@@ -122,6 +122,8 @@ pub struct State {
     pub limits: Option<Limits>,
     /// `(epoch ms, 5 h used %)` samples for the exhaustion projection.
     pub limits_series_5h: Vec<(i64, f64)>,
+    /// Other busy sessions in the registry (they share the rate limit).
+    pub other_live_sessions: usize,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -299,6 +301,13 @@ impl State {
                 exhaustion_ms: None,
             });
             self.limits_series_5h = series_5h.to_vec();
+            let ex = crate::metrics::limits::exhaustion(
+                &self.limits_series_5h,
+                s.at_ms.max(self.now_ms),
+            );
+            if let Some(l) = self.limits.as_mut() {
+                l.exhaustion_ms = ex;
+            }
         }
     }
 

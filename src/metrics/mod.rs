@@ -2,6 +2,7 @@
 
 pub mod context;
 pub mod cost;
+pub mod limits;
 pub mod registry;
 pub mod usage;
 

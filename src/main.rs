@@ -268,6 +268,21 @@ fn run(attach: Attach) {
             state.procs = snap;
         }));
     }
+    // Other live sessions share the account's rate limit.
+    let my_pid = app.state.session.pid;
+    let mut last_reg = std::time::Instant::now() - std::time::Duration::from_secs(10);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if last_reg.elapsed() >= std::time::Duration::from_secs(5) {
+            last_reg = std::time::Instant::now();
+            if let Some(dir) = cctop::registry::default_dir() {
+                state.other_live_sessions = cctop::registry::list(&dir)
+                    .iter()
+                    .filter(|s| Some(s.pid) != my_pid && s.is_alive())
+                    .filter(|s| s.status() == cctop::registry::Status::Busy)
+                    .count();
+            }
+        }
+    }));
     // Status-line samples (rate limits, exact context) when the shim is installed.
     let mut status = cctop::status::Watcher::new(&app.state.session.session_id);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
