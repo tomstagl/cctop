@@ -1,0 +1,15 @@
+# Fixtures
+
+Test inputs for cctop. Transcript fixtures are **anonymised copies of real
+`~/.claude/projects/<cwd>/<session>.jsonl` files**: paths, prompts and tool
+outputs are replaced with neutral text, but line types, ordering, `message.id`
+repetition, `usage` fields, `cost-state`, `system` subtypes and subagent layout
+are kept exactly as Claude Code wrote them. That is what the parsers are tested
+against, so never hand-edit structure — regenerate from a real session with the
+anonymiser (added with the transcript stories) instead.
+
+Layout mirrors `~/.claude`:
+
+- `sessions/` — session registry files
+- `session-a.jsonl` — a main transcript
+- `session-a/subagents/` — that session's subagent transcripts and meta files
