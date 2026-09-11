@@ -97,6 +97,8 @@ pub struct App {
     /// Where user themes live (hot-reloaded).
     pub user_theme_dir: Option<std::path::PathBuf>,
     last_theme_check: Option<Instant>,
+    /// Write config changes to disk (off in tests and headless runs).
+    pub persist_config: bool,
 }
 
 impl App {
@@ -121,6 +123,7 @@ impl App {
             theme_name: "default-dark".into(),
             user_theme_dir: None,
             last_theme_check: None,
+            persist_config: false,
         }
     }
 
@@ -159,7 +162,9 @@ impl App {
             Some(Mode::Wide) => "wide".into(),
             None => "auto".into(),
         };
-        self.config.save();
+        if self.persist_config {
+            self.config.save();
+        }
     }
 
     /// Re-read a user theme file if it changed (checked at most every 2 s).

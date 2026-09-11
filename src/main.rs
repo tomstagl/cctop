@@ -402,6 +402,7 @@ fn run(args: RunArgs) {
         return;
     }
 
+    app.persist_config = true;
     cctop::attach::attach(&mut app, &transcript, session_info, true);
     if let Err(e) = app::run_tui(app) {
         eprintln!("cctop: {e}");
