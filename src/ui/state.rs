@@ -118,6 +118,8 @@ pub struct State {
     pub limits: Option<Limits>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
+    /// Latest process-tree sample (live sessions only).
+    pub procs: crate::procs::Snapshot,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,

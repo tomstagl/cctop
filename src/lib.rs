@@ -9,6 +9,7 @@ pub mod discover;
 pub mod events;
 pub mod git;
 pub mod metrics;
+pub mod procs;
 pub mod registry;
 pub mod tail;
 pub mod tools;

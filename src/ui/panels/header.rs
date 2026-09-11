@@ -103,6 +103,15 @@ impl Panel for Header {
                 format!("  ▶ {} {}", c.name, fmt::duration_ms(el)),
                 accent,
             ));
+        } else if let Some(rc) = &state.procs.running_command {
+            l1.push(Span::styled(
+                format!(
+                    "  ▶ {} {}",
+                    fmt::clip(&rc.cmdline, 20),
+                    fmt::duration_ms(rc.elapsed_s as i64 * 1000)
+                ),
+                accent,
+            ));
         }
         if !s.cwd.as_os_str().is_empty() {
             l1.push(Span::raw(format!("  {}", fmt::shorten_home(&s.cwd))));

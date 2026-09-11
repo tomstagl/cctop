@@ -211,6 +211,25 @@ fn run(attach: Attach) {
         return;
     }
 
+    // Process tree once a second: cpu/rss, MCP servers, the running command.
+    if let Some(pid) = app.state.session.pid {
+        let configs = cctop::procs::mcp_configs(&app.state.session.cwd);
+        let mut sampler = cctop::procs::Sampler::default();
+        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(5);
+        app.tick_hooks.push(Box::new(move |state: &mut State| {
+            if last.elapsed() < std::time::Duration::from_secs(1) {
+                return;
+            }
+            last = std::time::Instant::now();
+            let snap = sampler.snapshot(&cctop::procs::Ps, pid, &configs);
+            if let Some(m) = &snap.main {
+                state.session.cpu_pct = Some(m.cpu_pct);
+                state.session.rss_bytes = Some(m.rss_bytes);
+            }
+            state.mcp_exited = sampler.exited.clone();
+            state.procs = snap;
+        }));
+    }
     let mut agents = cctop::agents::AgentWatcher::watch(&session_dir);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         if agents.poll() || state.agents.len() != agents.agents.len() {
