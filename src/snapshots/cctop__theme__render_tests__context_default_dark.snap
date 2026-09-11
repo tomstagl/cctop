@@ -1,0 +1,48 @@
+---
+source: src/theme.rs
+expression: text
+---
+╭cctop ─ session-a ── claude-sonnet-5 · v2.1.247 ──────────╮
+│ ■ ENDED 10:17  turn 15  0:00  /home/user/project         │
+│ auto · medium · — · $9.90 · cpu —                        │
+╰──────────────────────────────────────────────────────────╯
+╭1 Context ─ 40 % est ─────────────────────────────────────╮
+│ ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ │
+│ 396k / 1.00M est   prefix 60k · msgs 335k · free 603k    │
+│ ▂▃▃▄▄▄▄▅▆█  +50k/turn → autocompact in ~9 turns est      │
+│ compactions 0                                            │
+╰──────────────────────────────────────────────────────────╯
+╭2 Tokens & Cost ─ 33.63M ─────────────────────────────────╮
+│ cache read  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇ 32.97M │
+│ cache write ▇                                       597k │
+│ fresh in                                             286 │
+│ output                                               67k │
+│  └ thinking                                          30k │
+│ cache hit 98 %  ·  $9.90 ($26.0/h)  ·  in 1.83M/min      │
+│ per turn ▁▂▁▁▁▁▁▄▃█   last turn 17.23M · $4.07  main only│
+╰──────────────────────────────────────────────────────────╯
+─3 Limits ──────────────────────────────────────────────────
+─4 Turn ─ 0:00 ─────────────────────────────────────────────
+╭5 Tools ─ 257 calls ──────────────────────────────────────╮
+│ TOOL          N  ERR    p50    p95   LAST  TOKENS→CTX  ↕N│
+│ mcp:claude-…214    2   1.6s≈ 25.4s≈   9:25        21k    │
+│ RemoteTrigg… 16    0   4.3s≈ 10.0s≈  32:26       9.2k    │
+│ Bash         15    3   2.0s≈ 27.2s≈  19:05       3.9k    │
+│ ToolSearch    4    0    8ms≈  16ms≈  32:59          8    │
+│ Read          3    0   22ms≈ 513ms≈  41:58       2.2k    │
+│ top ctx: Read /home/user/project/src/a3d75d… 1.0k · Rea… │
+╰──────────────────────────────────────────────────────────╯
+─6 Agents & MCP ─ 0/1 agents ───────────────────────────────
+─7 Files ─ 4 touched ───────────────────────────────────────
+╭9 Advisor ─ 1 of 1 ───────────────────────────────────────╮
+│ ▸ `Bash make check` failed 3× with the same input        │
+│   Interrupt and give the fix or the…  ~481/turn · n next │
+╰──────────────────────────────────────────────────────────╯
+╭8 Events ─ 534 ───────────────────────────────────────────╮
+│ 10:08:01 tool   mcp:claude-in-chrome computer lorem ipsu…│
+│ 10:08:01 tool   mcp:claude-in-chrome computer lorem ipsu…│
+│ 10:08:02 tool   mcp:claude-in-chrome ✓ 118               │
+│ 10:08:04 tool   mcp:claude-in-chrome ✓ 68                │
+│ 10:08:04 api    cost-state $9.90 · api 18:45 · retries 0…│
+╰──────────────────────────────────────────────────────────╯
+ ?help 1-9 panels ⇥focus a ask t theme L sessions q quit

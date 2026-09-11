@@ -2,7 +2,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -15,14 +15,13 @@ use crate::ui::state::State;
 
 pub struct Events;
 
-fn kind_style(k: Kind) -> Style {
-    let c = match k {
-        Kind::Tool => Color::Green,
-        Kind::Hook | Kind::Agent => Color::Cyan,
-        Kind::Perm | Kind::Note | Kind::Compact | Kind::Away => Color::Yellow,
-        Kind::Api => Color::Red,
-    };
-    Style::default().fg(c)
+fn kind_style(t: &crate::theme::Theme, k: Kind) -> Style {
+    match k {
+        Kind::Tool => t.ok(),
+        Kind::Hook | Kind::Agent => t.accent(),
+        Kind::Perm | Kind::Note | Kind::Compact | Kind::Away => t.warn(),
+        Kind::Api => t.crit(),
+    }
 }
 
 fn clock(at: i64) -> String {
@@ -30,12 +29,17 @@ fn clock(at: i64) -> String {
     format!("{:02}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
 }
 
-fn line_for(e: &Event, width: usize, highlight: Option<&str>) -> Line<'static> {
-    let dim = Style::default().fg(Color::DarkGray);
+fn line_for(
+    t: &crate::theme::Theme,
+    e: &Event,
+    width: usize,
+    highlight: Option<&str>,
+) -> Line<'static> {
+    let dim = t.dim();
     let text = fmt::clip(&e.text, width.saturating_sub(17));
     let mut spans = vec![
         Span::styled(format!(" {} ", clock(e.at)), dim),
-        Span::styled(format!("{:<7}", e.kind.label()), kind_style(e.kind)),
+        Span::styled(format!("{:<7}", e.kind.label()), kind_style(t, e.kind)),
     ];
     match highlight.filter(|h| !h.is_empty()) {
         Some(h) if text.to_lowercase().contains(&h.to_lowercase()) => {
@@ -140,7 +144,7 @@ impl Panel for Events {
             .events
             .tail(n)
             .into_iter()
-            .map(|e| line_for(e, inner.width as usize, None))
+            .map(|e| line_for(&state.theme, e, inner.width as usize, None))
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
     }
@@ -167,7 +171,7 @@ impl Panel for Events {
             .iter()
             .skip(start)
             .take(rows)
-            .map(|e| line_for(e, inner.width as usize, ui.search.as_deref()))
+            .map(|e| line_for(&state.theme, e, inner.width as usize, ui.search.as_deref()))
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
     }

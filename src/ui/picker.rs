@@ -2,7 +2,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
@@ -110,7 +110,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     ));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = state.theme.dim();
     let now = state.now_ms;
     let mut lines = vec![Line::from(Span::styled(
         format!(

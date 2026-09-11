@@ -1,7 +1,7 @@
 //! Agents & MCP: subagents, MCP server processes, background tasks.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -58,8 +58,8 @@ impl Panel for Agents {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
         let now = state.clock_ms();
         let mut lines: Vec<Line> = Vec::new();
 
@@ -69,8 +69,8 @@ impl Panel for Agents {
         for a in agents {
             let (glyph, style) = match a.state(now) {
                 AgentState::Running => ("◐", accent),
-                AgentState::Done => ("✓", Style::default().fg(Color::Green)),
-                AgentState::Failed => ("✗", Style::default().fg(Color::Red)),
+                AgentState::Done => ("✓", state.theme.ok()),
+                AgentState::Failed => ("✗", state.theme.crit()),
             };
             let elapsed = a.elapsed_ms(now).map(fmt::duration_ms).unwrap_or_default();
             let model = a
@@ -135,7 +135,7 @@ impl Panel for Agents {
             if state.mcp_exited.contains(name) {
                 lines.push(Line::from(Span::styled(
                     format!(" mcp {:<12} exited", fmt::clip(name, 12)),
-                    Style::default().fg(Color::Red),
+                    state.theme.crit(),
                 )));
             }
         }

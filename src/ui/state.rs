@@ -175,6 +175,8 @@ pub struct State {
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
+    /// Colours and glyphs for this terminal.
+    pub theme: crate::theme::Theme,
     /// Session picker overlay (`L`).
     pub picker: Option<crate::ui::picker::PickerUi>,
     /// Drafted question from `a` (panel id, text) awaiting Enter/S/Esc.

@@ -8,14 +8,14 @@ use std::time::{Duration, Instant};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::{Backend, TestBackend};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line as TLine, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::{Frame, Terminal};
 
 use crate::transcript::Line;
 use crate::ui::layout::{self, Mode};
-use crate::ui::panel::{draw_frame, FrameStyle, Handled, Panel, PanelId};
+use crate::ui::panel::{draw_frame, Handled, Panel, PanelId};
 use crate::ui::State;
 
 /// Applies a transcript line to every collector in the state.
@@ -75,7 +75,6 @@ pub struct App {
     pub refresh_ms: u64,
     pub help: bool,
     pub quit: bool,
-    pub frame_style: FrameStyle,
     buffered: Vec<Line>,
     /// Applies a transcript line to every collector.
     sink: Sink,
@@ -89,6 +88,15 @@ pub struct App {
     advisor: crate::advisor::Engine,
     /// Send critical alerts to the desktop (`--notify`).
     pub desktop_notify: bool,
+    /// Persisted preferences; written back when panels or theme change.
+    pub config: crate::config::Config,
+    /// Terminal capabilities the theme is reduced to.
+    pub caps: crate::theme::Caps,
+    /// Current theme name (bundled or user).
+    pub theme_name: String,
+    /// Where user themes live (hot-reloaded).
+    pub user_theme_dir: Option<std::path::PathBuf>,
+    last_theme_check: Option<Instant>,
 }
 
 impl App {
@@ -100,7 +108,6 @@ impl App {
             refresh_ms: REFRESH_DEFAULT_MS,
             help: false,
             quit: false,
-            frame_style: FrameStyle::default(),
             buffered: Vec::new(),
             sink,
             tick_hooks: Vec::new(),
@@ -109,6 +116,72 @@ impl App {
             alerts: crate::alerts::Engine::default(),
             advisor: crate::advisor::Engine::default(),
             desktop_notify: false,
+            config: crate::config::Config::default(),
+            caps: crate::theme::Caps::full(),
+            theme_name: "default-dark".into(),
+            user_theme_dir: None,
+            last_theme_check: None,
+        }
+    }
+
+    /// Apply a theme by name for the current capabilities; unknown names fall
+    /// back to the bundled default.
+    pub fn set_theme(&mut self, name: &str) {
+        let t = crate::theme::Theme::find(name, self.user_theme_dir.as_deref())
+            .unwrap_or_default()
+            .for_caps(self.caps);
+        self.theme_name = if t.name.is_empty() {
+            "default-dark".into()
+        } else {
+            t.name.clone()
+        };
+        self.state.theme = t;
+    }
+
+    /// Apply the config: layout, theme, refresh, hidden panels, notify.
+    pub fn apply_config(&mut self, config: crate::config::Config) {
+        self.mode_override = config.layout_mode();
+        self.refresh_ms = config.refresh_ms.clamp(REFRESH_MIN_MS, REFRESH_MAX_MS);
+        self.state.hidden = config.hidden_panels.clone();
+        self.desktop_notify = self.desktop_notify || config.notify;
+        let theme = config.theme.clone();
+        self.config = config;
+        self.set_theme(&theme);
+    }
+
+    /// Persist the current panel/theme choices.
+    pub fn save_config(&mut self) {
+        self.config.hidden_panels = self.state.hidden.clone();
+        self.config.theme = self.theme_name.clone();
+        self.config.refresh_ms = self.refresh_ms;
+        self.config.layout = match self.mode_override {
+            Some(Mode::Narrow) => "narrow".into(),
+            Some(Mode::Wide) => "wide".into(),
+            None => "auto".into(),
+        };
+        self.config.save();
+    }
+
+    /// Re-read a user theme file if it changed (checked at most every 2 s).
+    pub fn hot_reload_theme(&mut self) {
+        let due = self
+            .last_theme_check
+            .is_none_or(|t| t.elapsed() >= Duration::from_secs(2));
+        if !due {
+            return;
+        }
+        self.last_theme_check = Some(Instant::now());
+        let Some(dir) = &self.user_theme_dir else {
+            return;
+        };
+        if let Some(t) = crate::theme::Theme::user_themes(dir)
+            .into_iter()
+            .find(|t| t.name == self.theme_name)
+        {
+            let t = t.for_caps(self.caps);
+            if t != self.state.theme {
+                self.state.theme = t;
+            }
         }
     }
 
@@ -298,6 +371,17 @@ impl App {
                     .unwrap_or_default();
                 self.state.picker = Some(crate::ui::picker::PickerUi::load(sessions));
             }
+            KeyCode::Char('t') => {
+                let names = crate::theme::Theme::names(self.user_theme_dir.as_deref());
+                let i = names
+                    .iter()
+                    .position(|n| *n == self.theme_name)
+                    .unwrap_or(0);
+                let next = names[(i + 1) % names.len()].clone();
+                self.set_theme(&next);
+                self.state.set_toast(format!("theme: {next}"));
+                self.save_config();
+            }
             KeyCode::Char('w') => {
                 self.mode_override = Some(match self.mode_override {
                     Some(Mode::Wide) => Mode::Narrow,
@@ -306,6 +390,7 @@ impl App {
                 });
                 self.state
                     .set_toast(format!("layout: {:?}", self.mode_override.unwrap()));
+                self.save_config();
             }
             KeyCode::Char('+') | KeyCode::Char('=') => {
                 self.refresh_ms = (self.refresh_ms + 100).min(REFRESH_MAX_MS);
@@ -323,6 +408,7 @@ impl App {
                 if self.state.focused == Some(id) {
                     self.state.focused = None;
                 }
+                self.save_config();
             }
             _ => {
                 if let Some(id) = self.state.focused {
@@ -341,9 +427,7 @@ impl App {
             let Some(panel) = self.panels.iter().find(|p| p.id() == *id) else {
                 continue;
             };
-            if let Some(inner) =
-                draw_frame(frame, *rect, panel.as_ref(), &self.state, &self.frame_style)
-            {
+            if let Some(inner) = draw_frame(frame, *rect, panel.as_ref(), &self.state) {
                 panel.render(frame, inner, &self.state);
             }
         }
@@ -394,7 +478,7 @@ impl App {
             } else {
                 "Enter copies the draft to the clipboard; paste it into Claude Code. (no messaging socket)"
             },
-            Style::default().fg(Color::DarkGray),
+            self.state.theme.dim(),
         )));
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     }
@@ -403,22 +487,21 @@ impl App {
         if area.height == 0 {
             return;
         }
-        let dim = Style::default().fg(Color::DarkGray);
+        let dim = self.state.theme.dim();
         let line = if let Some(t) = self.state.toast_text() {
-            TLine::from(Span::styled(
-                format!(" {t}"),
-                Style::default().fg(Color::Yellow),
-            ))
+            TLine::from(Span::styled(format!(" {t}"), self.state.theme.warn()))
         } else {
             let mut spans = vec![Span::raw(" ")];
             if self.state.paused {
                 spans.push(Span::styled(
                     format!("PAUSED +{} ", self.state.paused_pending),
-                    Style::default().fg(Color::Black).bg(Color::Yellow),
+                    Style::default()
+                        .fg(self.state.theme.bg)
+                        .bg(self.state.theme.warn),
                 ));
             }
             spans.push(Span::styled(
-                "?help 1-9 panels ⇥focus p pause w layout q quit",
+                "?help 1-9 panels ⇥focus a ask t theme L sessions q quit",
                 dim,
             ));
             TLine::from(spans)
@@ -448,7 +531,7 @@ impl App {
         }
         lines.push(TLine::from(Span::styled(
             "  any key to close",
-            Style::default().fg(Color::DarkGray),
+            self.state.theme.dim(),
         )));
         let block = Block::default().borders(Borders::ALL).title(" cctop keys ");
         frame.render_widget(Paragraph::new(lines).block(block), rect);
@@ -601,6 +684,7 @@ pub fn run_tui(mut app: App) -> std::io::Result<()> {
         // Clock-driven values (elapsed, toasts) change every tick.
         if dirty || last_render.elapsed() >= tick {
             app.state.now_ms = now_ms();
+            app.hot_reload_theme();
             app.tick();
             term.draw(|f| app.draw(f))?;
             last_render = Instant::now();

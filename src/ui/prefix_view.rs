@@ -1,7 +1,7 @@
 //! Full-height prefix inspector, opened with `i` on the Context panel.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -19,7 +19,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     ));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = state.theme.dim();
     let mut lines = vec![Line::from(Span::styled(
         format!(
             " {:<10} {:<40} {:>8} {:>8}  {}",
@@ -62,11 +62,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             note
         ));
         if i < 2 && r.kind != Kind::Other {
-            line = line.style(
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .fg(Color::Yellow),
-            );
+            line = line.style(state.theme.warn().add_modifier(Modifier::BOLD));
         }
         lines.push(line);
     }

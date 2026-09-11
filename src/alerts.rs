@@ -161,11 +161,22 @@ pub struct Engine {
     active: HashMap<RuleId, bool>,
     /// Retry time at the last evaluation (ApiRetry fires on increase).
     retry_ms: u64,
+    /// The first evaluation only latches baselines; historical retries in a
+    /// freshly loaded transcript are not news.
+    primed: bool,
 }
 
 impl Engine {
     /// Evaluate every rule; returns the ones that just crossed into active.
     pub fn evaluate(&mut self, state: &State) -> Vec<Fired> {
+        if !self.primed {
+            self.primed = true;
+            if let Some(c) = &state.cost.authoritative {
+                self.retry_ms = c
+                    .total_api_duration
+                    .saturating_sub(c.total_api_duration_without_retries);
+            }
+        }
         let mut fired = Vec::new();
         for rule in RuleId::ALL {
             let msg = check(rule, state, self.retry_ms);
@@ -195,7 +206,7 @@ impl Engine {
 /// critical ones to the desktop.
 pub fn deliver(fired: &[Fired], state: &mut State, desktop: bool) {
     for f in fired {
-        state.events.note(state.now_ms, f.message.clone());
+        state.events.note(state.clock_ms(), f.message.clone());
         state.set_toast(f.message.clone());
         if desktop && f.rule.critical() {
             desktop_notify(&f.message);

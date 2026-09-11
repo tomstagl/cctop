@@ -2,7 +2,6 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
@@ -59,9 +58,9 @@ impl Panel for AdvisorPanel {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
-        let amber = Style::default().fg(Color::Yellow);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let amber = state.theme.warn();
+        let accent = state.theme.accent();
         let Some(a) = state
             .advice
             .get(state.advice_index.min(state.advice.len().saturating_sub(1)))
@@ -104,7 +103,7 @@ impl Panel for AdvisorPanel {
         ));
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        let dim = Style::default().fg(Color::DarkGray);
+        let dim = state.theme.dim();
         let lines = vec![
             Line::from(vec![
                 Span::styled(" Evidence  ", dim),

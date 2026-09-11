@@ -1,7 +1,6 @@
 //! Context: how full the window is, how fast it fills, when autocompact hits.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -74,12 +73,17 @@ impl Panel for Context {
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
         let v = state.context();
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
         let width = inner.width.saturating_sub(2) as usize;
 
         let mut g = vec![Span::raw(" ")];
-        g.extend(gauge(v.ratio(), width, band_style(v.ratio(), 0.6, 0.8)));
+        g.extend(gauge(
+            &state.theme,
+            v.ratio(),
+            width,
+            band_style(&state.theme, v.ratio(), 0.6, 0.8),
+        ));
 
         let est = if v.window_exact { "" } else { " est" };
         let breakdown = Line::from(vec![
@@ -101,7 +105,7 @@ impl Panel for Context {
 
         let mut trend = vec![
             Span::raw(" "),
-            Span::styled(sparkline(&v.history, 12), accent),
+            Span::styled(sparkline(&state.theme, &v.history, 12), accent),
         ];
         if v.velocity > 0.0 {
             trend.push(Span::raw(format!(
@@ -113,7 +117,7 @@ impl Panel for Context {
                 trend.push(Span::raw(" → autocompact in "));
                 trend.push(Span::styled(
                     format!("~{} turns", n.ceil() as u64),
-                    band_style(1.0 - (n / 10.0).min(1.0), 0.6, 0.8),
+                    band_style(&state.theme, 1.0 - (n / 10.0).min(1.0), 0.6, 0.8),
                 ));
                 trend.push(Span::styled(mark, dim));
             }

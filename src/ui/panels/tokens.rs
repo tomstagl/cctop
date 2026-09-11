@@ -2,7 +2,6 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -67,8 +66,8 @@ impl Panel for Tokens {
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
         let u = Self::usage(state);
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
         let rows: [(&str, u64); 5] = [
             ("cache read ", u.cache_read),
             ("cache write", u.cache_write()),
@@ -85,7 +84,7 @@ impl Panel for Tokens {
                 let n = ((*v as f64 / max as f64) * bar_w as f64).round() as usize;
                 Line::from(vec![
                     Span::raw(format!(" {label} ")),
-                    Span::styled("▇".repeat(n), accent),
+                    Span::styled(state.theme.gauge_fill().repeat(n), accent),
                     Span::raw(" ".repeat(bar_w.saturating_sub(n))),
                     Span::raw(format!(" {:>6}", fmt::tokens(*v))),
                 ])
@@ -97,7 +96,7 @@ impl Panel for Tokens {
         match u.cache_hit_ratio() {
             Some(r) => l6.push(Span::styled(
                 format!("{:.0} %", r * 100.0),
-                band_style(1.0 - r, 0.2, 0.5),
+                band_style(&state.theme, 1.0 - r, 0.2, 0.5),
             )),
             None => l6.push(Span::styled("—", dim)),
         }
@@ -130,7 +129,7 @@ impl Panel for Tokens {
             .collect();
         let mut l7 = vec![
             Span::raw(" per turn "),
-            Span::styled(sparkline(&per_turn, 14), accent),
+            Span::styled(sparkline(&state.theme, &per_turn, 14), accent),
         ];
         if let Some(t) = state.agg.turns.iter().rev().find(|t| t.api_calls > 0) {
             let mut s = format!("   last turn {}", fmt::tokens(t.usage.total()));

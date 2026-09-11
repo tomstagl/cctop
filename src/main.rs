@@ -98,6 +98,15 @@ struct RunArgs {
     /// Also send critical alerts as desktop notifications.
     #[arg(long)]
     notify: bool,
+    /// Force a layout: auto, narrow or wide (overrides config).
+    #[arg(long, value_parser = ["auto", "narrow", "wide"])]
+    layout: Option<String>,
+    /// Theme name (bundled or ~/.config/cctop/themes/*.toml).
+    #[arg(long)]
+    theme: Option<String>,
+    /// Render interval cap in milliseconds (100–2000).
+    #[arg(long)]
+    refresh_ms: Option<u64>,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -322,6 +331,9 @@ fn run(args: RunArgs) {
         attach,
         headless,
         notify,
+        layout,
+        theme,
+        refresh_ms,
     } = args;
     let (transcript, session_info): (PathBuf, SessionInfo) =
         match cctop::load::resolve(&target(&attach)) {
@@ -337,6 +349,27 @@ fn run(args: RunArgs) {
     );
     app.desktop_notify = notify;
     app.state.now_ms = app::now_ms();
+    // Preferences and terminal capabilities.
+    let mut config = cctop::config::Config::load();
+    if let Some(l) = layout {
+        config.layout = l;
+    }
+    if let Some(t) = theme {
+        config.theme = t;
+    }
+    if let Some(r) = refresh_ms {
+        config.refresh_ms = r;
+    }
+    if notify {
+        config.notify = true;
+    }
+    app.caps = if headless.once {
+        cctop::theme::Caps::full()
+    } else {
+        cctop::theme::Caps::detect(&|k| std::env::var(k).ok())
+    };
+    app.user_theme_dir = cctop::theme::config_dir().map(|d| d.join("themes"));
+    app.apply_config(config);
     if let Some(projects) = cctop::baseline::default_projects_dir() {
         app.state.baseline = Some(cctop::baseline::load_or_compute(
             &cctop::status::cctop_dir(),

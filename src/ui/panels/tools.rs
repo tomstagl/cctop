@@ -3,7 +3,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -149,8 +149,8 @@ impl Panel for Tools {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
         let focused = state.focused == Some(self.id());
         let ui = &state.tools_ui;
         let now = state.clock_ms();
@@ -186,8 +186,8 @@ impl Panel for Tools {
             };
             let err_style = match t.errors {
                 0 => Style::default(),
-                1..=2 => Style::default().fg(Color::Yellow),
-                _ => Style::default().fg(Color::Red),
+                1..=2 => state.theme.warn(),
+                _ => state.theme.crit(),
             };
             let mut spans = vec![
                 Span::raw(format!(" {:<12}{:>3}  ", fmt::clip(&t.name, 12), t.calls)),
@@ -257,7 +257,7 @@ impl Panel for Tools {
             .title(format!(" {name} — last {} calls  (Esc back) ", calls.len()));
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        let dim = Style::default().fg(Color::DarkGray);
+        let dim = state.theme.dim();
         let mut lines = vec![Line::from(Span::styled(
             format!(
                 " {:<8} {:<32} {:>8} {:>8}  {}",
@@ -289,7 +289,7 @@ impl Panel for Tools {
                 err
             ));
             if c.is_error {
-                line = line.style(Style::default().fg(Color::Red));
+                line = line.style(state.theme.crit());
             }
             lines.push(line);
         }

@@ -2,7 +2,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -69,7 +69,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     if ui.detail {
         return render_detail(frame, area, state, rows.get(ui.selected).map(|r| r.turn));
     }
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = state.theme.dim();
     let title = format!(
         " Turn ledger — {} turns · ↕{}{}  (s/S sort, j/k, Enter calls, Esc back) ",
         rows.len(),
@@ -138,7 +138,7 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
     ));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = state.theme.dim();
     let mut lines = vec![Line::from(Span::styled(
         format!(
             " {:<16} {:<34} {:>8} {:>10}  ERR",
@@ -166,7 +166,7 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
             if c.is_error { "✗" } else { "" }
         ));
         if c.is_error {
-            line = line.style(Style::default().fg(Color::Red));
+            line = line.style(state.theme.crit());
         }
         lines.push(line);
     }

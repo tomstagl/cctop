@@ -17,6 +17,7 @@ fn fresh_state(prev: &State, info: SessionInfo) -> State {
     s.hidden = prev.hidden.clone();
     s.tokens_include_agents = prev.tokens_include_agents;
     s.baseline = prev.baseline.clone();
+    s.theme = prev.theme.clone();
     s.other_live_sessions = prev.other_live_sessions;
     if let Some(pid) = s.session.pid {
         if let Some(dir) = crate::registry::default_dir() {

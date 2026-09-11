@@ -1,7 +1,6 @@
 //! Turn: what the current turn is doing and waiting on.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -38,9 +37,9 @@ impl Panel for TurnPanel {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
-        let amber = Style::default().fg(Color::Yellow);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
+        let amber = state.theme.warn();
         let now = state.clock_ms();
         let turn = state.agg.current_turn();
 
@@ -125,7 +124,7 @@ impl Panel for TurnPanel {
                 if t.hook_errors > 0 {
                     l3.push(Span::styled(
                         format!(" ({} failed)", t.hook_errors),
-                        Style::default().fg(Color::Red),
+                        state.theme.crit(),
                     ));
                 }
             }

@@ -1,7 +1,6 @@
 //! Limits: 5 h / 7 d usage, resets, and whether you run out first.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -44,7 +43,7 @@ impl Panel for LimitsPanel {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
+        let dim = state.theme.dim();
         let Some(l) = &state.limits else {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(" — run cctop install", dim))),
@@ -57,13 +56,14 @@ impl Panel for LimitsPanel {
         let row = |label: &str, pct: f64, resets: Option<i64>| {
             let mut spans = vec![Span::raw(format!(" {label}  "))];
             spans.extend(gauge(
+                &state.theme,
                 pct / 100.0,
                 gauge_w,
-                band_style(pct / 100.0, 0.6, 0.85),
+                band_style(&state.theme, pct / 100.0, 0.6, 0.85),
             ));
             spans.push(Span::styled(
                 format!("  {pct:>3.0} %"),
-                band_style(pct / 100.0, 0.6, 0.85),
+                band_style(&state.theme, pct / 100.0, 0.6, 0.85),
             ));
             if let Some(r) = resets {
                 spans.push(Span::styled(
@@ -85,11 +85,11 @@ impl Panel for LimitsPanel {
                 match l.five_hour_resets_at_ms {
                     Some(reset) if ex >= reset => {
                         l2.push(Span::styled(", after reset ", dim));
-                        l2.push(Span::styled("✓", Style::default().fg(Color::Green)));
+                        l2.push(Span::styled("✓", state.theme.ok()));
                     }
                     Some(_) => {
                         l2.push(Span::styled(", before reset ", dim));
-                        l2.push(Span::styled("✗", Style::default().fg(Color::Red)));
+                        l2.push(Span::styled("✗", state.theme.crit()));
                     }
                     None => {}
                 }

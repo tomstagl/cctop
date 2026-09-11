@@ -1,7 +1,7 @@
 //! Header: who we are attached to and what it is doing right now.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -16,9 +16,7 @@ pub struct Header;
 impl Header {
     fn status_pill(state: &State) -> Span<'static> {
         let s = &state.session;
-        let amber = Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD);
+        let amber = state.theme.warn().add_modifier(Modifier::BOLD);
         if state.paused {
             return Span::styled("⏸ PAUSED", amber);
         }
@@ -26,23 +24,18 @@ impl Header {
             let at = s.ended_at_ms.map(fmt::clock_hhmm).unwrap_or_default();
             return Span::styled(
                 format!("■ ENDED {at}").trim_end().to_string(),
-                Style::default()
-                    .fg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
+                state.theme.dim().add_modifier(Modifier::BOLD),
             );
         }
         if s.permission_pending {
             return Span::styled("◆ WAITING", amber);
         }
         match s.status {
-            SessionStatus::Busy => Span::styled(
-                "● BUSY",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            SessionStatus::Idle => Span::styled("○ IDLE", Style::default().fg(Color::DarkGray)),
-            SessionStatus::Unknown => Span::styled("○ ?", Style::default().fg(Color::DarkGray)),
+            SessionStatus::Busy => {
+                Span::styled("● BUSY", state.theme.ok().add_modifier(Modifier::BOLD))
+            }
+            SessionStatus::Idle => Span::styled("○ IDLE", state.theme.dim()),
+            SessionStatus::Unknown => Span::styled("○ ?", state.theme.dim()),
         }
     }
 }
@@ -61,10 +54,11 @@ impl Panel for Header {
         } else {
             format!(" · v{}", state.session.version)
         };
+        let sep = state.theme.hline().repeat(2);
         let name = if state.session.name.is_empty() {
             String::new()
         } else {
-            format!("{} ── ", state.session.name)
+            format!("{} {sep} ", state.session.name)
         };
         Some(format!("{name}{model}{v}"))
     }
@@ -79,8 +73,8 @@ impl Panel for Header {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
-        let accent = Style::default().fg(Color::Cyan);
+        let dim = state.theme.dim();
+        let accent = state.theme.accent();
         let s = &state.session;
         let now = if s.alive {
             state.now_ms
@@ -119,7 +113,7 @@ impl Panel for Header {
         if let Some(b) = &s.git_branch {
             l1.push(Span::raw(format!(" {b}")));
             if s.git_dirty {
-                l1.push(Span::styled("*", Style::default().fg(Color::Yellow)));
+                l1.push(Span::styled("*", state.theme.warn()));
             }
         }
 

@@ -2,7 +2,6 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -92,7 +91,7 @@ impl Panel for FilesPanel {
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
-        let dim = Style::default().fg(Color::DarkGray);
+        let dim = state.theme.dim();
         let rows = Self::rows(state);
         if rows.is_empty() {
             frame.render_widget(
@@ -124,22 +123,13 @@ impl Panel for FilesPanel {
                 spans.push(Span::raw(format!("{counts:<12}")));
                 match (f.lines_added, f.lines_removed) {
                     (Some(a), Some(d)) => {
-                        spans.push(Span::styled(
-                            format!("+{a:<4}"),
-                            Style::default().fg(Color::Green),
-                        ));
-                        spans.push(Span::styled(
-                            format!("−{d:<4}"),
-                            Style::default().fg(Color::Red),
-                        ));
+                        spans.push(Span::styled(format!("+{a:<4}"), state.theme.ok()));
+                        spans.push(Span::styled(format!("−{d:<4}"), state.theme.crit()));
                     }
                     _ => spans.push(Span::styled("—        ", dim)),
                 }
                 if f.reread_warning() {
-                    spans.push(Span::styled(
-                        " re-read ⚠",
-                        Style::default().fg(Color::Yellow),
-                    ));
+                    spans.push(Span::styled(" re-read ⚠", state.theme.warn()));
                 }
                 Line::from(spans)
             })
