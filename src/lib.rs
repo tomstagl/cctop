@@ -4,4 +4,5 @@
 
 pub mod discover;
 pub mod registry;
+pub mod tail;
 pub mod transcript;

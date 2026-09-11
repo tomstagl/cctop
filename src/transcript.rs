@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+pub use crate::tail::{parse_file, Tailer};
+
 /// One line of the transcript.
 #[derive(Debug, Clone)]
 pub enum Line {
