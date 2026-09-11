@@ -6,6 +6,7 @@ pub mod advisor;
 pub mod agents;
 pub mod alerts;
 pub mod app;
+pub mod ask;
 pub mod baseline;
 pub mod discover;
 pub mod events;

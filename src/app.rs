@@ -204,6 +204,38 @@ impl App {
             self.quit = true;
             return;
         }
+        if let Some((_, text)) = self.state.ask.clone() {
+            match key.code {
+                KeyCode::Esc => self.state.ask = None,
+                KeyCode::Enter => {
+                    let msg = match crate::ask::copy_to_clipboard(&text) {
+                        Ok(tool) => format!("copied with {tool} — paste it into Claude Code"),
+                        Err(e) => format!("could not copy: {e}"),
+                    };
+                    self.state.set_toast(msg);
+                    self.state.ask = None;
+                }
+                KeyCode::Char('S') => {
+                    let msg = match &self.state.messaging_socket {
+                        Some(sock) => {
+                            let token = self.state.session.pid.and_then(|pid| {
+                                crate::registry::default_dir()
+                                    .and_then(|d| crate::ask::peer_token(&d, pid))
+                            });
+                            match crate::ask::send_over_socket(sock, token.as_deref(), &text) {
+                                Ok(_) => "sent to the session as a peer message".to_string(),
+                                Err(e) => format!("send failed: {e} — copied instead?"),
+                            }
+                        }
+                        None => "no messaging socket — use Enter to copy".to_string(),
+                    };
+                    self.state.set_toast(msg);
+                    self.state.ask = None;
+                }
+                _ => {}
+            }
+            return;
+        }
         if let Some(id) = self.state.overlay {
             // The panel gets first refusal (e.g. Esc clears its search);
             // an unhandled Esc closes the overlay.
@@ -238,6 +270,15 @@ impl App {
                     "resumed"
                 };
                 self.state.set_toast(msg);
+            }
+            KeyCode::Char('a')
+                if self.state.focused.is_some_and(|f| f != 2) || self.state.focused.is_none() =>
+            {
+                let panel = self.state.focused.unwrap_or(0);
+                match crate::ask::compose(&self.state, panel) {
+                    Some(text) => self.state.ask = Some((panel, text)),
+                    None => self.state.set_toast("nothing to ask about on this panel"),
+                }
             }
             KeyCode::Char('w') => {
                 self.mode_override = Some(match self.mode_override {
@@ -296,9 +337,45 @@ impl App {
                 panel.render_overlay(frame, body, &self.state);
             }
         }
+        if let Some((panel, text)) = &self.state.ask {
+            self.draw_ask(frame, area, *panel, text);
+        }
         if self.help {
             self.draw_help(frame, area);
         }
+    }
+
+    fn draw_ask(&self, frame: &mut Frame, area: Rect, panel: PanelId, text: &str) {
+        use ratatui::widgets::Wrap;
+        let w = area.width.min(72);
+        let cols = w.saturating_sub(2).max(1) as usize;
+        let rows = |n: usize| n.div_ceil(cols) as u16;
+        let h = (rows(text.chars().count()) + rows(110) + 4).min(area.height);
+        let rect = Rect::new(
+            area.x + (area.width - w) / 2,
+            area.y + (area.height - h) / 2,
+            w,
+            h,
+        );
+        frame.render_widget(Clear, rect);
+        let has_socket = self.state.messaging_socket.is_some();
+        let title = format!(
+            " ask about panel {panel}  —  Enter copy · {}Esc cancel ",
+            if has_socket { "S send · " } else { "" }
+        );
+        let block = Block::default().borders(Borders::ALL).title(title);
+        let inner = block.inner(rect);
+        frame.render_widget(block, rect);
+        let mut lines = vec![TLine::from(text.to_string()), TLine::from("")];
+        lines.push(TLine::from(Span::styled(
+            if has_socket {
+                "Enter copies the draft to the clipboard. S sends it over the session socket (arrives as a peer message)."
+            } else {
+                "Enter copies the draft to the clipboard; paste it into Claude Code. (no messaging socket)"
+            },
+            Style::default().fg(Color::DarkGray),
+        )));
+        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     }
 
     fn draw_footer(&self, frame: &mut Frame, area: Rect) {

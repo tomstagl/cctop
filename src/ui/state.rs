@@ -86,6 +86,11 @@ impl SessionInfo {
         }
     }
 
+    /// Messaging socket path if the registry has one and it exists.
+    pub fn socket_of(s: &crate::registry::Session) -> Option<std::path::PathBuf> {
+        s.messaging_socket_path.clone().filter(|p| p.exists())
+    }
+
     /// A transcript file with no live process behind it.
     pub fn from_fixture(path: &std::path::Path) -> SessionInfo {
         SessionInfo {
@@ -170,6 +175,10 @@ pub struct State {
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
+    /// Drafted question from `a` (panel id, text) awaiting Enter/S/Esc.
+    pub ask: Option<(PanelId, String)>,
+    /// The session's messaging socket, from the registry.
+    pub messaging_socket: Option<std::path::PathBuf>,
     /// Your last-7-days medians, when computed.
     pub baseline: Option<crate::baseline::Baseline>,
     /// Ranked advice from the Advisor engine (best first).

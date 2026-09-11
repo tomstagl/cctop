@@ -337,6 +337,14 @@ fn run(args: RunArgs) {
     );
     app.state = State::new(cctop::metrics::Pricing::load());
     app.state.session = session_info;
+    if let Some(pid) = app.state.session.pid {
+        if let Some(dir) = cctop::registry::default_dir() {
+            app.state.messaging_socket = cctop::registry::list(&dir)
+                .iter()
+                .find(|s| s.pid == pid)
+                .and_then(SessionInfo::socket_of);
+        }
+    }
     app.state.now_ms = app::now_ms();
     app.desktop_notify = notify;
     if let Some(projects) = cctop::baseline::default_projects_dir() {
