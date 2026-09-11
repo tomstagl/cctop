@@ -104,6 +104,8 @@ pub struct Turn {
     pub tool_calls: usize,
     /// Number of tool results flagged `is_error`.
     pub tool_errors: usize,
+    /// Length of the user's prompt text, in characters.
+    pub prompt_chars: usize,
     /// Time between a user/tool_result line and the next response (≈ API).
     pub api_ms: i64,
     /// Time between a tool_use response and its tool_result (≈ tools).
@@ -206,6 +208,7 @@ impl Aggregate {
                         number: self.turns.len() + 1,
                         started_at: u.timestamp.clone(),
                         last_at: u.timestamp.clone(),
+                        prompt_chars: u.message.content.text().chars().count(),
                         ..Default::default()
                     });
                 } else if let Some(t) = self.turns.last_mut() {

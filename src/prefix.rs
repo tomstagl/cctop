@@ -136,6 +136,19 @@ impl Prefix {
             .map(|m| m.len());
     }
 
+    /// Schema tokens and tool count per MCP server (`mcp:<server>` keys).
+    pub fn mcp_schema_tokens(&self) -> std::collections::BTreeMap<String, (u64, usize)> {
+        let mut out: std::collections::BTreeMap<String, (u64, usize)> = Default::default();
+        for (name, bytes) in &self.tool_lines {
+            if let (d, Some(_)) = crate::tools::display_name(name) {
+                let e = out.entry(d).or_default();
+                e.0 += bytes / 4;
+                e.1 += 1;
+            }
+        }
+        out
+    }
+
     /// Rows sorted by size, with the remainder against `first_call_tokens` as `other`.
     pub fn rows(&self, first_call_tokens: u64) -> Vec<Row> {
         let mut rows = Vec::new();

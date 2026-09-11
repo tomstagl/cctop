@@ -50,6 +50,8 @@ pub struct SessionInfo {
     pub hooks_installed: bool,
     pub permission_waits: usize,
     pub permission_wait_ms: i64,
+    /// Permission prompts per tool name.
+    pub permission_by_tool: std::collections::BTreeMap<String, usize>,
 }
 
 /// Rate-limit figures from the status line (shim), plus cctop's projection.
@@ -313,6 +315,11 @@ impl State {
                 }
             }
             "PermissionRequest" => {
+                *self
+                    .session
+                    .permission_by_tool
+                    .entry(ev.tool_name.clone().unwrap_or_else(|| "tool".into()))
+                    .or_default() += 1;
                 self.session.permission_pending = true;
                 self.session.permission_waiting_since_ms = Some(at);
                 if !id.is_empty() {
