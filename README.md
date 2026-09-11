@@ -1,5 +1,3 @@
-![cctop](brand/png/banner.png)
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="brand/svg/cctop-lockup-vertical-dark.svg">
