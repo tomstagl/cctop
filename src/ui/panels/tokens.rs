@@ -47,6 +47,10 @@ impl Panel for Tokens {
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
+        if key.code == KeyCode::Enter {
+            crate::ui::ledger_view::open(state);
+            return Handled::Yes;
+        }
         if key.code == KeyCode::Char('a') {
             state.tokens_include_agents = !state.tokens_include_agents;
             let msg = if state.tokens_include_agents {

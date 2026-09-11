@@ -6,9 +6,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use crossterm::event::{KeyCode, KeyEvent};
+
 use crate::ui::fmt;
 use crate::ui::layout::Placement;
-use crate::ui::panel::{Panel, PanelId};
+use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 use crate::ui::widgets::{band_style, gauge, sparkline};
 
@@ -34,6 +36,21 @@ impl Panel for Context {
     }
     fn placement(&self) -> Placement {
         Placement::Left
+    }
+
+    fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
+        if state.overlay == Some(self.id()) {
+            return crate::ui::ledger_view::handle_key(key, state);
+        }
+        if key.code == KeyCode::Enter {
+            crate::ui::ledger_view::open(state);
+            return Handled::Yes;
+        }
+        Handled::No
+    }
+
+    fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
+        crate::ui::ledger_view::render(frame, area, state);
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {

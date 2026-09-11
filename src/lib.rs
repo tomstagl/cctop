@@ -11,6 +11,7 @@ pub mod files;
 pub mod git;
 pub mod hooks;
 pub mod install;
+pub mod ledger;
 pub mod metrics;
 pub mod procs;
 pub mod registry;

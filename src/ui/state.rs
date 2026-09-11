@@ -164,6 +164,7 @@ pub struct State {
     pub tools_ui: ToolsUi,
     pub events: crate::events::Log,
     pub events_ui: EventsUi,
+    pub ledger_ui: crate::ui::ledger_view::LedgerUi,
 }
 
 #[derive(Debug, Clone, Default)]
