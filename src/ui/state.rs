@@ -168,6 +168,10 @@ pub struct State {
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
+    /// Ranked advice from the Advisor engine (best first).
+    pub advice: Vec<crate::advisor::Advice>,
+    pub advice_index: usize,
+    pub advice_dismissed: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -530,5 +534,23 @@ impl State {
         } else {
             self.hidden.push(id);
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests_support {
+    use super::State;
+    use crate::metrics::Pricing;
+    use crate::transcript::parse_file;
+    use std::path::Path;
+
+    /// The session-a fixture folded into a fresh state.
+    pub fn fixture_state() -> State {
+        let mut s = State::new(Pricing::bundled());
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        for l in parse_file(path).unwrap() {
+            s.apply(&l);
+        }
+        s
     }
 }

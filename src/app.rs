@@ -82,6 +82,7 @@ pub struct App {
     /// Run before every frame: liveness, git, process stats.
     pub tick_hooks: Vec<TickHook>,
     alerts: crate::alerts::Engine,
+    advisor: crate::advisor::Engine,
     /// Send critical alerts to the desktop (`--notify`).
     pub desktop_notify: bool,
 }
@@ -100,6 +101,7 @@ impl App {
             sink,
             tick_hooks: Vec::new(),
             alerts: crate::alerts::Engine::default(),
+            advisor: crate::advisor::Engine::default(),
             desktop_notify: false,
         }
     }
@@ -112,11 +114,19 @@ impl App {
         self.evaluate_alerts();
     }
 
-    /// Fire any alert whose threshold was just crossed.
+    /// Fire any alert whose threshold was just crossed, and refresh the advice.
     pub fn evaluate_alerts(&mut self) {
         let fired = self.alerts.evaluate(&self.state);
         if !fired.is_empty() {
             crate::alerts::deliver(&fired, &mut self.state, self.desktop_notify);
+        }
+        for rule in std::mem::take(&mut self.state.advice_dismissed) {
+            self.advisor.dismiss(rule);
+        }
+        self.advisor.evaluate(&self.state);
+        self.state.advice = self.advisor.current.clone();
+        if self.state.advice_index >= self.state.advice.len() {
+            self.state.advice_index = 0;
         }
     }
 

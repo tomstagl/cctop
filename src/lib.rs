@@ -2,6 +2,7 @@
 //! CLI over this crate so that every number is reachable from tests and from
 //! `cctop query`.
 
+pub mod advisor;
 pub mod agents;
 pub mod alerts;
 pub mod app;

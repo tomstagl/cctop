@@ -1,5 +1,6 @@
 //! The dashboard panels, one module each.
 
+pub mod advisor;
 pub mod agents;
 pub mod context;
 pub mod events;
@@ -23,6 +24,7 @@ pub fn all() -> Vec<Box<dyn Panel>> {
         Box::new(tools::Tools),
         Box::new(agents::Agents),
         Box::new(files::FilesPanel),
+        Box::new(advisor::AdvisorPanel),
         Box::new(events::Events),
     ]
 }
