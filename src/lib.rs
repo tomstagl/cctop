@@ -6,4 +6,5 @@ pub mod discover;
 pub mod metrics;
 pub mod registry;
 pub mod tail;
+pub mod tools;
 pub mod transcript;
