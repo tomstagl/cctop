@@ -59,7 +59,8 @@ impl Session {
     }
 }
 
-fn pid_alive(pid: u32) -> bool {
+/// True when a process with `pid` exists (see [`Session::is_alive`]).
+pub fn pid_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else {
         return false;
     };

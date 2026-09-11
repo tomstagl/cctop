@@ -136,28 +136,54 @@ fn fixture_path(session: &str) -> Option<PathBuf> {
 
 fn run(attach: Attach) {
     use cctop::app::{self, App};
-    let transcript: PathBuf = match attach.session.as_deref().and_then(fixture_path) {
-        Some(p) => p,
-        None => {
-            let q = cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
-            let s = match cctop::discover::resolve_system(&q, attach.wait) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("cctop: {e}");
-                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                }
-            };
-            cctop::transcript_path(&s)
-        }
-    };
-    // Panels arrive with the next stories; the sink counts lines for now.
-    let mut app = App::new(Vec::new(), Box::new(|_line, _state| {}));
+    use cctop::ui::state::{SessionInfo, State};
+    let (transcript, session_info): (PathBuf, SessionInfo) =
+        match attach.session.as_deref().and_then(fixture_path) {
+            Some(p) => {
+                let info = SessionInfo::from_fixture(&p);
+                (p, info)
+            }
+            None => {
+                let q =
+                    cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
+                let s = match cctop::discover::resolve_system(&q, attach.wait) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("cctop: {e}");
+                        std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                    }
+                };
+                (cctop::transcript_path(&s), SessionInfo::from_registry(&s))
+            }
+        };
+    let mut app = App::new(
+        cctop::ui::panels::all(),
+        Box::new(|line, state: &mut State| state.apply(line)),
+    );
+    app.state = State::new(cctop::metrics::Pricing::load());
+    app.state.session = session_info;
     app.state.now_ms = app::now_ms();
+    // Clock-driven collectors: liveness and git, at most every 5 s.
+    let mut last_git = std::time::Instant::now() - std::time::Duration::from_secs(10);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        state.session.refresh_alive(state.now_ms);
+        if last_git.elapsed() >= std::time::Duration::from_secs(5) {
+            last_git = std::time::Instant::now();
+            if let Some(g) = cctop::git::info(&state.session.cwd) {
+                state.session.git_branch = g.branch;
+                state.session.git_dirty = g.dirty;
+            }
+        }
+    }));
 
     if attach.once {
         for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
             app.feed(line);
         }
+        if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
+            app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        }
+        app.tick();
         if let Some(keys) = attach.keys.as_deref() {
             for k in app::parse_keys(keys) {
                 app.handle_key(k);

@@ -13,6 +13,9 @@ use serde_json::Value;
 pub use crate::tail::{parse_file, Tailer};
 
 /// One line of the transcript.
+// Lines are transient (parsed, applied, dropped), so the size skew between
+// variants costs nothing worth boxing for.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum Line {
     User(UserLine),
@@ -78,6 +81,8 @@ pub struct UserLine {
     pub uuid: Option<String>,
     pub parent_uuid: Option<String>,
     pub timestamp: Option<String>,
+    pub version: Option<String>,
+    pub cwd: Option<String>,
     #[serde(default)]
     pub is_meta: bool,
     #[serde(default)]
@@ -181,6 +186,8 @@ pub struct AssistantLine {
     pub uuid: Option<String>,
     pub parent_uuid: Option<String>,
     pub timestamp: Option<String>,
+    pub version: Option<String>,
+    pub cwd: Option<String>,
     pub request_id: Option<String>,
     /// Effort level in force for this response (`low`/`medium`/`high`…).
     pub effort: Option<String>,

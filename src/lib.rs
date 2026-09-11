@@ -5,6 +5,7 @@
 pub mod agents;
 pub mod app;
 pub mod discover;
+pub mod git;
 pub mod metrics;
 pub mod registry;
 pub mod tail;

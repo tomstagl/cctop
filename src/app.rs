@@ -20,6 +20,8 @@ use crate::ui::State;
 
 /// Applies a transcript line to every collector in the state.
 pub type Sink = Box<dyn FnMut(&Line, &mut State)>;
+/// Clock-driven collector run before each frame.
+pub type TickHook = Box<dyn FnMut(&mut State)>;
 
 pub const REFRESH_DEFAULT_MS: u64 = 250;
 pub const REFRESH_MIN_MS: u64 = 100;
@@ -77,6 +79,8 @@ pub struct App {
     buffered: Vec<Line>,
     /// Applies a transcript line to every collector.
     sink: Sink,
+    /// Run before every frame: liveness, git, process stats.
+    pub tick_hooks: Vec<TickHook>,
 }
 
 impl App {
@@ -91,6 +95,14 @@ impl App {
             frame_style: FrameStyle::default(),
             buffered: Vec::new(),
             sink,
+            tick_hooks: Vec::new(),
+        }
+    }
+
+    /// Run the tick hooks (clock-driven collectors).
+    pub fn tick(&mut self) {
+        for h in self.tick_hooks.iter_mut() {
+            h(&mut self.state);
         }
     }
 
@@ -420,6 +432,7 @@ pub fn run_tui(mut app: App, mut sources: Vec<Box<dyn LineSource>>) -> std::io::
         // Clock-driven values (elapsed, toasts) change every tick.
         if dirty || last_render.elapsed() >= tick {
             app.state.now_ms = now_ms();
+            app.tick();
             term.draw(|f| app.draw(f))?;
             last_render = Instant::now();
             dirty = false;
