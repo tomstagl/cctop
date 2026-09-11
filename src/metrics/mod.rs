@@ -4,4 +4,4 @@ pub mod cost;
 pub mod usage;
 
 pub use cost::{Cost, CostTracker, Price, Pricing, Rates};
-pub use usage::{Aggregate, Turn, Usage};
+pub use usage::{Aggregate, Away, Turn, Usage};

@@ -101,6 +101,31 @@ pub struct Turn {
     pub tool_calls: usize,
     /// Number of tool results flagged `is_error`.
     pub tool_errors: usize,
+    /// Hook commands that ran at the end of this turn (`stop_hook_summary`).
+    pub hook_runs: usize,
+    /// Total hook wall time for this turn, milliseconds.
+    pub hook_ms: u64,
+    pub hook_errors: usize,
+}
+
+impl Turn {
+    /// Wall time so far: exact once `turn_duration` arrived, else `now − start`.
+    pub fn elapsed_ms(&self, now_ms: i64) -> Option<i64> {
+        if let Some(d) = self.duration_ms {
+            return Some(d as i64);
+        }
+        self.started_at
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms)
+            .map(|s| (now_ms - s).max(0))
+    }
+}
+
+/// An `away_summary` Claude Code wrote while the user was gone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Away {
+    pub at: Option<String>,
+    pub content: String,
 }
 
 /// Running aggregate over a transcript. Feed lines in order.
@@ -114,6 +139,10 @@ pub struct Aggregate {
     pub observed_ttl: Option<CacheTtl>,
     /// Last model used.
     pub model: Option<String>,
+    /// Prompts waiting in Claude Code's input queue (`queue-operation`).
+    pub queued_prompts: usize,
+    /// `away_summary` lines, in order.
+    pub away: Vec<Away>,
 }
 
 impl Aggregate {
@@ -164,15 +193,33 @@ impl Aggregate {
             }
             Line::Assistant(a) => self.push_assistant(a),
             Line::System(s) => {
-                if let (crate::transcript::SystemKind::TurnDuration, Some(ms)) =
-                    (s.kind(), s.duration_ms)
-                {
-                    if let Some(t) = self.turns.last_mut() {
-                        t.duration_ms = Some(ms);
-                        t.last_at = s.timestamp.clone().or(t.last_at.take());
+                use crate::transcript::SystemKind;
+                match s.kind() {
+                    SystemKind::TurnDuration => {
+                        if let (Some(ms), Some(t)) = (s.duration_ms, self.turns.last_mut()) {
+                            t.duration_ms = Some(ms);
+                            t.last_at = s.timestamp.clone().or(t.last_at.take());
+                        }
                     }
+                    SystemKind::StopHookSummary => {
+                        if let Some(t) = self.turns.last_mut() {
+                            t.hook_runs += s.hook_infos.len();
+                            t.hook_ms += s.hook_infos.iter().map(|h| h.duration_ms).sum::<u64>();
+                            t.hook_errors += s.hook_errors.len();
+                        }
+                    }
+                    SystemKind::AwaySummary => self.away.push(Away {
+                        at: s.timestamp.clone(),
+                        content: s.content.clone().unwrap_or_default(),
+                    }),
+                    SystemKind::Other => {}
                 }
             }
+            Line::QueueOperation(q) => match q.operation.as_str() {
+                "enqueue" => self.queued_prompts += 1,
+                "popAll" | "clear" => self.queued_prompts = 0,
+                _ => self.queued_prompts = self.queued_prompts.saturating_sub(1),
+            },
             _ => {}
         }
     }
@@ -292,6 +339,45 @@ mod tests {
         assert!(agg.total.cache_hit_ratio().unwrap() > 0.9);
         assert_eq!(agg.model.as_deref(), Some("claude-sonnet-5"));
         assert_eq!(last.effort.as_deref(), Some("medium"));
+    }
+
+    #[test]
+    fn turn_duration_hooks_queue_and_away_from_system_lines() {
+        let lines = fixture();
+        let agg = Aggregate::from_lines(&lines);
+        // Hand-computed from the fixture's system lines.
+        assert_eq!(agg.turns[2].duration_ms, Some(95_830), "turn 3");
+        assert_eq!(agg.turns[0].duration_ms, Some(20_814));
+        assert_eq!(agg.turns[11].duration_ms, Some(398_534));
+        assert_eq!(
+            agg.turns.iter().map(|t| t.hook_ms).sum::<u64>(),
+            37 + 65 + 60 + 33 + 39 + 38 + 59 + 67 + 58
+        );
+        assert_eq!(agg.turns.iter().map(|t| t.hook_runs).sum::<usize>(), 9);
+        assert_eq!(agg.turns.iter().map(|t| t.hook_errors).sum::<usize>(), 0);
+        assert_eq!(agg.turns[2].hook_ms, 60);
+        // enqueue, remove, enqueue, popAll → 0 queued at the end.
+        assert_eq!(agg.queued_prompts, 0);
+        let mut partial = Aggregate::default();
+        for l in &lines {
+            partial.push(l);
+            if partial.turns.len() == 14 && partial.queued_prompts == 1 {
+                break;
+            }
+        }
+        assert_eq!(
+            partial.queued_prompts, 1,
+            "queued after the enqueue in turn 14"
+        );
+        assert_eq!(agg.away.len(), 1);
+        assert!(agg.away[0].at.is_some());
+        assert!(!agg.away[0].content.is_empty());
+        // Live elapsed for a turn without turn_duration.
+        let t = &agg.turns[3];
+        assert!(t.duration_ms.is_none());
+        let start = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref().unwrap()).unwrap();
+        assert_eq!(t.elapsed_ms(start + 5_000), Some(5_000));
+        assert_eq!(agg.turns[2].elapsed_ms(0), Some(95_830));
     }
 
     #[test]
