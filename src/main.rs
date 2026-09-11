@@ -17,7 +17,7 @@ enum Command {
     /// Attach to a session and show the dashboard (default).
     Run(Attach),
     /// Print session metrics as JSON.
-    Query,
+    Query(QueryArgs),
     /// Print the metrics registry as Markdown.
     Metrics(MetricsArgs),
     /// Install the status-line shim and hooks into ~/.claude/settings.json.
@@ -49,6 +49,44 @@ struct InstallArgs {
     yes: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+struct QueryArgs {
+    #[command(subcommand)]
+    what: QueryWhat,
+    #[command(flatten)]
+    attach: Attach,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum QueryWhat {
+    /// Session, context, tokens, cost, limits at a glance.
+    Summary,
+    /// One row per turn.
+    Ledger {
+        /// Only the last N turns.
+        #[arg(long)]
+        last: Option<usize>,
+    },
+    /// Per-tool statistics and the largest results.
+    Tools,
+    /// Files touched.
+    Files,
+    /// Subagents, MCP servers, background tasks.
+    Agents,
+    /// Ranked Advisor recommendations with explanations.
+    Advice,
+    /// What rides on every request.
+    Prefix,
+    /// Event log.
+    Events {
+        /// Only events newer than this (e.g. 10m, 2h).
+        #[arg(long)]
+        since: Option<String>,
+    },
+    /// Definition of a metric id (see docs/metrics.md).
+    Explain { metric_id: String },
+}
+
 #[derive(Args, Debug, Default, Clone)]
 struct AdviseArgs {
     #[command(flatten)]
@@ -71,14 +109,14 @@ struct MetricsArgs {
 /// How to pick the Claude Code session to attach to.
 #[derive(Args, Debug, Default, Clone)]
 struct Attach {
-    /// Session id (or ≥ 8-char prefix), name, or pid.
-    #[arg(long)]
+    /// Session id (or ≥ 8-char prefix), name, pid, or a fixture .jsonl path.
+    #[arg(long, global = true)]
     session: Option<String>,
     /// Attach to the newest session running in this directory.
-    #[arg(long)]
+    #[arg(long, global = true)]
     cwd: Option<PathBuf>,
     /// Keep polling until a session appears.
-    #[arg(long)]
+    #[arg(long, global = true)]
     wait: bool,
     /// Render one frame and exit (headless; for tests and scripts).
     #[arg(long)]
@@ -104,7 +142,10 @@ fn main() {
             run(attach);
             return;
         }
-        Command::Query => "query",
+        Command::Query(q) => {
+            query(q);
+            return;
+        }
         Command::Metrics(args) => {
             use cctop::metrics::registry;
             if let Some(path) = args.readme {
@@ -173,37 +214,15 @@ fn main() {
     println!("cctop {name}: not implemented");
 }
 
-/// A `--session` value naming an existing `.jsonl` (or a directory holding
-/// `<name>.jsonl`) is a fixture: read it instead of the live registry.
-fn fixture_path(session: &str) -> Option<PathBuf> {
-    let p = PathBuf::from(session);
-    if p.is_file() {
-        return Some(p);
-    }
-    let with_ext = p.with_extension("jsonl");
-    with_ext.is_file().then_some(with_ext)
-}
-
 fn run(attach: Attach) {
     use cctop::app::{self, App};
     use cctop::ui::state::{SessionInfo, State};
     let (transcript, session_info): (PathBuf, SessionInfo) =
-        match attach.session.as_deref().and_then(fixture_path) {
-            Some(p) => {
-                let info = SessionInfo::from_fixture(&p);
-                (p, info)
-            }
-            None => {
-                let q =
-                    cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
-                let s = match cctop::discover::resolve_system(&q, attach.wait) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("cctop: {e}");
-                        std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                    }
-                };
-                (cctop::transcript_path(&s), SessionInfo::from_registry(&s))
+        match cctop::load::resolve(&target(&attach)) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("cctop: {e}");
+                std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
             }
         };
     let mut app = App::new(
@@ -353,53 +372,59 @@ fn run(attach: Attach) {
     }
 }
 
-/// Build a fully loaded state for a session (fixture or live) without a UI.
+fn target(attach: &Attach) -> cctop::load::Target {
+    cctop::load::Target {
+        session: attach.session.clone(),
+        cwd: attach.cwd.clone(),
+        wait: attach.wait,
+    }
+}
+
 fn load_state(attach: &Attach) -> cctop::ui::State {
-    use cctop::ui::state::{SessionInfo, State};
-    let (transcript, info): (PathBuf, SessionInfo) =
-        match attach.session.as_deref().and_then(fixture_path) {
-            Some(p) => {
-                let info = SessionInfo::from_fixture(&p);
-                (p, info)
-            }
-            None => {
-                let q =
-                    cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
-                let s = match cctop::discover::resolve_system(&q, attach.wait) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("cctop: {e}");
-                        std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                    }
-                };
-                (cctop::transcript_path(&s), SessionInfo::from_registry(&s))
-            }
-        };
-    let mut state = State::new(cctop::metrics::Pricing::load());
-    state.session = info;
-    state.now_ms = cctop::app::now_ms();
-    for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
-        state.apply(&line);
-    }
-    state.agents = cctop::agents::load(&transcript.with_extension(""));
-    if !state.session.alive {
-        state.session.ended_at_ms = state.last_line_at_ms;
-    }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let cwd = state.session.cwd.clone();
-    state.prefix.scan(&cwd, home.as_deref());
-    let mut status = cctop::status::Watcher::new(&state.session.session_id);
-    if status.poll() || status.latest.is_some() {
-        if let Some(s) = status.latest.as_ref() {
-            state.apply_status(s, &status.series_5h);
+    match cctop::load::state(&target(attach)) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cctop: {e}");
+            std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
         }
     }
-    let mut hooks =
-        cctop::hooks::Watcher::new(&cctop::status::cctop_dir(), &state.session.session_id);
-    for ev in hooks.poll() {
-        state.apply_hook(&ev);
-    }
-    state
+}
+
+fn query(q: QueryArgs) {
+    use cctop::query as qy;
+    let out = match &q.what {
+        QueryWhat::Explain { metric_id } => qy::explain(metric_id),
+        what => {
+            let mut state = load_state(&q.attach);
+            let mut engine = cctop::advisor::Engine::default();
+            engine.evaluate(&state);
+            state.advice = engine.current.clone();
+            match what {
+                QueryWhat::Summary => qy::summary(&state),
+                QueryWhat::Ledger { last } => qy::ledger_json(&state, *last),
+                QueryWhat::Tools => qy::tools(&state),
+                QueryWhat::Files => qy::files(&state),
+                QueryWhat::Agents => qy::agents(&state),
+                QueryWhat::Advice => qy::advice(&state),
+                QueryWhat::Prefix => qy::prefix(&state),
+                QueryWhat::Events { since } => {
+                    let since_ms = match since.as_deref() {
+                        Some(s) => match qy::parse_since(s) {
+                            Some(ms) => Some(ms),
+                            None => {
+                                eprintln!("cctop: --since expects e.g. 10m, 2h, 90s");
+                                std::process::exit(1);
+                            }
+                        },
+                        None => None,
+                    };
+                    qy::events(&state, since_ms)
+                }
+                QueryWhat::Explain { .. } => unreachable!(),
+            }
+        }
+    };
+    println!("{}", serde_json::to_string_pretty(&out).unwrap());
 }
 
 fn advise(a: AdviseArgs) {

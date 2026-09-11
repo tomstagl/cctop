@@ -1,0 +1,169 @@
+---
+source: src/query.rs
+expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
+---
+[
+  {
+    "api_calls": {
+      "approx": false,
+      "metric_id": "api_calls",
+      "unit": "count",
+      "value": 16
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 4151106
+    },
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 32361
+    },
+    "compaction": false,
+    "cost": {
+      "approx": true,
+      "metric_id": "cost",
+      "unit": "USD",
+      "value": 1.0167792
+    },
+    "duration": {
+      "approx": false,
+      "metric_id": "turn_duration",
+      "unit": "ms",
+      "value": 175979
+    },
+    "effort": "medium",
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 32
+    },
+    "model": "claude-sonnet-5",
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 5705
+    },
+    "started_at_ms": 1787824443286,
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 2363
+    },
+    "tools": "mcp:claude-in-chrome×25 Bash×2 Write×1",
+    "turn": 13
+  },
+  {
+    "api_calls": {
+      "approx": false,
+      "metric_id": "api_calls",
+      "unit": "count",
+      "value": 52
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 17091493
+    },
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 121929
+    },
+    "compaction": false,
+    "cost": {
+      "approx": true,
+      "metric_id": "cost",
+      "unit": "USD",
+      "value": 4.0666826
+    },
+    "duration": {
+      "approx": false,
+      "metric_id": "turn_duration",
+      "unit": "ms",
+      "value": 1194956
+    },
+    "effort": "medium",
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 104
+    },
+    "model": "claude-sonnet-5",
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 16046
+    },
+    "started_at_ms": 1787824652608,
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 2257
+    },
+    "tools": "mcp:claude-in-chrome×122 Bash×3",
+    "turn": 14
+  },
+  {
+    "api_calls": {
+      "approx": false,
+      "metric_id": "api_calls",
+      "unit": "count",
+      "value": 0
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 0
+    },
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 0
+    },
+    "compaction": false,
+    "cost": null,
+    "duration": {
+      "approx": false,
+      "metric_id": "turn_duration",
+      "unit": "ms",
+      "value": 0
+    },
+    "effort": "",
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 0
+    },
+    "model": "",
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 0
+    },
+    "started_at_ms": 1787825847564,
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 0
+    },
+    "tools": "",
+    "turn": 15
+  }
+]

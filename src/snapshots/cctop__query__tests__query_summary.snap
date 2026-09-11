@@ -1,0 +1,178 @@
+---
+source: src/query.rs
+expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
+---
+{
+  "advice_count": 0,
+  "agents": {
+    "approx": false,
+    "metric_id": "agent_state",
+    "unit": "count",
+    "value": 1
+  },
+  "api_calls": {
+    "approx": false,
+    "metric_id": "api_calls",
+    "unit": "count",
+    "value": 143
+  },
+  "burn_rate": {
+    "approx": true,
+    "metric_id": "burn_rate",
+    "unit": "USD/h",
+    "value": 25.99123573283813
+  },
+  "context": {
+    "compactions": {
+      "approx": false,
+      "metric_id": "compactions",
+      "unit": "count",
+      "value": 0
+    },
+    "prefix": {
+      "approx": false,
+      "metric_id": "context_prefix",
+      "unit": "tokens",
+      "value": 60582
+    },
+    "ratio": {
+      "approx": true,
+      "metric_id": "context_size",
+      "unit": "ratio",
+      "value": 0.396365
+    },
+    "size": {
+      "approx": true,
+      "metric_id": "context_size",
+      "unit": "tokens",
+      "value": 396365
+    },
+    "turns_until_compaction": {
+      "approx": true,
+      "metric_id": "turns_until_compaction",
+      "unit": "turns",
+      "value": 8.036989501372158
+    },
+    "velocity": {
+      "approx": false,
+      "metric_id": "context_velocity",
+      "unit": "tokens/turn",
+      "value": 50222.16340224001
+    },
+    "window": {
+      "approx": true,
+      "metric_id": "context_window",
+      "unit": "tokens",
+      "value": 1000000
+    }
+  },
+  "cost": {
+    "approx": false,
+    "metric_id": "cost",
+    "unit": "USD",
+    "value": 9.903498600000011
+  },
+  "cost_by_model": {
+    "claude-haiku-4-5-20251001": 0.001946,
+    "claude-sonnet-5": 9.901552600000011
+  },
+  "current_turn_elapsed": {
+    "approx": false,
+    "metric_id": "turn_elapsed",
+    "unit": "ms",
+    "value": 0
+  },
+  "hooks_installed": false,
+  "input_rate": {
+    "approx": false,
+    "metric_id": "input_rate",
+    "unit": "tokens/min",
+    "value": 1833602.701373589
+  },
+  "limits": {
+    "hint": "run cctop install",
+    "source": "missing"
+  },
+  "permission_waits": {
+    "hint": "run cctop install",
+    "source": "missing"
+  },
+  "queued_prompts": {
+    "approx": false,
+    "metric_id": "queued_prompts",
+    "unit": "count",
+    "value": 0
+  },
+  "session": {
+    "alive": false,
+    "cwd": "",
+    "effort": "medium",
+    "model": "claude-sonnet-5",
+    "name": "session-a",
+    "permission_mode": null,
+    "pid": null,
+    "plan": {
+      "hint": "run cctop install",
+      "source": "missing"
+    },
+    "session_id": "",
+    "version": ""
+  },
+  "tokens": {
+    "cache_hit_ratio": {
+      "approx": false,
+      "metric_id": "cache_hit_ratio",
+      "unit": "ratio",
+      "value": 0.9822053232392264
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 32969470
+    },
+    "cache_ttl": "OneHour",
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 597024
+    },
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 286
+    },
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 67061
+    },
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 30922
+    }
+  },
+  "tokens_to_ctx": {
+    "approx": true,
+    "metric_id": "tokens_to_ctx",
+    "unit": "tokens",
+    "value": 37539
+  },
+  "tool_calls": {
+    "approx": false,
+    "metric_id": "tool_calls",
+    "unit": "count",
+    "value": 257
+  },
+  "turns": {
+    "approx": false,
+    "metric_id": "turn_number",
+    "unit": "count",
+    "value": 15
+  }
+}
