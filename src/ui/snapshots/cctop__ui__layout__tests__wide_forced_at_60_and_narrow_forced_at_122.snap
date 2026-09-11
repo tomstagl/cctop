@@ -1,0 +1,18 @@
+---
+source: src/ui/layout.rs
+expression: describe(&l)
+---
+[
+    "mode=Wide",
+    "0: x=0 y=0 w=60 h=4",
+    "1: x=0 y=4 w=31 h=6",
+    "2: x=0 y=10 w=31 h=9",
+    "3: x=0 y=19 w=31 h=5",
+    "4: x=0 y=24 w=31 h=16",
+    "5: x=30 y=4 w=30 h=24",
+    "6: x=30 y=28 w=30 h=7",
+    "7: x=30 y=35 w=30 h=5",
+    "9: x=0 y=40 w=60 h=4",
+    "8: x=0 y=44 w=60 h=6",
+    "footer: y=50 h=1",
+]

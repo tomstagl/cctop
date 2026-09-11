@@ -9,3 +9,4 @@ pub mod registry;
 pub mod tail;
 pub mod tools;
 pub mod transcript;
+pub mod ui;
