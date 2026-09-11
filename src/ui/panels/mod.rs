@@ -3,6 +3,7 @@
 pub mod context;
 pub mod header;
 pub mod tokens;
+pub mod tools;
 
 use super::Panel;
 
@@ -12,5 +13,6 @@ pub fn all() -> Vec<Box<dyn Panel>> {
         Box::new(header::Header),
         Box::new(context::Context),
         Box::new(tokens::Tokens),
+        Box::new(tools::Tools),
     ]
 }

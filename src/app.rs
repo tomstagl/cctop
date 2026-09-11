@@ -155,7 +155,20 @@ impl App {
         self.state.focused = Some(ids[next]);
     }
 
-    /// Global keys first; anything else goes to the focused panel.
+    fn route_to(&mut self, id: PanelId, key: KeyEvent) -> Handled {
+        let mut state = std::mem::take(&mut self.state);
+        let handled = self
+            .panels
+            .iter_mut()
+            .find(|p| p.id() == id)
+            .map(|p| p.handle_key(key, &mut state))
+            .unwrap_or(Handled::No);
+        self.state = state;
+        handled
+    }
+
+    /// Global keys first; anything else goes to the focused panel. A panel
+    /// that captures input (overlay, text field) sees every key first.
     pub fn handle_key(&mut self, key: KeyEvent) {
         if self.help {
             self.help = false;
@@ -163,6 +176,28 @@ impl App {
         }
         let ctrl_c =
             key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL);
+        if ctrl_c {
+            self.quit = true;
+            return;
+        }
+        if let Some(id) = self.state.overlay {
+            if key.code == KeyCode::Esc {
+                self.state.overlay = None;
+            } else {
+                self.route_to(id, key);
+            }
+            return;
+        }
+        if let Some(id) = self.state.focused {
+            let captures = self
+                .panels
+                .iter()
+                .find(|p| p.id() == id)
+                .is_some_and(|p| p.captures_input(&self.state));
+            if captures && self.route_to(id, key) == Handled::Yes {
+                return;
+            }
+        }
         match key.code {
             KeyCode::Char('q') | KeyCode::Char('c') if ctrl_c || key.code == KeyCode::Char('q') => {
                 self.quit = true
@@ -208,15 +243,7 @@ impl App {
             }
             _ => {
                 if let Some(id) = self.state.focused {
-                    let mut state = std::mem::take(&mut self.state);
-                    let handled = self
-                        .panels
-                        .iter_mut()
-                        .find(|p| p.id() == id)
-                        .map(|p| p.handle_key(key, &mut state))
-                        .unwrap_or(Handled::No);
-                    self.state = state;
-                    let _ = handled;
+                    self.route_to(id, key);
                 }
             }
         }
@@ -238,6 +265,13 @@ impl App {
             }
         }
         self.draw_footer(frame, lay.footer);
+        if let Some(id) = self.state.overlay {
+            if let Some(panel) = self.panels.iter().find(|p| p.id() == id) {
+                let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+                frame.render_widget(Clear, body);
+                panel.render_overlay(frame, body, &self.state);
+            }
+        }
         if self.help {
             self.draw_help(frame, area);
         }

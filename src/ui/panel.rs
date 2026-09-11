@@ -40,6 +40,13 @@ pub trait Panel {
     fn handle_key(&mut self, _key: KeyEvent, _state: &mut State) -> Handled {
         Handled::No
     }
+    /// True while the panel wants every key (an inline text field, an
+    /// overlay): global bindings are suspended except Ctrl-C.
+    fn captures_input(&self, _state: &State) -> bool {
+        false
+    }
+    /// Full-screen view when `state.overlay == Some(self.id())`.
+    fn render_overlay(&self, _frame: &mut Frame, _area: Rect, _state: &State) {}
 
     /// Layout description derived from the trait methods.
     fn spec(&self) -> PanelSpec {

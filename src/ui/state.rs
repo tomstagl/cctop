@@ -125,6 +125,61 @@ pub struct State {
     pub last_line_at_ms: Option<i64>,
     /// Tokens panel: include subagent usage (toggled with `a`).
     pub tokens_include_agents: bool,
+    /// Full-screen view owned by a panel (`Enter`), closed with Esc.
+    pub overlay: Option<PanelId>,
+    pub tools_ui: ToolsUi,
+}
+
+/// Sort column of the Tools table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ToolSort {
+    #[default]
+    Calls,
+    Errors,
+    P50,
+    P95,
+    Last,
+    Tokens,
+    Name,
+}
+
+impl ToolSort {
+    pub fn next(self) -> ToolSort {
+        use ToolSort::*;
+        match self {
+            Calls => Errors,
+            Errors => P50,
+            P50 => P95,
+            P95 => Last,
+            Last => Tokens,
+            Tokens => Name,
+            Name => Calls,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        use ToolSort::*;
+        match self {
+            Calls => "N",
+            Errors => "ERR",
+            P50 => "p50",
+            P95 => "p95",
+            Last => "LAST",
+            Tokens => "TOKENS→CTX",
+            Name => "TOOL",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ToolsUi {
+    pub sort: ToolSort,
+    pub ascending: bool,
+    /// Substring filter on the tool name; `Some` while active.
+    pub filter: Option<String>,
+    /// The filter box is taking keystrokes.
+    pub editing: bool,
+    /// Selected row in the (sorted, filtered) table.
+    pub selected: usize,
 }
 
 impl State {
