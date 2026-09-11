@@ -35,7 +35,7 @@ enum Command {
     /// Open cctop in a right-hand pane of the current multiplexer.
     Split,
     /// Print the current Advisor recommendations.
-    Advise,
+    Advise(AdviseArgs),
     /// Write an end-of-session report.
     Report,
     /// Export ledger and events.
@@ -47,6 +47,15 @@ struct InstallArgs {
     /// Apply without asking.
     #[arg(long, short = 'y')]
     yes: bool,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct AdviseArgs {
+    #[command(flatten)]
+    attach: Attach,
+    /// Print JSON instead of a table.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -154,7 +163,10 @@ fn main() {
             std::process::exit(cctop::status::run_shim(&original));
         }
         Command::Split => "split",
-        Command::Advise => "advise",
+        Command::Advise(a) => {
+            advise(a);
+            return;
+        }
         Command::Report => "report",
         Command::Export => "export",
     };
@@ -338,5 +350,88 @@ fn run(attach: Attach) {
     if let Err(e) = app::run_tui(app, vec![Box::new(tailer)]) {
         eprintln!("cctop: {e}");
         std::process::exit(1);
+    }
+}
+
+/// Build a fully loaded state for a session (fixture or live) without a UI.
+fn load_state(attach: &Attach) -> cctop::ui::State {
+    use cctop::ui::state::{SessionInfo, State};
+    let (transcript, info): (PathBuf, SessionInfo) =
+        match attach.session.as_deref().and_then(fixture_path) {
+            Some(p) => {
+                let info = SessionInfo::from_fixture(&p);
+                (p, info)
+            }
+            None => {
+                let q =
+                    cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
+                let s = match cctop::discover::resolve_system(&q, attach.wait) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("cctop: {e}");
+                        std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                    }
+                };
+                (cctop::transcript_path(&s), SessionInfo::from_registry(&s))
+            }
+        };
+    let mut state = State::new(cctop::metrics::Pricing::load());
+    state.session = info;
+    state.now_ms = cctop::app::now_ms();
+    for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
+        state.apply(&line);
+    }
+    state.agents = cctop::agents::load(&transcript.with_extension(""));
+    if !state.session.alive {
+        state.session.ended_at_ms = state.last_line_at_ms;
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let cwd = state.session.cwd.clone();
+    state.prefix.scan(&cwd, home.as_deref());
+    let mut status = cctop::status::Watcher::new(&state.session.session_id);
+    if status.poll() || status.latest.is_some() {
+        if let Some(s) = status.latest.as_ref() {
+            state.apply_status(s, &status.series_5h);
+        }
+    }
+    let mut hooks =
+        cctop::hooks::Watcher::new(&cctop::status::cctop_dir(), &state.session.session_id);
+    for ev in hooks.poll() {
+        state.apply_hook(&ev);
+    }
+    state
+}
+
+fn advise(a: AdviseArgs) {
+    let state = load_state(&a.attach);
+    let mut engine = cctop::advisor::Engine::default();
+    engine.evaluate(&state);
+    if a.json {
+        let items: Vec<serde_json::Value> = engine
+            .current
+            .iter()
+            .map(|x| {
+                serde_json::json!({
+                    "rule": x.rule,
+                    "headline": x.headline,
+                    "evidence": x.evidence,
+                    "action": x.action,
+                    "saving": x.saving.label(),
+                    "doc_key": x.doc_key,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&items).unwrap());
+        return;
+    }
+    if engine.current.is_empty() {
+        println!("cctop advise: no recommendation — the session looks efficient");
+        return;
+    }
+    for (i, x) in engine.current.iter().enumerate() {
+        println!("{}. [{}] {}", i + 1, x.rule, x.headline);
+        println!("   evidence: {}", x.evidence);
+        println!("   action:   {}", x.action);
+        println!("   saving:   {}", x.saving.label());
     }
 }

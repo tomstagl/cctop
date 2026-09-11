@@ -20,6 +20,12 @@ pub fn all() -> Vec<Box<dyn Rule>> {
         Box::new(LongForeground),
         Box::new(FreshInputSpike),
         Box::new(ChattyTurns),
+        Box::new(RateLimitPacing),
+        Box::new(SubagentModel),
+        Box::new(ErrorLoop),
+        Box::new(HookOverhead),
+        Box::new(BigPrefix),
+        Box::new(NoHandoff),
     ]
 }
 
@@ -38,6 +44,12 @@ pub fn explain(doc_key: &str) -> &'static str {
         "A10" => "A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background: Claude keeps working and is notified when the command finishes.",
         "A11" => "Uncached input tokens are the most expensive kind. A large paste is billed in full on that turn and then stays in context. Point Claude at the file (it reads only what it needs) or paste the relevant slice.",
         "A12" => "Every turn re-sends the whole context, cache reads included. Many tiny prompts multiply that cost; one prompt with several instructions costs a single context read and usually gets a more coherent answer.",
+        "A13" => "Rate limits are account-wide and reset on a fixed schedule. If the current burn reaches 100 % before the reset, the session stops mid-task. Moving exploration and summaries to cheaper subagents lowers the burn; pausing heavy work until the reset avoids the cut-off.",
+        "A14" => "Search, listing and summarising tasks do not need the most capable model. Running such subagents on Sonnet or Haiku cuts their cost several-fold with the same result, and leaves Opus for the reasoning-heavy main thread.",
+        "A15" => "When the same command fails repeatedly with the same error, each retry re-injects the full error output and the model rarely finds a new angle. Interrupt, read the error yourself, and give the fix or the missing context in one prompt.",
+        "A16" => "Hooks run synchronously inside the turn. A slow PostToolUse or Stop hook adds its full duration to every tool call or turn. Make expensive hooks asynchronous, or narrow their matcher to the tools and paths they care about.",
+        "A17" => "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills) is sent on every request. Even as a cache read it is billed, and it crowds out working context. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers you do not use in this project.",
+        "A18" => "Long sessions accumulate stale context: superseded plans, old tool output, resolved errors. Past a natural boundary, a short hand-off note and a fresh session cost fewer tokens than carrying everything forward through compactions.",
         _ => "No explanation for this rule yet.",
     }
 }
@@ -529,6 +541,215 @@ impl Rule for ChattyTurns {
     }
 }
 
+/// A13 — the 5 h limit is projected to run out before it resets.
+pub struct RateLimitPacing;
+impl Rule for RateLimitPacing {
+    fn id(&self) -> &'static str {
+        "A13"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let l = state.limits.as_ref()?;
+        let (ex, reset) = (l.exhaustion_ms?, l.five_hour_resets_at_ms?);
+        if ex >= reset {
+            return None;
+        }
+        Some(Advice {
+            rule: "A13",
+            headline: format!(
+                "At this burn you hit the 5 h limit {} before it resets",
+                fmt::duration_ms(reset - ex)
+            ),
+            evidence: format!(
+                "{:.0} % used, exhausted in {}",
+                l.five_hour_pct,
+                fmt::duration_ms(ex - state.clock_ms())
+            ),
+            action: "Move exploration to Sonnet subagents or pause the heavy work until the reset."
+                .into(),
+            saving: Saving::Avoids,
+            doc_key: "A13",
+        })
+    }
+}
+
+/// A14 — an Opus subagent doing search/summarise work.
+pub struct SubagentModel;
+impl Rule for SubagentModel {
+    fn id(&self) -> &'static str {
+        "A14"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        const PATTERNS: &[&str] = &[
+            "search", "summar", "list", "find", "explore", "look for", "locate", "scan",
+        ];
+        let a = state
+            .agents
+            .values()
+            .filter(|a| a.model.contains("opus"))
+            .filter(|a| {
+                let text = format!("{} {}", a.agent_type, a.description).to_lowercase();
+                PATTERNS.iter().any(|p| text.contains(p))
+            })
+            .max_by_key(|a| a.usage.total())?;
+        let pricing = state.cost.pricing();
+        let opus = pricing.estimate(&a.usage, &a.model).unwrap_or(0.0);
+        let sonnet = pricing.estimate(&a.usage, "claude-sonnet-5").unwrap_or(0.0);
+        let saved_tokens = ((opus - sonnet).max(0.0) / 5.0 * 1e6) as u64; // at $5/MTok input-equivalent
+        Some(Advice {
+            rule: "A14",
+            headline: format!(
+                "The {} agent \"{}\" is on Opus",
+                a.agent_type,
+                fmt::clip(&a.description, 30)
+            ),
+            evidence: format!(
+                "{} tokens so far; search-and-summarise work runs equally well on Sonnet/Haiku",
+                fmt::tokens(a.usage.total())
+            ),
+            action: "Pick a cheaper model for search, listing and summary subagents.".into(),
+            saving: Saving::Tokens(saved_tokens.max(1)),
+            doc_key: "A14",
+        })
+    }
+}
+
+/// A15 — the same tool with the same input failed ≥ 3×.
+pub struct ErrorLoop;
+impl Rule for ErrorLoop {
+    fn id(&self) -> &'static str {
+        "A15"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let mut fails: std::collections::HashMap<(&str, &str), (usize, u64)> = Default::default();
+        for c in state.tools.calls.iter().filter(|c| c.is_error) {
+            let e = fails
+                .entry((c.name.as_str(), c.input_summary.as_str()))
+                .or_default();
+            e.0 += 1;
+            e.1 += c.result_tokens_est;
+        }
+        let ((name, input), (n, tokens)) = fails
+            .into_iter()
+            .filter(|(_, (n, _))| *n >= 3)
+            .max_by_key(|(_, (n, _))| *n)?;
+        Some(Advice {
+            rule: "A15",
+            headline: format!("`{name} {input}` failed {n}× with the same input"),
+            evidence: format!(
+                "{} tokens of error output re-read across the retries",
+                fmt::tokens(tokens)
+            ),
+            action: "Interrupt and give the fix or the missing context yourself in one prompt."
+                .into(),
+            saving: Saving::Tokens(tokens / n as u64),
+            doc_key: "A15",
+        })
+    }
+}
+
+/// A16 — hook time > 10 % of turn time over recent turns.
+pub struct HookOverhead;
+impl Rule for HookOverhead {
+    fn id(&self) -> &'static str {
+        "A16"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let turns: Vec<_> = state
+            .agg
+            .turns
+            .iter()
+            .filter(|t| t.duration_ms.is_some() && t.hook_runs > 0)
+            .rev()
+            .take(5)
+            .collect();
+        if turns.is_empty() {
+            return None;
+        }
+        let hook: u64 = turns.iter().map(|t| t.hook_ms).sum();
+        let total: u64 = turns.iter().filter_map(|t| t.duration_ms).sum();
+        if total == 0 || (hook as f64) / (total as f64) <= 0.10 {
+            return None;
+        }
+        let per_turn = hook / turns.len() as u64;
+        Some(Advice {
+            rule: "A16",
+            headline: format!("Hooks add {} per turn ({:.0} % of turn time)", fmt::short_ms(per_turn), hook as f64 / total as f64 * 100.0),
+            evidence: format!("{} hook runs over the last {} turns", turns.iter().map(|t| t.hook_runs).sum::<usize>(), turns.len()),
+            action: "Make slow hooks async or scope their matcher to the tools and paths they care about.".into(),
+            saving: Saving::Seconds((per_turn / 1000).max(1)),
+            doc_key: "A16",
+        })
+    }
+}
+
+/// A17 — the fixed prefix is more than a quarter of the window.
+pub struct BigPrefix;
+impl Rule for BigPrefix {
+    fn id(&self) -> &'static str {
+        "A17"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let v = state.context();
+        if v.window == 0 || v.prefix == 0 || (v.prefix as f64) / (v.window as f64) <= 0.25 {
+            return None;
+        }
+        let rows = state.prefix.rows(v.prefix);
+        let biggest = rows
+            .iter()
+            .find(|r| r.kind != crate::prefix::Kind::Other)
+            .map(|r| format!("largest: {} ({})", r.name, fmt::tokens(r.tokens_est)))
+            .unwrap_or_else(|| "press i on Context for the breakdown".into());
+        Some(Advice {
+            rule: "A17",
+            headline: format!(
+                "Your fixed prefix is {} tokens ({:.0} % of the window)",
+                fmt::tokens(v.prefix),
+                v.prefix as f64 / v.window as f64 * 100.0
+            ),
+            evidence: biggest,
+            action:
+                "Trim CLAUDE.md, move rarely-used rules to skills, and disable unused MCP servers."
+                    .into(),
+            saving: Saving::Tokens(v.prefix / 10),
+            doc_key: "A17",
+        })
+    }
+}
+
+/// A18 — > 3 h in one context with > 70 % of the window used.
+pub struct NoHandoff;
+impl Rule for NoHandoff {
+    fn id(&self) -> &'static str {
+        "A18"
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let start = state
+            .agg
+            .turns
+            .first()
+            .and_then(|t| t.started_at.as_deref())
+            .and_then(crate::metrics::cost::parse_ts_ms)?;
+        let age = state.clock_ms() - start;
+        let v = state.context();
+        if age <= 3 * 3_600_000 || v.ratio() <= 0.70 {
+            return None;
+        }
+        Some(Advice {
+            rule: "A18",
+            headline: format!("You've been in one context for {}", fmt::duration_ms(age)),
+            evidence: format!(
+                "{:.0} % of the window used, {} compactions so far",
+                v.ratio() * 100.0,
+                v.compactions.len()
+            ),
+            action: "At the next milestone write a short hand-off note and start a fresh session."
+                .into(),
+            saving: Saving::Avoids,
+            doc_key: "A18",
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -812,6 +1033,144 @@ mod tests {
             fires(&ChattyTurns, &fixture_state()).is_none(),
             "15 turns only"
         );
+    }
+
+    #[test]
+    fn a13_rate_limit_pacing() {
+        let mut s = State::new(Pricing::bundled());
+        s.session.alive = true;
+        s.now_ms = 1_000_000;
+        s.limits = Some(crate::ui::state::Limits {
+            five_hour_pct: 80.0,
+            seven_day_pct: 10.0,
+            five_hour_resets_at_ms: Some(2_000_000),
+            seven_day_resets_at_ms: None,
+            exhaustion_ms: Some(1_500_000),
+        });
+        let a = fires(&RateLimitPacing, &s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "At this burn you hit the 5 h limit 8:20 before it resets"
+        );
+        s.limits.as_mut().unwrap().exhaustion_ms = Some(2_500_000);
+        assert!(fires(&RateLimitPacing, &s).is_none());
+    }
+
+    #[test]
+    fn a14_subagent_model() {
+        let mut s = State::new(Pricing::bundled());
+        let mut a = crate::agents::Agent::new(
+            "x",
+            crate::agents::Meta {
+                agent_type: "Explore".into(),
+                description: "find render call sites".into(),
+                ..Default::default()
+            },
+        );
+        a.model = "claude-opus-5".into();
+        a.usage.cache_read = 400_000;
+        a.usage.output = 5_000;
+        s.agents.insert("x".into(), a.clone());
+        let adv = fires(&SubagentModel, &s).expect("fires");
+        assert!(
+            adv.headline.contains("Explore agent") && adv.headline.contains("is on Opus"),
+            "{}",
+            adv.headline
+        );
+        assert!(matches!(adv.saving, Saving::Tokens(t) if t > 0));
+        a.model = "claude-sonnet-5".into();
+        s.agents.insert("x".into(), a.clone());
+        assert!(fires(&SubagentModel, &s).is_none());
+        let mut b = crate::agents::Agent::new(
+            "y",
+            crate::agents::Meta {
+                agent_type: "fork".into(),
+                description: "implement the parser".into(),
+                ..Default::default()
+            },
+        );
+        b.model = "claude-opus-5".into();
+        s.agents.insert("y".into(), b);
+        assert!(fires(&SubagentModel, &s).is_none(), "not a search task");
+    }
+
+    #[test]
+    fn a15_error_loop() {
+        let mut s = State::new(Pricing::bundled());
+        for i in 0..3 {
+            s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{{"id":"e{i}","model":"m","content":[{{"type":"tool_use","id":"e{i}","name":"Bash","input":{{"command":"cargo test"}}}}],"usage":{{"output_tokens":1}}}}}}"#)).unwrap());
+            s.apply(&Line::parse(&format!(r#"{{"type":"user","timestamp":"2026-01-01T00:00:05Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"e{i}","content":"{}","is_error":true}}]}}}}"#, "e".repeat(4000))).unwrap());
+        }
+        let a = fires(&ErrorLoop, &s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "`Bash cargo test` failed 3× with the same input"
+        );
+        assert_eq!(a.saving, Saving::Tokens(1_000));
+        // The anonymiser maps every Bash command to `make check`, so the
+        // fixture's three failing Bash calls look identical and the rule fires.
+        let f = fires(&ErrorLoop, &fixture_state()).expect("fires on the anonymised fixture");
+        assert_eq!(
+            f.headline,
+            "`Bash make check` failed 3× with the same input"
+        );
+        let mut two = State::new(Pricing::bundled());
+        for i in 0..2 {
+            two.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{{"id":"e{i}","model":"m","content":[{{"type":"tool_use","id":"e{i}","name":"Bash","input":{{"command":"cargo test"}}}}],"usage":{{"output_tokens":1}}}}}}"#)).unwrap());
+            two.apply(&Line::parse(&format!(r#"{{"type":"user","timestamp":"2026-01-01T00:00:05Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"e{i}","content":"e","is_error":true}}]}}}}"#)).unwrap());
+        }
+        assert!(
+            fires(&ErrorLoop, &two).is_none(),
+            "two failures are not a loop"
+        );
+    }
+
+    #[test]
+    fn a16_hook_overhead() {
+        let mut s = State::new(Pricing::bundled());
+        for i in 0..3 {
+            s.apply(&prompt("2026-01-01T00:00:00Z"));
+            s.apply(&response(
+                &format!("h{i}"),
+                "2026-01-01T00:00:01Z",
+                10,
+                0,
+                100,
+            ));
+            s.apply(&Line::parse(r#"{"type":"system","subtype":"stop_hook_summary","timestamp":"2026-01-01T00:00:02Z","hookInfos":[{"command":"lint","durationMs":1400}],"hookErrors":[]}"#).unwrap());
+            s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:00:02Z","durationMs":8000}"#).unwrap());
+        }
+        let a = fires(&HookOverhead, &s).expect("fires");
+        assert_eq!(a.headline, "Hooks add 1.4s per turn (18 % of turn time)");
+        assert!(
+            fires(&HookOverhead, &fixture_state()).is_none(),
+            "fixture hooks are ~50 ms"
+        );
+    }
+
+    #[test]
+    fn a17_big_prefix_and_a18_no_handoff() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        // haiku: 200k window; first call reads 60k of prefix.
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":60000,"input_tokens":10}}}"#).unwrap());
+        let a = fires(&BigPrefix, &s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "Your fixed prefix is 60k tokens (30 % of the window)"
+        );
+        assert!(fires(&BigPrefix, &fixture_state()).is_none(), "60k of 1M");
+
+        // No hand-off: 3.5 h old with 75 % used.
+        s.apply(&prompt("2026-01-01T03:30:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T03:30:01Z","message":{"id":"p2","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":150000,"input_tokens":10}}}"#).unwrap());
+        s.session.alive = true;
+        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T03:31:00Z").unwrap();
+        let a = fires(&NoHandoff, &s).expect("fires");
+        assert_eq!(a.headline, "You've been in one context for 3h 31m");
+        assert_eq!(a.saving, Saving::Avoids);
+        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T02:00:00Z").unwrap();
+        assert!(fires(&NoHandoff, &s).is_none());
     }
 
     #[test]

@@ -125,8 +125,8 @@ mod tests {
         let mut e = Engine::default();
         e.evaluate(&State::new(Pricing::bundled()));
         assert!(e.current.is_empty());
-        assert_eq!(e.rule_ids().len(), 12);
-        assert_eq!(e.rule_ids()[6], "A07");
+        assert_eq!(e.rule_ids().len(), 18);
+        assert_eq!(e.rule_ids()[17], "A18");
     }
 
     #[test]
