@@ -21,13 +21,17 @@ enum Command {
     /// Print the metrics registry as Markdown.
     Metrics(MetricsArgs),
     /// Install the status-line shim and hooks into ~/.claude/settings.json.
-    Install,
+    Install(InstallArgs),
     /// Remove what `install` added.
-    Uninstall,
+    Uninstall(InstallArgs),
     /// Hook entry point: record one Claude Code hook event.
     Hook,
     /// Status-line entry point: tee the status JSON, then run the original command.
-    StatuslineShim,
+    StatuslineShim {
+        /// The original status-line command and its arguments (after `--`).
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        original: Vec<String>,
+    },
     /// Open cctop in a right-hand pane of the current multiplexer.
     Split,
     /// Print the current Advisor recommendations.
@@ -36,6 +40,13 @@ enum Command {
     Report,
     /// Export ledger and events.
     Export,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct InstallArgs {
+    /// Apply without asking.
+    #[arg(long, short = 'y')]
+    yes: bool,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -114,10 +125,31 @@ fn main() {
             print!("{}", registry::markdown());
             return;
         }
-        Command::Install => "install",
-        Command::Uninstall => "uninstall",
+        Command::Install(a) => {
+            let path = cctop::install::settings_path();
+            if let Err(e) =
+                cctop::install::apply(&path, a.yes, cctop::install::with_shim, "install")
+            {
+                eprintln!("cctop: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        Command::Uninstall(a) => {
+            let path = cctop::install::settings_path();
+            if let Err(e) =
+                cctop::install::apply(&path, a.yes, cctop::install::without_shim, "uninstall")
+            {
+                eprintln!("cctop: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
         Command::Hook => "hook",
-        Command::StatuslineShim => "statusline-shim",
+        Command::StatuslineShim { original } => {
+            let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
+            std::process::exit(cctop::status::run_shim(&original));
+        }
         Command::Split => "split",
         Command::Advise => "advise",
         Command::Report => "report",
@@ -236,6 +268,13 @@ fn run(attach: Attach) {
             state.procs = snap;
         }));
     }
+    // Status-line samples (rate limits, exact context) when the shim is installed.
+    let mut status = cctop::status::Watcher::new(&app.state.session.session_id);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if status.poll() {
+            state.apply_status(status.latest.as_ref().unwrap(), &status.series_5h);
+        }
+    }));
     // Background tasks: rescan the session's task directory every 2 s.
     if let Some(dir) = cctop::tasks::dir_for(&app.state.session.session_id) {
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(5);

@@ -104,6 +104,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "similar",
  "thiserror",
  "tokio",
  "toml",

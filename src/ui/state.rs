@@ -120,6 +120,8 @@ pub struct State {
     pub agents: std::collections::BTreeMap<String, crate::agents::Agent>,
     /// Rate limits, when the status-line shim is installed.
     pub limits: Option<Limits>,
+    /// `(epoch ms, 5 h used %)` samples for the exhaustion projection.
+    pub limits_series_5h: Vec<(i64, f64)>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -275,6 +277,28 @@ impl State {
             cost: CostTracker::new(pricing),
             tokens_include_agents: true,
             ..Default::default()
+        }
+    }
+
+    /// Take a status-line sample: exact context, plan, rate limits.
+    pub fn apply_status(&mut self, s: &crate::status::Sample, series_5h: &[(i64, f64)]) {
+        if s.context_window.context_window_size > 0 {
+            self.context_window_exact = Some(s.context_window.context_window_size);
+            self.context_size_exact = Some(s.context_window.total_input_tokens);
+        }
+        if s.plan.is_some() {
+            self.session.plan = s.plan.clone();
+        }
+        if let Some(rl) = &s.rate_limits {
+            let to_ms = |secs: Option<f64>| secs.map(|x| (x * 1000.0) as i64);
+            self.limits = Some(Limits {
+                five_hour_pct: rl.five_hour.used_percentage,
+                seven_day_pct: rl.seven_day.used_percentage,
+                five_hour_resets_at_ms: to_ms(rl.five_hour.resets_at),
+                seven_day_resets_at_ms: to_ms(rl.seven_day.resets_at),
+                exhaustion_ms: None,
+            });
+            self.limits_series_5h = series_5h.to_vec();
         }
     }
 
