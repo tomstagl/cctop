@@ -7,6 +7,7 @@ pub mod files;
 pub mod header;
 pub mod tokens;
 pub mod tools;
+pub mod turn;
 
 use super::Panel;
 
@@ -16,6 +17,7 @@ pub fn all() -> Vec<Box<dyn Panel>> {
         Box::new(header::Header),
         Box::new(context::Context),
         Box::new(tokens::Tokens),
+        Box::new(turn::TurnPanel),
         Box::new(tools::Tools),
         Box::new(agents::Agents),
         Box::new(files::FilesPanel),

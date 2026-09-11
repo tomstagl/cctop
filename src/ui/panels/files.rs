@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn files_panel_on_fixture() {
         let app = fixture_app();
-        let out = render_to_string(&app, 60, 51);
+        let out = render_to_string(&app, 60, 60);
         assert!(out.contains("7 Files ─ 4 touched"), "{out}");
         assert!(out.contains("src/ad450c.rs"), "{out}");
         assert!(out.contains("W×1"), "{out}");
@@ -193,7 +193,7 @@ mod tests {
             Path::new("/home/user/project"),
             &crate::files::parse_numstat("210\t31\tsrc/render.rs\n"),
         );
-        let out = render_to_string(&app, 64, 51);
+        let out = render_to_string(&app, 64, 60);
         assert!(out.contains("7 Files ─ 5 touched · +210 −31"), "{out}");
         assert!(out.contains("src/render.rs"), "{out}");
         assert!(out.contains("R×3"), "{out}");
@@ -202,6 +202,6 @@ mod tests {
         app.state.focused = Some(7);
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
         assert_eq!(app.state.files_sort, FileSort::Touches);
-        assert!(render_to_string(&app, 64, 51).contains("↕touches"));
+        assert!(render_to_string(&app, 64, 60).contains("↕touches"));
     }
 }

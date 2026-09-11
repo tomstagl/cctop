@@ -104,6 +104,10 @@ pub struct Turn {
     pub tool_calls: usize,
     /// Number of tool results flagged `is_error`.
     pub tool_errors: usize,
+    /// Time between a user/tool_result line and the next response (≈ API).
+    pub api_ms: i64,
+    /// Time between a tool_use response and its tool_result (≈ tools).
+    pub tool_ms: i64,
     /// Hook commands that ran at the end of this turn (`stop_hook_summary`).
     pub hook_runs: usize,
     /// Total hook wall time for this turn, milliseconds.
@@ -122,6 +126,12 @@ impl Turn {
             .and_then(crate::metrics::cost::parse_ts_ms)
             .map(|s| (now_ms - s).max(0))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LastKind {
+    User,
+    Assistant,
 }
 
 /// An `away_summary` Claude Code wrote while the user was gone.
@@ -144,6 +154,8 @@ pub struct Aggregate {
     pub model: Option<String>,
     /// Prompts waiting in Claude Code's input queue (`queue-operation`).
     pub queued_prompts: usize,
+    /// Timestamp and kind of the last timed line, for api/tool split.
+    last_ts: Option<(i64, LastKind)>,
     /// `away_summary` lines, in order.
     pub away: Vec<Away>,
 }
@@ -175,6 +187,20 @@ impl Aggregate {
         match line {
             Line::User(u) => {
                 let is_prompt = !u.is_meta && u.message.content.tool_results().next().is_none();
+                let ts = u
+                    .timestamp
+                    .as_deref()
+                    .and_then(crate::metrics::cost::parse_ts_ms);
+                if let (Some(ts), Some((prev, LastKind::Assistant)), false) =
+                    (ts, self.last_ts, is_prompt)
+                {
+                    if let Some(t) = self.turns.last_mut() {
+                        t.tool_ms += (ts - prev).max(0);
+                    }
+                }
+                if let Some(ts) = ts {
+                    self.last_ts = Some((ts, LastKind::User));
+                }
                 if is_prompt {
                     self.turns.push(Turn {
                         number: self.turns.len() + 1,
@@ -236,6 +262,20 @@ impl Aggregate {
                 started_at: a.timestamp.clone(),
                 ..Default::default()
             });
+        }
+        let ts = a
+            .timestamp
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms);
+        let is_new_response = !self.seen_ids.contains(&a.message.id);
+        if let (Some(ts), Some((prev, LastKind::User)), true) = (ts, self.last_ts, is_new_response)
+        {
+            if let Some(t) = self.turns.last_mut() {
+                t.api_ms += (ts - prev).max(0);
+            }
+        }
+        if let Some(ts) = ts {
+            self.last_ts = Some((ts, LastKind::Assistant));
         }
         let t = self.turns.last_mut().expect("turn exists");
         t.tool_calls += a
@@ -384,6 +424,15 @@ mod tests {
         let start = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref().unwrap()).unwrap();
         assert_eq!(t.elapsed_ms(start + 5_000), Some(5_000));
         assert_eq!(agg.turns[2].elapsed_ms(0), Some(95_830));
+        // API + tool time never exceeds the turn's wall time (first to last
+        // line), and both are non-trivial on a real turn. Note `turn_duration`
+        // (95.8 s) is shorter than that wall time (150 s): Claude Code does
+        // not count the whole span.
+        let t3 = &agg.turns[2];
+        let wall = crate::metrics::cost::parse_ts_ms(t3.last_at.as_deref().unwrap()).unwrap()
+            - crate::metrics::cost::parse_ts_ms(t3.started_at.as_deref().unwrap()).unwrap();
+        assert!(t3.api_ms > 0 && t3.tool_ms > 0, "{t3:?}");
+        assert!(t3.api_ms + t3.tool_ms <= wall, "{t3:?} wall {wall}");
     }
 
     #[test]

@@ -46,6 +46,10 @@ pub struct SessionInfo {
     pub permission_pending: bool,
     /// When the pending permission request was raised (epoch ms).
     pub permission_waiting_since_ms: Option<i64>,
+    /// Hook events are arriving (cctop install ran), so waits are measured.
+    pub hooks_installed: bool,
+    pub permission_waits: usize,
+    pub permission_wait_ms: i64,
 }
 
 /// Rate-limit figures from the status line (shim), plus cctop's projection.

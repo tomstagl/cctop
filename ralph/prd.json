@@ -380,7 +380,7 @@
         "Tests pass (`cargo test`)"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "PRD ref: US-018 · R5 R6"
     },
     {
