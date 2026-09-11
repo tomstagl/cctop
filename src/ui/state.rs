@@ -44,6 +44,19 @@ pub struct SessionInfo {
     pub permission_mode: Option<String>,
     /// A PermissionRequest hook fired and no tool has completed since.
     pub permission_pending: bool,
+    /// When the pending permission request was raised (epoch ms).
+    pub permission_waiting_since_ms: Option<i64>,
+}
+
+/// Rate-limit figures from the status line (shim), plus cctop's projection.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Limits {
+    pub five_hour_pct: f64,
+    pub seven_day_pct: f64,
+    pub five_hour_resets_at_ms: Option<i64>,
+    pub seven_day_resets_at_ms: Option<i64>,
+    /// Projected moment the 5 h limit hits 100 % at the current slope.
+    pub exhaustion_ms: Option<i64>,
 }
 
 impl SessionInfo {
@@ -101,6 +114,10 @@ pub struct State {
     pub tools: tools::Stats,
     /// Subagents of this session, by id.
     pub agents: std::collections::BTreeMap<String, crate::agents::Agent>,
+    /// Rate limits, when the status-line shim is installed.
+    pub limits: Option<Limits>,
+    /// MCP servers whose process disappeared since the last evaluation.
+    pub mcp_exited: Vec<String>,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,

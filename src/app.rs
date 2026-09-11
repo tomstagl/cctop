@@ -81,6 +81,9 @@ pub struct App {
     sink: Sink,
     /// Run before every frame: liveness, git, process stats.
     pub tick_hooks: Vec<TickHook>,
+    alerts: crate::alerts::Engine,
+    /// Send critical alerts to the desktop (`--notify`).
+    pub desktop_notify: bool,
 }
 
 impl App {
@@ -96,13 +99,24 @@ impl App {
             buffered: Vec::new(),
             sink,
             tick_hooks: Vec::new(),
+            alerts: crate::alerts::Engine::default(),
+            desktop_notify: false,
         }
     }
 
-    /// Run the tick hooks (clock-driven collectors).
+    /// Run the tick hooks (clock-driven collectors), then the alert rules.
     pub fn tick(&mut self) {
         for h in self.tick_hooks.iter_mut() {
             h(&mut self.state);
+        }
+        self.evaluate_alerts();
+    }
+
+    /// Fire any alert whose threshold was just crossed.
+    pub fn evaluate_alerts(&mut self) {
+        let fired = self.alerts.evaluate(&self.state);
+        if !fired.is_empty() {
+            crate::alerts::deliver(&fired, &mut self.state, self.desktop_notify);
         }
     }
 
@@ -448,6 +462,10 @@ pub fn run_tui(mut app: App, mut sources: Vec<Box<dyn LineSource>>) -> std::io::
                 app.feed(line);
                 dirty = true;
             }
+        }
+        if dirty {
+            app.state.now_ms = now_ms();
+            app.evaluate_alerts();
         }
         // Then input, waiting at most until the next render is due.
         let wait = tick

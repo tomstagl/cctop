@@ -72,6 +72,9 @@ struct Attach {
     /// With --once: keys to press before rendering, comma separated (e.g. "Tab,Enter").
     #[arg(long)]
     keys: Option<String>,
+    /// Also send critical alerts as desktop notifications.
+    #[arg(long)]
+    notify: bool,
 }
 
 fn main() {
@@ -163,6 +166,7 @@ fn run(attach: Attach) {
     app.state = State::new(cctop::metrics::Pricing::load());
     app.state.session = session_info;
     app.state.now_ms = app::now_ms();
+    app.desktop_notify = attach.notify;
     // Clock-driven collectors: liveness and git, at most every 5 s.
     let mut last_git = std::time::Instant::now() - std::time::Duration::from_secs(10);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
