@@ -9,3 +9,4 @@ pub use panel::{Handled, Panel, PanelId};
 pub use state::State;
 pub mod fmt;
 pub mod panels;
+pub mod widgets;

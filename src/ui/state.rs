@@ -99,6 +99,11 @@ pub struct State {
     pub agg: Aggregate,
     pub cost: CostTracker,
     pub tools: tools::Stats,
+    /// Exact context figures from the status line (shim), when present.
+    pub context_window_exact: Option<u64>,
+    pub context_size_exact: Option<u64>,
+    /// Autocompact threshold learned from an observed compaction, by model.
+    pub learned_thresholds: std::collections::BTreeMap<String, u64>,
     // -- ui
     /// Panel that receives keys; `None` = global.
     pub focused: Option<PanelId>,
@@ -169,6 +174,19 @@ impl State {
     /// Model currently in use.
     pub fn model(&self) -> Option<&str> {
         self.agg.model.as_deref()
+    }
+
+    /// Context-window view for the current model.
+    pub fn context(&self) -> crate::metrics::ContextView {
+        let learned = self
+            .model()
+            .and_then(|m| self.learned_thresholds.get(m).copied());
+        crate::metrics::context::view(
+            &self.agg,
+            self.context_window_exact,
+            self.context_size_exact,
+            learned,
+        )
     }
 
     pub fn is_hidden(&self, id: PanelId) -> bool {

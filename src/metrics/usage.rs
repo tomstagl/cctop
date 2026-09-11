@@ -95,6 +95,9 @@ pub struct Turn {
     pub context_size: u64,
     /// Cache TTL on the last call that wrote cache.
     pub cache_ttl: Option<CacheTtl>,
+    /// `cache_read + cache_write` of the turn's first API call (the fixed
+    /// prefix, when this is the session's first turn).
+    pub first_call_prefix: u64,
     /// Tool result text length pushed into context this turn (bytes).
     pub tool_result_bytes: u64,
     /// Number of tool calls issued this turn.
@@ -246,6 +249,9 @@ impl Aggregate {
             return; // another block of a response already counted
         }
         let u = Usage::from_api(&a.message.usage);
+        if t.api_calls == 0 {
+            t.first_call_prefix = u.cache_read + u.cache_write();
+        }
         t.api_calls += 1;
         t.usage.add(&u);
         t.context_size = u.total_input();
