@@ -48,7 +48,7 @@
         "Tests pass (`cargo test`)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "PRD ref: US-001"
     },
     {

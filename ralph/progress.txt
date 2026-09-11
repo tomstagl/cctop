@@ -5,3 +5,4 @@
 #
 [US-001] PASS | Cargo project with ratatui/crossterm/tokio/notify/serde/clap, 11 subcommand stubs, CI (fmt/clippy/test on macOS+Ubuntu), fixtures/README. Cargo.lock pins instability 0.3.7 and darling 0.20.10 for rustc 1.85.
 [US-002] PASS | registry::Session/list/is_alive (libc kill 0, EPERM=alive), newest-first, malformed files skipped; fixtures/sessions busy+idle+dead+broken; 6 tests. Crate split into lib + bin. Note: brew upgrade of rust was building from source and was aborted; staying on 1.85 with lock-file pins.
+[US-003] PASS | discover::resolve with precedence --session > --cwd > $CLAUDE_SESSION_ID > tmux pane TTY > $PWD (busy, newest); Env trait mocked in 11 tests; --wait polls; exit 2 with the spec'd message; `cctop run` wired to real registry.
