@@ -120,6 +120,8 @@ pub struct State {
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
     pub procs: crate::procs::Snapshot,
+    /// Background tasks from `~/.claude/tasks/session-<id8>/`.
+    pub tasks: Vec<crate::tasks::Task>,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,

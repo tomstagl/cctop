@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod procs;
 pub mod registry;
 pub mod tail;
+pub mod tasks;
 pub mod tools;
 pub mod transcript;
 pub mod ui;

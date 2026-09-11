@@ -230,6 +230,16 @@ fn run(attach: Attach) {
             state.procs = snap;
         }));
     }
+    // Background tasks: rescan the session's task directory every 2 s.
+    if let Some(dir) = cctop::tasks::dir_for(&app.state.session.session_id) {
+        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(5);
+        app.tick_hooks.push(Box::new(move |state: &mut State| {
+            if last.elapsed() >= std::time::Duration::from_secs(2) {
+                last = std::time::Instant::now();
+                state.tasks = cctop::tasks::load(&dir);
+            }
+        }));
+    }
     let mut agents = cctop::agents::AgentWatcher::watch(&session_dir);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         if agents.poll() || state.agents.len() != agents.agents.len() {
