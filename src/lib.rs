@@ -21,6 +21,7 @@ pub mod procs;
 pub mod query;
 pub mod registry;
 pub mod report;
+pub mod split;
 pub mod status;
 pub mod tail;
 pub mod tasks;

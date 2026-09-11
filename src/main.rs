@@ -15,7 +15,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Attach to a session and show the dashboard (default).
-    Run(Attach),
+    Run(RunArgs),
     /// Print session metrics as JSON.
     Query(QueryArgs),
     /// Print the metrics registry as Markdown.
@@ -33,7 +33,7 @@ enum Command {
         original: Vec<String>,
     },
     /// Open cctop in a right-hand pane of the current multiplexer.
-    Split,
+    Split(SplitArgs),
     /// Print the current Advisor recommendations.
     Advise(AdviseArgs),
     /// Write an end-of-session report.
@@ -87,6 +87,26 @@ enum QueryWhat {
     Explain { metric_id: String },
     /// Medians over your last 7 days of sessions.
     Baseline,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct RunArgs {
+    #[command(flatten)]
+    attach: Attach,
+    #[command(flatten)]
+    headless: Headless,
+    /// Also send critical alerts as desktop notifications.
+    #[arg(long)]
+    notify: bool,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct SplitArgs {
+    #[command(flatten)]
+    attach: Attach,
+    /// Width of the new pane as a percentage.
+    #[arg(long, default_value = "45", value_parser = clap::value_parser!(u8).range(10..=90))]
+    size: u8,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -147,6 +167,11 @@ struct Attach {
     /// Keep polling until a session appears.
     #[arg(long, global = true)]
     wait: bool,
+}
+
+/// Headless rendering options (`run --once`).
+#[derive(Args, Debug, Default, Clone)]
+struct Headless {
     /// Render one frame and exit (headless; for tests and scripts).
     #[arg(long)]
     once: bool,
@@ -159,22 +184,13 @@ struct Attach {
     /// With --once: keys to press before rendering, comma separated (e.g. "Tab,Enter").
     #[arg(long)]
     keys: Option<String>,
-    /// Also send critical alerts as desktop notifications.
-    #[arg(long)]
-    notify: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
-    let name = match cli.command.unwrap_or(Command::Run(Attach::default())) {
-        Command::Run(attach) => {
-            run(attach);
-            return;
-        }
-        Command::Query(q) => {
-            query(q);
-            return;
-        }
+    match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
+        Command::Run(args) => run(args),
+        Command::Query(q) => query(q),
         Command::Metrics(args) => {
             use cctop::metrics::registry;
             if let Some(path) = args.readme {
@@ -197,12 +213,10 @@ fn main() {
                         std::process::exit(1);
                     }
                 }
-                return;
             }
             // `--md` is the default output; the flag exists for explicitness.
             let _ = args.md;
             print!("{}", registry::markdown());
-            return;
         }
         Command::Install(a) => {
             let path = cctop::install::settings_path();
@@ -212,7 +226,6 @@ fn main() {
                 eprintln!("cctop: {e}");
                 std::process::exit(1);
             }
-            return;
         }
         Command::Uninstall(a) => {
             let path = cctop::install::settings_path();
@@ -225,18 +238,29 @@ fn main() {
                 eprintln!("cctop: {e}");
                 std::process::exit(1);
             }
-            return;
         }
         Command::Hook => std::process::exit(cctop::hooks::run_hook()),
         Command::StatuslineShim { original } => {
             let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
             std::process::exit(cctop::status::run_shim(&original));
         }
-        Command::Split => "split",
-        Command::Advise(a) => {
-            advise(a);
-            return;
+        Command::Split(sp) => {
+            // Resolve first so the pane attaches to exactly this session.
+            let (_, info) = match cctop::load::resolve(&target(&sp.attach)) {
+                Ok(x) => x,
+                Err(e) => {
+                    eprintln!("cctop: {e}");
+                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                }
+            };
+            let key = if info.session_id.is_empty() {
+                sp.attach.session.clone().unwrap_or_default()
+            } else {
+                info.session_id
+            };
+            std::process::exit(cctop::split::run(&key, sp.size));
         }
+        Command::Advise(a) => advise(a),
         Command::Report(r) => {
             let state = load_state(&r.attach);
             let md = cctop::report::markdown(&state, state.baseline.as_ref());
@@ -256,7 +280,6 @@ fn main() {
                     println!("cctop: report written to {}", path.display());
                 }
             }
-            return;
         }
         Command::Export(x) => {
             let state = load_state(&x.attach);
@@ -275,15 +298,18 @@ fn main() {
                 }
                 None => print!("{text}"),
             }
-            return;
         }
-    };
-    println!("cctop {name}: not implemented");
+    }
 }
 
-fn run(attach: Attach) {
+fn run(args: RunArgs) {
     use cctop::app::{self, App};
     use cctop::ui::state::{SessionInfo, State};
+    let RunArgs {
+        attach,
+        headless,
+        notify,
+    } = args;
     let (transcript, session_info): (PathBuf, SessionInfo) =
         match cctop::load::resolve(&target(&attach)) {
             Ok(x) => x,
@@ -299,7 +325,7 @@ fn run(attach: Attach) {
     app.state = State::new(cctop::metrics::Pricing::load());
     app.state.session = session_info;
     app.state.now_ms = app::now_ms();
-    app.desktop_notify = attach.notify;
+    app.desktop_notify = notify;
     if let Some(projects) = cctop::baseline::default_projects_dir() {
         app.state.baseline = Some(cctop::baseline::load_or_compute(
             &cctop::status::cctop_dir(),
@@ -312,7 +338,10 @@ fn run(attach: Attach) {
     let base_commit = cctop::files::head_commit(&app.state.session.cwd);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         state.session.refresh_alive(state.now_ms);
-        if last_git.elapsed() >= std::time::Duration::from_secs(5) {
+        if !state.session.alive && state.session.ended_at_ms.is_none() {
+            state.session.ended_at_ms = state.last_line_at_ms;
+        }
+        if last_git.elapsed() >= std::time::Duration::from_secs(5) && state.session.cwd.is_dir() {
             last_git = std::time::Instant::now();
             if let Some(g) = cctop::git::info(&state.session.cwd) {
                 state.session.git_branch = g.branch;
@@ -327,7 +356,7 @@ fn run(attach: Attach) {
     }));
 
     let session_dir = transcript.with_extension("");
-    if attach.once {
+    if headless.once {
         for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
             app.feed(line);
         }
@@ -336,18 +365,18 @@ fn run(attach: Attach) {
             app.state.session.ended_at_ms = app.state.last_line_at_ms;
         }
         app.tick();
-        if let Some(keys) = attach.keys.as_deref() {
+        if let Some(keys) = headless.keys.as_deref() {
             for k in app::parse_keys(keys) {
                 app.handle_key(k);
             }
         }
-        let (w, h) = attach
+        let (w, h) = headless
             .size
             .as_deref()
             .and_then(app::parse_size)
             .unwrap_or((60, 51));
         let text = app::render_to_string(&app, w, h);
-        match attach.render_to {
+        match headless.render_to {
             Some(path) => std::fs::write(&path, text).unwrap_or_else(|e| {
                 eprintln!("cctop: cannot write {}: {e}", path.display());
                 std::process::exit(1);
