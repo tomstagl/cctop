@@ -3,6 +3,7 @@
 //! `cctop query`.
 
 pub mod discover;
+pub mod metrics;
 pub mod registry;
 pub mod tail;
 pub mod transcript;
