@@ -7,6 +7,7 @@ pub mod agents;
 pub mod alerts;
 pub mod app;
 pub mod ask;
+pub mod attach;
 pub mod baseline;
 pub mod discover;
 pub mod events;

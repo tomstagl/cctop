@@ -335,18 +335,8 @@ fn run(args: RunArgs) {
         cctop::ui::panels::all(),
         Box::new(|line, state: &mut State| state.apply(line)),
     );
-    app.state = State::new(cctop::metrics::Pricing::load());
-    app.state.session = session_info;
-    if let Some(pid) = app.state.session.pid {
-        if let Some(dir) = cctop::registry::default_dir() {
-            app.state.messaging_socket = cctop::registry::list(&dir)
-                .iter()
-                .find(|s| s.pid == pid)
-                .and_then(SessionInfo::socket_of);
-        }
-    }
-    app.state.now_ms = app::now_ms();
     app.desktop_notify = notify;
+    app.state.now_ms = app::now_ms();
     if let Some(projects) = cctop::baseline::default_projects_dir() {
         app.state.baseline = Some(cctop::baseline::load_or_compute(
             &cctop::status::cctop_dir(),
@@ -354,38 +344,10 @@ fn run(args: RunArgs) {
             app.state.now_ms,
         ));
     }
-    // Clock-driven collectors: liveness and git, at most every 5 s.
-    let mut last_git = std::time::Instant::now() - std::time::Duration::from_secs(10);
-    let base_commit = cctop::files::head_commit(&app.state.session.cwd);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        state.session.refresh_alive(state.now_ms);
-        if !state.session.alive && state.session.ended_at_ms.is_none() {
-            state.session.ended_at_ms = state.last_line_at_ms;
-        }
-        if last_git.elapsed() >= std::time::Duration::from_secs(5) && state.session.cwd.is_dir() {
-            last_git = std::time::Instant::now();
-            if let Some(g) = cctop::git::info(&state.session.cwd) {
-                state.session.git_branch = g.branch;
-                state.session.git_dirty = g.dirty;
-            }
-            if let Some(base) = &base_commit {
-                let ns = cctop::files::numstat(&state.session.cwd, base);
-                let cwd = state.session.cwd.clone();
-                state.files.apply_numstat(&cwd, &ns);
-            }
-        }
-    }));
+    cctop::hooks::prune(&cctop::status::cctop_dir(), app.state.now_ms);
 
-    let session_dir = transcript.with_extension("");
     if headless.once {
-        for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
-            app.feed(line);
-        }
-        app.state.agents = cctop::agents::load(&session_dir);
-        if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
-            app.state.session.ended_at_ms = app.state.last_line_at_ms;
-        }
-        app.tick();
+        cctop::attach::attach_headless(&mut app, &transcript, session_info);
         if let Some(keys) = headless.keys.as_deref() {
             for k in app::parse_keys(keys) {
                 app.handle_key(k);
@@ -402,95 +364,13 @@ fn run(args: RunArgs) {
                 eprintln!("cctop: cannot write {}: {e}", path.display());
                 std::process::exit(1);
             }),
-            None => print!("{text}"),
+            None => emit(&text),
         }
         return;
     }
 
-    // Process tree once a second: cpu/rss, MCP servers, the running command.
-    if let Some(pid) = app.state.session.pid {
-        let configs = cctop::procs::mcp_configs(&app.state.session.cwd);
-        let mut sampler = cctop::procs::Sampler::default();
-        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(5);
-        app.tick_hooks.push(Box::new(move |state: &mut State| {
-            if last.elapsed() < std::time::Duration::from_secs(1) {
-                return;
-            }
-            last = std::time::Instant::now();
-            let snap = sampler.snapshot(&cctop::procs::Ps, pid, &configs);
-            if let Some(m) = &snap.main {
-                state.session.cpu_pct = Some(m.cpu_pct);
-                state.session.rss_bytes = Some(m.rss_bytes);
-            }
-            state.mcp_exited = sampler.exited.clone();
-            state.procs = snap;
-        }));
-    }
-    // CLAUDE.md files and the memory index for the prefix inspector.
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let mut last_scan = std::time::Instant::now() - std::time::Duration::from_secs(60);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if last_scan.elapsed() >= std::time::Duration::from_secs(30) {
-            last_scan = std::time::Instant::now();
-            let cwd = state.session.cwd.clone();
-            state.prefix.scan(&cwd, home.as_deref());
-        }
-    }));
-    // Other live sessions share the account's rate limit.
-    let my_pid = app.state.session.pid;
-    let mut last_reg = std::time::Instant::now() - std::time::Duration::from_secs(10);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if last_reg.elapsed() >= std::time::Duration::from_secs(5) {
-            last_reg = std::time::Instant::now();
-            if let Some(dir) = cctop::registry::default_dir() {
-                state.other_live_sessions = cctop::registry::list(&dir)
-                    .iter()
-                    .filter(|s| Some(s.pid) != my_pid && s.is_alive())
-                    .filter(|s| s.status() == cctop::registry::Status::Busy)
-                    .count();
-            }
-        }
-    }));
-    // Hook spool: exact tool timings, permission waits, compactions.
-    let home = cctop::status::cctop_dir();
-    cctop::hooks::prune(&home, app.state.now_ms);
-    let mut hooks = cctop::hooks::Watcher::new(&home, &app.state.session.session_id);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        for ev in hooks.poll() {
-            state.apply_hook(&ev);
-        }
-    }));
-    // Status-line samples (rate limits, exact context) when the shim is installed.
-    let mut status = cctop::status::Watcher::new(&app.state.session.session_id);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if status.poll() {
-            state.apply_status(status.latest.as_ref().unwrap(), &status.series_5h);
-        }
-    }));
-    // Background tasks: rescan the session's task directory every 2 s.
-    if let Some(dir) = cctop::tasks::dir_for(&app.state.session.session_id) {
-        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(5);
-        app.tick_hooks.push(Box::new(move |state: &mut State| {
-            if last.elapsed() >= std::time::Duration::from_secs(2) {
-                last = std::time::Instant::now();
-                state.tasks = cctop::tasks::load(&dir);
-            }
-        }));
-    }
-    let mut agents = cctop::agents::AgentWatcher::watch(&session_dir);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if agents.poll() || state.agents.len() != agents.agents.len() {
-            state.agents = agents.agents.clone();
-        }
-    }));
-    let tailer = match cctop::tail::Tailer::open(&transcript) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("cctop: cannot tail {}: {e}", transcript.display());
-            std::process::exit(1);
-        }
-    };
-    if let Err(e) = app::run_tui(app, vec![Box::new(tailer)]) {
+    cctop::attach::attach(&mut app, &transcript, session_info, true);
+    if let Err(e) = app::run_tui(app) {
         eprintln!("cctop: {e}");
         std::process::exit(1);
     }

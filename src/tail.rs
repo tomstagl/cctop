@@ -19,6 +19,13 @@ use crate::transcript::Line;
 /// Poll interval when no filesystem event arrives.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Tailers currently alive (their threads stop when dropped).
+pub fn live_count() -> usize {
+    LIVE.load(Ordering::Relaxed)
+}
+
 /// A running tailer. Drop it (or call [`Tailer::stop`]) to end the thread.
 pub struct Tailer {
     rx: mpsc::UnboundedReceiver<Line>,
@@ -41,6 +48,7 @@ impl Tailer {
         std::thread::Builder::new()
             .name(format!("tail:{}", path.display()))
             .spawn(move || worker.run())?;
+        LIVE.fetch_add(1, Ordering::Relaxed);
         Ok(Tailer { rx, stop, path })
     }
 
@@ -66,6 +74,7 @@ impl Tailer {
 impl Drop for Tailer {
     fn drop(&mut self) {
         self.stop();
+        LIVE.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

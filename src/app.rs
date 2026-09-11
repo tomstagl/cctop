@@ -81,6 +81,10 @@ pub struct App {
     sink: Sink,
     /// Run before every frame: liveness, git, process stats.
     pub tick_hooks: Vec<TickHook>,
+    /// Transcript followers for the attached session.
+    pub sources: Vec<Box<dyn LineSource>>,
+    /// Session chosen in the picker, to be attached by the loop.
+    pub pending_switch: Option<crate::registry::Session>,
     alerts: crate::alerts::Engine,
     advisor: crate::advisor::Engine,
     /// Send critical alerts to the desktop (`--notify`).
@@ -100,6 +104,8 @@ impl App {
             buffered: Vec::new(),
             sink,
             tick_hooks: Vec::new(),
+            sources: Vec::new(),
+            pending_switch: None,
             alerts: crate::alerts::Engine::default(),
             advisor: crate::advisor::Engine::default(),
             desktop_notify: false,
@@ -204,6 +210,12 @@ impl App {
             self.quit = true;
             return;
         }
+        if self.state.picker.is_some() {
+            if let Some(chosen) = crate::ui::picker::handle_key(key, &mut self.state) {
+                self.pending_switch = Some(chosen);
+            }
+            return;
+        }
         if let Some((_, text)) = self.state.ask.clone() {
             match key.code {
                 KeyCode::Esc => self.state.ask = None,
@@ -280,6 +292,12 @@ impl App {
                     None => self.state.set_toast("nothing to ask about on this panel"),
                 }
             }
+            KeyCode::Char('L') => {
+                let sessions = crate::registry::default_dir()
+                    .map(|d| crate::registry::list(&d))
+                    .unwrap_or_default();
+                self.state.picker = Some(crate::ui::picker::PickerUi::load(sessions));
+            }
             KeyCode::Char('w') => {
                 self.mode_override = Some(match self.mode_override {
                     Some(Mode::Wide) => Mode::Narrow,
@@ -339,6 +357,9 @@ impl App {
         }
         if let Some((panel, text)) = &self.state.ask {
             self.draw_ask(frame, area, *panel, text);
+        }
+        if self.state.picker.is_some() {
+            crate::ui::picker::render(frame, area, &self.state);
         }
         if self.help {
             self.draw_help(frame, area);
@@ -534,7 +555,7 @@ impl LineSource for crate::tail::Tailer {
 }
 
 /// Run the interactive loop until the user quits.
-pub fn run_tui(mut app: App, mut sources: Vec<Box<dyn LineSource>>) -> std::io::Result<()> {
+pub fn run_tui(mut app: App) -> std::io::Result<()> {
     let _guard = TerminalGuard::enter()?;
     let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
     let mut term = Terminal::new(backend)?;
@@ -544,11 +565,13 @@ pub fn run_tui(mut app: App, mut sources: Vec<Box<dyn LineSource>>) -> std::io::
     while !app.quit {
         let tick = Duration::from_millis(app.refresh_ms);
         // Data first.
-        for s in sources.iter_mut() {
-            for line in s.drain() {
-                app.feed(line);
-                dirty = true;
-            }
+        let mut batch = Vec::new();
+        for s in app.sources.iter_mut() {
+            batch.extend(s.drain());
+        }
+        for line in batch {
+            app.feed(line);
+            dirty = true;
         }
         if dirty {
             app.state.now_ms = now_ms();
@@ -567,6 +590,13 @@ pub fn run_tui(mut app: App, mut sources: Vec<Box<dyn LineSource>>) -> std::io::
                 Event::Resize(_, _) => dirty = true,
                 _ => {}
             }
+        }
+        if let Some(chosen) = app.pending_switch.take() {
+            let info = crate::ui::state::SessionInfo::from_registry(&chosen);
+            let transcript = crate::transcript_path(&chosen);
+            crate::attach::attach(&mut app, &transcript, info, true);
+            app.state.set_toast(format!("attached to {}", chosen.name));
+            dirty = true;
         }
         // Clock-driven values (elapsed, toasts) change every tick.
         if dirty || last_render.elapsed() >= tick {
