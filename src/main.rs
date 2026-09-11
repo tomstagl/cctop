@@ -186,7 +186,20 @@ struct Headless {
     keys: Option<String>,
 }
 
+/// Print to stdout without panicking when the reader went away (`| head`).
+fn emit(text: &str) {
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(text.as_bytes());
+    let _ = out.flush();
+}
+
 fn main() {
+    // A closed pipe (`cctop query … | head`) must not be a crash.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     let cli = Cli::parse();
     match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
         Command::Run(args) => run(args),
@@ -528,7 +541,10 @@ fn query(q: QueryArgs) {
             }
         }
     };
-    println!("{}", serde_json::to_string_pretty(&out).unwrap());
+    emit(&format!(
+        "{}\n",
+        serde_json::to_string_pretty(&out).unwrap()
+    ));
 }
 
 fn advise(a: AdviseArgs) {

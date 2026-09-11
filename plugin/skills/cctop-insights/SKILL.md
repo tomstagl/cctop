@@ -9,20 +9,23 @@ cctop watches this session from the outside (transcript, hooks, status line, pro
 
 ## Commands
 
-All commands accept `--session <id|name|pid>` (default: the session you are in, from `$CLAUDE_SESSION_ID`) and print JSON.
+All commands accept `--session <id|name|pid>` (default: the session you are in, from `$CLAUDE_SESSION_ID`, the tmux pane, or the working directory) and print JSON. Every numeric value is `{value, unit, metric_id, approx}`; an optional source that is not on disk is `{"source": "missing", "hint": "run cctop install"}`. Full schema: `docs/query.md` in the cctop repo.
 
 | Question shape | Command |
 |---|---|
-| Overall state right now | `cctop query summary --json` |
-| Which turns cost what | `cctop query ledger --last 20 --json` |
-| Tool usage, slow/noisy tools, context pushed by results | `cctop query tools --json` |
-| Files touched, re-reads | `cctop query files --json` |
-| Subagents, MCP servers, background tasks | `cctop query agents --json` |
-| Current ranked recommendations with evidence | `cctop query advice --json` |
-| What is in the fixed prefix (CLAUDE.md, tool schemas, MCP) | `cctop query prefix --json` |
-| Recent events (tools, hooks, permissions, compactions) | `cctop query events --since 10m --json` |
-| Definition, formula and caveats of a metric | `cctop query explain <metric_id> --json` |
-| Compare to the user's own recent sessions | `cctop query baseline --json` |
+| Overall state right now | `cctop query summary` |
+| Which turns cost what | `cctop query ledger --last 20` |
+| Tool usage, slow/noisy tools, context pushed by results | `cctop query tools` |
+| Files touched, re-reads | `cctop query files` |
+| Subagents, MCP servers, background tasks | `cctop query agents` |
+| Current ranked recommendations with evidence and explanation | `cctop query advice` |
+| What is in the fixed prefix (CLAUDE.md, tool schemas, MCP) | `cctop query prefix` |
+| Recent events (tools, hooks, permissions, compactions) | `cctop query events --since 10m` |
+| Definition, formula and caveats of a metric | `cctop query explain <metric_id>` |
+| Compare to the user's own recent sessions | `cctop query baseline` |
+| One-page end-of-session summary (Markdown) | `cctop report --out -` |
+
+Output is always JSON (no `--json` flag needed). Pipe through `jq` to keep the tool result small, e.g. `cctop query summary | jq '{context, cost, limits}'`.
 
 If `cctop` is not on PATH, say so and give the install line (`brew install <tap>/cctop`); do not fall back to parsing transcripts by hand.
 
@@ -37,19 +40,19 @@ If `cctop` is not on PATH, say so and give the install line (`brew install <tap>
 ## Examples
 
 **"Why is this session so expensive?"**
-`cctop query summary --json`, then `cctop query ledger --last 10 --json`. Answer pattern: total and burn rate; the two or three turns that dominate and what they did (tool results size, compaction, cold cache); the top advice item.
+`cctop query summary | jq '{cost, burn_rate, tokens}'`, then `cctop query ledger --last 10 | jq '.[] | [.turn, .api_calls.value, .cost.value, .tools]'`. Answer pattern: total and burn rate; the two or three turns that dominate and what they did (tool results size, compaction, cold cache); the top advice item.
 
 **"Why is my cache hit ratio low?"**
-`cctop query advice --json` (rule A01/A02 will be present if relevant) and `cctop query ledger --last 10 --json` to show which turns had cache writes instead of reads. Name the cause cctop found (prompt gap longer than the cache TTL, a changing prefix, a CLAUDE.md edit) and the fix.
+`cctop query advice` (rule A01/A02 will be present if relevant) and `cctop query ledger --last 10 | jq '.[] | [.turn, .cache_read.value, .cache_write.value]'` to show which turns wrote cache instead of reading it. Name the cause cctop found (prompt gap longer than the cache TTL, a changing prefix, a CLAUDE.md edit) and the fix.
 
 **"What is filling my context?"**
-`cctop query prefix --json` and `cctop query tools --json` (`top_ctx` field). Answer: prefix size and its biggest parts; the largest individual tool results; turns until autocompact.
+`cctop query prefix | jq '.rows[:5]'` and `cctop query tools | jq '.top_ctx'`. Answer: prefix size and its biggest parts; the largest individual tool results; turns until autocompact.
 
 **"Will I hit the rate limit?"**
-`cctop query summary --json` → `limits.five_hour`. Give used %, reset time, projected exhaustion and whether other live sessions are contributing. If exhaustion is before reset, suggest moving exploration to a cheaper model or pausing heavy work.
+`cctop query summary | jq .limits` → `five_hour`, `exhaustion_ms`, `other_live_sessions`; if `source` is `missing`, say the shim is not installed and offer `cctop install`. Give used %, reset time, projected exhaustion and whether other live sessions are contributing. If exhaustion is before reset, suggest moving exploration to a cheaper model or pausing heavy work.
 
 **"What does TOKENS→CTX mean?"**
-`cctop query explain tokens_to_ctx --json` and restate the definition and caveat in one sentence each.
+`cctop query explain tokens_to_ctx` and restate the definition and caveat in one sentence each.
 
 ## Boundaries
 
