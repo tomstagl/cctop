@@ -68,6 +68,16 @@ pub fn without_shim(settings: &Value) -> Value {
     out
 }
 
+/// Everything `cctop install` adds: the status-line shim and the hooks.
+pub fn install_transform(settings: &Value) -> Value {
+    crate::hooks::with_hooks(&with_shim(settings))
+}
+
+/// Everything `cctop uninstall` removes.
+pub fn uninstall_transform(settings: &Value) -> Value {
+    crate::hooks::without_hooks(&without_shim(settings))
+}
+
 pub fn pretty(v: &Value) -> String {
     let mut s = serde_json::to_string_pretty(v).unwrap_or_default();
     s.push('\n');

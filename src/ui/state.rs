@@ -124,6 +124,9 @@ pub struct State {
     pub limits_series_5h: Vec<(i64, f64)>,
     /// Other busy sessions in the registry (they share the rate limit).
     pub other_live_sessions: usize,
+    /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
+    hook_pre: std::collections::HashMap<String, i64>,
+    hook_perm: std::collections::HashMap<String, i64>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -279,6 +282,109 @@ impl State {
             cost: CostTracker::new(pricing),
             tokens_include_agents: true,
             ..Default::default()
+        }
+    }
+
+    /// Fold one hook event into timings, permission waits and events.
+    pub fn apply_hook(&mut self, ev: &crate::hooks::HookEvent) {
+        use crate::events::Kind;
+        self.session.hooks_installed = true;
+        let at = ev.at;
+        let id = ev.tool_use_id.clone().unwrap_or_default();
+        match ev.event.as_str() {
+            "PreToolUse" => {
+                if !id.is_empty() {
+                    self.hook_pre.insert(id, at);
+                }
+            }
+            "PermissionRequest" => {
+                self.session.permission_pending = true;
+                self.session.permission_waiting_since_ms = Some(at);
+                if !id.is_empty() {
+                    self.hook_perm.insert(id.clone(), at);
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Perm,
+                    text: format!(
+                        "{} asks permission",
+                        ev.tool_name.as_deref().unwrap_or("tool")
+                    ),
+                });
+            }
+            "PostToolUse" | "PostToolUseFailure" => {
+                self.session.permission_pending = false;
+                self.session.permission_waiting_since_ms = None;
+                let name = self.tools.get(&id).map(|c| c.name.clone());
+                // Exact timing first, so the permission wait below subtracts
+                // the tool's real median rather than the transcript's guess.
+                if let Some(start) = self.hook_pre.remove(&id) {
+                    self.tools.set_exact_duration(&id, start, at);
+                }
+                if let Some(perm_at) = self.hook_perm.remove(&id) {
+                    // ≈ wait: the tool's own median duration is subtracted.
+                    let median = name
+                        .as_deref()
+                        .and_then(|n| self.tools.by_name().get(n).and_then(|t| t.p50_ms))
+                        .unwrap_or(0) as i64;
+                    let wait = (at - perm_at - median).max(0);
+                    self.session.permission_waits += 1;
+                    self.session.permission_wait_ms += wait;
+                    self.events.push(crate::events::Event {
+                        at,
+                        kind: Kind::Perm,
+                        text: format!(
+                            "{} allowed after ≈{}",
+                            name.clone().unwrap_or_else(|| "tool".into()),
+                            crate::ui::fmt::duration_ms(wait)
+                        ),
+                    });
+                }
+                if ev.event == "PostToolUseFailure" {
+                    self.events.push(crate::events::Event {
+                        at,
+                        kind: Kind::Api,
+                        text: format!("{} failed", name.unwrap_or_else(|| "tool".into())),
+                    });
+                }
+            }
+            "PreCompact" => {
+                let size = self.context().size;
+                if let Some(m) = self.model().map(str::to_string) {
+                    let entry = self.learned_thresholds.entry(m).or_insert(size);
+                    *entry = (*entry).max(size);
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Compact,
+                    text: format!("compacting at {}", crate::ui::fmt::tokens(size)),
+                });
+            }
+            "SubagentStart" | "SubagentStop" => self.events.push(crate::events::Event {
+                at,
+                kind: Kind::Agent,
+                text: ev.event.trim_start_matches("Subagent").to_lowercase(),
+            }),
+            "Notification" => {
+                let msg = ev
+                    .payload
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("notification");
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Note,
+                    text: crate::ui::fmt::clip(msg, 80),
+                });
+            }
+            "SessionStart" | "SessionEnd" | "Stop" | "UserPromptSubmit" => {
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: ev.event.clone(),
+                })
+            }
+            _ => {}
         }
     }
 

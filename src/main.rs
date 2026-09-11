@@ -128,7 +128,7 @@ fn main() {
         Command::Install(a) => {
             let path = cctop::install::settings_path();
             if let Err(e) =
-                cctop::install::apply(&path, a.yes, cctop::install::with_shim, "install")
+                cctop::install::apply(&path, a.yes, cctop::install::install_transform, "install")
             {
                 eprintln!("cctop: {e}");
                 std::process::exit(1);
@@ -137,15 +137,18 @@ fn main() {
         }
         Command::Uninstall(a) => {
             let path = cctop::install::settings_path();
-            if let Err(e) =
-                cctop::install::apply(&path, a.yes, cctop::install::without_shim, "uninstall")
-            {
+            if let Err(e) = cctop::install::apply(
+                &path,
+                a.yes,
+                cctop::install::uninstall_transform,
+                "uninstall",
+            ) {
                 eprintln!("cctop: {e}");
                 std::process::exit(1);
             }
             return;
         }
-        Command::Hook => "hook",
+        Command::Hook => std::process::exit(cctop::hooks::run_hook()),
         Command::StatuslineShim { original } => {
             let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
             std::process::exit(cctop::status::run_shim(&original));
@@ -281,6 +284,15 @@ fn run(attach: Attach) {
                     .filter(|s| s.status() == cctop::registry::Status::Busy)
                     .count();
             }
+        }
+    }));
+    // Hook spool: exact tool timings, permission waits, compactions.
+    let home = cctop::status::cctop_dir();
+    cctop::hooks::prune(&home, app.state.now_ms);
+    let mut hooks = cctop::hooks::Watcher::new(&home, &app.state.session.session_id);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        for ev in hooks.poll() {
+            state.apply_hook(&ev);
         }
     }));
     // Status-line samples (rate limits, exact context) when the shim is installed.
