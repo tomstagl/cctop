@@ -37,9 +37,9 @@ enum Command {
     /// Print the current Advisor recommendations.
     Advise(AdviseArgs),
     /// Write an end-of-session report.
-    Report,
+    Report(ReportArgs),
     /// Export ledger and events.
-    Export,
+    Export(ExportArgs),
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -85,6 +85,35 @@ enum QueryWhat {
     },
     /// Definition of a metric id (see docs/metrics.md).
     Explain { metric_id: String },
+    /// Medians over your last 7 days of sessions.
+    Baseline,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct ReportArgs {
+    #[command(flatten)]
+    attach: Attach,
+    /// Write here instead of ~/.cctop/reports/<date>-<name>.md (`-` for stdout).
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct ExportArgs {
+    #[command(flatten)]
+    attach: Attach,
+    /// JSON with ledger and events (default).
+    #[arg(long)]
+    json: bool,
+    /// CSV of the ledger (or of the events with --events).
+    #[arg(long)]
+    csv: bool,
+    /// With --csv: export the events instead of the ledger.
+    #[arg(long)]
+    events: bool,
+    /// Write to this file instead of stdout.
+    #[arg(long)]
+    out: Option<PathBuf>,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -208,8 +237,46 @@ fn main() {
             advise(a);
             return;
         }
-        Command::Report => "report",
-        Command::Export => "export",
+        Command::Report(r) => {
+            let state = load_state(&r.attach);
+            let md = cctop::report::markdown(&state, state.baseline.as_ref());
+            match r.out {
+                Some(p) if p.as_os_str() == "-" => print!("{md}"),
+                out => {
+                    let path = out.unwrap_or_else(|| {
+                        cctop::report::report_path(&cctop::status::cctop_dir(), &state)
+                    });
+                    if let Some(dir) = path.parent() {
+                        let _ = std::fs::create_dir_all(dir);
+                    }
+                    if let Err(e) = std::fs::write(&path, md) {
+                        eprintln!("cctop: cannot write {}: {e}", path.display());
+                        std::process::exit(1);
+                    }
+                    println!("cctop: report written to {}", path.display());
+                }
+            }
+            return;
+        }
+        Command::Export(x) => {
+            let state = load_state(&x.attach);
+            let text = if x.csv {
+                cctop::report::export_csv(&state, x.events)
+            } else {
+                serde_json::to_string_pretty(&cctop::report::export_json(&state)).unwrap()
+            };
+            match x.out {
+                Some(p) => {
+                    if let Err(e) = std::fs::write(&p, text) {
+                        eprintln!("cctop: cannot write {}: {e}", p.display());
+                        std::process::exit(1);
+                    }
+                    println!("cctop: exported to {}", p.display());
+                }
+                None => print!("{text}"),
+            }
+            return;
+        }
     };
     println!("cctop {name}: not implemented");
 }
@@ -233,6 +300,13 @@ fn run(attach: Attach) {
     app.state.session = session_info;
     app.state.now_ms = app::now_ms();
     app.desktop_notify = attach.notify;
+    if let Some(projects) = cctop::baseline::default_projects_dir() {
+        app.state.baseline = Some(cctop::baseline::load_or_compute(
+            &cctop::status::cctop_dir(),
+            &projects,
+            app.state.now_ms,
+        ));
+    }
     // Clock-driven collectors: liveness and git, at most every 5 s.
     let mut last_git = std::time::Instant::now() - std::time::Duration::from_secs(10);
     let base_commit = cctop::files::head_commit(&app.state.session.cwd);
@@ -407,6 +481,7 @@ fn query(q: QueryArgs) {
                 QueryWhat::Agents => qy::agents(&state),
                 QueryWhat::Advice => qy::advice(&state),
                 QueryWhat::Prefix => qy::prefix(&state),
+                QueryWhat::Baseline => qy::baseline(state.baseline.as_ref()),
                 QueryWhat::Events { since } => {
                     let since_ms = match since.as_deref() {
                         Some(s) => match qy::parse_since(s) {

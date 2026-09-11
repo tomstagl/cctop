@@ -68,5 +68,12 @@ pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
     for ev in hooks.poll() {
         state.apply_hook(&ev);
     }
+    if let Some(projects) = crate::baseline::default_projects_dir() {
+        state.baseline = Some(crate::baseline::load_or_compute(
+            &crate::status::cctop_dir(),
+            &projects,
+            state.now_ms,
+        ));
+    }
     state
 }

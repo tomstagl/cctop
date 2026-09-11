@@ -170,6 +170,8 @@ pub struct State {
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
+    /// Your last-7-days medians, when computed.
+    pub baseline: Option<crate::baseline::Baseline>,
     /// Ranked advice from the Advisor engine (best first).
     pub advice: Vec<crate::advisor::Advice>,
     pub advice_index: usize,

@@ -239,6 +239,13 @@ pub fn events(state: &State, since_ms: Option<i64>) -> Value {
     )
 }
 
+pub fn baseline(b: Option<&crate::baseline::Baseline>) -> Value {
+    match b {
+        Some(b) => serde_json::to_value(b).unwrap_or(Value::Null),
+        None => missing("no transcripts in the last 7 days"),
+    }
+}
+
 pub fn explain(metric_id: &str) -> Value {
     match registry::get(metric_id) {
         Some(mt) => {

@@ -144,6 +144,27 @@ impl Panel for Tokens {
             }
             l7.push(Span::raw(s));
         }
+        if let Some(b) = state.baseline.as_ref().filter(|b| b.sessions > 0) {
+            let turns = state.agg.turns.len().max(1) as f64;
+            let tok = crate::baseline::Baseline::multiplier(
+                Some(state.agg.total.total() as f64 / turns),
+                b.tokens_per_turn,
+            );
+            let usd = crate::baseline::Baseline::multiplier(
+                state.cost.current().map(|c| c.usd / turns),
+                b.cost_per_turn,
+            );
+            let mut parts = Vec::new();
+            if let Some(t) = tok {
+                parts.push(format!("×{t:.1}t"));
+            }
+            if let Some(c) = usd {
+                parts.push(format!("×{c:.1}$"));
+            }
+            if !parts.is_empty() {
+                l7.push(Span::styled(format!(" · 7d {}", parts.join(" ")), dim));
+            }
+        }
         if !state.tokens_include_agents {
             l7.push(Span::styled("  main only", dim));
         }
@@ -193,6 +214,20 @@ mod tests {
         assert!(out.contains("in ") && out.contains("/min"), "{out}");
         assert!(out.contains("per turn ▁"), "{out}");
         assert!(out.contains("last turn "), "{out}");
+    }
+
+    #[test]
+    fn baseline_multipliers_render() {
+        let mut app = fixture_app();
+        app.state.baseline = Some(crate::baseline::Baseline {
+            sessions: 3,
+            cost_per_turn: Some(0.33),
+            tokens_per_turn: Some(1_000_000.0),
+            ..Default::default()
+        });
+        let out = render_to_string(&app, 72, 70);
+        assert!(out.contains("· 7d ×"), "{out}");
+        assert!(out.contains("×2.0$"), "{out}");
     }
 
     #[test]

@@ -106,11 +106,27 @@ pub fn record(home: &Path, at: i64, payload: &[u8]) -> Option<PathBuf> {
     Some(path)
 }
 
-/// `cctop hook`: the hook entry point. Always exits 0.
+/// `cctop hook`: the hook entry point. Always exits 0. On `SessionEnd` it
+/// also kicks off `cctop report` for the session, detached, so the hook
+/// itself stays instant.
 pub fn run_hook() -> i32 {
     let mut payload = Vec::new();
     let _ = std::io::stdin().read_to_end(&mut payload);
     let _ = record(&crate::status::cctop_dir(), crate::app::now_ms(), &payload);
+    if let Ok(v) = serde_json::from_slice::<Value>(&payload) {
+        if v.get("hook_event_name").and_then(Value::as_str) == Some("SessionEnd") {
+            if let Some(id) = v.get("session_id").and_then(Value::as_str) {
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe)
+                        .args(["report", "--session", id])
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn();
+                }
+            }
+        }
+    }
     0
 }
 
