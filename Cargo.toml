@@ -9,6 +9,7 @@ repository = "https://github.com/tomstagl/cctop"
 readme = "README.md"
 keywords = ["claude", "tui", "dashboard", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["brand/", "fixtures/", "ralph/", "tasks/", "docs/verification/", "site/", "plugin/", ".github/", "scripts/", "packaging/"]
 
 [dependencies]
 anyhow = "1"
