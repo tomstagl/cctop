@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod context;
 pub mod events;
+pub mod files;
 pub mod header;
 pub mod tokens;
 pub mod tools;
@@ -17,6 +18,7 @@ pub fn all() -> Vec<Box<dyn Panel>> {
         Box::new(tokens::Tokens),
         Box::new(tools::Tools),
         Box::new(agents::Agents),
+        Box::new(files::FilesPanel),
         Box::new(events::Events),
     ]
 }

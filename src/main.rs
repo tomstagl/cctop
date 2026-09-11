@@ -169,6 +169,7 @@ fn run(attach: Attach) {
     app.desktop_notify = attach.notify;
     // Clock-driven collectors: liveness and git, at most every 5 s.
     let mut last_git = std::time::Instant::now() - std::time::Duration::from_secs(10);
+    let base_commit = cctop::files::head_commit(&app.state.session.cwd);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         state.session.refresh_alive(state.now_ms);
         if last_git.elapsed() >= std::time::Duration::from_secs(5) {
@@ -176,6 +177,11 @@ fn run(attach: Attach) {
             if let Some(g) = cctop::git::info(&state.session.cwd) {
                 state.session.git_branch = g.branch;
                 state.session.git_dirty = g.dirty;
+            }
+            if let Some(base) = &base_commit {
+                let ns = cctop::files::numstat(&state.session.cwd, base);
+                let cwd = state.session.cwd.clone();
+                state.files.apply_numstat(&cwd, &ns);
             }
         }
     }));

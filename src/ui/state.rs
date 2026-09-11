@@ -122,6 +122,8 @@ pub struct State {
     pub procs: crate::procs::Snapshot,
     /// Background tasks from `~/.claude/tasks/session-<id8>/`.
     pub tasks: Vec<crate::tasks::Task>,
+    pub files: crate::files::Files,
+    pub files_sort: FileSort,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,
@@ -186,6 +188,27 @@ impl EventsUi {
         };
         if let Some(i) = found {
             self.scroll = Some(i);
+        }
+    }
+}
+
+/// Sort order of the Files panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FileSort {
+    #[default]
+    LastTouch,
+    Touches,
+    Lines,
+    Name,
+}
+
+impl FileSort {
+    pub fn next(self) -> FileSort {
+        match self {
+            FileSort::LastTouch => FileSort::Touches,
+            FileSort::Touches => FileSort::Lines,
+            FileSort::Lines => FileSort::Name,
+            FileSort::Name => FileSort::LastTouch,
         }
     }
 }
@@ -275,6 +298,7 @@ impl State {
         self.cost.push(line);
         self.tools.push(line);
         self.events.apply(line);
+        self.files.push(line);
         let ts = match line {
             Line::PermissionMode(p) => {
                 self.session.permission_mode = Some(p.permission_mode.clone());

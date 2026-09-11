@@ -7,6 +7,7 @@ pub mod alerts;
 pub mod app;
 pub mod discover;
 pub mod events;
+pub mod files;
 pub mod git;
 pub mod metrics;
 pub mod procs;
