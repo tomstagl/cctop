@@ -19,7 +19,7 @@ enum Command {
     /// Print session metrics as JSON.
     Query,
     /// Print the metrics registry as Markdown.
-    Metrics,
+    Metrics(MetricsArgs),
     /// Install the status-line shim and hooks into ~/.claude/settings.json.
     Install,
     /// Remove what `install` added.
@@ -36,6 +36,16 @@ enum Command {
     Report,
     /// Export ledger and events.
     Export,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+struct MetricsArgs {
+    /// Print the full Markdown reference (docs/metrics.md).
+    #[arg(long)]
+    md: bool,
+    /// Rewrite the marked block in this README in place.
+    #[arg(long, value_name = "FILE")]
+    readme: Option<PathBuf>,
 }
 
 /// How to pick the Claude Code session to attach to.
@@ -73,7 +83,35 @@ fn main() {
             return;
         }
         Command::Query => "query",
-        Command::Metrics => "metrics",
+        Command::Metrics(args) => {
+            use cctop::metrics::registry;
+            if let Some(path) = args.readme {
+                let text = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+                    eprintln!("cctop: cannot read {}: {e}", path.display());
+                    std::process::exit(1);
+                });
+                match registry::splice_readme(&text) {
+                    Some(new) => {
+                        if new != text {
+                            std::fs::write(&path, new).expect("write readme");
+                        }
+                        println!("cctop: updated metrics block in {}", path.display());
+                    }
+                    None => {
+                        eprintln!(
+                            "cctop: {} has no <!-- metrics:start --> block",
+                            path.display()
+                        );
+                        std::process::exit(1);
+                    }
+                }
+                return;
+            }
+            // `--md` is the default output; the flag exists for explicitness.
+            let _ = args.md;
+            print!("{}", registry::markdown());
+            return;
+        }
         Command::Install => "install",
         Command::Uninstall => "uninstall",
         Command::Hook => "hook",

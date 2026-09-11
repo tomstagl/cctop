@@ -181,7 +181,7 @@
         "Tests pass (`cargo test`)"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "PRD ref: US-021 · FR-18"
     },
     {
