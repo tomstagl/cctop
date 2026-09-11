@@ -102,6 +102,7 @@ impl Panel for Tools {
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
         let n = Self::rows(state).len();
+        let in_overlay = state.overlay == Some(self.id());
         let ui = &mut state.tools_ui;
         if ui.editing {
             match key.code {
@@ -131,7 +132,8 @@ impl Panel for Tools {
                 ui.editing = true;
                 ui.filter.get_or_insert_with(String::new);
             }
-            KeyCode::Esc if ui.filter.is_some() => ui.filter = None,
+            // In the detail view Esc closes the view; the filter survives.
+            KeyCode::Esc if ui.filter.is_some() && !in_overlay => ui.filter = None,
             KeyCode::Char('j') | KeyCode::Down => {
                 ui.selected = (ui.selected + 1).min(n.saturating_sub(1))
             }

@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn header_shows_fixture_session_values() {
         let app = fixture_app();
-        let out = render_to_string(&app, 60, 8);
+        let out = render_to_string(&app, 60, 30);
         let l0 = out.lines().next().unwrap();
         assert!(l0.contains("cctop"), "{out}");
         assert!(
@@ -209,18 +209,18 @@ mod tests {
         app.state.session.cpu_pct = Some(3.1);
         app.state.session.rss_bytes = Some(412 << 20);
         app.state.now_ms = app.state.last_line_at_ms.unwrap();
-        let out = render_to_string(&app, 70, 8);
+        let out = render_to_string(&app, 70, 30);
         assert!(out.contains("● BUSY"), "{out}");
         assert!(out.contains("/home/user/project main*"), "{out}");
         assert!(out.contains("Max · up 1h 12m · $9.90 · 3% 412 MB"), "{out}");
 
         app.state.session.permission_pending = true;
-        assert!(render_to_string(&app, 70, 8).contains("◆ WAITING"));
+        assert!(render_to_string(&app, 70, 30).contains("◆ WAITING"));
         app.state.session.status = SessionStatus::Idle;
         app.state.session.permission_pending = false;
-        assert!(render_to_string(&app, 70, 8).contains("○ IDLE"));
+        assert!(render_to_string(&app, 70, 30).contains("○ IDLE"));
         app.state.paused = true;
-        assert!(render_to_string(&app, 70, 8).contains("⏸ PAUSED"));
+        assert!(render_to_string(&app, 70, 30).contains("⏸ PAUSED"));
     }
 
     #[test]
@@ -229,9 +229,9 @@ mod tests {
         app.state.session.alive = false;
         let ended = app.state.session.ended_at_ms.unwrap();
         app.state.now_ms = ended + 3_600_000;
-        let a = render_to_string(&app, 60, 8);
+        let a = render_to_string(&app, 60, 30);
         app.state.now_ms = ended + 7_200_000;
-        let b = render_to_string(&app, 60, 8);
+        let b = render_to_string(&app, 60, 30);
         assert_eq!(a, b, "values must not move once the session ended");
         assert!(a.contains("ENDED"));
     }

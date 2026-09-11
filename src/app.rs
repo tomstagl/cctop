@@ -181,10 +181,10 @@ impl App {
             return;
         }
         if let Some(id) = self.state.overlay {
-            if key.code == KeyCode::Esc {
+            // The panel gets first refusal (e.g. Esc clears its search);
+            // an unhandled Esc closes the overlay.
+            if self.route_to(id, key) == Handled::No && key.code == KeyCode::Esc {
                 self.state.overlay = None;
-            } else {
-                self.route_to(id, key);
             }
             return;
         }

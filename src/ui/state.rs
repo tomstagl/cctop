@@ -128,6 +128,45 @@ pub struct State {
     /// Full-screen view owned by a panel (`Enter`), closed with Esc.
     pub overlay: Option<PanelId>,
     pub tools_ui: ToolsUi,
+    pub events: crate::events::Log,
+    pub events_ui: EventsUi,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EventsUi {
+    /// Index of the bottom-most visible event in the overlay; `None` follows the tail.
+    pub scroll: Option<usize>,
+    pub search: Option<String>,
+    pub editing: bool,
+}
+
+impl EventsUi {
+    /// Move `scroll` to the next (or previous) event matching the search.
+    pub fn jump_to_match(&mut self, log: &crate::events::Log, forward: bool) {
+        let Some(q) = self.search.as_deref().map(str::to_lowercase) else {
+            return;
+        };
+        if q.is_empty() {
+            return;
+        }
+        let n = log.len();
+        let cur = self.scroll.unwrap_or(n.saturating_sub(1));
+        let matches = |i: usize| {
+            log.iter()
+                .nth(i)
+                .is_some_and(|e| e.text.to_lowercase().contains(&q))
+        };
+        let found = if forward {
+            (cur + 1..n)
+                .chain(0..=cur.min(n.saturating_sub(1)))
+                .find(|&i| matches(i))
+        } else {
+            (0..cur).rev().chain((cur..n).rev()).find(|&i| matches(i))
+        };
+        if let Some(i) = found {
+            self.scroll = Some(i);
+        }
+    }
 }
 
 /// Sort column of the Tools table.
@@ -214,6 +253,7 @@ impl State {
         self.agg.push(line);
         self.cost.push(line);
         self.tools.push(line);
+        self.events.apply(line);
         let ts = match line {
             Line::PermissionMode(p) => {
                 self.session.permission_mode = Some(p.permission_mode.clone());
