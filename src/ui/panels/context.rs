@@ -39,18 +39,37 @@ impl Panel for Context {
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
+        use crate::ui::state::ContextView;
         if state.overlay == Some(self.id()) {
-            return crate::ui::ledger_view::handle_key(key, state);
+            return match state.context_view {
+                ContextView::Ledger => crate::ui::ledger_view::handle_key(key, state),
+                ContextView::Prefix => Handled::No,
+            };
         }
-        if key.code == KeyCode::Enter {
-            crate::ui::ledger_view::open(state);
-            return Handled::Yes;
+        match key.code {
+            KeyCode::Enter => {
+                state.context_view = ContextView::Ledger;
+                crate::ui::ledger_view::open(state);
+                Handled::Yes
+            }
+            KeyCode::Char('i') => {
+                state.context_view = ContextView::Prefix;
+                state.overlay = Some(self.id());
+                Handled::Yes
+            }
+            _ => Handled::No,
         }
-        Handled::No
     }
 
     fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
-        crate::ui::ledger_view::render(frame, area, state);
+        match state.context_view {
+            crate::ui::state::ContextView::Ledger => {
+                crate::ui::ledger_view::render(frame, area, state)
+            }
+            crate::ui::state::ContextView::Prefix => {
+                crate::ui::prefix_view::render(frame, area, state)
+            }
+        }
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {

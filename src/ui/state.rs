@@ -165,6 +165,16 @@ pub struct State {
     pub events: crate::events::Log,
     pub events_ui: EventsUi,
     pub ledger_ui: crate::ui::ledger_view::LedgerUi,
+    pub prefix: crate::prefix::Prefix,
+    /// Which full-screen view the Context panel shows when it owns the overlay.
+    pub context_view: ContextView,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ContextView {
+    #[default]
+    Ledger,
+    Prefix,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -443,6 +453,7 @@ impl State {
         self.tools.push(line);
         self.events.apply(line);
         self.files.push(line);
+        self.prefix.push(line);
         let ts = match line {
             Line::PermissionMode(p) => {
                 self.session.permission_mode = Some(p.permission_mode.clone());

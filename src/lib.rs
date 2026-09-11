@@ -13,6 +13,7 @@ pub mod hooks;
 pub mod install;
 pub mod ledger;
 pub mod metrics;
+pub mod prefix;
 pub mod procs;
 pub mod registry;
 pub mod status;
@@ -26,12 +27,7 @@ pub mod ui;
 /// Claude Code derives the slug by replacing every non-alphanumeric byte of
 /// the absolute cwd with `-`.
 pub fn transcript_path(s: &registry::Session) -> std::path::PathBuf {
-    let slug: String = s
-        .cwd
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
+    let slug = slug(&s.cwd);
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_default();
@@ -39,4 +35,13 @@ pub fn transcript_path(s: &registry::Session) -> std::path::PathBuf {
         .join("projects")
         .join(slug)
         .join(format!("{}.jsonl", s.session_id))
+}
+
+/// Claude Code's project slug for a working directory: every non-alphanumeric
+/// character of the absolute path becomes `-`.
+pub fn slug(cwd: &std::path::Path) -> String {
+    cwd.to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
 }

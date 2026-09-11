@@ -10,4 +10,5 @@ pub use state::State;
 pub mod fmt;
 pub mod ledger_view;
 pub mod panels;
+pub mod prefix_view;
 pub mod widgets;

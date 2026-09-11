@@ -48,6 +48,7 @@ impl Panel for Tokens {
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
         if key.code == KeyCode::Enter {
+            state.context_view = crate::ui::state::ContextView::Ledger;
             crate::ui::ledger_view::open(state);
             return Handled::Yes;
         }

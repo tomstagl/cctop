@@ -271,6 +271,16 @@ fn run(attach: Attach) {
             state.procs = snap;
         }));
     }
+    // CLAUDE.md files and the memory index for the prefix inspector.
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let mut last_scan = std::time::Instant::now() - std::time::Duration::from_secs(60);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if last_scan.elapsed() >= std::time::Duration::from_secs(30) {
+            last_scan = std::time::Instant::now();
+            let cwd = state.session.cwd.clone();
+            state.prefix.scan(&cwd, home.as_deref());
+        }
+    }));
     // Other live sessions share the account's rate limit.
     let my_pid = app.state.session.pid;
     let mut last_reg = std::time::Instant::now() - std::time::Duration::from_secs(10);
