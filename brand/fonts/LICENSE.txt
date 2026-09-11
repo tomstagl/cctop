@@ -1,0 +1,7 @@
+IBM Plex Sans Condensed and IBM Plex Mono
+Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+
+These fonts are licensed under the SIL Open Font License, Version 1.1.
+https://openfontlicense.org/ — https://github.com/IBM/plex
+
+They are used only to convert the "cctop" wordmark to outlines in brand/build.ts.
