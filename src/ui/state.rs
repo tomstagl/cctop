@@ -99,6 +99,8 @@ pub struct State {
     pub agg: Aggregate,
     pub cost: CostTracker,
     pub tools: tools::Stats,
+    /// Subagents of this session, by id.
+    pub agents: std::collections::BTreeMap<String, crate::agents::Agent>,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,
@@ -121,14 +123,35 @@ pub struct State {
     pub lines_seen: usize,
     /// Newest transcript timestamp seen (epoch ms).
     pub last_line_at_ms: Option<i64>,
+    /// Tokens panel: include subagent usage (toggled with `a`).
+    pub tokens_include_agents: bool,
 }
 
 impl State {
     pub fn new(pricing: Pricing) -> State {
         State {
             cost: CostTracker::new(pricing),
+            tokens_include_agents: true,
             ..Default::default()
         }
+    }
+
+    /// "Now" for elapsed-time arithmetic: frozen at the end for dead sessions.
+    pub fn clock_ms(&self) -> i64 {
+        if self.session.alive {
+            self.now_ms
+        } else {
+            self.session.ended_at_ms.unwrap_or(self.now_ms)
+        }
+    }
+
+    /// Total usage of all subagents.
+    pub fn agents_usage(&self) -> crate::metrics::Usage {
+        let mut u = crate::metrics::Usage::default();
+        for a in self.agents.values() {
+            u.add(&a.usage);
+        }
+        u
     }
 
     /// Feed one main-transcript line to every collector.

@@ -176,10 +176,12 @@ fn run(attach: Attach) {
         }
     }));
 
+    let session_dir = transcript.with_extension("");
     if attach.once {
         for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
             app.feed(line);
         }
+        app.state.agents = cctop::agents::load(&session_dir);
         if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
             app.state.session.ended_at_ms = app.state.last_line_at_ms;
         }
@@ -205,6 +207,12 @@ fn run(attach: Attach) {
         return;
     }
 
+    let mut agents = cctop::agents::AgentWatcher::watch(&session_dir);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if agents.poll() || state.agents.len() != agents.agents.len() {
+            state.agents = agents.agents.clone();
+        }
+    }));
     let tailer = match cctop::tail::Tailer::open(&transcript) {
         Ok(t) => t,
         Err(e) => {

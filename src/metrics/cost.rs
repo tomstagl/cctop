@@ -218,8 +218,8 @@ pub struct Rates {
     pub window_min: f64,
 }
 
-/// Burn rate over the trailing 15 minutes ending at `now`.
-/// Cost = trailing 15-min cost × 4; tokens likewise per minute.
+/// Burn rate over the trailing 15 minutes ending at `now`: turns whose last
+/// activity falls in the window. Cost = window cost × (60 / window minutes).
 pub fn rates(agg: &Aggregate, pricing: &Pricing, now_ms: i64) -> Rates {
     const WINDOW_MS: i64 = 15 * 60 * 1000;
     let mut usd = 0.0;
@@ -227,7 +227,13 @@ pub fn rates(agg: &Aggregate, pricing: &Pricing, now_ms: i64) -> Rates {
     let mut tokens: u64 = 0;
     let mut earliest = now_ms;
     for t in &agg.turns {
-        let Some(at) = t.started_at.as_deref().and_then(parse_ts_ms) else {
+        // A turn counts if its last activity falls in the window.
+        let Some(at) = t
+            .last_at
+            .as_deref()
+            .or(t.started_at.as_deref())
+            .and_then(parse_ts_ms)
+        else {
             continue;
         };
         if at < now_ms - WINDOW_MS || at > now_ms {
@@ -424,7 +430,7 @@ mod tests {
             .turns
             .iter()
             .filter(|t| t.usage.total_input() > 0)
-            .filter_map(|t| t.started_at.as_deref().and_then(parse_ts_ms))
+            .filter_map(|t| t.last_at.as_deref().and_then(parse_ts_ms))
             .max()
             .unwrap();
         let r = rates(&agg, &Pricing::bundled(), last + 1000);
