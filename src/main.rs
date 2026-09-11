@@ -60,26 +60,25 @@ struct Attach {
     /// Keep polling until a session appears.
     #[arg(long)]
     wait: bool,
+    /// Render one frame and exit (headless; for tests and scripts).
+    #[arg(long)]
+    once: bool,
+    /// With --once: write the frame as plain text to this file (default stdout).
+    #[arg(long, value_name = "FILE")]
+    render_to: Option<PathBuf>,
+    /// With --once: terminal size as WxH (default 60x51).
+    #[arg(long, value_name = "WxH")]
+    size: Option<String>,
+    /// With --once: keys to press before rendering, comma separated (e.g. "Tab,Enter").
+    #[arg(long)]
+    keys: Option<String>,
 }
 
 fn main() {
     let cli = Cli::parse();
     let name = match cli.command.unwrap_or(Command::Run(Attach::default())) {
         Command::Run(attach) => {
-            let q = cctop::discover::Query::from_env(attach.session, attach.cwd);
-            match cctop::discover::resolve_system(&q, attach.wait) {
-                Ok(s) => println!(
-                    "cctop run: would attach to {} ({}, pid {}, {})",
-                    s.name,
-                    s.session_id,
-                    s.pid,
-                    s.cwd.display()
-                ),
-                Err(e) => {
-                    eprintln!("cctop: {e}");
-                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                }
-            }
+            run(attach);
             return;
         }
         Command::Query => "query",
@@ -122,4 +121,73 @@ fn main() {
         Command::Export => "export",
     };
     println!("cctop {name}: not implemented");
+}
+
+/// A `--session` value naming an existing `.jsonl` (or a directory holding
+/// `<name>.jsonl`) is a fixture: read it instead of the live registry.
+fn fixture_path(session: &str) -> Option<PathBuf> {
+    let p = PathBuf::from(session);
+    if p.is_file() {
+        return Some(p);
+    }
+    let with_ext = p.with_extension("jsonl");
+    with_ext.is_file().then_some(with_ext)
+}
+
+fn run(attach: Attach) {
+    use cctop::app::{self, App};
+    let transcript: PathBuf = match attach.session.as_deref().and_then(fixture_path) {
+        Some(p) => p,
+        None => {
+            let q = cctop::discover::Query::from_env(attach.session.clone(), attach.cwd.clone());
+            let s = match cctop::discover::resolve_system(&q, attach.wait) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("cctop: {e}");
+                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                }
+            };
+            cctop::transcript_path(&s)
+        }
+    };
+    // Panels arrive with the next stories; the sink counts lines for now.
+    let mut app = App::new(Vec::new(), Box::new(|_line, _state| {}));
+    app.state.now_ms = app::now_ms();
+
+    if attach.once {
+        for line in cctop::transcript::parse_file(&transcript).unwrap_or_default() {
+            app.feed(line);
+        }
+        if let Some(keys) = attach.keys.as_deref() {
+            for k in app::parse_keys(keys) {
+                app.handle_key(k);
+            }
+        }
+        let (w, h) = attach
+            .size
+            .as_deref()
+            .and_then(app::parse_size)
+            .unwrap_or((60, 51));
+        let text = app::render_to_string(&app, w, h);
+        match attach.render_to {
+            Some(path) => std::fs::write(&path, text).unwrap_or_else(|e| {
+                eprintln!("cctop: cannot write {}: {e}", path.display());
+                std::process::exit(1);
+            }),
+            None => print!("{text}"),
+        }
+        return;
+    }
+
+    let tailer = match cctop::tail::Tailer::open(&transcript) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("cctop: cannot tail {}: {e}", transcript.display());
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = app::run_tui(app, vec![Box::new(tailer)]) {
+        eprintln!("cctop: {e}");
+        std::process::exit(1);
+    }
 }
