@@ -104,7 +104,7 @@ pub struct Turn {
 }
 
 /// Running aggregate over a transcript. Feed lines in order.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Aggregate {
     pub turns: Vec<Turn>,
     pub total: Usage,
