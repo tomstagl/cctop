@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cctop — see what Claude Code is doing</title>
+<meta name="description" content="A btop-style live dashboard for Claude Code internals: context, tokens, cost, rate limits, tools, agents and an Advisor — in a pane beside your session.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="assets/favicon.ico">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:title" content="cctop">
+<meta property="og:description" content="See what Claude Code is doing — live, in a pane beside it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tomstagl.github.io/cctop/">
+<meta property="og:image" content="https://tomstagl.github.io/cctop/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a href="./" aria-label="cctop home">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/cctop-lockup-horizontal-dark.svg">
+      <img src="assets/cctop-lockup-horizontal-light.svg" alt="cctop" height="36">
+    </picture>
+  </a>
+  <nav>
+    <a href="#panels">Panels</a>
+    <a href="#advisor">Advisor</a>
+    <a href="#install">Install</a>
+    <a href="metrics.html">Metrics</a>
+    <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">for Claude Code · Rust · read-only</div>
+  <h1>See what Claude Code is doing — live, in a pane beside it.</h1>
+  <p class="lede"><strong>cctop</strong> is an <code>htop</code>/<code>btop</code>-style terminal dashboard for a running Claude Code session. It shows the internals Claude Code doesn't — context fill and when the next compaction hits, tokens and cost with cache-hit ratio, rate limits with an exhaustion forecast, what the current turn is waiting on, per-tool latency and how much context each tool pushed, subagents and MCP servers, touched files — on one page, in real time, in a right-hand split while you keep working on the left.</p>
+  <div class="install">
+    <code id="install-line">brew install tomstagl/tap/cctop</code>
+    <button id="copy" type="button" hidden>copy</button>
+  </div>
+  <p class="subline">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></p>
+</section>
+
+<section id="screenshot">
+  <h2>One page, nine panels</h2>
+  <div class="term"><pre>┌─cctop ── cctop-46 ──────────────────── Opus 5 · v2.1.269 ┐
+│ ● BUSY  turn 14  02:31  ▶ Bash 0:48  ~/code/cctop main*  │
+│ auto · medium · Max · 1h 12m · ≈ API $4.37 · 3% 412 MB   │
+├─1 Context ───────────────────────────────────────── 67 % ┤
+│ ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ │
+│ 134k / 200k   sys+tools 28k · msgs 106k · free 66k       │
+│ ▁▂▂▃▃▄▄▅▅▆▆▇  +9.4k/turn → autocompact in ~3 turns est   │
+│ compactions 1 (turn 9, −71k)                             │
+├─2 Tokens &amp; Cost ───────────────────────────────── 1.91 M ┤
+│ cache read  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇      1.62 M     │
+│ cache write ▇▇▇                                 148k     │
+│ fresh in    ▇                                    24k     │
+│ output      ▇▇                                  118k     │
+│  └ thinking ▇                                    61k     │
+│ cache hit 90 %  ·  ≈ $4.37 ($3.61/h)  ·  in 12.4k/min    │
+│ per turn ▂▁▃▂▄▂▂▆▁▃▂▅▃█   last turn 31k · $0.42          │
+├─3 Limits ────────────────────────────────────────────────┤
+│ 5 h  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁  62 %  ↺ 1h 48m │
+│      at this rate: exhausted in 2h 05m, after reset ✓    │
+│ 7 d  ▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  23 %  ↺ 4d 03h │
+├─4 Turn ──────────────────────────────────────────────────┤
+│ elapsed 2:31   api 3 calls · ttft 1.2 s · out 41 tok/s   │
+│ ● Bash  0:48  cargo test --workspace          pid 8812   │
+│ hooks 6 runs · 84 ms   permission waits 1 · 12 s         │
+├─5 Tools ────────────────────────────────────── 212 calls ┤
+│ TOOL         N  ERR    p50    p95   LAST  TOKENS→CTX     │
+│ Read        71    0   38ms   90ms   0:02      41.2k      │
+│ Bash        58    3   1.4s   9.8s   ▶now      22.9k      │
+│ Edit        44    1   22ms   55ms   0:09       2.1k      │
+│ Grep        23    0   61ms  140ms   1:10      11.6k      │
+│ mcp:github   9    1  620ms   2.1s   4:02       8.8k      │
+│ top ctx: Read src/render.rs 6.1k · Bash ls -R 4.4k       │
+├─6 Agents &amp; MCP ──────────────────────────────────────────┤
+│ ◐ Explore  find render call sites    0:41   18k  sonnet  │
+│ ✓ fork     review                    3:12   92k  opus    │
+│ mcp github      pid 8231   41 MB   9 calls  p95 2.1s     │
+│ mcp playwright  pid 8244  188 MB   0 calls  idle 12m     │
+│ bg  cargo build --release          1:58   task #3        │
+├─7 Files ─────────────────────────── 9 touched · +412 −87 ┤
+│ src/render.rs      R×6  E×5  +210 −31   re-read ⚠        │
+│ src/collect.rs     R×2  E×3  +98  −40                    │
+│ tasks/prd-cctop.md W×1                                   │
+├─9 Advisor ─────────────────────────────────────── 1 of 3 ┤
+│ ▸ Bash ls -R pushed 4.4k tokens into context, twice.     │
+│   Pipe through head -50 or use Glob.   ~4k/turn · n next │
+├─8 Events ────────────────────────────────────────────────┤
+│ 20:41:02 hook   PostToolUse Edit src/render.rs   12ms    │
+│ 20:41:03 tool   Bash cargo test --workspace  ▶           │
+│ 20:41:17 perm   Bash allowed (auto)                      │
+│ 20:41:39 note   rate-limit 5h crossed 60 %               │
+└ ?help 1-9 panels ⇥focus s sort f filter p pause q quit   ┘</pre></div>
+  <p class="cap">narrow layout · 60 columns · the right-hand-pane case. At ≥ 100 columns the panels flow into two columns.</p>
+</section>
+
+<section id="panels">
+  <h2>What each panel answers</h2>
+  <div class="panels"><div class="pnl"><h4>1 Context</h4><p>How full is the window, how fast is it filling, how many turns until autocompact</p></div>
+<div class="pnl"><h4>2 Tokens &amp; Cost</h4><p>Cache read / write / fresh / output / thinking, cache-hit ratio, $ and burn rate</p></div>
+<div class="pnl"><h4>3 Limits</h4><p>5 h and 7 d usage, reset countdown, will I run out before the reset</p></div>
+<div class="pnl"><h4>4 Turn</h4><p>What the turn is doing right now, API vs tool time, hook overhead, permission waits</p></div>
+<div class="pnl"><h4>5 Tools</h4><p>Calls, errors, p50/p95, and tokens each tool pushed into context</p></div>
+<div class="pnl"><h4>6 Agents &amp; MCP</h4><p>Subagents, MCP server processes, background tasks</p></div>
+<div class="pnl"><h4>7 Files</h4><p>Blast radius and wasted re-reads</p></div>
+<div class="pnl"><h4>8 Events</h4><p>Tool / hook / permission / compaction / note stream</p></div>
+<div class="pnl"><h4>9 Advisor</h4><p>One evidence-backed recommendation at a time, ranked by tokens saved</p></div></div>
+</section>
+
+<section id="advisor">
+  <h2>One recommendation at a time</h2>
+  <p>The Advisor turns what it sees into a single concrete change, ranked by what it saves. Eighteen deterministic rules; no model call, no network. Three examples from real sessions:</p>
+  <div class="advice">
+    <div class="adv"><span class="h">▸ `Bash ls -R` pushed 4.4k tokens into context, 2×</span><br><span class="a">Pipe through `head -50`, use Glob/Grep, or ask a subagent for a summary.</span> <span class="s">~8.8k/turn · A03</span></div>
+    <div class="adv"><span class="h">▸ Prompt cache expired before turn 12</span><br><span class="a">Batch your questions or keep the session warm; each cold turn re-writes the whole context (TTL 1 h on this session).</span> <span class="s">~396k · A02</span></div>
+    <div class="adv"><span class="h">▸ mcp:playwright has had no calls for 42:00</span><br><span class="a">Disable it for this project (.mcp.json) or rely on deferred tool loading.</span> <span class="s">~3.1k/turn · A07</span></div>
+  </div>
+  <p class="cap">Ask your session about any of them: the bundled <code>cctop-insights</code> skill answers from <code>cctop query</code>.</p>
+</section>
+
+<section id="install">
+  <h2>Install &amp; attach</h2>
+  <pre class="block">brew install tomstagl/tap/cctop     # or: cargo install cctop
+claude plugin add tomstagl/cctop    # adds /cctop and cctop-insights
+/cctop                              # opens the dashboard in a right-hand pane</pre>
+  <h3>Optional: exact rate limits and tool timings</h3>
+  <p><code>cctop install</code> wraps your status line with a tiny shim and registers <code>cctop hook</code> for Claude Code's hook events. It shows a diff of <code>~/.claude/settings.json</code>, backs the file up to <code>~/.cctop/backups/</code>, and asks before writing. <code>cctop uninstall</code> restores the original. Without it, every panel still works from the transcript alone.</p>
+  <h3>Works in</h3>
+  <div class="hosts"><span>tmux</span><span>zellij</span><span>WezTerm</span><span>Kitty</span><span>iTerm2</span></div>
+  <p class="cap">Minimum useful pane: 40 columns. 45 % of a 132-column window gives 59, which fits the narrow layout.</p>
+</section>
+
+<section id="themes">
+  <h2>Themes</h2>
+  <p>Six bundled, yours in <code>~/.config/cctop/themes/*.toml</code>, hot-reloaded. <code>t</code> cycles. Honours <code>NO_COLOR</code>; falls back to 16 colours and ASCII borders when the terminal needs it.</p>
+  <div class="themes"><div class="theme" style="background:#000000;color:#EEEEEE;border-color:#4E4E4E">btop<br><i style="background:#C2A0FF"></i><i style="background:#5AD08D"></i><i style="background:#F5B347"></i><i style="background:#FF5C57"></i></div>
+<div class="theme" style="background:#1E1E2E;color:#CDD6F4;border-color:#45475A">catppuccin-mocha<br><i style="background:#89DCEB"></i><i style="background:#A6E3A1"></i><i style="background:#F9E2AF"></i><i style="background:#F38BA8"></i></div>
+<div class="theme" style="background:#0E1318;color:#D6DEE8;border-color:#2A3644">default-dark<br><i style="background:#4CC2C2"></i><i style="background:#5FC77E"></i><i style="background:#E2B04A"></i><i style="background:#E5605E"></i></div>
+<div class="theme" style="background:#F1F3F6;color:#1A212C;border-color:#D5DAE2">default-light<br><i style="background:#177F86"></i><i style="background:#2F8F58"></i><i style="background:#C7911E"></i><i style="background:#C9403F"></i></div>
+<div class="theme" style="background:#282828;color:#EBDBB2;border-color:#504945">gruvbox<br><i style="background:#83A598"></i><i style="background:#B8BB26"></i><i style="background:#FABD2F"></i><i style="background:#FB4934"></i></div>
+<div class="theme" style="background:#2E3440;color:#D8DEE9;border-color:#434C5E">nord<br><i style="background:#88C0D0"></i><i style="background:#A3BE8C"></i><i style="background:#EBCB8B"></i><i style="background:#BF616A"></i></div></div>
+</section>
+
+<section id="privacy">
+  <h2>Local only</h2>
+  <p>cctop reads <code>~/.claude</code> (session registry, transcripts, hook events) and the process tree, and writes only under <code>~/.cctop</code> and <code>~/.config/cctop</code>. It sends nothing over the network. Cost figures for subscription plans are API-equivalent list prices, marked <code>≈</code>.</p>
+</section>
+
+<footer>
+  <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  <a href="https://github.com/tomstagl/cctop/releases">Releases</a>
+  <a href="metrics.html">Every metric, explained</a>
+  <a href="https://github.com/tomstagl/cctop/blob/main/LICENSE">MIT</a>
+  <span>© 2026 Thomas Stagl</span>
+</footer>
+</div>
+<script>
+(function(){
+  var b=document.getElementById('copy'),c=document.getElementById('install-line');
+  if(!b||!c||!navigator.clipboard)return;
+  b.hidden=false;
+  b.addEventListener('click',function(){navigator.clipboard.writeText(c.textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)})});
+})();
+</script>
+</body>
+</html>

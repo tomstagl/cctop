@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cctop — see what Claude Code is doing</title>
+<meta name="description" content="A btop-style live dashboard for Claude Code internals: context, tokens, cost, rate limits, tools, agents and an Advisor — in a pane beside your session.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="assets/favicon.ico">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:title" content="cctop">
+<meta property="og:description" content="See what Claude Code is doing — live, in a pane beside it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tomstagl.github.io/cctop/">
+<meta property="og:image" content="https://tomstagl.github.io/cctop/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a href="./" aria-label="cctop home">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/cctop-lockup-horizontal-dark.svg">
+      <img src="assets/cctop-lockup-horizontal-light.svg" alt="cctop" height="36">
+    </picture>
+  </a>
+  <nav>
+    <a href="#panels">Panels</a>
+    <a href="#advisor">Advisor</a>
+    <a href="#install">Install</a>
+    <a href="metrics.html">Metrics</a>
+    <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">for Claude Code · Rust · read-only</div>
+  <h1>@HEADLINE@</h1>
+  <p class="lede">@HERO@</p>
+  <div class="install">
+    <code id="install-line">brew install tomstagl/tap/cctop</code>
+    <button id="copy" type="button" hidden>copy</button>
+  </div>
+  <p class="subline">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></p>
+  <div class="demo">
+    <video autoplay muted loop playsinline poster="assets/two-pane.png" width="1280" height="640">
+      <source src="assets/demo.webm" type="video/webm">
+    </video>
+    <img class="still" src="assets/two-pane.png" alt="Claude Code on the left, cctop attached in a right-hand pane" width="1280" height="640" loading="lazy">
+    <p class="cap">Claude Code keeps running on the left; cctop follows it from the right. Everything is live.</p>
+  </div>
+</section>
+
+<section id="screenshot">
+  <h2>One page, nine panels</h2>
+  <div class="term"><pre>@MOCKUP@</pre></div>
+  <p class="cap">narrow layout · 60 columns · the right-hand-pane case. At ≥ 100 columns the panels flow into two columns.</p>
+</section>
+
+<section id="panels">
+  <h2>What each panel answers</h2>
+  <div class="panels">@PANELS@</div>
+</section>
+
+<section id="advisor">
+  <h2>One recommendation at a time</h2>
+  <p>The Advisor turns what it sees into a single concrete change, ranked by what it saves. Eighteen deterministic rules; no model call, no network. Three examples from real sessions:</p>
+  <div class="advice">
+    <div class="adv"><span class="h">▸ `Bash ls -R` pushed 4.4k tokens into context, 2×</span><br><span class="a">Pipe through `head -50`, use Glob/Grep, or ask a subagent for a summary.</span> <span class="s">~8.8k/turn · A03</span></div>
+    <div class="adv"><span class="h">▸ Prompt cache expired before turn 12</span><br><span class="a">Batch your questions or keep the session warm; each cold turn re-writes the whole context (TTL 1 h on this session).</span> <span class="s">~396k · A02</span></div>
+    <div class="adv"><span class="h">▸ mcp:playwright has had no calls for 42:00</span><br><span class="a">Disable it for this project (.mcp.json) or rely on deferred tool loading.</span> <span class="s">~3.1k/turn · A07</span></div>
+  </div>
+  <p class="cap">Ask your session about any of them: the bundled <code>cctop-insights</code> skill answers from <code>cctop query</code>.</p>
+</section>
+
+<section id="install">
+  <h2>Install &amp; attach</h2>
+  <pre class="block">@INSTALL@</pre>
+  <h3>Optional: exact rate limits and tool timings</h3>
+  <p><code>cctop install</code> wraps your status line with a tiny shim and registers <code>cctop hook</code> for Claude Code's hook events. It shows a diff of <code>~/.claude/settings.json</code>, backs the file up to <code>~/.cctop/backups/</code>, and asks before writing. <code>cctop uninstall</code> restores the original. Without it, every panel still works from the transcript alone.</p>
+  <h3>Works in</h3>
+  <div class="hosts"><span>tmux</span><span>zellij</span><span>WezTerm</span><span>Kitty</span><span>iTerm2</span></div>
+  <p class="cap">Minimum useful pane: 40 columns. 45 % of a 132-column window gives 59, which fits the narrow layout.</p>
+</section>
+
+<section id="themes">
+  <h2>Themes</h2>
+  <p>Six bundled, yours in <code>~/.config/cctop/themes/*.toml</code>, hot-reloaded. <code>t</code> cycles. Honours <code>NO_COLOR</code>; falls back to 16 colours and ASCII borders when the terminal needs it.</p>
+  <div class="themes">@THEMES@</div>
+</section>
+
+<section id="privacy">
+  <h2>Local only</h2>
+  <p>cctop reads <code>~/.claude</code> (session registry, transcripts, hook events) and the process tree, and writes only under <code>~/.cctop</code> and <code>~/.config/cctop</code>. It sends nothing over the network. Cost figures for subscription plans are API-equivalent list prices, marked <code>≈</code>.</p>
+</section>
+
+<footer>
+  <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  <a href="https://github.com/tomstagl/cctop/releases">Releases</a>
+  <a href="metrics.html">Every metric, explained</a>
+  <a href="https://github.com/tomstagl/cctop/blob/main/LICENSE">MIT</a>
+  <span>© 2026 Thomas Stagl</span>
+</footer>
+</div>
+<script>
+(function(){
+  var b=document.getElementById('copy'),c=document.getElementById('install-line');
+  if(!b||!c||!navigator.clipboard)return;
+  b.hidden=false;
+  b.addEventListener('click',function(){navigator.clipboard.writeText(c.textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)})});
+})();
+</script>
+</body>
+</html>

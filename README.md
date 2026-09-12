@@ -5,7 +5,9 @@
   </picture>
 </p>
 
+<!-- hero:start -->
 <p align="center"><strong>See what Claude Code is doing — live, in a pane beside it.</strong></p>
+<!-- hero:end -->
 
 <p align="center">
   <a href="tasks/prd-cctop.md">PRD</a> ·
@@ -16,7 +18,9 @@
 
 ---
 
+<!-- lede:start -->
 **cctop** is an `htop`/`btop`-style terminal dashboard for a running Claude Code session. It shows the internals Claude Code doesn't — context fill and when the next compaction hits, tokens and cost with cache-hit ratio, rate limits with an exhaustion forecast, what the current turn is waiting on, per-tool latency and how much context each tool pushed, subagents and MCP servers, touched files — on one page, in real time, in a right-hand split while you keep working on the left.
+<!-- lede:end -->
 
 > **Status: planning.** The PRD is finished and reviewed against real transcripts; implementation (Rust + ratatui) starts from [`ralph/prd.json`](ralph/prd.json). Nothing installable yet.
 
@@ -80,6 +84,7 @@ Claude Code keeps running in the left pane; `cctop` attaches to it from the righ
 
 ## Panels
 
+<!-- panels:start -->
 | # | Panel | Answers |
 |---|---|---|
 | 1 | **Context** | How full is the window, how fast is it filling, how many turns until autocompact |
@@ -91,6 +96,7 @@ Claude Code keeps running in the left pane; `cctop` attaches to it from the righ
 | 7 | **Files** | Blast radius and wasted re-reads |
 | 8 | **Events** | Tool / hook / permission / compaction / note stream |
 | 9 | **Advisor** | One evidence-backed recommendation at a time, ranked by tokens saved |
+<!-- panels:end -->
 
 The Advisor is rule-based (18 rules, no model call): cache misses, cache expiry, runaway tool results, re-reads, exploring in the main context, compaction churn, idle MCP servers, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, error loops, hook overhead, oversized prefix, missing hand-off.
 
@@ -210,11 +216,13 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 
 ## Planned install
 
+<!-- install:start -->
 ```
 brew install tomstagl/tap/cctop     # or: cargo install cctop
 claude plugin add tomstagl/cctop    # adds /cctop and cctop-insights
 /cctop                              # opens the dashboard in a right-hand pane
 ```
+<!-- install:end -->
 
 Works in tmux, zellij, WezTerm, Kitty and iTerm2.
 
