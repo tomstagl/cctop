@@ -34,7 +34,7 @@ for line in block("panels").splitlines()[2:]:
     if len(cells) < 3:
         continue
     n, name, answers = cells[0], re.sub(r"\*", "", cells[1]), cells[2]
-    cards.append(f'<div class="pnl"><h4>{n} {html.escape(name)}</h4><p>{inline_md(answers)}</p></div>')
+    cards.append(f'<div class="pnl"><h3>{n} {html.escape(name)}</h3><p>{inline_md(answers)}</p></div>')
 # themes
 themes = []
 for path in sorted(glob.glob("themes/*.toml")):

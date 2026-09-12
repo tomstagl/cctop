@@ -37,7 +37,7 @@ pub fn load(dir: &Path) -> Vec<Task> {
         .filter(|e| e.path().is_file())
         .filter_map(|e| read_task(&e.path()))
         .collect();
-    tasks.sort_by(|a, b| b.started_at_ms.cmp(&a.started_at_ms));
+    tasks.sort_by_key(|t| std::cmp::Reverse(t.started_at_ms));
     tasks
 }
 

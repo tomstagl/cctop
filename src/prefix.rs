@@ -231,7 +231,7 @@ impl Prefix {
             tokens_est: other,
             count: 0,
         });
-        rows.sort_by(|a, b| b.tokens_est.cmp(&a.tokens_est));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.tokens_est));
         rows
     }
 }

@@ -338,9 +338,8 @@ mod tests {
             EVENTS_MIN_ROWS + 2,
             "Events keeps its floor"
         );
-        assert_eq!(
-            l.rect(7).map(|r| r.height),
-            Some(1).filter(|_| l.rect(7).is_some()).or(None),
+        assert!(
+            l.rect(7).is_none_or(|r| r.height == 1),
             "Files collapsed or dropped"
         );
         insta::assert_debug_snapshot!(describe(&l));

@@ -237,7 +237,7 @@ impl Stats {
             .iter()
             .filter(|c| c.result_tokens_est > 0)
             .collect();
-        v.sort_by(|a, b| b.result_tokens_est.cmp(&a.result_tokens_est));
+        v.sort_by_key(|t| std::cmp::Reverse(t.result_tokens_est));
         v.truncate(n);
         v
     }
