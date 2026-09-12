@@ -37,8 +37,8 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "`$.env` follows the d.ts (`get`/`set`, async); the plain object behind it is `$.env.values`. `fakeOn($?)` takes the engine to hand to dispatched hooks (makes its own when omitted). Importing tests/pane/harness.ts installs the JSX globals `h`/`Fragment`, which Node lacks; a test that writes JSX must be a `.tsx` file (tests/pane/harness.test.tsx). Fixture loader: tests/pane/fixture.ts `fixture(name)`."
     },
     {
       "id": "US-003",

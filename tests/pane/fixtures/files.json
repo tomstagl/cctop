@@ -1,0 +1,86 @@
+[
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/ad450c.rs",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 1
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/fc57f7.rs",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/8008ee.rs",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/a3d75d.rs",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  }
+]

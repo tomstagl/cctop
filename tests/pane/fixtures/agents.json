@@ -1,0 +1,28 @@
+{
+  "agents": [
+    {
+      "description": "Check whether a setup step needs the user personally",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 42499
+      },
+      "id": "a9a92645226d3a561",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 548887
+      },
+      "type": "fork"
+    }
+  ],
+  "mcp": {
+    "hint": "no live process (fixture)",
+    "source": "missing"
+  },
+  "tasks": []
+}
