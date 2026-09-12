@@ -170,8 +170,8 @@
         "`cargo test` passes and `cargo clippy --all-targets -- -D warnings` is clean"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "skill.prompt{skill:cctop} opens the pane and returns the fixed one-liner (pane.tsx, model.ts's Action/reduce untouched); SKILL.md step 3 checks the US-008 marker before cctop split, exit-3 text gains the function-hooks hint; src/split.rs::pane_marker_open reads the same marker (30 s freshness, reusing metrics::cost::parse_ts_ms) before host detection; plugin.json 0.2.0, plugin/README.md and root README.md gain the pane/enabling-hooks/fallback/verification-status sections; TESTED_WITH='2.1.269' lives in model.ts (re-exported from pane.tsx to satisfy the literal criterion without a pane.tsx->views->pane.tsx import cycle) and widens the header's badge box (14->22 cols) to fit 'hooks 2.1.269'; scripts/check-plugin-types.sh + Makefile check-types (skipped without claude on PATH)."
     },
     {
       "id": "US-010",

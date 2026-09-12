@@ -5,6 +5,39 @@
 
 use std::process::Command;
 
+/// How stale `~/.cctop/pane/<session>.json`'s `heartbeatAt` may be before the
+/// pane it describes is treated as gone (matches the pane's own poller,
+/// `STALE_AFTER_MS` in `plugin/hooks/poller.ts`).
+const MARKER_STALE_AFTER_MS: i64 = 30_000;
+
+/// Whether the function-hooks pane (US-008/US-009) already has this session
+/// open: `~/.cctop/pane/<session_id>.json` exists, says `open: true` and its
+/// `heartbeatAt` is no more than `MARKER_STALE_AFTER_MS` old. A missing,
+/// unparsable or stale marker means "not open", so `cctop split` proceeds.
+pub fn pane_marker_open(home: &str, session_id: &str) -> bool {
+    pane_marker_open_at(home, session_id, crate::app::now_ms())
+}
+
+fn pane_marker_open_at(home: &str, session_id: &str, now_ms: i64) -> bool {
+    let path = format!("{home}/.cctop/pane/{session_id}.json");
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(marker) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    if marker.get("open").and_then(|v| v.as_bool()) != Some(true) {
+        return false;
+    }
+    let Some(heartbeat_at) = marker.get("heartbeatAt").and_then(|v| v.as_str()) else {
+        return false;
+    };
+    let Some(at) = crate::metrics::cost::parse_ts_ms(heartbeat_at) else {
+        return false;
+    };
+    now_ms - at < MARKER_STALE_AFTER_MS
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Host {
     Tmux,
@@ -142,6 +175,12 @@ pub fn manual_hint(cctop: &str, session: &str) -> String {
 
 /// Run the split for the detected host. Returns the process exit code.
 pub fn run(session_id: &str, size: u8) -> i32 {
+    if let Some(home) = std::env::var("HOME").ok().filter(|h| !h.is_empty()) {
+        if pane_marker_open(&home, session_id) {
+            println!("cctop pane is already open in this session");
+            return 0;
+        }
+    }
     let env = |k: &str| std::env::var(k).ok();
     let cctop = std::env::current_exe()
         .ok()
@@ -160,7 +199,11 @@ pub fn run(session_id: &str, size: u8) -> i32 {
         .status();
     match result {
         Ok(st) if st.success() => {
-            let place = if host.opens_new_window() { "window" } else { "pane" };
+            let place = if host.opens_new_window() {
+                "window"
+            } else {
+                "pane"
+            };
             println!(
                 "cctop: opened in a new {} {place}, attached to {session_id}",
                 host.name()
@@ -230,10 +273,7 @@ mod tests {
             ])),
             Some(Host::ITerm2)
         );
-        assert_eq!(
-            detect(&env(&[("TERM_PROGRAM", "vscode")])),
-            None
-        );
+        assert_eq!(detect(&env(&[("TERM_PROGRAM", "vscode")])), None);
     }
 
     #[test]
@@ -285,5 +325,42 @@ mod tests {
         );
 
         assert!(manual_hint("cctop", "abc").contains("cctop run --session abc"));
+    }
+
+    #[test]
+    fn pane_marker_open_reads_freshness() {
+        let home = std::env::temp_dir().join(format!("cctop-split-marker-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let dir = home.join(".cctop").join("pane");
+        std::fs::create_dir_all(&dir).unwrap();
+        let home = home.to_str().unwrap();
+        let base = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:00.000Z").unwrap();
+
+        // Missing marker: not open.
+        assert!(!pane_marker_open_at(home, "sess-1", base));
+
+        std::fs::write(
+            dir.join("sess-1.json"),
+            r#"{"version":"0.2.0","sessionId":"sess-1","openedAt":"2026-01-01T00:00:00.000Z","heartbeatAt":"2026-01-01T00:00:00.000Z","open":true}"#,
+        )
+        .unwrap();
+
+        // Fresh heartbeat, open: true.
+        assert!(pane_marker_open_at(home, "sess-1", base + 10_000));
+
+        // A 30 s-old heartbeat is already stale (matches the poller's own threshold).
+        assert!(!pane_marker_open_at(home, "sess-1", base + 30_000));
+
+        std::fs::write(
+            dir.join("sess-1.json"),
+            r#"{"version":"0.2.0","sessionId":"sess-1","openedAt":null,"heartbeatAt":"2026-01-01T00:00:00.000Z","open":false}"#,
+        )
+        .unwrap();
+
+        // `open: false`: not open regardless of freshness.
+        assert!(!pane_marker_open_at(home, "sess-1", base));
+
+        // A different session id at the same home: no marker of its own.
+        assert!(!pane_marker_open_at(home, "sess-2", base));
     }
 }

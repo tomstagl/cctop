@@ -225,7 +225,10 @@ claude plugin install cctop               # adds /cctop and cctop-insights
 ```
 <!-- install:end -->
 
-Works in tmux, zellij, WezTerm, Kitty and iTerm2.
+Works in tmux, zellij, WezTerm, Kitty and iTerm2. With function hooks enabled
+(`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude`, then `/tui fullscreen`),
+`/cctop` docks the dashboard inside Claude Code itself instead — no
+multiplexer needed.
 
 ## Repository
 

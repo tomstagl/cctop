@@ -109,3 +109,24 @@ here so nothing is silently assumed:
    `heartbeatAt`, and the debug log should show no query after the close.
    Claude Code version:
    Result: pending
+7. `/cctop:cctop` (the skill, US-009) with the pane already open, function
+   hooks enabled: the `skill.prompt` hook should fire (the debug log lists
+   it, resolving open question 2 of the PRD alongside item 3), the model's
+   only reply should be the one line `cctop is open in the side pane.`, and
+   it should run no tool.
+   Claude Code version:
+   Result: pending
+8. `cctop split`, run a second time for a session whose pane is already open
+   (US-009's `pane_marker_open`): it should print `cctop pane is already
+   open in this session` and exit 0, without opening a second terminal
+   split. Setup: open the pane (`/cctop-pane` with function hooks enabled),
+   then run `cctop split --session <id>` from a shell.
+   Claude Code version:
+   Result: pending
+9. `/cctop` on a build *without* function hooks (or before accepting the
+   plugin's hooks module): the skill's step 3 (`plugin/skills/cctop/
+   SKILL.md`) should read `~/.cctop/pane/<session>.json`, find no fresh
+   `open: true` marker, and fall through to `cctop split` exactly as
+   before US-009.
+   Claude Code version:
+   Result: pending

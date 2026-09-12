@@ -26,11 +26,19 @@ pane; **never print dashboard output into the conversation**.
      dashboard works from the transcript alone.
    Skip the question when either marker file exists.
 
-3. Open the pane: `cctop split`. It resolves this session itself (from
-   `$CLAUDE_SESSION_ID`, the tmux pane, or the working directory).
+3. Read `~/.cctop/pane/<session>.json` (`<session>` is `$CLAUDE_SESSION_ID`).
+   If it parses, `open` is `true` and `heartbeatAt` is within 30 s, the
+   function-hooks pane already has this session open: say "cctop is open in
+   the side pane" and stop — do not run `cctop split`.
+
+   Otherwise open the pane: `cctop split`. It resolves this session itself
+   (from `$CLAUDE_SESSION_ID`, the tmux pane, or the working directory).
    - exit 0 → say "cctop is open in the right-hand pane; press ? there for keys."
    - exit 3 → no tmux/zellij/WezTerm/Kitty/iTerm2 detected: relay the manual
      command it printed (`cctop run --session <id>`) for a second terminal.
+     To get the dashboard inside Claude Code itself, start Claude Code with
+     `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and use `/tui fullscreen`; then
+     `/cctop` docks the pane without a multiplexer.
    - other → relay the error text.
 
 Do not run `cctop run` in the foreground of this session's shell: it is a

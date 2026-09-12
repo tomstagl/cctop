@@ -11,7 +11,7 @@
 // missing. Colours are palette names only: the pane takes Claude Code's
 // theme as it is.
 import type { ElementTable, RenderElement } from 'claude-code';
-import { formatCountdown, formatTokens, type Model, type Placement, type TurnState } from '../model';
+import { formatCountdown, formatTokens, TESTED_WITH, type Model, type Placement, type TurnState } from '../model';
 import { DASH, at, formatDuration, formatUsd, isMissing, mark, measured, stringAt, tokensOf } from './format';
 
 /** The elements a view draws with, as `$.ui.resolve(e)` answers them. */
@@ -22,6 +22,8 @@ export const NEEDS_BINARY = 'needs the cctop binary';
 export const TWO_COLUMN_MIN = 60;
 /** The narrowest label a value Box leaves room for. */
 const MIN_LABEL = 8;
+/** `bin shim hooks 2.1.269`: as wide as the badges ever get, so the row never wraps. */
+const BADGES_WIDTH = 'bin'.length + 1 + 'shim'.length + 1 + `hooks ${TESTED_WITH}`.length;
 
 // `cyan` stands in for the TUI's accent (running, hooks, agents).
 export type Color = 'green' | 'yellow' | 'red' | 'cyan';
@@ -38,7 +40,7 @@ export type Row = {
 
 export type Block = { title: string; rows: Row[] };
 
-export type Badge = { label: 'bin' | 'shim' | 'hooks'; on: boolean };
+export type Badge = { label: 'bin' | 'shim' | 'hooks'; on: boolean; text?: string };
 
 export type Header = {
   status: TurnState;
@@ -89,7 +91,10 @@ export function header(model: Model, now: number): Header {
       { label: 'bin', on: model.binary === 'present' },
       // Limits come from the status-line shim alone, so their presence is its.
       { label: 'shim', on: at(summary, 'limits') !== undefined && !isMissing(summary, 'limits') },
-      { label: 'hooks', on: at(summary, 'hooks_installed') === true },
+      // TESTED_WITH names the Claude Code version the `$` contract was
+      // checked against (pane.tsx re-exports it; scripts/check-plugin-types.sh
+      // catches drift), shown here whether or not the hooks are installed.
+      { label: 'hooks', on: at(summary, 'hooks_installed') === true, text: `hooks ${TESTED_WITH}` },
     ],
   };
 }
@@ -326,10 +331,10 @@ function renderHeader(head: Header, el: ViewElements): RenderElement {
           {` · turn ${head.turn} · ${head.elapsed} · ${head.model} · ${head.effort}`}
         </Text>
       </Box>
-      <Box width={14} flexShrink={0} flexDirection="row" columnGap={1} justifyContent="flex-end">
+      <Box width={BADGES_WIDTH} flexShrink={0} flexDirection="row" columnGap={1} justifyContent="flex-end">
         {head.badges.map((b) => (
           <Text key={b.label} wrap="truncate" dimColor={!b.on} color={b.on ? 'green' : undefined}>
-            {b.label}
+            {b.text ?? b.label}
           </Text>
         ))}
       </Box>

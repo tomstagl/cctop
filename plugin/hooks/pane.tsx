@@ -5,9 +5,14 @@
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
 import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
-import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model, type View } from './model';
+import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, TESTED_WITH, type Action, type Binary, type Model, type View } from './model';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { renderView } from './views/index';
+
+// Re-exported so the checked-in `$` contract's own version (US-009) has one
+// source (`model.ts`, already imported by both this file and the views) and
+// this file, which the header badge names, still carries the export.
+export { TESTED_WITH };
 
 const PANE_ID = 'cctop';
 // The native command is /cctop-pane, not /cctop: the engine reserves /cctop
@@ -425,6 +430,20 @@ export const register: Register = (on) => {
   }).catch(($, _e, next) => {
     $.ui.log(`cctop: /${COMMAND} failed: ${next.error.message ?? next.error.kind}`);
     return { text: 'cctop pane could not be opened' };
+  });
+
+  // On a build with function hooks, `/cctop` (the skill, US-001) still
+  // resolves first; this replaces its prompt so the model does the same
+  // thing the native command does — open the pane — instead of running
+  // `cctop split`, and says nothing back into the transcript.
+  on('skill.prompt', { skill: 'cctop' }, async ($) => {
+    await openPane($);
+    return {
+      text: 'The cctop pane is already open beside the transcript. Reply with exactly one line: "cctop is open in the side pane." Do not run any tool.',
+    };
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: skill.prompt failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
   });
 
   // Every close of the pane, the person's and an unload's as much as the

@@ -8,6 +8,11 @@ export type View = 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advis
 export type Placement = 'dock' | 'inline';
 export type Binary = 'unknown' | 'present' | 'missing';
 
+/** The Claude Code version this hooks module's `$` contract was checked
+ * against (`plugin/.claude/types/claude-code.d.ts`'s own first line);
+ * `scripts/check-plugin-types.sh` catches drift, the header badge shows it. */
+export const TESTED_WITH = '2.1.269';
+
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
 export const QUERY_VERBS = ['summary', 'tools', 'files', 'agents', 'advice', 'events'] as const;
 export type QueryVerb = (typeof QUERY_VERBS)[number];

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { CommandRunResult, RenderElement, RenderNode } from 'claude-code';
+import type { CommandRunResult, RenderElement, RenderNode, SkillPromptResult } from 'claude-code';
 import { fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
 import { renderToText } from './render';
 import { register } from '../../plugin/hooks/pane';
@@ -166,6 +166,17 @@ test('inline placement draws the header, Context and Limits without the view bar
   // The docked form of the same model draws the bar and the Tools view.
   const dock = await render(80);
   assert.ok(buttons(dock.tree).length === 6);
+});
+
+test('the /cctop skill prompt opens the pane and answers a fixed one-liner', async () => {
+  const { $, dispatch } = await boot();
+  assert.deepEqual($.ui.opens, []);
+  const result = await dispatch<SkillPromptResult>('skill.prompt', { skill: 'cctop', text: 'original skill text' });
+  assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
+  assert.equal(
+    result.text,
+    'The cctop pane is already open beside the transcript. Reply with exactly one line: "cctop is open in the side pane." Do not run any tool.',
+  );
 });
 
 test('a Pane render for another requestId passes through', async () => {

@@ -85,10 +85,11 @@ for (const columns of [50, 60, 80]) {
     const lines = rows(build(), columns);
     for (const row of lines) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
     for (const text of EXPECTED) has(lines, text);
-    has(lines, /^● busy · turn 1 · 0:48 · claude-so/);
-    // The header truncates before the badges: model and effort fit from 80.
+    has(lines, /^● busy · turn 1 · 0:48/);
+    // The header truncates before the badges: the model name fits from 60, effort too from 80.
+    if (columns >= 60) has(lines, /· claude-so/);
     if (columns >= 80) has(lines, /· claude-sonnet-5 · medium/);
-    has(lines, /bin shim hooks$/);
+    has(lines, /bin shim hooks 2\.1\.269$/);
     for (const title of ['Context', 'Tokens & Cost', 'Limits', 'Turn']) has(lines, new RegExp(`(^|\\s)${title.replace('&', '&')}(\\s|$)`));
   });
 
@@ -189,7 +190,7 @@ test('a missing binary draws one line per binary-backed section and keeps the en
     assert.equal(lines.join('\n').split(NEEDS_BINARY).length - 1, 3, JSON.stringify(lines));
     for (const text of ['396k / 1.0M (40 %)', '$9.90', '42 %', '17 %', '2h 29m', 'Bash 0:46']) has(lines, text);
     for (const gone of ['cache read', 'velocity', 'burn rate']) assert.ok(!lines.some((r) => r.includes(gone)), gone);
-    has(lines, /bin shim hooks$/);
+    has(lines, /bin shim hooks 2\.1\.269$/);
     for (const row of lines) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
   }
 });
