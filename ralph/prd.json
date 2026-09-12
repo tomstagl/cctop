@@ -184,8 +184,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "This story produces the checklist only; the agent must not mark live items as passed."
+      "passes": true,
+      "notes": "Only npm run typecheck applies (docs-only story); no code changed. The checklist covers all 20 live items named across US-001/US-007/US-008/US-009 plus the new ones (Advisor-vs-CLI match, context % latency, open latency, turn-latency parity, flag-off fallback), each with exact setup/keys/expected/Claude Code version/Result: pending; none marked passed by the agent."
     },
     {
       "id": "US-011",

@@ -73,11 +73,34 @@ manual command for a second terminal.
 ## Verification status
 
 Automated (typecheck, tests, `claude plugin validate --strict`, `cargo test`)
-runs on every change; the live checks a person must run at a real terminal
-(a docked pane at a given width, hotkeys, `/reload-plugins`, CPU, `cctop
-split` in tmux or Apple Terminal) are tracked in
-[`docs/verification/pane.md`](../docs/verification/pane.md) and are `pending`
-until someone runs them.
+runs on every change and is green. Nobody has yet run the checklist below at a
+real terminal, so every item is `Result: pending` in
+[`docs/verification/pane.md`](../docs/verification/pane.md):
+
+1. `/cctop-pane` listed in the slash menu with its description
+2. pane docks at 144 columns in `/tui fullscreen`
+3. pane docks at 110 columns in `/tui fullscreen`
+4. pane draws inline in `/tui default`
+5. `/cctop-pane` toggles open/closed
+6. `/cctop-pane close` closes the pane
+7. `/cctop-pane tools` opens straight to the Tools view
+8. `/cctop:cctop` (the skill) still resolves, and answers the one-liner when
+   the pane is already open
+9. hotkeys `1`-`6` act only after `ctrl+x tab` gives the pane focus
+10. `ctrl+x` arrows resize the pane and persist `pluginPanes.dockColumns`
+11. the Advisor view's top row matches `cctop query advice --session <id>`
+12. Context % updates within 1 s of a response
+13. `/cctop-pane` opens in under 500 ms
+14. `/reload-plugins` reopens the pane on its previous view
+15. Claude Code's idle CPU with the pane open stays under 2 %
+16. turn latency with vs. without `--plugin-dir` differs by under 1 %
+17. with function hooks off, `/cctop` still splits in tmux and opens a new
+    window in Apple Terminal
+18. the marker file `~/.cctop/pane/<id>.json` toggles `open` on open/close
+19. `cctop split` short-circuits when the pane is already open
+20. `/cctop` falls back to `cctop split` when there is no fresh open marker
+
+See the checklist for the exact setup, keys and expected observation for each.
 
 ## What it costs
 
