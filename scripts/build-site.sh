@@ -8,6 +8,9 @@ import re, html, pathlib, glob
 
 readme = pathlib.Path("README.md").read_text()
 tmpl = pathlib.Path("site/index.template.html").read_text()
+# Inline the stylesheets: 4 KB in the document beats a render-blocking request.
+tmpl = tmpl.replace("@@FONTS_CSS@@", pathlib.Path("site/fonts.css").read_text().strip())
+tmpl = tmpl.replace("@@SITE_CSS@@", pathlib.Path("site/site.css").read_text().strip())
 
 def block(name):
     m = re.search(rf"<!-- {name}:start -->\n(.*?)\n<!-- {name}:end -->", readme, re.S)

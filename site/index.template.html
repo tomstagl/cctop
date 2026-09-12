@@ -14,11 +14,14 @@
 <meta property="og:url" content="https://tomstagl.github.io/cctop/">
 <meta property="og:image" content="https://tomstagl.github.io/cctop/assets/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
-<link rel="stylesheet" href="site.css">
+<link rel="preload" href="assets/two-pane.webp" as="image" fetchpriority="high">
+<link rel="preload" href="assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-sans-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@@FONTS_CSS@@
+@@SITE_CSS@@
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -49,10 +52,10 @@
   </div>
   <p class="subline">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></p>
   <div class="demo">
-    <video autoplay muted loop playsinline poster="assets/two-pane.png" width="1280" height="640">
+    <video autoplay muted loop playsinline poster="assets/two-pane.webp" width="1280" height="640">
       <source src="assets/demo.webm" type="video/webm">
     </video>
-    <img class="still" src="assets/two-pane.png" alt="Claude Code on the left, cctop attached in a right-hand pane" width="1280" height="640" loading="lazy">
+    <img class="still" src="assets/two-pane.webp" alt="Claude Code on the left, cctop attached in a right-hand pane" width="1280" height="640" loading="lazy">
     <p class="cap">Claude Code keeps running on the left; cctop follows it from the right. Everything is live.</p>
   </div>
 </section>

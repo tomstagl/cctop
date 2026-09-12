@@ -91,6 +91,8 @@ def main():
     if not os.path.exists(CCTOP): sys.exit(f"demo: {CCTOP} not built (cargo build --release)")
     OUT.mkdir(parents=True, exist_ok=True)
     two_pane(OUT / "two-pane.png")
+    # the site uses the WebP (≈40% of the PNG) as the video poster
+    subprocess.run(["cwebp", "-quiet", "-q", "82", str(OUT / "two-pane.png"), "-o", str(OUT / "two-pane.webp")], check=True)
     for theme in ["default-dark", "default-light", "btop", "nord", "gruvbox", "catppuccin-mocha"]:
         right = ansi_to_html(cctop(["--size", "60x30", "--theme", theme]))
         shoot(PAGE.format(w=560, h=560, fs=12, left="", right=right), OUT / f"theme-{theme}.png", 560, 560)
