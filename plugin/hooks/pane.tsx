@@ -2,20 +2,12 @@
 // function-hooks API (early access). It registers the /cctop-pane command,
 // opens the pane, draws it, and keeps a Model of the session up to date from
 // the engine's own events (model.ts) and, when the binary is installed, from
-// `cctop query` through the poller (poller.ts). The views land in later
-// stories.
+// `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
+// the model; the Overview is the default.
 import type { EngineInterface, Register, Timer, ToolCallResult } from 'claude-code';
-import {
-  initialModel,
-  reduce,
-  unsupportedVerbs,
-  usageRows,
-  UNSUPPORTED,
-  type Action,
-  type Binary,
-  type Model,
-} from './model';
+import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model } from './model';
 import { createPoller, type Poller, type PollerEngine } from './poller';
+import { renderOverview } from './views/overview';
 
 const PANE_ID = 'cctop';
 // The native command is /cctop-pane, not /cctop: the engine reserves /cctop
@@ -93,6 +85,14 @@ function readUsage($: EngineInterface): void {
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
 }
 
+// The model's name for the header, read once after session.start's `next(e)`.
+function readModelName($: EngineInterface): void {
+  $.session
+    .model()
+    .then((name) => apply($, { type: 'session.model', name }))
+    .catch((err: unknown) => $.ui.log(`cctop: session.model failed: ${String(err)}`));
+}
+
 function stopUsageTimer(): void {
   usageTimer?.cancel();
   usageTimer = null;
@@ -130,6 +130,7 @@ export const register: Register = (on) => {
       .then(() => next(e))
       .then((result) => {
         readUsage($);
+        readModelName($);
         detectBinary($);
         return result;
       });
@@ -207,17 +208,13 @@ export const register: Register = (on) => {
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID) return next(e);
     if (model.placement !== e.props.placement) model = { ...model, placement: e.props.placement };
-    const { Box, Text } = $.ui.resolve(e);
+    const el = $.ui.resolve(e);
+    const { Box, Text } = el;
     const now = $.clock.now();
-    // Until the Overview view lands, the pane draws what the engine alone
-    // provides (the turn, the running tool, the usage rows) plus the state of
-    // the binary and its query verbs.
-    const running = model.turn.runningTool;
+    // The view, then the state of the binary and its query verbs beneath it.
     return (
       <Box flexDirection="column">
-        <Text wrap="truncate">
-          cctop · turn {model.turn.number} · {model.turn.state}
-        </Text>
+        {renderOverview(model, el, e.props.bodyColumns, e.props.placement, now)}
         {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
         {model.stale && <Text wrap="truncate">cctop query stale</Text>}
         {unsupportedVerbs(model).map((verb) => (
@@ -225,17 +222,6 @@ export const register: Register = (on) => {
             {verb}: {UNSUPPORTED}
           </Text>
         ))}
-        {running !== null && (
-          <Text wrap="truncate">
-            running {running.name} {Math.round((now - running.startedAt) / 1000)}s
-          </Text>
-        )}
-        {model.usage !== null &&
-          usageRows(model.usage, now).map((row) => (
-            <Text key={row.key} wrap="truncate">
-              {row.label} {row.value}
-            </Text>
-          ))}
       </Box>
     );
   }).catch(($, e, next) => {

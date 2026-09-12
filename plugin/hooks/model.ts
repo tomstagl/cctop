@@ -37,12 +37,16 @@ export type Turn = {
   lastReason: string | null;
   /** The most recently started tool call that has not ended. */
   runningTool: RunningTool | null;
+  /** Σ durations of the tool calls that ended in this turn (the running one is added at render). */
+  toolMs: number;
 };
 
 export type Model = {
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
   usageAt: number | null;
+  /** `$.session.model()`, read once after session.start. */
+  modelName: string | null;
   turn: Turn;
   tools: Record<string, ToolStats>;
   compactions: number;
@@ -75,6 +79,7 @@ export type Action =
   | { type: 'tool.end'; name: string; startedAt: number; at: number; isError: boolean; resultChars: number }
   | { type: 'session.compact' }
   | { type: 'usage'; usage: SessionUsage; at: number }
+  | { type: 'session.model'; name: string }
   | { type: 'binary'; binary: Binary }
   | { type: 'session.id'; id: string }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
@@ -87,6 +92,7 @@ export function initialModel(): Model {
   return {
     usage: null,
     usageAt: null,
+    modelName: null,
     turn: {
       number: 0,
       state: 'idle',
@@ -94,6 +100,7 @@ export function initialModel(): Model {
       lastDurationMs: null,
       lastReason: null,
       runningTool: null,
+      toolMs: 0,
     },
     tools: {},
     compactions: 0,
@@ -118,7 +125,7 @@ export function reduce(model: Model, action: Action): Model {
     case 'turn.start':
       return {
         ...model,
-        turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at },
+        turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at, toolMs: 0 },
       };
     case 'turn.complete':
       return {
@@ -136,10 +143,11 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, turn: { ...model.turn, runningTool: { name: action.name, startedAt: action.at } } };
     case 'tool.end': {
       const prev = model.tools[action.name] ?? EMPTY_TOOL;
+      const durationMs = Math.max(0, action.at - action.startedAt);
       const stats: ToolStats = {
         calls: prev.calls + 1,
         errors: prev.errors + (action.isError ? 1 : 0),
-        durationsMs: [...prev.durationsMs, Math.max(0, action.at - action.startedAt)],
+        durationsMs: [...prev.durationsMs, durationMs],
         tokensToCtx: prev.tokensToCtx + Math.ceil(action.resultChars / 4),
       };
       const running = model.turn.runningTool;
@@ -148,13 +156,15 @@ export function reduce(model: Model, action: Action): Model {
       return {
         ...model,
         tools: { ...model.tools, [action.name]: stats },
-        turn: { ...model.turn, runningTool: stillRunning ? running : null },
+        turn: { ...model.turn, runningTool: stillRunning ? running : null, toolMs: model.turn.toolMs + durationMs },
       };
     }
     case 'session.compact':
       return { ...model, compactions: model.compactions + 1 };
     case 'usage':
       return { ...model, usage: action.usage, usageAt: action.at };
+    case 'session.model':
+      return { ...model, modelName: action.name };
     case 'binary':
       return { ...model, binary: action.binary };
     case 'session.id':

@@ -6,7 +6,7 @@ import { renderToText } from './render';
 import { register } from '../../plugin/hooks/pane';
 
 // The US-001 skeleton through the headless harness: session.start registers
-// the command, /cctop-pane opens the pane, ui.render draws `cctop`.
+// the command, /cctop-pane opens the pane, ui.render draws the header.
 async function boot() {
   const $ = fakeEngine();
   const { on, dispatch } = fakeOn($);
@@ -33,11 +33,11 @@ test('/cctop-pane opens the pane', async () => {
 });
 
 for (const columns of [50, 80]) {
-  test(`renders cctop at ${columns} columns`, async () => {
+  test(`renders the pane at ${columns} columns`, async () => {
     const { dispatch } = await boot();
     const tree = await dispatch<RenderElement>('ui.render', paneRender('cctop', columns));
     const rows = renderToText(tree, columns);
-    assert.ok(rows.some((r) => r.includes('cctop')), `no row mentions cctop: ${JSON.stringify(rows)}`);
+    assert.ok(rows.some((r) => r.includes('turn 0')), `no header row: ${JSON.stringify(rows)}`);
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
   });
 }

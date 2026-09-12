@@ -184,16 +184,17 @@ test('the pane draws the turn, the running tool and the usage rows', async () =>
   for (const columns of [50, 80]) {
     const tree = await dispatch<RenderElement>('ui.render', paneRender('cctop', columns));
     const rows = renderToText(tree, columns);
-    assert.ok(rows.some((r) => r.includes('turn 1 · busy')), JSON.stringify(rows));
-    assert.ok(rows.some((r) => r.includes('running Bash 2s')), JSON.stringify(rows));
-    assert.ok(rows.some((r) => r.includes('Context 396k / 1.0M (40 %)')), JSON.stringify(rows));
-    assert.ok(rows.some((r) => r.includes('5h 42 %, resets in 2h 29m')), JSON.stringify(rows));
-    assert.ok(rows.some((r) => r.includes('Cost $9.90')), JSON.stringify(rows));
+    assert.ok(rows.some((r) => r.includes('● busy · turn 1 · 0:02')), JSON.stringify(rows));
+    assert.ok(rows.some((r) => r.includes('Bash 0:02')), JSON.stringify(rows));
+    assert.ok(rows.some((r) => r.includes('396k / 1.0M (40 %)')), JSON.stringify(rows));
+    assert.ok(rows.some((r) => /5 h\s+42 %/.test(r)), JSON.stringify(rows));
+    assert.ok(rows.some((r) => /resets in\s+2h 29m/.test(r)), JSON.stringify(rows));
+    assert.ok(rows.some((r) => /cost\s+\$9\.90/.test(r)), JSON.stringify(rows));
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
   }
   finish({ ref: 1, result: {}, text: 'done' });
   await running;
   assert.ok(($.ui.invalidates['ui.render'] ?? 0) > before, 'model changes invalidate the open pane');
   const tree = await dispatch<RenderElement>('ui.render', paneRender('cctop', 80));
-  assert.ok(!renderToText(tree, 80).some((r) => r.includes('running')), 'the tool line goes once the call ends');
+  assert.ok(!renderToText(tree, 80).some((r) => r.includes('Bash')), 'the tool goes once the call ends');
 });
