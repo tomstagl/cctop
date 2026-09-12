@@ -20,7 +20,7 @@ second terminal.
 | Kitty | `$KITTY_LISTEN_ON` | `kitten @ launch --location=vsplit cctop run --session <id>` | not yet (needs `allow_remote_control yes`) |
 | iTerm2 (inside a session) | `$ITERM_SESSION_ID` | `osascript -e 'tell application "iTerm2" … split vertically with default profile'` | not yet |
 | iTerm2 (new window) | `$TERM_PROGRAM=iTerm.app`, no `$ITERM_SESSION_ID` split context | `osascript -e 'tell application "iTerm2" to tell (create window with default profile) … write text'` | not yet |
-| Terminal.app (new window) | `$TERM_PROGRAM=Apple_Terminal` | `osascript -e 'tell application "Terminal" to do script "cctop run --session <id>"'` | **yes** — 2026-09-12, macOS Terminal.app: opened a new window running `cctop run --session <id>` from a plain (non-tmux) Claude Code session |
+| Terminal.app (new window) | `$TERM_PROGRAM=Apple_Terminal` | writes `~/.cctop/run/<id>.command` (`exec cctop run --session <id>`), `open -na Terminal ~/.cctop/run/<id>.command`, then `osascript -e 'tell application "Terminal" … set bounds of front window to …'` to butt the new window against the old one | Verified: pending (see docs/verification/pane.md) |
 | none | — | prints the manual command, exit code 3 | yes |
 
 Reproduce the tmux check without a live Claude Code session:

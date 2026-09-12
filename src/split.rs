@@ -139,30 +139,55 @@ pub fn command(
             ),
         ],
         Host::AppleTerminalWindow => {
-            // Terminal.app has no split-pane API, only windows/tabs, so the
-            // closest approximation of a right-hand panel is a second
-            // window butted up against the current one. Only the *new*
-            // window's bounds are touched — the frontmost window's bounds
-            // are read, never written, so existing windows/tabs are left
-            // exactly as they were.
-            let script = format!(
-                "tell application \"Terminal\"\n\
-                 set b to bounds of front window\n\
-                 set x1 to item 1 of b\n\
-                 set y1 to item 2 of b\n\
-                 set x2 to item 3 of b\n\
-                 set y2 to item 4 of b\n\
-                 set newW to ((x2 - x1) * {size}) / 100\n\
-                 do script \"{inner}\"\n\
-                 delay 0.3\n\
-                 set bounds of front window to {{x2, y1, x2 + newW, y2}}\n\
-                 end tell",
-                size = size,
-                inner = inner.replace('"', "\\\"")
-            );
-            vec![s("osascript"), s("-e"), script]
+            // Terminal.app has no split-pane API, only windows/tabs, and
+            // `do script` (used here through 09/12) doesn't reliably give a
+            // new *window* either: with System Settings > Desktop & Dock >
+            // "Prefer tabs when opening documents" set (a common default),
+            // macOS merges the window `do script` asks for into the current
+            // one as a tab. Launching a genuinely separate process with
+            // `open -na Terminal <file>` isn't subject to that tab-merging,
+            // so it opens a real window. Terminal.app can't run an arbitrary
+            // shell command via `open` directly, so the command lives in an
+            // executable `.command` file `open` hands to Terminal. If this
+            // ever regresses (e.g. a macOS version starts tab-merging `open`
+            // too), the fallback is scripting System Events to select the
+            // new tab and run "Move Tab to New Window".
+            let home = env("HOME").unwrap_or_default();
+            let dir = format!("{home}/.cctop/run");
+            let _ = std::fs::create_dir_all(&dir);
+            let path = format!("{dir}/{session}.command");
+            let _ = std::fs::write(&path, format!("#!/bin/sh\nexec {inner}\n"));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+            }
+            vec![s("open"), s("-na"), s("Terminal"), path]
         }
     }
+}
+
+/// AppleScript that positions the just-opened Terminal window as a
+/// right-hand panel next to whatever was frontmost before it. Run after
+/// `open -na Terminal <file>` (see `Host::AppleTerminalWindow` in
+/// `command`), by which point the new window is window 1 (frontmost) and
+/// the pre-existing one is window 2; only the new window's bounds are
+/// written. `delay 0.3` guards against the new window not existing yet when
+/// osascript starts (`open` returns as soon as it has been asked to spawn
+/// Terminal, not once the window appears).
+fn apple_terminal_position_script(size: u8) -> String {
+    format!(
+        "tell application \"Terminal\"\n\
+         delay 0.3\n\
+         set b to bounds of window 2\n\
+         set x1 to item 1 of b\n\
+         set y1 to item 2 of b\n\
+         set x2 to item 3 of b\n\
+         set y2 to item 4 of b\n\
+         set newW to ((x2 - x1) * {size}) / 100\n\
+         set bounds of front window to {{x2, y1, x2 + newW, y2}}\n\
+         end tell"
+    )
 }
 
 /// What to tell the user when no host is detected.
@@ -199,6 +224,17 @@ pub fn run(session_id: &str, size: u8) -> i32 {
         .status();
     match result {
         Ok(st) if st.success() => {
+            if host == Host::AppleTerminalWindow {
+                // Best-effort: a positioning failure (e.g. the new window
+                // still hadn't appeared after the delay) leaves a correctly
+                // opened, just unpositioned, window — not worth failing the
+                // whole command over.
+                let _ = Command::new("osascript")
+                    .arg("-e")
+                    .arg(apple_terminal_position_script(size))
+                    .stdout(std::process::Stdio::null())
+                    .status();
+            }
             let place = if host.opens_new_window() {
                 "window"
             } else {
@@ -316,15 +352,43 @@ mod tests {
         assert_eq!(iw[0], "osascript");
         assert!(iw[2].contains("create window") && iw[2].contains("cctop run --session abc"));
 
-        let at = command(Host::AppleTerminalWindow, "cctop", "abc", 45, &e);
-        assert_eq!(at[0], "osascript");
-        assert!(
-            at[2].contains("Terminal")
-                && at[2].contains("cctop run --session abc")
-                && at[2].contains("bounds of front window")
-        );
-
         assert!(manual_hint("cctop", "abc").contains("cctop run --session abc"));
+    }
+
+    #[test]
+    fn apple_terminal_window_writes_a_launcher_and_opens_it() {
+        let home = std::env::temp_dir().join(format!("cctop-split-apple-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let e = env(&[("HOME", home.to_str().unwrap())]);
+
+        let at = command(Host::AppleTerminalWindow, "cctop", "abc", 45, &e);
+
+        // The `open` argv: `-n` (via `-na`) forces a new instance so a
+        // window opens even if Terminal is already running.
+        assert_eq!(at[0], "open");
+        assert_eq!(at[1], "-na");
+        assert_eq!(at[2], "Terminal");
+        let path = &at[3];
+        assert_eq!(*path, format!("{}/.cctop/run/abc.command", home.display()));
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert_eq!(content, "#!/bin/sh\nexec cctop run --session abc\n");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o755);
+        }
+    }
+
+    #[test]
+    fn apple_terminal_position_script_targets_front_window() {
+        let script = apple_terminal_position_script(45);
+        assert!(script.contains("tell application \"Terminal\""));
+        assert!(script.contains("bounds of window 2"));
+        assert!(script.contains("set bounds of front window to"));
+        assert!(script.contains("* 45"));
     }
 
     #[test]

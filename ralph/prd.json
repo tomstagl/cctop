@@ -200,8 +200,8 @@
         "Tests pass (`cargo test`)"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Host::AppleTerminalWindow now writes ~/.cctop/run/<session>.command (mode 0755, '#!/bin/sh\\nexec <cctop> run --session <id>\\n') and returns the `open -na Terminal <file>` argv from `command()` (writing the file is a side effect of building that argv, same pattern as every other host's `command()` arm); `run()` runs that argv through the existing generic Command path, then on success runs a second osascript (`apple_terminal_position_script`) that waits 0.3s and sets the bounds of the new (frontmost) window using window 2's (the pre-existing window's) bounds, matching adabf68's math but reading from window 2 instead of a pre-`do script` front window since the new window already exists as window 1 by the time this script runs; a comment on the Host::AppleTerminalWindow arm records the 'Prefer tabs when opening documents' root cause and the System Events 'Move Tab to New Window' fallback. docs/hosts.md's Terminal.app row now describes the two-step open+position and is 'Verified: pending (see docs/verification/pane.md)' (US-010 already anticipated this exact design in its flag-off fallback item). Tests: apple_terminal_window_writes_a_launcher_and_opens_it (.command content/mode via a temp HOME, open argv) and apple_terminal_position_script_targets_front_window (script text); commands_per_host_carry_the_session's old AppleTerminalWindow assertions removed since they tested the retired do-script osascript. 178 cargo tests (was 176); make check (fmt/clippy -D warnings/cargo test) and npm run typecheck green."
     },
     {
       "id": "US-012",
