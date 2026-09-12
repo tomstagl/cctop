@@ -8,6 +8,14 @@ export type View = 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advis
 export type Placement = 'dock' | 'inline';
 export type Binary = 'unknown' | 'present' | 'missing';
 
+/** The `cctop query` verbs the pane polls, in the order one tick runs them. */
+export const QUERY_VERBS = ['summary', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+export type QueryVerb = (typeof QUERY_VERBS)[number];
+/** The parsed JSON of the last successful `cctop query <verb>`, per verb. */
+export type QueryData = Partial<Record<QueryVerb, unknown>>;
+/** What a section draws when its verb is not in this binary's `cctop query --help`. */
+export const UNSUPPORTED = 'unsupported by this cctop version';
+
 export type RunningTool = { name: string; startedAt: number };
 
 export type ToolStats = {
@@ -39,6 +47,17 @@ export type Model = {
   tools: Record<string, ToolStats>;
   compactions: number;
   binary: Binary;
+  /** `$.session.id()`, read by the poller on its first tick. */
+  sessionId: string | null;
+  // Precedence between the two sources: the Context and Limits rows come
+  // from `usage` (engine-native, live) when it is present, else from
+  // `query.summary`; every other figure (tokens & cost breakdown, burn rate,
+  // tools, files, agents, advice, events) comes from the query JSON alone.
+  query: QueryData;
+  /** When the last tick in which every called verb parsed ended; null before one. */
+  queryAt: number | null;
+  /** The verbs `cctop query --help` lists; null until the poller has read it. */
+  verbs: readonly QueryVerb[] | null;
   view: View;
   open: boolean;
   /** True when the last successful `cctop query` tick is older than 30 s. */
@@ -55,7 +74,14 @@ export type Action =
   // closure, so concurrent calls of the same tool time themselves apart.
   | { type: 'tool.end'; name: string; startedAt: number; at: number; isError: boolean; resultChars: number }
   | { type: 'session.compact' }
-  | { type: 'usage'; usage: SessionUsage; at: number };
+  | { type: 'usage'; usage: SessionUsage; at: number }
+  | { type: 'binary'; binary: Binary }
+  | { type: 'session.id'; id: string }
+  | { type: 'verbs'; verbs: readonly QueryVerb[] }
+  | { type: 'query'; verb: QueryVerb; data: unknown }
+  // One poller tick ended; `ok` when every verb it called parsed.
+  | { type: 'tick'; at: number; ok: boolean }
+  | { type: 'stale'; stale: boolean };
 
 export function initialModel(): Model {
   return {
@@ -72,6 +98,10 @@ export function initialModel(): Model {
     tools: {},
     compactions: 0,
     binary: 'unknown',
+    sessionId: null,
+    query: {},
+    queryAt: null,
+    verbs: null,
     view: 'overview',
     open: false,
     stale: false,
@@ -125,7 +155,29 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, compactions: model.compactions + 1 };
     case 'usage':
       return { ...model, usage: action.usage, usageAt: action.at };
+    case 'binary':
+      return { ...model, binary: action.binary };
+    case 'session.id':
+      return { ...model, sessionId: action.id };
+    case 'verbs':
+      return { ...model, verbs: action.verbs };
+    case 'query':
+      return { ...model, query: { ...model.query, [action.verb]: action.data } };
+    case 'tick':
+      return action.ok ? { ...model, queryAt: action.at } : model;
+    case 'stale':
+      return model.stale === action.stale ? model : { ...model, stale: action.stale };
   }
+}
+
+/** Whether `verb` may be polled: unknown until `--help` is read, then as listed. */
+export function isSupported(model: Model, verb: QueryVerb): boolean {
+  return model.verbs === null || model.verbs.includes(verb);
+}
+
+/** The verbs this binary lacks, for the sections that read `UNSUPPORTED`. */
+export function unsupportedVerbs(model: Model): QueryVerb[] {
+  return model.verbs === null ? [] : QUERY_VERBS.filter((verb) => !isSupported(model, verb));
 }
 
 /** The p-th percentile (0..1, nearest rank) of `values`; 0 when empty. */

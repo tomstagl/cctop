@@ -75,8 +75,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "`claude plugin validate --strict` follows `$` only into functions declared in the same file, never across an import, so `createPoller` cannot take `$` itself: it takes `PollerEngine` (the slice of `$` it uses: clock.now/every, process.run, session.id, fs.write, ui.log, plus `home()` for `$.env.get(\"HOME\")`, whose name the validator reads off pane.tsx), built by the top-level `pollerEngine($)` in pane.tsx; the fake `$` is structurally assignable, so tests call `createPoller({ ...$, home }, getModel, setModel)`. The poller runs while the pane is open and the binary is present (US-008 adds the stop on ui.close); `reschedule()` re-arms the cadence after turn.start/turn.complete and is a no-op while stopped. A tick is successful when every called verb parsed; `stale` is judged in the timer callback before each tick, so a hung query flips it too. A failed `--help` leaves `verbs` null (every verb tried, help retried next tick). `writeMarker` already writes `{ version, sessionId, heartbeatAt, open }`; US-008 adds `openedAt` and the ui.close rewrite."
     },
     {
       "id": "US-005",

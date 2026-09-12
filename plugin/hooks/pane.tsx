@@ -1,10 +1,21 @@
 // cctop pane: the dashboard drawn inside Claude Code's own TUI through the
 // function-hooks API (early access). It registers the /cctop-pane command,
 // opens the pane, draws it, and keeps a Model of the session up to date from
-// the engine's own events (model.ts). The views and the binary-backed poller
-// land in later stories.
+// the engine's own events (model.ts) and, when the binary is installed, from
+// `cctop query` through the poller (poller.ts). The views land in later
+// stories.
 import type { EngineInterface, Register, Timer, ToolCallResult } from 'claude-code';
-import { initialModel, reduce, usageRows, type Action, type Model } from './model';
+import {
+  initialModel,
+  reduce,
+  unsupportedVerbs,
+  usageRows,
+  UNSUPPORTED,
+  type Action,
+  type Binary,
+  type Model,
+} from './model';
+import { createPoller, type Poller, type PollerEngine } from './poller';
 
 const PANE_ID = 'cctop';
 // The native command is /cctop-pane, not /cctop: the engine reserves /cctop
@@ -13,6 +24,8 @@ const PANE_ID = 'cctop';
 // The skill stays the fallback path for builds without function hooks.
 const COMMAND = 'cctop-pane';
 const USAGE_POLL_MS = 1000;
+const VERSION_TIMEOUT_MS = 3000;
+const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 
 // Module state: one Model per loaded module (a hot reload starts a fresh
 // environment, and `register` resets it). The helpers that take `$` are
@@ -22,10 +35,55 @@ let model: Model = initialModel();
 // once after session.start and turn.complete: never inside a hook's own
 // path before `next(e)`, so the pane costs the turn nothing.
 let usageTimer: Timer | null = null;
+// The query poller, built at session.start and run while the pane is open
+// and the binary is present.
+let poller: Poller | null = null;
+
+function replaceModel($: EngineInterface, next: Model): void {
+  model = next;
+  if (model.open) $.ui.invalidate('ui.render');
+}
 
 function apply($: EngineInterface, action: Action): void {
-  model = reduce(model, action);
-  if (model.open) $.ui.invalidate('ui.render');
+  replaceModel($, reduce(model, action));
+}
+
+// The slice of `$` the poller runs on: the validator follows `$` only into
+// functions declared in this file, so the calls are spelled here.
+function pollerEngine($: EngineInterface): PollerEngine {
+  return {
+    clock: { now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn) },
+    process: { run: (argv, init) => $.process.run(argv, init) },
+    session: { id: () => $.session.id() },
+    fs: { write: (path, text) => $.fs.write(path, text) },
+    ui: { log: (text) => $.ui.log(text) },
+    home: () => $.env.get('HOME'),
+  };
+}
+
+function makePoller($: EngineInterface): Poller {
+  return createPoller(
+    pollerEngine($),
+    () => model,
+    (next) => replaceModel($, next),
+  );
+}
+
+// Whether the `cctop` binary answers `--version`: `present` on exit 0,
+// `missing` when it cannot start, exits non-zero or takes over 3 s. Runs
+// after session.start's `next(e)` and is never awaited by a hook.
+function detectBinary($: EngineInterface): void {
+  $.process
+    .run(['cctop', '--version'], { timeoutMs: VERSION_TIMEOUT_MS })
+    .then(
+      (result): Binary => (result.exitCode === 0 ? 'present' : 'missing'),
+      (): Binary => 'missing',
+    )
+    .then((binary) => {
+      apply($, { type: 'binary', binary });
+      if (binary === 'present' && model.open) poller?.start();
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: binary detection failed: ${String(err)}`));
 }
 
 function readUsage($: EngineInterface): void {
@@ -54,11 +112,14 @@ function startUsageTimer($: EngineInterface): void {
 export const register: Register = (on) => {
   model = initialModel();
   stopUsageTimer();
+  poller?.stop();
+  poller = null;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.
   on('session.start', ($, e, next) => {
     apply($, { type: 'session.start', at: $.clock.now() });
+    poller = makePoller($);
     return $.command
       .register({
         name: COMMAND,
@@ -69,6 +130,7 @@ export const register: Register = (on) => {
       .then(() => next(e))
       .then((result) => {
         readUsage($);
+        detectBinary($);
         return result;
       });
   }).catch(($, e, next) => {
@@ -79,6 +141,7 @@ export const register: Register = (on) => {
   on('turn.start', ($, e, next) => {
     apply($, { type: 'turn.start', at: $.clock.now() });
     startUsageTimer($);
+    poller?.reschedule();
     return next(e);
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.start failed: ${next.error.message ?? next.error.kind}`);
@@ -88,6 +151,7 @@ export const register: Register = (on) => {
   on('turn.complete', ($, e, next) => {
     apply($, { type: 'turn.complete', at: $.clock.now(), durationMs: e.durationMs, reason: e.reason });
     stopUsageTimer();
+    poller?.reschedule();
     return next(e).then((result) => {
       readUsage($);
       return result;
@@ -133,6 +197,7 @@ export const register: Register = (on) => {
   on('command.run', { command: COMMAND }, async ($) => {
     await $.ui.open({ id: PANE_ID, title: 'cctop' });
     model = { ...model, open: true };
+    if (model.binary === 'present') poller?.start();
     return { text: 'cctop pane opened' };
   }).catch(($, _e, next) => {
     $.ui.log(`cctop: /${COMMAND} failed: ${next.error.message ?? next.error.kind}`);
@@ -145,13 +210,21 @@ export const register: Register = (on) => {
     const { Box, Text } = $.ui.resolve(e);
     const now = $.clock.now();
     // Until the Overview view lands, the pane draws what the engine alone
-    // provides: the turn, the running tool, and the usage rows.
+    // provides (the turn, the running tool, the usage rows) plus the state of
+    // the binary and its query verbs.
     const running = model.turn.runningTool;
     return (
       <Box flexDirection="column">
         <Text wrap="truncate">
           cctop · turn {model.turn.number} · {model.turn.state}
         </Text>
+        {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
+        {model.stale && <Text wrap="truncate">cctop query stale</Text>}
+        {unsupportedVerbs(model).map((verb) => (
+          <Text key={verb} wrap="truncate">
+            {verb}: {UNSUPPORTED}
+          </Text>
+        ))}
         {running !== null && (
           <Text wrap="truncate">
             running {running.name} {Math.round((now - running.startedAt) / 1000)}s
