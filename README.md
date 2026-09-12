@@ -218,9 +218,10 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 
 <!-- install:start -->
 ```
-brew install tomstagl/tap/cctop     # or: cargo install cctop
-claude plugin add tomstagl/cctop    # adds /cctop and cctop-insights
-/cctop                              # opens the dashboard in a right-hand pane
+brew install tomstagl/tap/cctop           # or: cargo install cctop
+claude plugin marketplace add tomstagl/cctop
+claude plugin install cctop               # adds /cctop and cctop-insights
+/cctop                                     # opens the dashboard in a right-hand pane
 ```
 <!-- install:end -->
 

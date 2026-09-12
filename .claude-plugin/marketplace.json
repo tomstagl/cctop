@@ -1,0 +1,15 @@
+{
+  "name": "cctop",
+  "description": "Marketplace for the cctop Claude Code plugin",
+  "owner": {
+    "name": "Thomas Stagl",
+    "url": "https://github.com/tomstagl"
+  },
+  "plugins": [
+    {
+      "name": "cctop",
+      "source": "./plugin",
+      "description": "btop-style live dashboard for Claude Code internals: /cctop opens it in a side pane, cctop-insights lets the session answer questions from its numbers"
+    }
+  ]
+}
