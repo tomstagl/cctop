@@ -34,6 +34,8 @@ enum Command {
     },
     /// Open cctop in a right-hand pane of the current multiplexer.
     Split(SplitArgs),
+    /// Serve the query interface as MCP tools over stdio.
+    Mcp,
     /// Print the current Advisor recommendations.
     Advise(AdviseArgs),
     /// Write an end-of-session report.
@@ -280,6 +282,12 @@ fn main() {
         Command::StatuslineShim { original } => {
             let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
             std::process::exit(cctop::status::run_shim(&original));
+        }
+        Command::Mcp => {
+            if let Err(e) = cctop::mcp::run_stdio() {
+                eprintln!("cctop mcp: {e}");
+                std::process::exit(1);
+            }
         }
         Command::Split(sp) => {
             // Resolve first so the pane attaches to exactly this session.

@@ -18,6 +18,7 @@ pub mod hooks;
 pub mod install;
 pub mod ledger;
 pub mod load;
+pub mod mcp;
 pub mod metrics;
 pub mod otel;
 pub mod prefix;
