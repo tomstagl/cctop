@@ -12,6 +12,12 @@ pub enum Host {
     WezTerm,
     Kitty,
     ITerm2,
+    /// Not inside a multiplexer, but iTerm2 is the terminal app: open a new
+    /// window instead of splitting the (unmanaged) current one.
+    ITerm2Window,
+    /// Not inside a multiplexer, but Terminal.app is the terminal app: open
+    /// a new window instead of splitting.
+    AppleTerminalWindow,
 }
 
 impl Host {
@@ -22,13 +28,25 @@ impl Host {
             Host::WezTerm => "WezTerm",
             Host::Kitty => "Kitty",
             Host::ITerm2 => "iTerm2",
+            Host::ITerm2Window => "iTerm2",
+            Host::AppleTerminalWindow => "Terminal",
         }
+    }
+
+    /// True for hosts that open a brand-new window rather than splitting
+    /// the pane the current session is already running in.
+    pub fn opens_new_window(self) -> bool {
+        matches!(self, Host::ITerm2Window | Host::AppleTerminalWindow)
     }
 }
 
-/// Which multiplexer we are running inside, from the environment.
+/// Which multiplexer we are running inside, from the environment. When none
+/// is detected, fall back to opening a new window in the current terminal
+/// app (Terminal.app or iTerm2) so the dashboard is still one command away
+/// instead of requiring the user to already be inside a multiplexer.
 pub fn detect(env: &dyn Fn(&str) -> Option<String>) -> Option<Host> {
     let set = |k: &str| env(k).is_some_and(|v| !v.is_empty());
+    let val = |k: &str| env(k).filter(|v| !v.is_empty());
     if set("TMUX") {
         Some(Host::Tmux)
     } else if set("ZELLIJ") {
@@ -40,7 +58,11 @@ pub fn detect(env: &dyn Fn(&str) -> Option<String>) -> Option<Host> {
     } else if set("ITERM_SESSION_ID") {
         Some(Host::ITerm2)
     } else {
-        None
+        match val("TERM_PROGRAM").as_deref() {
+            Some("iTerm.app") => Some(Host::ITerm2Window),
+            Some("Apple_Terminal") => Some(Host::AppleTerminalWindow),
+            _ => None,
+        }
     }
 }
 
@@ -75,13 +97,45 @@ pub fn command(
                 inner.replace('"', "\\\"")
             ),
         ],
+        Host::ITerm2Window => vec![
+            s("osascript"),
+            s("-e"),
+            format!(
+                "tell application \"iTerm2\" to tell (create window with default profile) to tell current session to write text \"{}\"",
+                inner.replace('"', "\\\"")
+            ),
+        ],
+        Host::AppleTerminalWindow => {
+            // Terminal.app has no split-pane API, only windows/tabs, so the
+            // closest approximation of a right-hand panel is a second
+            // window butted up against the current one. Only the *new*
+            // window's bounds are touched — the frontmost window's bounds
+            // are read, never written, so existing windows/tabs are left
+            // exactly as they were.
+            let script = format!(
+                "tell application \"Terminal\"\n\
+                 set b to bounds of front window\n\
+                 set x1 to item 1 of b\n\
+                 set y1 to item 2 of b\n\
+                 set x2 to item 3 of b\n\
+                 set y2 to item 4 of b\n\
+                 set newW to ((x2 - x1) * {size}) / 100\n\
+                 do script \"{inner}\"\n\
+                 delay 0.3\n\
+                 set bounds of front window to {{x2, y1, x2 + newW, y2}}\n\
+                 end tell",
+                size = size,
+                inner = inner.replace('"', "\\\"")
+            );
+            vec![s("osascript"), s("-e"), script]
+        }
     }
 }
 
 /// What to tell the user when no host is detected.
 pub fn manual_hint(cctop: &str, session: &str) -> String {
     format!(
-        "cctop split: no tmux, zellij, WezTerm, Kitty or iTerm2 detected.\n\
+        "cctop split: no tmux, zellij, WezTerm, Kitty, iTerm2 or Terminal.app detected.\n\
          Open a second terminal and run:\n\n    {cctop} run --session {session}\n"
     )
 }
@@ -98,10 +152,17 @@ pub fn run(session_id: &str, size: u8) -> i32 {
         return 3;
     };
     let argv = command(host, &cctop, session_id, size, &env);
-    match Command::new(&argv[0]).args(&argv[1..]).status() {
+    // Discard stdout: osascript echoes the AppleScript result (e.g. a tab
+    // reference), which is noise here — only the exit status matters.
+    let result = Command::new(&argv[0])
+        .args(&argv[1..])
+        .stdout(std::process::Stdio::null())
+        .status();
+    match result {
         Ok(st) if st.success() => {
+            let place = if host.opens_new_window() { "window" } else { "pane" };
             println!(
-                "cctop: opened in a {} pane, attached to {session_id}",
+                "cctop: opened in a new {} {place}, attached to {session_id}",
                 host.name()
             );
             0
@@ -152,6 +213,30 @@ mod tests {
     }
 
     #[test]
+    fn falls_back_to_a_new_window_outside_any_multiplexer() {
+        assert_eq!(
+            detect(&env(&[("TERM_PROGRAM", "Apple_Terminal")])),
+            Some(Host::AppleTerminalWindow)
+        );
+        assert_eq!(
+            detect(&env(&[("TERM_PROGRAM", "iTerm.app")])),
+            Some(Host::ITerm2Window)
+        );
+        // Already inside an iTerm2 session: split, don't open a new window.
+        assert_eq!(
+            detect(&env(&[
+                ("TERM_PROGRAM", "iTerm.app"),
+                ("ITERM_SESSION_ID", "w0t0p0")
+            ])),
+            Some(Host::ITerm2)
+        );
+        assert_eq!(
+            detect(&env(&[("TERM_PROGRAM", "vscode")])),
+            None
+        );
+    }
+
+    #[test]
     fn commands_per_host_carry_the_session() {
         let e = env(&[("TMUX_PANE", "%3")]);
         let t = command(Host::Tmux, "cctop", "abc", 45, &e);
@@ -186,6 +271,19 @@ mod tests {
         let i = command(Host::ITerm2, "cctop", "abc", 45, &e);
         assert_eq!(i[0], "osascript");
         assert!(i[2].contains("split vertically") && i[2].contains("cctop run --session abc"));
+
+        let iw = command(Host::ITerm2Window, "cctop", "abc", 45, &e);
+        assert_eq!(iw[0], "osascript");
+        assert!(iw[2].contains("create window") && iw[2].contains("cctop run --session abc"));
+
+        let at = command(Host::AppleTerminalWindow, "cctop", "abc", 45, &e);
+        assert_eq!(at[0], "osascript");
+        assert!(
+            at[2].contains("Terminal")
+                && at[2].contains("cctop run --session abc")
+                && at[2].contains("bounds of front window")
+        );
+
         assert!(manual_hint("cctop", "abc").contains("cctop run --session abc"));
     }
 }
