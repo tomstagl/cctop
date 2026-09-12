@@ -661,7 +661,7 @@
         "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "PRD ref: US-017"
     },
     {

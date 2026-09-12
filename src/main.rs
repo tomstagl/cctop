@@ -193,6 +193,12 @@ struct Headless {
     /// With --once: keys to press before rendering, comma separated (e.g. "Tab,Enter").
     #[arg(long)]
     keys: Option<String>,
+    /// With --once: feed only the first N transcript lines (for recordings).
+    #[arg(long)]
+    lines: Option<usize>,
+    /// With --once: emit ANSI colour escapes instead of plain text.
+    #[arg(long)]
+    ansi: bool,
 }
 
 /// Print to stdout without panicking when the reader went away (`| head`).
@@ -380,7 +386,12 @@ fn run(args: RunArgs) {
     cctop::hooks::prune(&cctop::status::cctop_dir(), app.state.now_ms);
 
     if headless.once {
-        cctop::attach::attach_headless(&mut app, &transcript, session_info);
+        match headless.lines {
+            Some(n) => {
+                cctop::attach::attach_headless_prefix(&mut app, &transcript, session_info, n)
+            }
+            None => cctop::attach::attach_headless(&mut app, &transcript, session_info),
+        }
         if let Some(keys) = headless.keys.as_deref() {
             for k in app::parse_keys(keys) {
                 app.handle_key(k);
@@ -391,7 +402,11 @@ fn run(args: RunArgs) {
             .as_deref()
             .and_then(app::parse_size)
             .unwrap_or((60, 51));
-        let text = app::render_to_string(&app, w, h);
+        let text = if headless.ansi {
+            app::render_to_ansi(&app, w, h)
+        } else {
+            app::render_to_string(&app, w, h)
+        };
         match headless.render_to {
             Some(path) => std::fs::write(&path, text).unwrap_or_else(|e| {
                 eprintln!("cctop: cannot write {}: {e}", path.display());

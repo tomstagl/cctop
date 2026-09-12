@@ -40,3 +40,17 @@ and prints the `claude plugin add …` line as a caveat.
 `repository`, `keywords`, `categories`, `readme`). `cargo publish --dry-run`
 passes locally and in CI. Package contents are trimmed by the `exclude` list
 in `Cargo.toml` (fixtures, brand assets, planning files stay out of the crate).
+
+## Website (GitHub Pages)
+
+`.github/workflows/pages.yml` builds `site/` from the README, `docs/metrics.md`
+and `themes/` on every push to `main` (and uploads a preview artifact on pull
+requests), runs Lighthouse CI against the built pages with the assertions in
+`site/lighthouserc.json` (performance, accessibility, SEO ≥ 0.95), and deploys
+with `actions/deploy-pages`. Enable Pages → Source: *GitHub Actions* once in
+the repository settings. The site is then at `https://tomstagl.github.io/cctop/`.
+
+`make demo` regenerates the two-pane screenshot, theme PNGs and the demo
+recording from `fixtures/session-a` with a fixed clock (`CCTOP_FAKE_NOW`), so
+assets never leak a real session. It needs Chrome and ffmpeg; `vhs` is
+optional (`site/demo.tape`).

@@ -154,8 +154,17 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
 /// Load a fixture fully into `app` (headless): attach without followers,
 /// then feed every line.
 pub fn attach_headless(app: &mut App, transcript: &Path, info: SessionInfo) {
+    attach_headless_prefix(app, transcript, info, usize::MAX);
+}
+
+/// Like [`attach_headless`] but only the first `n` lines — a point in time.
+pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInfo, n: usize) {
     attach(app, transcript, info, false);
-    for line in crate::transcript::parse_file(transcript).unwrap_or_default() {
+    for line in crate::transcript::parse_file(transcript)
+        .unwrap_or_default()
+        .into_iter()
+        .take(n)
+    {
         app.feed(line);
     }
     app.state.agents = crate::agents::load(&transcript.with_extension(""));

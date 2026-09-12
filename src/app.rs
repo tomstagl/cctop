@@ -554,6 +554,47 @@ pub fn render_to_string(app: &App, width: u16, height: u16) -> String {
     buffer_to_string(term.backend().buffer())
 }
 
+/// Render one frame as text with ANSI true-colour escapes (for recordings).
+pub fn render_to_ansi(app: &App, width: u16, height: u16) -> String {
+    use ratatui::style::{Color, Modifier};
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).expect("test terminal");
+    term.draw(|f| app.draw(f)).expect("draw");
+    let buf = term.backend().buffer();
+    let code = |c: Color, fg: bool| -> String {
+        let base = if fg { 38 } else { 48 };
+        match c {
+            Color::Rgb(r, g, b) => format!("\x1b[{base};2;{r};{g};{b}m"),
+            Color::Indexed(i) => format!("\x1b[{base};5;{i}m"),
+            Color::Reset => format!("\x1b[{}m", if fg { 39 } else { 49 }),
+            _ => String::new(),
+        }
+    };
+    let mut out = String::new();
+    for y in 0..buf.area.height {
+        let mut last: Option<(Color, Color, Modifier)> = None;
+        for x in 0..buf.area.width {
+            let cell = &buf[(x, y)];
+            let cur = (cell.fg, cell.bg, cell.modifier);
+            if last != Some(cur) {
+                out.push_str("\x1b[0m");
+                out.push_str(&code(cell.fg, true));
+                out.push_str(&code(cell.bg, false));
+                if cell.modifier.contains(Modifier::BOLD) {
+                    out.push_str("\x1b[1m");
+                }
+                if cell.modifier.contains(Modifier::REVERSED) {
+                    out.push_str("\x1b[7m");
+                }
+                last = Some(cur);
+            }
+            out.push_str(cell.symbol());
+        }
+        out.push_str("\x1b[0m\n");
+    }
+    out
+}
+
 pub fn buffer_to_string(buf: &ratatui::buffer::Buffer) -> String {
     let mut out = String::new();
     for y in 0..buf.area.height {
@@ -700,6 +741,12 @@ pub fn run_tui(mut app: App) -> std::io::Result<()> {
 }
 
 pub fn now_ms() -> i64 {
+    // A fixed clock makes headless renders reproducible (demo, snapshots).
+    if let Some(v) = std::env::var_os("CCTOP_FAKE_NOW") {
+        if let Some(ms) = v.to_str().and_then(|s| s.parse::<i64>().ok()) {
+            return ms;
+        }
+    }
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)

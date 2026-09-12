@@ -1,0 +1,29 @@
+╭──────────────────────────────────────────────────────────────────╮
+│ ✻ Claude Code · Opus 5 · ~/code/cctop                            │
+╰──────────────────────────────────────────────────────────────────╯
+
+> add a p95 column to the tools panel and make it sortable
+
+● I'll look at how the table is rendered first, then add the
+  column and the sort key.
+
+● Read(src/render.rs)
+  ⎿  Read 412 lines
+
+● Grep(pattern: "sort_key", path: src)
+  ⎿  Found 3 matches in 2 files
+
+● Edit(src/render.rs)
+  ⎿  Updated src/render.rs with 31 additions and 4 removals
+       118    +        Column::new("p95", |t| t.p95_ms),
+       119    +        Column::new("LAST", |t| t.last_call),
+
+● Bash(cargo test --workspace)
+  ⎿  Running…
+
+✻ Crunching… (48s · ↑ 2.1k tokens · esc to interrupt)
+
+╭──────────────────────────────────────────────────────────────────╮
+│ > █                                                              │
+╰──────────────────────────────────────────────────────────────────╯
+  ~/code/cctop git:main* Opus 5 67% 5h 62%                    ⏵⏵ auto
