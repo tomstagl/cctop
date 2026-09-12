@@ -26,12 +26,25 @@ pub fn tools() -> Vec<Value> {
     ]
 }
 
+/// The `claude` process that spawned this server, if it is a registered
+/// session. Pins discovery to the caller instead of "newest busy in $PWD",
+/// which picks the wrong session when two run in the same project.
+fn parent_session() -> Option<String> {
+    let ppid = std::os::unix::process::parent_id();
+    let dir = crate::registry::default_dir()?;
+    crate::registry::list(&dir)
+        .iter()
+        .find(|s| s.pid == ppid && s.is_alive())
+        .map(|s| s.session_id.clone())
+}
+
 fn state_for(args: &Value) -> Result<crate::ui::State, String> {
     let t = Target {
         session: args
             .get("session")
             .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(str::to_string)
+            .or_else(parent_session),
         cwd: None,
         wait: false,
     };
@@ -50,7 +63,11 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
                 .get("metric_id")
                 .and_then(Value::as_str)
                 .ok_or("metric_id is required")?;
-            Ok(query::explain(id))
+            let v = query::explain(id);
+            match v.get("error").and_then(Value::as_str) {
+                Some(e) => Err(format!("{e}; known: {}", v["known"])),
+                None => Ok(v),
+            }
         }
         "cctop_summary" => Ok(query::summary(&state_for(args)?)),
         "cctop_ledger" => {
@@ -61,10 +78,13 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
         "cctop_advice" => Ok(query::advice(&state_for(args)?)),
         "cctop_prefix" => Ok(query::prefix(&state_for(args)?)),
         "cctop_events" => {
-            let since = args
-                .get("since")
-                .and_then(Value::as_str)
-                .and_then(query::parse_since);
+            let since = match args.get("since").and_then(Value::as_str) {
+                Some(s) => Some(
+                    query::parse_since(s)
+                        .ok_or_else(|| format!("since {s:?}: expected e.g. 10m, 2h, 90s"))?,
+                ),
+                None => None,
+            };
             Ok(query::events(&state_for(args)?, since))
         }
         other => Err(format!("unknown tool {other}")),
@@ -212,5 +232,15 @@ mod tests {
         // Same JSON as `cctop query`.
         let via_query = crate::query::explain("cache_hit_ratio");
         assert_eq!(explain, via_query);
+    }
+
+    #[test]
+    fn bad_arguments_are_tool_errors_not_silent_defaults() {
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/session-a.jsonl");
+        let e = call("cctop_explain_metric", &json!({"metric_id":"nope"})).unwrap_err();
+        assert!(e.contains("unknown metric nope") && e.contains("cache_hit_ratio"));
+        let e = call("cctop_events", &json!({"session":fixture,"since":"10min"})).unwrap_err();
+        assert!(e.contains("10min"), "{e}");
+        assert!(call("cctop_events", &json!({"session":fixture,"since":"10m"})).is_ok());
     }
 }

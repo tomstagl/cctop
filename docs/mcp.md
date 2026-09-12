@@ -15,13 +15,13 @@ counterpart prints, so `docs/query.md` describes the shapes.
 | `cctop_explain_metric` (`metric_id`) | `cctop query explain <id>` |
 
 All session tools take an optional `session` argument (id, name, pid or a
-fixture path); without it cctop discovers the session the same way the TUI
-does.
+fixture path); without it the server attaches to the `claude` process that
+spawned it (its parent pid), falling back to the same discovery the TUI uses.
 
 ## Cost of registering it
 
-Measured on 0.1.0: the seven tool schemas serialise to **2 459 bytes ≈ 614
-tokens** (`cctop mcp` → `tools/list`). That rides on every request of any
+Measured on 0.1.0: the seven tool schemas serialise to **2 349 bytes ≈ 587
+tokens** (`cctop mcp` → `tools/list`; a unit test keeps it under 600). That rides on every request of any
 session that has the server registered — which is exactly what Advisor rule
 A07 warns about. So:
 
