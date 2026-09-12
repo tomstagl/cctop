@@ -33,3 +33,6 @@ declare module 'node:path' {
 }
 
 declare var __dirname: string;
+
+// Bare timers for a test that has to let promise chains settle.
+declare function setTimeout(fn: () => void, ms: number): unknown;

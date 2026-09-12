@@ -55,8 +55,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "`tool.end` carries `startedAt` besides name/at/isError/resultChars (the hook keeps it in its closure) so concurrent calls of one tool time themselves apart and only the matching call clears `runningTool`. `turn.state` `waiting` is declared but never set yet (permission waits need `tool.check`, PRD open question 4). Model state and the `$`-taking helpers (`apply`, `readUsage`, `startUsageTimer`) live at module scope: `claude plugin validate --strict` refuses `$` passed to a closure. The render draws an interim turn/running-tool/usage list until US-005 replaces it with the Overview."
     },
     {
       "id": "US-004",
