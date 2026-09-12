@@ -4,9 +4,9 @@
 // the engine's own events (model.ts) and, when the binary is installed, from
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
-import type { ElementTable, EngineInterface, Register, RenderElement, Timer, ToolCallResult } from 'claude-code';
+import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
 import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model, type View } from './model';
-import { createPoller, type Poller, type PollerEngine } from './poller';
+import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { renderView } from './views/index';
 
 const PANE_ID = 'cctop';
@@ -17,6 +17,9 @@ const PANE_ID = 'cctop';
 const COMMAND = 'cctop-pane';
 const USAGE_POLL_MS = 1000;
 const VERSION_TIMEOUT_MS = 3000;
+// The least gap between two `$.ui.invalidate("ui.render")` calls: at most
+// four a second, the engine folds further (ten a second).
+const RENDER_MIN_MS = 250;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 // The views in view-bar order; the hotkey is the 1-based position.
 const VIEWS: { view: View; label: string }[] = [
@@ -28,9 +31,10 @@ const VIEWS: { view: View; label: string }[] = [
   { view: 'advisor', label: 'Advisor' },
 ];
 const USAGE = `usage: /${COMMAND} [${VIEWS.map((v) => v.view).join('|')}|close]`;
-// The `$.store` key under which `{ open, view }` survives a reload (restored
-// at session.start by US-008).
+// The `$.store` key under which `{ open, view }` survives a reload: an
+// interactive session.start reopens the pane on that view.
 const STORE_KEY = 'pane';
+const MANIFEST = '.claude-plugin/plugin.json';
 
 // Module state: one Model per loaded module (a hot reload starts a fresh
 // environment, and `register` resets it). The helpers that take `$` are
@@ -43,10 +47,39 @@ let usageTimer: Timer | null = null;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
+// The redraw throttle: when the last invalidate was, and the timer holding
+// the trailing one back while changes come faster than RENDER_MIN_MS.
+let invalidatedAt: number | null = null;
+let renderTimer: Timer | null = null;
+
+function invalidateNow($: EngineInterface): void {
+  invalidatedAt = $.clock.now();
+  $.ui.invalidate('ui.render');
+}
+
+// Asks for a redraw at most every RENDER_MIN_MS: a change inside the gap
+// arms one trailing call for the end of it, later changes fold into that.
+function requestRender($: EngineInterface): void {
+  if (renderTimer !== null) return;
+  const waited = invalidatedAt === null ? RENDER_MIN_MS : $.clock.now() - invalidatedAt;
+  if (waited >= RENDER_MIN_MS) {
+    invalidateNow($);
+    return;
+  }
+  renderTimer = $.clock.after(RENDER_MIN_MS - waited, () => {
+    renderTimer = null;
+    invalidateNow($);
+  });
+}
+
+function stopRenderTimer(): void {
+  renderTimer?.cancel();
+  renderTimer = null;
+}
 
 function replaceModel($: EngineInterface, next: Model): void {
   model = next;
-  if (model.open) $.ui.invalidate('ui.render');
+  if (model.open) requestRender($);
 }
 
 function apply($: EngineInterface, action: Action): void {
@@ -76,9 +109,10 @@ function makePoller($: EngineInterface): Poller {
 
 // Whether the `cctop` binary answers `--version`: `present` on exit 0,
 // `missing` when it cannot start, exits non-zero or takes over 3 s. Runs
-// after session.start's `next(e)` and is never awaited by a hook.
-function detectBinary($: EngineInterface): void {
-  $.process
+// after session.start's `next(e)` and is never awaited by a hook; settles
+// once the answer is in the model, so the restore can follow it.
+function detectBinary($: EngineInterface): Promise<void> {
+  return $.process
     .run(['cctop', '--version'], { timeoutMs: VERSION_TIMEOUT_MS })
     .then(
       (result): Binary => (result.exitCode === 0 ? 'present' : 'missing'),
@@ -89,6 +123,39 @@ function detectBinary($: EngineInterface): void {
       if (binary === 'present' && model.open) poller?.start();
     })
     .catch((err: unknown) => $.ui.log(`cctop: binary detection failed: ${String(err)}`));
+}
+
+// The plugin's version for the marker file, from plugin.json under
+// `$.plugin.root`; stays null when the manifest cannot be read.
+function readVersion($: EngineInterface): void {
+  $.fs
+    .read(`${$.plugin.root}/${MANIFEST}`)
+    .then((text) => {
+      const version = (JSON.parse(text) as { version?: unknown }).version;
+      if (typeof version === 'string') model = { ...model, version };
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: plugin.json unreadable: ${String(err)}`));
+}
+
+// Reopens the pane a reload closed: `$.store` holds `{ open: true, view }`
+// from the last persistPane. Only where a person is at the prompt, and only
+// after the binary check, so the poller starts with the pane.
+function restorePane($: EngineInterface, isInteractive: boolean): Promise<void> {
+  if (!isInteractive) return Promise.resolve();
+  return $.store
+    .get(STORE_KEY)
+    .then((saved) => {
+      if (model.open || saved === null || typeof saved !== 'object') return;
+      const { open, view } = saved as { open?: unknown; view?: unknown };
+      if (open !== true) return;
+      const known = VIEWS.find((v) => v.view === view);
+      return openPane($, known?.view ?? 'overview');
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: restore failed: ${String(err)}`));
+}
+
+function updateMarker($: EngineInterface): void {
+  writeMarker(pollerEngine($), model).catch((err: unknown) => $.ui.log(`cctop: marker write failed: ${String(err)}`));
 }
 
 function readUsage($: EngineInterface): void {
@@ -131,18 +198,41 @@ function persistPane($: EngineInterface): void {
 }
 
 // Opens the pane (an open id is merely retitled) on `view` when given. Never
-// asks for `focus`: the keyboard stays the person's.
+// asks for `focus`: the keyboard stays the person's. The timers and the
+// poller run only while the pane is open, so they start here.
 async function openPane($: EngineInterface, view?: View): Promise<void> {
   await $.ui.open({ id: PANE_ID, title: 'cctop' });
-  model = { ...model, open: true, view: view ?? model.view };
-  if (model.binary === 'present') poller?.start();
+  const opened = model.open;
+  model = { ...model, open: true, view: view ?? model.view, openedAt: opened ? model.openedAt : $.clock.now() };
   persistPane($);
+  if (opened) {
+    invalidateNow($);
+    return;
+  }
+  if (model.binary === 'present') poller?.start();
+  if (model.turn.state === 'busy') startUsageTimer($);
+  readUsage($);
+  if (model.sessionId === null) apply($, { type: 'session.id', id: await $.session.id() });
+  updateMarker($);
+}
+
+// What every close does, whoever closes: the timers and the poller stop,
+// the choice is remembered, the marker says `open: false`. Runs from the
+// ui.close hook (any origin) and after the command's own $.ui.close, so it
+// is a no-op the second time round.
+function paneClosed($: EngineInterface): void {
+  if (!model.open) return;
+  model = { ...model, open: false };
+  poller?.stop();
+  stopUsageTimer();
+  stopRenderTimer();
+  persistPane($);
+  updateMarker($);
 }
 
 async function closePane($: EngineInterface): Promise<void> {
   await $.ui.close({ id: PANE_ID });
-  model = { ...model, open: false };
-  persistPane($);
+  paneClosed($);
 }
 
 // A view-bar press: the view changes, the choice is remembered, the pane
@@ -150,7 +240,39 @@ async function closePane($: EngineInterface): Promise<void> {
 function selectView($: EngineInterface, view: View): void {
   model = { ...model, view };
   persistPane($);
-  $.ui.invalidate('ui.render');
+  invalidateNow($);
+}
+
+// The pane's tree for one render. Inline (the classic renderer's few rows
+// above the prompt): the header and the Context and Limits lines only, no
+// view bar. Docked: the view bar, the view, then the state of the binary and
+// its query verbs beneath it.
+function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
+  const el = $.ui.resolve(e);
+  const { Box, Text } = el;
+  const now = $.clock.now();
+  const columns = e.props.bodyColumns;
+  if (e.props.placement === 'inline') {
+    return (
+      <Box flexDirection="column">
+        {renderView(model, el, columns, 'inline', now)}
+        {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
+      </Box>
+    );
+  }
+  return (
+    <Box flexDirection="column">
+      {viewBar($, el, columns)}
+      {renderView(model, el, columns, 'dock', now)}
+      {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
+      {model.stale && <Text wrap="truncate">cctop query stale</Text>}
+      {unsupportedVerbs(model).map((verb) => (
+        <Text key={verb} wrap="truncate">
+          {verb}: {UNSUPPORTED}
+        </Text>
+      ))}
+    </Box>
+  );
 }
 
 // The view bar: `1 Overview · 2 Tools · …` as plain Buttons whose hotkeys
@@ -193,6 +315,8 @@ function viewBar($: EngineInterface, el: Pick<ElementTable<'terminal'>, 'Box' | 
 export const register: Register = (on) => {
   model = initialModel();
   stopUsageTimer();
+  stopRenderTimer();
+  invalidatedAt = null;
   poller?.stop();
   poller = null;
 
@@ -210,9 +334,9 @@ export const register: Register = (on) => {
       })
       .then(() => next(e))
       .then((result) => {
-        readUsage($);
         readModelName($);
-        detectBinary($);
+        readVersion($);
+        void detectBinary($).then(() => restorePane($, e.isInteractive));
         return result;
       });
   }).catch(($, e, next) => {
@@ -220,9 +344,11 @@ export const register: Register = (on) => {
     return next(e);
   });
 
+  // While the pane is closed the turn and tool hooks keep the books and
+  // nothing else: no timer, no poll, no usage read.
   on('turn.start', ($, e, next) => {
     apply($, { type: 'turn.start', at: $.clock.now() });
-    startUsageTimer($);
+    if (model.open) startUsageTimer($);
     poller?.reschedule();
     return next(e);
   }).catch(($, e, next) => {
@@ -235,7 +361,7 @@ export const register: Register = (on) => {
     stopUsageTimer();
     poller?.reschedule();
     return next(e).then((result) => {
-      readUsage($);
+      if (model.open) readUsage($);
       return result;
     });
   }).catch(($, e, next) => {
@@ -301,38 +427,41 @@ export const register: Register = (on) => {
     return { text: 'cctop pane could not be opened' };
   });
 
+  // Every close of the pane, the person's and an unload's as much as the
+  // command's, ends the timers and the poller; a close of another pane is
+  // not ours.
+  on('ui.close', { id: PANE_ID }, ($, e, next) => {
+    return next(e).then((result) => {
+      paneClosed($);
+      return result;
+    });
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
+  // A view that throws must not take the pane down: the error is drawn in
+  // one line above the last tree that built, kept in the model for that.
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID) return next(e);
     if (model.placement !== e.props.placement) model = { ...model, placement: e.props.placement };
-    const el = $.ui.resolve(e);
-    const { Box, Text } = el;
-    const now = $.clock.now();
-    const columns = e.props.bodyColumns;
-    // Inline (the classic renderer's few rows above the prompt): the header
-    // and the Context and Limits lines only, no view bar.
-    if (e.props.placement === 'inline') {
+    const { Box, Text } = $.ui.resolve(e);
+    try {
+      const tree = buildPane($, e);
+      model = { ...model, lastTree: tree };
+      return tree;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      $.ui.log(`cctop: render error: ${message}`);
       return (
         <Box flexDirection="column">
-          {renderView(model, el, columns, 'inline', now)}
-          {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
+          <Text color="red" wrap="truncate">
+            cctop render error: {message}
+          </Text>
+          {model.lastTree}
         </Box>
       );
     }
-    // Docked: the view bar, the view, then the state of the binary and its
-    // query verbs beneath it.
-    return (
-      <Box flexDirection="column">
-        {viewBar($, el, columns)}
-        {renderView(model, el, columns, 'dock', now)}
-        {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
-        {model.stale && <Text wrap="truncate">cctop query stale</Text>}
-        {unsupportedVerbs(model).map((verb) => (
-          <Text key={verb} wrap="truncate">
-            {verb}: {UNSUPPORTED}
-          </Text>
-        ))}
-      </Box>
-    );
   }).catch(($, e, next) => {
     $.ui.log(`cctop: render failed: ${next.error.message ?? next.error.kind}`);
     return next(e);

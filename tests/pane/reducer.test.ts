@@ -126,12 +126,19 @@ function boot(usage?: SessionUsage) {
   return { $, dispatch, reads, start, turnStart, turnComplete, toolCall, settle };
 }
 
-test('usage is read once after session.start and once after turn.complete, and every second while busy', async () => {
-  const { $, reads, start, turnStart, turnComplete, settle } = boot();
+test('usage is read once on open and once after turn.complete, and every second while busy', async () => {
+  const { $, dispatch, reads, start, turnStart, turnComplete, settle } = boot();
   await start();
   await settle();
-  assert.equal(reads.count, 1);
+  assert.equal(reads.count, 0, 'nothing is read while the pane is closed');
   assert.equal($.clock.pending(), 0, 'no timer armed while idle');
+
+  await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
+  await settle();
+  assert.equal(reads.count, 1, 'one read on open');
+  // A second of quiet lets the trailing redraw of the open land.
+  $.clock.tick(1000);
+  assert.equal($.clock.pending(), 0, 'no timer armed while idle and open');
 
   await turnStart();
   assert.equal(reads.count, 1, 'turn.start reads nothing itself');

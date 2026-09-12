@@ -58,16 +58,17 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
 }
 
 // The marker other cctop processes read to learn that a pane is open for this
-// session (`cctop split` refuses a second one, US-009). A stub: US-008 fills
-// in the shape (`{ version, sessionId, openedAt, heartbeatAt, open }`) and the
-// rewrite on ui.close; every tick refreshes the heartbeat here already.
+// session (`cctop split` refuses a second one, US-009): written on open, on
+// every tick, and with `open: false` on ui.close. `$.fs` cannot delete, so a
+// reader treats `open: false` or a `heartbeatAt` older than 30 s as absent.
 export async function writeMarker($: PollerEngine, model: Model): Promise<void> {
   if (model.sessionId === null) return;
   const home = await $.home();
   if (home === undefined) return;
   const marker = {
-    version: 1,
+    version: model.version,
     sessionId: model.sessionId,
+    openedAt: model.openedAt === null ? null : new Date(model.openedAt).toISOString(),
     heartbeatAt: new Date($.clock.now()).toISOString(),
     open: model.open,
   };

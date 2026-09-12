@@ -1,7 +1,7 @@
 // The pane's state and the pure reducer that advances it. Nothing in here
 // touches `$`: the hooks in pane.tsx turn engine events into actions, the
 // views draw the model. Kept pure so it is testable from plain data.
-import type { SessionUsage } from 'claude-code';
+import type { RenderElement, SessionUsage } from 'claude-code';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
@@ -64,9 +64,15 @@ export type Model = {
   verbs: readonly QueryVerb[] | null;
   view: View;
   open: boolean;
+  /** When the pane was last opened (the marker's `openedAt`); null before the first open. */
+  openedAt: number | null;
   /** True when the last successful `cctop query` tick is older than 30 s. */
   stale: boolean;
   placement: Placement;
+  /** The `version` of plugin.json, read once after session.start; null until then. */
+  version: string | null;
+  /** The last tree `ui.render` built without throwing: drawn again beneath a render error. */
+  lastTree: RenderElement | null;
 };
 
 export type Action =
@@ -111,8 +117,11 @@ export function initialModel(): Model {
     verbs: null,
     view: 'overview',
     open: false,
+    openedAt: null,
     stale: false,
     placement: 'dock',
+    version: null,
+    lastTree: null,
   };
 }
 

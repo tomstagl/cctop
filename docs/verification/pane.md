@@ -69,8 +69,8 @@ Result: pending
 
 ## B. Live checks
 
-Collected in US-010. Until then every live item of US-001 is listed here so
-nothing is silently assumed:
+Collected in US-010. Until then every live item of US-001 and US-008 is listed
+here so nothing is silently assumed:
 
 1. `/cctop-pane` appears in the slash-command typeahead with the description
    `Open the cctop dashboard pane` and the hint `[view|close]`.
@@ -86,5 +86,26 @@ nothing is silently assumed:
 3. `/cctop:cctop` (the skill) still resolves and behaves as before the pane
    existed. Record which events the debug log shows for it (`skill.prompt`,
    `command.run`, both) to settle open question 2 of the PRD.
+   Claude Code version:
+   Result: pending
+4. `/reload-plugins` with the pane open reopens it on the same view (US-008:
+   `{ open, view }` is restored from `$.store` on `session.start`).
+   Setup: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugin`,
+   `/tui fullscreen`, `/cctop-pane tools`, then `/reload-plugins`; the pane
+   should come back on Tools without a further command.
+   Claude Code version:
+   Result: pending
+5. Claude Code's CPU is under 2 % while idle with the pane open (US-008: the
+   poller runs every 10 s idle, redraws are throttled to 4/s).
+   Setup: pane open, no turn running; `top -pid $(pgrep -n claude)` for a
+   minute and read the `%CPU` column.
+   Claude Code version:
+   Result: pending
+6. The person's close of the pane fires the module's `ui.close` hook (US-008).
+   The engine's `hooks module cctop loaded ... events:` debug line names the
+   engine events only, so the hook on the op-event `ui.close` is unconfirmed
+   headlessly. Setup: pane open, close it with the pane's close key, then read
+   `~/.cctop/pane/<session id>.json`: `open` should be `false` with a fresh
+   `heartbeatAt`, and the debug log should show no query after the close.
    Claude Code version:
    Result: pending
