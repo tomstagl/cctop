@@ -20,8 +20,8 @@
         "Tests pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Native command is `cctop-pane`, not `cctop`: on 2.1.269 `$.command.register({ name: \"cctop\" })` is refused (\"it is the plugin's /cctop:cctop\"). PRD open question 1 resolved as the PRD prescribed; `/cctop` keeps resolving to the skill. Later stories that say `/cctop [view|close]` for the native command mean `/cctop-pane`."
     },
     {
       "id": "US-002",

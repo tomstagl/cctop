@@ -3,3 +3,12 @@
 # Started: 2026-09-12
 # Format: [US-XXX] PASS|FAIL | summary
 #
+
+## Codebase Patterns
+- Native slash command is `/cctop-pane` (`COMMAND` in plugin/hooks/pane.tsx): the engine refuses `$.command.register({ name: "cctop" })` because the plugin's skill already owns `/cctop` (`/cctop:cctop`). Stories that say `/cctop <args>` for the native command mean `/cctop-pane <args>`; `/cctop` alone is the skill.
+- `claude -p --debug` writes nothing to stderr; the debug log is `~/.claude/debug/latest` (symlink to the newest `<session>.txt`). Grep it for `hooks module cctop loaded`, `refused`, `hook failed`.
+- TS toolchain: `typescript` is the only devDependency and tsconfig has `types: []`, so `node:test` / `node:assert/strict` are declared by hand in `tests/pane/node.d.ts` (extend it when a test needs another assert method). `npm test` compiles with tsconfig.test.json (commonjs + esModuleInterop, outDir `.test-build`) and runs `node --test '.test-build/tests/pane/**/*.test.js'` (a bare directory arg is not a glob in Node 22).
+- In a `.catch` handler the failure is `next.error` (`{ kind, message?, budget }`), not a `failure` field; there are no `$.ui.*` element globals, always `const { Text } = $.ui.resolve(e)`.
+- `claude plugin validate --strict ./plugin` prints the hooks and `$` calls it found in the module; use it to confirm the engine sees the events you meant.
+
+[US-001] PASS | TS toolchain (package.json, tsconfig.json, tsconfig.test.json, tests/pane/node.d.ts shim), hooks skeleton (plugin/hooks/hooks.json, pane.tsx: session.start registers the command, command.run opens the pane, ui.render draws `cctop`), docs/verification/pane.md, CI `pane` job; 1 placeholder test; typecheck/test/validate green, headless load check exit 0 with no refused line. Gotcha: the command had to be named `cctop-pane` because the engine reserves `/cctop` for the plugin's skill (PRD open question 1); criterion (a) named it `cctop`, resolved as the PRD's own contingency prescribes.
