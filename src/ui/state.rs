@@ -175,6 +175,8 @@ pub struct State {
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
+    /// OpenTelemetry data for this session, when the receiver is running.
+    pub otel: Option<crate::otel::SessionData>,
     /// Colours and glyphs for this terminal.
     pub theme: crate::theme::Theme,
     /// Session picker overlay (`L`).
@@ -423,6 +425,21 @@ impl State {
             }
             _ => {}
         }
+    }
+
+    /// Take the receiver's data for this session: exact tool durations by
+    /// tool_use_id, per-tool duration samples, TTFT.
+    pub fn apply_otel(&mut self, data: &crate::otel::SessionData) {
+        for t in &data.tool_results {
+            if let (Some(id), Some(d)) = (&t.tool_use_id, t.duration_ms) {
+                if let Some(c) = self.tools.get(id) {
+                    let start = c.started_at.unwrap_or(t.at_ms - d as i64);
+                    self.tools.set_exact_duration(id, start, start + d as i64);
+                }
+            }
+        }
+        self.tools.otel_durations = data.durations_by_tool();
+        self.otel = Some(data.clone());
     }
 
     /// Take a status-line sample: exact context, plan, rate limits.

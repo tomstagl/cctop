@@ -47,6 +47,9 @@ struct InstallArgs {
     /// Apply without asking.
     #[arg(long, short = 'y')]
     yes: bool,
+    /// Print the telemetry env block for settings.json (never written).
+    #[arg(long)]
+    otel: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -107,6 +110,9 @@ struct RunArgs {
     /// Render interval cap in milliseconds (100–2000).
     #[arg(long)]
     refresh_ms: Option<u64>,
+    /// Host an OTLP/HTTP receiver (loopback only) for Claude Code telemetry.
+    #[arg(long, value_name = "ADDR", num_args = 0..=1, default_missing_value = cctop::otel::DEFAULT_ADDR)]
+    otlp: Option<String>,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -246,6 +252,9 @@ fn main() {
             let _ = args.md;
             print!("{}", registry::markdown());
         }
+        Command::Install(a) if a.otel => {
+            print!("{}", cctop::otel::env_block(cctop::otel::DEFAULT_ADDR));
+        }
         Command::Install(a) => {
             let path = cctop::install::settings_path();
             if let Err(e) =
@@ -340,6 +349,7 @@ fn run(args: RunArgs) {
         layout,
         theme,
         refresh_ms,
+        otlp,
     } = args;
     let (transcript, session_info): (PathBuf, SessionInfo) =
         match cctop::load::resolve(&target(&attach)) {
@@ -419,6 +429,27 @@ fn run(args: RunArgs) {
 
     app.persist_config = true;
     cctop::attach::attach(&mut app, &transcript, session_info, true);
+    if let Some(addr) = otlp {
+        match cctop::otel::serve(&addr) {
+            Ok((store, bound)) => {
+                app.state.set_toast(format!("OTLP receiver on {bound}"));
+                app.tick_hooks.push(Box::new(move |state: &mut State| {
+                    let st = store.lock().unwrap();
+                    if let Some(d) = st.sessions.get(&state.session.session_id) {
+                        if state.otel.as_ref() != Some(d) {
+                            let d = d.clone();
+                            drop(st);
+                            state.apply_otel(&d);
+                        }
+                    }
+                }));
+            }
+            Err(e) => {
+                eprintln!("cctop: --otlp: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     if let Err(e) = app::run_tui(app) {
         eprintln!("cctop: {e}");
         std::process::exit(1);

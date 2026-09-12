@@ -68,6 +68,12 @@ impl Panel for TurnPanel {
             }
             None => l1.push(Span::styled("no turn yet", dim)),
         }
+        if let Some(ttft) = state.otel.as_ref().and_then(|o| o.last_ttft_ms()) {
+            l1.push(Span::styled(
+                format!(" · ttft {}", fmt::short_ms(ttft)),
+                dim,
+            ));
+        }
         if let Some(c) = &state.cost.authoritative {
             let retry = c
                 .total_api_duration

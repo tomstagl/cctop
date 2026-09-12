@@ -93,6 +93,10 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "hint": "run cctop install",
     "source": "missing"
   },
+  "otel": {
+    "hint": "run cctop with --otlp and export telemetry (cctop install --otel)",
+    "source": "missing"
+  },
   "permission_waits": {
     "hint": "run cctop install",
     "source": "missing"

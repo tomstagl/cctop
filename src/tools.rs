@@ -110,6 +110,8 @@ pub struct Stats {
     pub calls: Vec<Call>,
     index: HashMap<String, usize>,
     turn: usize,
+    /// Exact per-tool durations from OpenTelemetry, keyed by display name.
+    pub otel_durations: HashMap<String, Vec<u64>>,
 }
 
 impl Stats {
@@ -201,7 +203,11 @@ impl Stats {
         groups
             .into_iter()
             .map(|(name, calls)| {
-                let mut durs: Vec<u64> = calls.iter().filter_map(|c| c.duration_ms).collect();
+                let otel = self.otel_durations.get(&name).filter(|v| !v.is_empty());
+                let mut durs: Vec<u64> = match otel {
+                    Some(v) => v.clone(),
+                    None => calls.iter().filter_map(|c| c.duration_ms).collect(),
+                };
                 durs.sort_unstable();
                 (
                     name.clone(),
@@ -214,9 +220,10 @@ impl Stats {
                         p95_ms: percentile(&durs, 0.95),
                         last_call_at: calls.iter().filter_map(|c| c.started_at).max(),
                         tokens_to_ctx: calls.iter().map(|c| c.result_tokens_est).sum(),
-                        approx: calls
-                            .iter()
-                            .any(|c| c.duration_ms.is_some() && c.approx_duration),
+                        approx: otel.is_none()
+                            && calls
+                                .iter()
+                                .any(|c| c.duration_ms.is_some() && c.approx_duration),
                     },
                 )
             })

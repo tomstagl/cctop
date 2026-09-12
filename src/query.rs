@@ -91,6 +91,20 @@ pub fn summary(state: &State) -> Value {
         },
         "queued_prompts": m(state.agg.queued_prompts, "count", "queued_prompts", false),
         "advice_count": state.advice.len(),
+        "otel": match &state.otel {
+            Some(o) => json!({
+                "tokens": o.tokens,
+                "cost": m(o.cost_usd, "USD", "cost", false),
+                "lines_added": o.lines_added,
+                "lines_removed": o.lines_removed,
+                "active_time_s": o.active_time_s,
+                "api_requests": o.api_requests.len(),
+                "api_errors": o.api_errors,
+                "ttft_ms": o.last_ttft_ms().map(|t| m(t, "ms", "api_time", false)),
+                "tool_results": o.tool_results.len(),
+            }),
+            None => missing("run cctop with --otlp and export telemetry (cctop install --otel)"),
+        },
     })
 }
 

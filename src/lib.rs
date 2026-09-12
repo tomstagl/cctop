@@ -19,6 +19,7 @@ pub mod install;
 pub mod ledger;
 pub mod load;
 pub mod metrics;
+pub mod otel;
 pub mod prefix;
 pub mod procs;
 pub mod query;
