@@ -4,8 +4,8 @@
 // the engine's own events (model.ts) and, when the binary is installed, from
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
-import type { EngineInterface, Register, Timer, ToolCallResult } from 'claude-code';
-import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model } from './model';
+import type { ElementTable, EngineInterface, Register, RenderElement, Timer, ToolCallResult } from 'claude-code';
+import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model, type View } from './model';
 import { createPoller, type Poller, type PollerEngine } from './poller';
 import { renderView } from './views/index';
 
@@ -18,6 +18,19 @@ const COMMAND = 'cctop-pane';
 const USAGE_POLL_MS = 1000;
 const VERSION_TIMEOUT_MS = 3000;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
+// The views in view-bar order; the hotkey is the 1-based position.
+const VIEWS: { view: View; label: string }[] = [
+  { view: 'overview', label: 'Overview' },
+  { view: 'tools', label: 'Tools' },
+  { view: 'agents', label: 'Agents' },
+  { view: 'files', label: 'Files' },
+  { view: 'events', label: 'Events' },
+  { view: 'advisor', label: 'Advisor' },
+];
+const USAGE = `usage: /${COMMAND} [${VIEWS.map((v) => v.view).join('|')}|close]`;
+// The `$.store` key under which `{ open, view }` survives a reload (restored
+// at session.start by US-008).
+const STORE_KEY = 'pane';
 
 // Module state: one Model per loaded module (a hot reload starts a fresh
 // environment, and `register` resets it). The helpers that take `$` are
@@ -109,6 +122,74 @@ function startUsageTimer($: EngineInterface): void {
   });
 }
 
+// Remembers `{ open, view }` so the next session.start can reopen the pane
+// on the same view.
+function persistPane($: EngineInterface): void {
+  $.store
+    .set(STORE_KEY, { open: model.open, view: model.view })
+    .catch((err: unknown) => $.ui.log(`cctop: store.set failed: ${String(err)}`));
+}
+
+// Opens the pane (an open id is merely retitled) on `view` when given. Never
+// asks for `focus`: the keyboard stays the person's.
+async function openPane($: EngineInterface, view?: View): Promise<void> {
+  await $.ui.open({ id: PANE_ID, title: 'cctop' });
+  model = { ...model, open: true, view: view ?? model.view };
+  if (model.binary === 'present') poller?.start();
+  persistPane($);
+}
+
+async function closePane($: EngineInterface): Promise<void> {
+  await $.ui.close({ id: PANE_ID });
+  model = { ...model, open: false };
+  persistPane($);
+}
+
+// A view-bar press: the view changes, the choice is remembered, the pane
+// redraws.
+function selectView($: EngineInterface, view: View): void {
+  model = { ...model, view };
+  persistPane($);
+  $.ui.invalidate('ui.render');
+}
+
+// The view bar: `1 Overview · 2 Tools · …` as plain Buttons whose hotkeys
+// act while the pane is focused. Buttons that do not fit on one line
+// continue on the next, so the bar never overflows a narrow pane.
+function viewBar($: EngineInterface, el: Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>, columns: number): RenderElement {
+  const { Box, Text, Button } = el;
+  const lines: RenderElement[][] = [[]];
+  let used = 0;
+  VIEWS.forEach(({ view, label }, i) => {
+    const hotkey = String(i + 1);
+    // `1: Overview` on the engine; one more for the harness's `[1 Overview]`.
+    const width = hotkey.length + 3 + label.length;
+    const line = lines[lines.length - 1];
+    if (line.length > 0) {
+      if (used + 3 + width > columns) {
+        lines.push([]);
+        used = 0;
+      } else {
+        line.push(<Text wrap="truncate"> · </Text>);
+        used += 3;
+      }
+    }
+    lines[lines.length - 1].push(
+      <Button key={view} label={label} hotkey={hotkey} plain onPress={() => selectView($, view)} />,
+    );
+    used += width;
+  });
+  return (
+    <Box flexDirection="column">
+      {lines.map((line, i) => (
+        <Box key={`view-bar-${i}`} flexDirection="row">
+          {line}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 export const register: Register = (on) => {
   model = initialModel();
   stopUsageTimer();
@@ -195,11 +276,26 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on('command.run', { command: COMMAND }, async ($) => {
-    await $.ui.open({ id: PANE_ID, title: 'cctop' });
-    model = { ...model, open: true };
-    if (model.binary === 'present') poller?.start();
-    return { text: 'cctop pane opened' };
+  // `/cctop-pane` toggles the pane, `/cctop-pane <view>` opens it on that
+  // view, `/cctop-pane close` closes it; anything else prints the usage.
+  on('command.run', { command: COMMAND }, async ($, e) => {
+    const arg = e.args.trim();
+    if (arg === 'close') {
+      await closePane($);
+      return { text: 'cctop pane closed' };
+    }
+    if (arg === '') {
+      if (model.open) {
+        await closePane($);
+        return { text: 'cctop pane closed' };
+      }
+      await openPane($);
+      return { text: 'cctop pane opened' };
+    }
+    const view = VIEWS.find((v) => v.view === arg);
+    if (view === undefined) return { text: USAGE };
+    await openPane($, view.view);
+    return { text: `cctop pane opened on ${view.label}` };
   }).catch(($, _e, next) => {
     $.ui.log(`cctop: /${COMMAND} failed: ${next.error.message ?? next.error.kind}`);
     return { text: 'cctop pane could not be opened' };
@@ -211,10 +307,23 @@ export const register: Register = (on) => {
     const el = $.ui.resolve(e);
     const { Box, Text } = el;
     const now = $.clock.now();
-    // The view, then the state of the binary and its query verbs beneath it.
+    const columns = e.props.bodyColumns;
+    // Inline (the classic renderer's few rows above the prompt): the header
+    // and the Context and Limits lines only, no view bar.
+    if (e.props.placement === 'inline') {
+      return (
+        <Box flexDirection="column">
+          {renderView(model, el, columns, 'inline', now)}
+          {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
+        </Box>
+      );
+    }
+    // Docked: the view bar, the view, then the state of the binary and its
+    // query verbs beneath it.
     return (
       <Box flexDirection="column">
-        {renderView(model, el, e.props.bodyColumns, e.props.placement, now)}
+        {viewBar($, el, columns)}
+        {renderView(model, el, columns, 'dock', now)}
         {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
         {model.stale && <Text wrap="truncate">cctop query stale</Text>}
         {unsupportedVerbs(model).map((verb) => (

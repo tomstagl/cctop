@@ -133,8 +133,8 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "The usage line names the real command: `usage: /cctop-pane [overview|tools|agents|files|events|advisor|close]` (see US-001). `{ open, view }` is persisted under `$.store` key `pane` on open, close and every view switch; US-008 reads it back. The d.ts says a Button `hotkey` presses `where the site honours one` and names only the AbovePrompt band, so whether a docked Pane fires `1`-`6` is a live check for US-010, not something the harness can settle. The bar wraps onto a second row below 76 body columns (greedy line fill over `[n Label]` widths) so it never overflows."
     },
     {
       "id": "US-008",
