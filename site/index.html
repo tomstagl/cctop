@@ -118,7 +118,7 @@ footer a{color:var(--muted)}
   </div>
   <p class="subline">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></p>
   <div class="demo">
-    <video autoplay muted loop playsinline poster="assets/two-pane.webp" width="1280" height="640">
+    <video muted loop playsinline preload="none" poster="assets/two-pane.webp" width="1280" height="640">
       <source src="assets/demo.webm" type="video/webm">
     </video>
     <img class="still" src="assets/two-pane.webp" alt="Claude Code on the left, cctop attached in a right-hand pane" width="1280" height="640" loading="lazy">
@@ -248,6 +248,13 @@ claude plugin add tomstagl/cctop    # adds /cctop and cctop-insights
   if(!b||!c||!navigator.clipboard)return;
   b.hidden=false;
   b.addEventListener('click',function(){navigator.clipboard.writeText(c.textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)})});
+})();
+(function(){
+  // The demo decodes in software on weak devices; start it when it scrolls into view.
+  var v=document.querySelector('.demo video');
+  if(!v||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  if(!('IntersectionObserver' in window)){v.autoplay=true;v.load();return;}
+  new IntersectionObserver(function(es,o){if(es[0].isIntersecting){v.play();o.disconnect()}},{rootMargin:'200px'}).observe(v);
 })();
 </script>
 </body>
