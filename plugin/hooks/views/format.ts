@@ -67,6 +67,20 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(s / 86400)}d ${two(Math.floor((s % 86400) / 3600))}h`;
 }
 
+/** Milliseconds as the TUI's fmt::short_ms: `123ms`, `1.6s`, then duration_ms. */
+export function formatShortMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(Math.max(0, ms))}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return formatDuration(ms);
+}
+
+/** Bytes as the TUI's fmt::bytes: `1.2 GB`, `41 MB`, `512 kB`. */
+export function formatBytes(b: number): string {
+  if (b >= 1 << 30) return `${(b / (1 << 30)).toFixed(1)} GB`;
+  if (b >= 1 << 20) return `${Math.floor(b / (1 << 20))} MB`;
+  return `${Math.floor(b / 1024)} kB`;
+}
+
 /** Dollars as the TUI's fmt::usd: `$4.37`, `$12.5`, `$137`, `$0.004`. */
 export function formatUsd(v: number): string {
   if (v >= 100) return `$${v.toFixed(0)}`;

@@ -7,7 +7,7 @@
 import type { EngineInterface, Register, Timer, ToolCallResult } from 'claude-code';
 import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, type Action, type Binary, type Model } from './model';
 import { createPoller, type Poller, type PollerEngine } from './poller';
-import { renderOverview } from './views/overview';
+import { renderView } from './views/index';
 
 const PANE_ID = 'cctop';
 // The native command is /cctop-pane, not /cctop: the engine reserves /cctop
@@ -214,7 +214,7 @@ export const register: Register = (on) => {
     // The view, then the state of the binary and its query verbs beneath it.
     return (
       <Box flexDirection="column">
-        {renderOverview(model, el, e.props.bodyColumns, e.props.placement, now)}
+        {renderView(model, el, e.props.bodyColumns, e.props.placement, now)}
         {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
         {model.stale && <Text wrap="truncate">cctop query stale</Text>}
         {unsupportedVerbs(model).map((verb) => (

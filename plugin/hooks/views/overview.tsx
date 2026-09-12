@@ -23,7 +23,8 @@ export const TWO_COLUMN_MIN = 60;
 /** The narrowest label a value Box leaves room for. */
 const MIN_LABEL = 8;
 
-export type Color = 'green' | 'yellow' | 'red';
+// `cyan` stands in for the TUI's accent (running, hooks, agents).
+export type Color = 'green' | 'yellow' | 'red' | 'cyan';
 
 export type Row = {
   /** The metric id as docs/metrics.md names it. */
