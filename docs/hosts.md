@@ -8,9 +8,19 @@ and quitting it (`q`) cannot signal the session.
 When the session isn't running inside a multiplexer, there is no existing
 pane to split — the current terminal window belongs to Claude Code itself.
 In that case `split` falls back to opening a *new window* in the detected
-terminal app (Terminal.app or iTerm2) instead of a pane, so the dashboard is
-still one command away rather than requiring the user to manually open a
-second terminal.
+terminal app (Terminal.app or iTerm2 on macOS; on Linux the first emulator
+of `$TERMINAL`, `x-terminal-emulator`, `gnome-terminal`, `konsole`,
+`alacritty`, `kitty`, `xterm` that `which` resolves) instead of a pane, so
+the dashboard is still one command away rather than requiring the user to
+manually open a second terminal.
+
+Idempotency: `cctop run` writes `~/.cctop/run/<session>.pid` on start and
+removes it on exit. `cctop split` for a session whose pid file names a live
+process (`kill(pid, 0)` semantics, as the registry's `is_alive`) prints
+`cctop already running for this session (pid N)` and exits 0 without opening
+anything; a stale pid file (process gone) is ignored. The function-hooks
+pane's marker (`~/.cctop/pane/<session>.json`, checked first) short-circuits
+the same way.
 
 | Host | Detected by | Command issued | Verified |
 |---|---|---|---|
@@ -21,7 +31,14 @@ second terminal.
 | iTerm2 (inside a session) | `$ITERM_SESSION_ID` | `osascript -e 'tell application "iTerm2" … split vertically with default profile'` | not yet |
 | iTerm2 (new window) | `$TERM_PROGRAM=iTerm.app`, no `$ITERM_SESSION_ID` split context | `osascript -e 'tell application "iTerm2" to tell (create window with default profile) … write text'` | not yet |
 | Terminal.app (new window) | `$TERM_PROGRAM=Apple_Terminal` | writes `~/.cctop/run/<id>.command` (`exec cctop run --session <id>`), `open -na Terminal ~/.cctop/run/<id>.command`, then `osascript -e 'tell application "Terminal" … set bounds of front window to …'` to butt the new window against the old one | Verified: pending (see docs/verification/pane.md) |
-| none | — | prints the manual command, exit code 3 | yes |
+| Linux, `$TERMINAL` | Linux, no multiplexer, `$TERMINAL` set and on `PATH` | `$TERMINAL -e cctop run --session <id>` (`--` instead of `-e` if it is gnome-terminal; kitty's shape if it is kitty) | Verified: pending |
+| Linux, x-terminal-emulator | Linux, no multiplexer, `x-terminal-emulator` on `PATH` (Debian alternatives) | `x-terminal-emulator -e cctop run --session <id>` | Verified: pending |
+| Linux, gnome-terminal | Linux, no multiplexer, `gnome-terminal` on `PATH` | `gnome-terminal -- cctop run --session <id>` | Verified: pending |
+| Linux, konsole | Linux, no multiplexer, `konsole` on `PATH` | `konsole -e cctop run --session <id>` | Verified: pending |
+| Linux, alacritty | Linux, no multiplexer, `alacritty` on `PATH` | `alacritty -e cctop run --session <id>` | Verified: pending |
+| Linux, kitty | Linux, no multiplexer, `kitty` on `PATH` | `kitten @ launch --type=os-window cctop run --session <id>` when `$KITTY_LISTEN_ON` is set (in practice `$KITTY_LISTEN_ON` already selects the Kitty split row above), else `kitty -e cctop run --session <id>` | Verified: pending |
+| Linux, xterm | Linux, no multiplexer, `xterm` on `PATH` | `xterm -e cctop run --session <id>` | Verified: pending |
+| none | — | prints the manual command (naming the Linux fallbacks), exit code 3 | yes |
 
 Reproduce the tmux check without a live Claude Code session:
 

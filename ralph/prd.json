@@ -217,8 +217,8 @@
         "Tests pass (`cargo test`)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Host::LinuxWindow(String) (Host drops Copy; name()/opens_new_window() take &self) chosen by detect_with(env, which, linux) — detect() passes a `which`-based lookup and cfg!(target_os = \"linux\") — from $TERMINAL then LINUX_TERMINALS in the AC's order, first that `which` resolves; command() shapes argv by the basename of the resolved program (`-e` generic, `--` for gnome-terminal, `kitten @ launch --type=os-window` for kitty when KITTY_LISTEN_ON is set else `kitty -e`), so `$TERMINAL=/usr/bin/gnome-terminal` also gets `--`. Idempotency: split::PidFile::write(home, session) writes ~/.cctop/run/<session>.pid (own pid) and its Drop removes it; main.rs run() holds the guard across the interactive TUI only (not headless --once); split::running_pid(home, session) (running_pid_with for a mocked `alive`) reads it and checks registry::pid_alive; run() prints `cctop already running for this session (pid N)` and returns 0 after the pane-marker check. manual_hint names the Linux list; iTerm2 paths untouched. docs/hosts.md: intro names the Linux order, an idempotency paragraph, one row per Linux terminal (Verified: pending). Tests: linux_falls_back_to_the_first_terminal_on_path, linux_window_argv_per_terminal, pid_file_live_stale_missing — 181 cargo tests (was 178); make check green; smoke-tested the binary: live pid → exit 0 one-liner, stale pid → falls through."
     }
   ]
 }
