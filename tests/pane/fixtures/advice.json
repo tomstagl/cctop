@@ -1,0 +1,11 @@
+[
+  {
+    "action": "Interrupt and give the fix or the missing context yourself in one prompt.",
+    "doc_key": "A15",
+    "evidence": "1.4k tokens of error output re-read across the retries",
+    "explain": "When the same command fails repeatedly with the same error, each retry re-injects the full error output and the model rarely finds a new angle. Interrupt, read the error yourself, and give the fix or the missing context in one prompt.",
+    "headline": "`Bash make check` failed 3× with the same input",
+    "rule": "A15",
+    "saving": "~481/turn"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "name": "cctop-pane",
+  "private": true,
+  "description": "Toolchain for the cctop plugin's function-hooks module (plugin/hooks); the plugin itself ships without it",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "rm -rf .test-build && tsc -p tsconfig.test.json && node --test '.test-build/tests/pane/**/*.test.js'"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

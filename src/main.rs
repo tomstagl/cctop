@@ -436,6 +436,13 @@ fn run(args: RunArgs) {
     }
 
     app.persist_config = true;
+    // `~/.cctop/run/<session>.pid` for the TUI's lifetime, so `cctop split`
+    // can refuse to open a second dashboard for the same session; the
+    // guard removes it on return.
+    let _pid_file = std::env::var("HOME")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .and_then(|home| cctop::split::PidFile::write(&home, &session_info.session_id));
     cctop::attach::attach(&mut app, &transcript, session_info, true);
     if let Some(addr) = otlp {
         match cctop::otel::serve(&addr) {

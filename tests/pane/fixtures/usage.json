@@ -1,0 +1,8 @@
+{
+  "context": { "tokens": 396365, "window": 1000000, "percent": 40 },
+  "rateLimits": [
+    { "kind": "five_hour", "percentUsed": 42, "resetsAt": "2026-09-12T14:30:00.000Z" },
+    { "kind": "seven_day", "percentUsed": 17, "resetsAt": "2026-09-15T00:00:00.000Z" }
+  ],
+  "cost": { "usd": 9.9035 }
+}

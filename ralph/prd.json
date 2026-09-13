@@ -1,699 +1,224 @@
 {
   "project": "cctop",
-  "branchName": "ralph/cctop-v1",
-  "description": "cctop — a btop-style live TUI that shows Claude Code internals (context, tokens, cost, limits, tools, agents, files, advisor) in a pane beside a running session. Rust + ratatui. Source PRD: tasks/prd-cctop.md v1.1.",
+  "branchName": "ralph/cctop-pane",
+  "description": "cctop pane — render the cctop dashboard inside Claude Code's own TUI as a docked pane through the function-hooks plugin API (early access, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1), with `cctop split` kept as the fallback. TSX hooks module in plugin/hooks/ + Rust split fallback fixes. Source PRD: tasks/prd-cctop-pane.md v1.1. API contract: plugin/.claude/types/claude-code.d.ts (Claude Code 2.1.269). Live-terminal checks are NOT done by the agent: they are collected in US-010 as a checklist for a person; every other story is verified by `npm run typecheck`, `npm test` (Node 22, headless harness), `claude plugin validate --strict ./plugin` and `cargo test`.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Scaffold the Rust workspace and CI",
-      "description": "As a developer, I need a buildable `cctop` binary with the core dependencies and CI so that every later story lands on a green base.",
+      "title": "Toolchain, checked-in types and hooks-module skeleton",
+      "description": "As a developer, I want a typechecked, testable hooks module skeleton that Claude Code loads, so that every later story lands on a green base.",
       "acceptanceCriteria": [
-        "Cargo project `cctop` (edition 2021, Rust stable) with deps: ratatui, crossterm, tokio (rt-multi-thread, fs, time), notify, serde, serde_json, clap (derive), anyhow, thiserror, toml, insta (dev)",
-        "`cctop --version` prints the crate version; `cctop --help` lists subcommands `run` (default), `query`, `metrics`, `install`, `uninstall`, `hook`, `statusline-shim`, `split`, `advise`, `report`, `export` as stubs that exit 0 with `not implemented`",
-        "`.github/workflows/ci.yml` runs fmt check, clippy -D warnings, test on macOS and Ubuntu",
-        "`fixtures/` directory exists with a README explaining that fixture transcripts are anonymised copies of real `~/.claude/projects` files",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`plugin/.claude/types/claude-code.d.ts` (already written by `/plugin-types` for 2.1.269) is committed; `plugin/.claude/types/claude-code-mcp.d.ts` stays gitignored (it is machine-specific)",
+        "Repo-root `package.json` with `typescript` (>= 5.4) as the ONLY devDependency and scripts `typecheck` (`tsc --noEmit`) and `test`; repo-root `tsconfig.json` as the d.ts header prescribes: target/lib es2023, `types: []`, module esnext, moduleResolution bundler, strict, `jsx: \"react\"`, `jsxFactory: \"h\"`, `jsxFragmentFactory: \"Fragment\"`, `include: [\"plugin/.claude/types\", \"plugin/hooks\", \"tests/pane\"]`",
+        "`npm test` compiles `plugin/hooks` and `tests/pane` with a second tsconfig (`tsconfig.test.json`, `noEmit: false`, `outDir: .test-build`, module commonjs or nodenext so `node --test` can load it) and runs `node --test .test-build/tests/pane`; one placeholder test passes; `.test-build/` and `node_modules/` are gitignored",
+        "Nothing under `plugin/` besides `hooks/`, `skills/`, `.claude-plugin/`, `.claude/types/claude-code.d.ts`, `README.md`: no package.json, no node_modules, no tests",
+        "`plugin/hooks/hooks.json` = `{ \"modules\": [\"./pane.tsx\"] }`; `plugin/hooks/pane.tsx` exports `register: Register` that (a) calls `$.command.register({ name: \"cctop\", description: \"Open the cctop dashboard pane\", argumentHint: \"[view|close]\", immediate: true })` inside an `engine.create` or `session.start` hook, (b) registers `on(\"command.run\", { command: \"cctop\" }, ...)` that calls `$.ui.open({ id: \"cctop\", title: \"cctop\" })` and returns `{ text: \"cctop pane opened\" }`, (c) registers `on(\"ui.render\", { component: \"Pane\" }, ...)` that for `e.requestId === \"cctop\"` returns one `<Text>cctop</Text>` from `$.ui.resolve(e)` and otherwise `next(e)`",
+        "`claude plugin validate --strict ./plugin` passes",
+        "`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --plugin-dir ./plugin --debug --max-turns 1 'say ok'` exits 0 and its debug output contains the module load line and no `refused` line for the module; the exact command and grep are written to `docs/verification/pane.md` (create the file with a header explaining that `Result:` lines are filled by a person)",
+        "`.github/workflows/ci.yml` gains a job: `npm ci`, `npm run typecheck`, `npm test`, and `claude plugin validate --strict ./plugin` guarded by `if command -v claude`",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "PRD ref: US-001/003"
+      "notes": "Native command is `cctop-pane`, not `cctop`: on 2.1.269 `$.command.register({ name: \"cctop\" })` is refused (\"it is the plugin's /cctop:cctop\"). PRD open question 1 resolved as the PRD prescribed; `/cctop` keeps resolving to the skill. Later stories that say `/cctop [view|close]` for the native command mean `/cctop-pane`."
     },
     {
       "id": "US-002",
-      "title": "Session registry reader",
-      "description": "As a developer, I need to parse `~/.claude/sessions/<pid>.json` files so that cctop knows which Claude Code sessions exist.",
+      "title": "Headless render harness and fixtures",
+      "description": "As a developer, I want to render the pane's element tree to plain text without Claude Code, so that every view can be asserted against fixture data in `npm test`.",
       "acceptanceCriteria": [
-        "`registry::Session` struct with fields pid, session_id, cwd, name, status (busy|idle|other), started_at, updated_at, version, kind, messaging_socket_path; unknown fields ignored",
-        "`registry::list(dir) -> Vec<Session>` reads every `*.json` in the directory; malformed files are skipped with a warning, not an error",
-        "`Session::is_alive()` checks the pid with `kill(pid, 0)` semantics (libc) and reports dead registry entries",
-        "Fixture: three registry files (busy, idle, dead pid) under `fixtures/sessions/`; tests cover all three",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`tests/pane/harness.ts` exports `fakeEngine(opts)` returning a `$` whose `ui.resolve` returns a fake element table (`Box`, `Text`, `Button`, `Input`, `Select`, `Link`, `Code` as tagged factories usable through `h`), `ui.invalidate` counts calls per event, `ui.log` captures lines, `clock` has `now()`, `every()`/`after()` returning `{ cancel }` and a manual `tick(ms)` that fires due timers, `store` is an in-memory map, `process.run` answers from a scripted map keyed by `argv.join(' ')` (default: rejects), `session.usage/id/model/turns/cwd` answer scripted values, `fs.write/read/exists` use an in-memory map, `env` is a plain object",
+        "`tests/pane/harness.ts` exports `fakeOn()` returning an `on` that records `{ event, matcher, handler }` registrations and a `dispatch(event, e, core?)` that runs the matching handlers as a chain with a working `next(e)` ending in `core(e)`",
+        "`tests/pane/render.ts` exports `renderToText(tree, columns, rows?) => string[]`: `Box` lays out children by `flexDirection` (`column` default, `row`), honours `width`, `flexGrow`, `paddingX/paddingLeft/paddingRight`; `Text` honours `wrap` (`wrap` = soft wrap, any `truncate*` = cut with `…`), ignores colours; `Button` renders `[<hotkey> <label>]`; `Fragment`/unknown render their children; no output row is longer than `columns`",
+        "`tests/pane/fixtures/` holds `summary.json`, `tools.json`, `files.json`, `agents.json`, `advice.json`, `events.json` produced by `cargo run -q -- query <verb> --session fixtures/session-a.jsonl`, plus a hand-written `usage.json` in the `SessionUsage` shape (`context.tokens/window/percent`, `rateLimits[{kind, percentUsed, resetsAt}]`, `cost.usd`); `scripts/pane-fixtures.sh` regenerates the query files",
+        "A test renders the US-001 skeleton pane through `fakeEngine` + `fakeOn` at 50 and 80 columns and asserts the text `cctop` is present and no row exceeds the width",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "PRD ref: US-001"
+      "notes": "`$.env` follows the d.ts (`get`/`set`, async); the plain object behind it is `$.env.values`. `fakeOn($?)` takes the engine to hand to dispatched hooks (makes its own when omitted). Importing tests/pane/harness.ts installs the JSX globals `h`/`Fragment`, which Node lacks; a test that writes JSX must be a `.tsx` file (tests/pane/harness.test.tsx). Fixture loader: tests/pane/fixture.ts `fixture(name)`."
     },
     {
       "id": "US-003",
-      "title": "Session discovery precedence",
-      "description": "As a user, I want `cctop` with no arguments to attach to the session in my current terminal window so that I never copy a session id.",
+      "title": "Model, reducer and engine-native core metrics",
+      "description": "As a user without `cctop install`, I want context, cost, rate limits and the current turn tracked live from the engine, so that the pane is useful with zero setup.",
       "acceptanceCriteria": [
-        "Resolution order: `--session <id|name|pid>` → `--cwd <path>` → tmux pane match (`tmux list-panes -F '#{pane_tty} #{pane_pid}'`, compare with the session pid's controlling TTY via `ps -o tty= -p`) → zellij (`$ZELLIJ` present: most recent busy session with cwd == $PWD) → most recently updated busy session with cwd == $PWD → error",
-        "`$CLAUDE_SESSION_ID` env var, when set, is used before all fallbacks except explicit `--session`",
-        "No session found: message `no Claude Code session found (try --session or --wait)` and exit code 2; `--wait` polls every 1 s until one appears",
-        "Unit tests for precedence with the fixture registry and injected env/tmux outputs (tmux call behind a trait so it can be mocked)",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`plugin/hooks/model.ts` exports the `Model` type (`usage: SessionUsage | null`, `usageAt`, `turn: { number, state: 'idle'|'busy'|'waiting', startedAt, lastDurationMs, lastReason, runningTool: { name, startedAt } | null }`, `tools: Record<name, { calls, errors, durationsMs: number[], tokensToCtx }>`, `compactions`, `binary: 'unknown'|'present'|'missing'`, `view`, `open`, `stale`, `placement`) and `initialModel()`",
+        "`plugin/hooks/model.ts` exports a pure `reduce(model, action) => Model` where actions are `session.start`, `turn.start`, `turn.complete` (`durationMs`, `reason`), `tool.start` (name, at), `tool.end` (name, at, isError, resultChars), `session.compact`, `usage` (a `SessionUsage` + at); no `$` inside",
+        "`plugin/hooks/pane.tsx` registers hooks for `session.start`, `turn.start`, `turn.complete`, `session.compact`, and `tool.call` wrapping `next(e)`: it records the start timestamp, calls `next(e)`, then records the end with `isError` and `text.length` from the result; the hook's own work before `next(e)` is timestamps/counters only",
+        "`$.session.usage()` is read only from a `$.clock.every(1000)` timer that runs while `turn.state === 'busy'` and once after `turn.complete` and `session.start`; it is never awaited before `next(e)` in any hook",
+        "Every registration has `.catch(err => $.ui.log(...))`; every hook returns what `next(e)` returned, unchanged",
+        "Tests (`tests/pane/reducer.test.ts`): a scripted sequence start -> tool.call x3 (one `isError: true`, result texts of 400/4000/40 chars) -> compact -> complete yields calls 3, errors 1, p50 of the durations, `tokensToCtx` = ceil(chars/4) summed, `lastReason`, compactions 1; a usage action from `fixtures/usage.json` produces formatted rows `tokens / window (percent %)`, `five_hour`/`seven_day` `percentUsed` with a countdown from a fixed `now` to `resetsAt`, and `cost.usd` with two decimals",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "PRD ref: US-001"
+      "notes": "`tool.end` carries `startedAt` besides name/at/isError/resultChars (the hook keeps it in its closure) so concurrent calls of one tool time themselves apart and only the matching call clears `runningTool`. `turn.state` `waiting` is declared but never set yet (permission waits need `tool.check`, PRD open question 4). Model state and the `$`-taking helpers (`apply`, `readUsage`, `startUsageTimer`) live at module scope: `claude plugin validate --strict` refuses `$` passed to a closure. The render draws an interim turn/running-tool/usage list until US-005 replaces it with the Overview."
     },
     {
       "id": "US-004",
-      "title": "Transcript line model",
-      "description": "As a developer, I need typed, tolerant deserialisation of every transcript line kind so that parsing never fails on a new Claude Code version.",
+      "title": "Binary detection and query poller",
+      "description": "As a user with the `cctop` binary installed, I want the pane to pull deep metrics from `cctop query`, so that it matches the TUI.",
       "acceptanceCriteria": [
-        "`transcript::Line` enum tagged on `type` with variants: User, Assistant, System (subtype: turn_duration, stop_hook_summary, away_summary, other), CostState, PermissionMode, QueueOperation, FileHistorySnapshot, Attachment, Unknown(raw)",
-        "Assistant lines expose message.id, model, effort, requestId, timestamp, content blocks (text, tool_use{id,name,input}, thinking), usage (input, cache_creation, cache_read, output, thinking_tokens, cache_creation.ephemeral_5m/1h, speed, service_tier)",
-        "User lines expose timestamp, content blocks (text, tool_result{tool_use_id, content, is_error}), toolUseResult (raw serde_json::Value), isMeta",
-        "CostState exposes totalCostUSD, totalAPIDuration, totalAPIDurationWithoutRetries, totalToolDuration, totalLinesAdded/Removed, modelUsage map",
-        "Fixture `fixtures/session-a.jsonl` (≥ 300 lines, anonymised real transcript containing a 13-block assistant response, a cost-state line, turn_duration and stop_hook_summary lines); test asserts every line parses to a non-Unknown variant except the ones expected to be Unknown",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "On load (`session.start`), `$.process.run([\"cctop\", \"--version\"], { timeoutMs: 3000 })` sets `model.binary` to `present` (exit 0) or `missing` (rejects or non-zero); `missing` is shown as one header line `needs the cctop binary: brew install tomstagl/tap/cctop` and disables the poller",
+        "`plugin/hooks/poller.ts` exports `createPoller($, getModel, setModel)` with `start()`, `stop()`, `tick()`: each tick runs `cctop query <verb> --session <id>` for verbs `summary`, `tools`, `files`, `agents`, `advice`, `events` sequentially through ONE in-flight promise (a tick that starts while one runs is skipped), each with `timeoutMs: 5000`; the JSON is parsed into `model.query[verb]`",
+        "Cadence: 2000 ms while `turn.state === 'busy'`, 10000 ms otherwise, re-evaluated after every `turn.start`/`turn.complete`",
+        "A failed or non-JSON call keeps the previous `model.query[verb]`; `model.stale` becomes true when the last successful tick is older than 30 s",
+        "The verbs the binary supports are read once from `cctop query --help`; a verb absent there is never called and its section reads `unsupported by this cctop version`",
+        "Precedence documented in code: Context and Limits rows come from `model.usage` when present, else from `query.summary`; everything else from the query JSON",
+        "Every tick refreshes the marker file `~/.cctop/pane/<sessionId>.json` (see US-008) — stub the write here as `writeMarker($, model)` so US-008 only fills in the shape",
+        "Tests (`tests/pane/poller.test.ts`) with the scripted `process.run` and manual clock: busy cadence 2 s, idle 10 s; a slow (never-resolving) `summary` blocks further ticks without overlap; stale after 30 s of failures; `binary: missing` spawns no `query`; an unsupported verb is skipped",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "PRD ref: US-002"
+      "notes": "`claude plugin validate --strict` follows `$` only into functions declared in the same file, never across an import, so `createPoller` cannot take `$` itself: it takes `PollerEngine` (the slice of `$` it uses: clock.now/every, process.run, session.id, fs.write, ui.log, plus `home()` for `$.env.get(\"HOME\")`, whose name the validator reads off pane.tsx), built by the top-level `pollerEngine($)` in pane.tsx; the fake `$` is structurally assignable, so tests call `createPoller({ ...$, home }, getModel, setModel)`. The poller runs while the pane is open and the binary is present (US-008 adds the stop on ui.close); `reschedule()` re-arms the cadence after turn.start/turn.complete and is a no-op while stopped. A tick is successful when every called verb parsed; `stale` is judged in the timer callback before each tick, so a hung query flips it too. A failed `--help` leaves `verbs` null (every verb tried, help retried next tick). `writeMarker` already writes `{ version, sessionId, heartbeatAt, open }`; US-008 adds `openedAt` and the ui.close rewrite."
     },
     {
       "id": "US-005",
-      "title": "Transcript tailer with live follow",
-      "description": "As a user, I want new transcript lines reflected within 250 ms so that the dashboard is genuinely live.",
+      "title": "Overview view: header, Context, Tokens & Cost, Limits, Turn",
+      "description": "As a user, I want the four core panels in one compact Overview, so that the default pane is the TUI's top half.",
       "acceptanceCriteria": [
-        "`transcript::Tailer::open(path)` parses existing content from byte 0 and then follows appends using `notify` (kqueue/inotify) with a 1 s poll fallback",
-        "Partial trailing lines are buffered until `\\n` arrives; file truncation/rotation restarts from 0; unknown line types are passed through as `Unknown`",
-        "Emits parsed lines on a tokio mpsc channel; a test appends 50 lines to a temp file after open and receives all 50 in order within 500 ms",
-        "Benchmark test (ignored by default): a 10 MB fixture parses in < 500 ms",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`plugin/hooks/views/overview.tsx` exports `renderOverview(model, el, columns, placement, now)` returning a `RenderElement`",
+        "Header row: status (`busy`/`idle`/`waiting`), `turn <n>`, elapsed, model, effort, then badges `bin`/`shim`/`hooks` (dim when absent)",
+        "Context block: size / window / percent (from `model.usage` when present, else `summary.context`), velocity, turns until autocompact, compactions; Tokens & Cost block: cache read / write / fresh / output / thinking, hit ratio, TTL, cost, burn rate; Limits block: 5 h and 7 d percent, resets in, projected exhaustion; Turn block: state, elapsed, API vs tool time, waiting on, permission waits, queued prompts — field names as `docs/query.md` gives them for `summary`",
+        "Layout: `columns >= 60` puts Context+Tokens and Limits+Turn side by side in two-column rows; `< 60` stacks them; numbers right-aligned inside fixed-width `Box`es; every `Text` has `wrap=\"truncate\"`; colours are palette names only (a test greps the views for `#` colours and fails on any)",
+        "`≈` prefix on every value whose source object carries `approx: true`; each metric row has `key` equal to its id in `docs/metrics.md`",
+        "When `query.advice[0].severity` is `high`, its `headline` is the last Overview row",
+        "Missing binary: the Tokens & Cost breakdown, velocity and Advisor rows show one line `needs the cctop binary`; Context percent, cost, limits and the running tool still render from `model.usage`/`model.tools`",
+        "Tests (`tests/pane/overview.test.ts`): render from the fixtures at 50, 60 and 80 columns; assert expected fixture values appear, no row exceeds the width, `≈` where the fixture says `approx`, two-column layout only at >= 60, the missing-binary line when `binary: missing`",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "PRD ref: US-002"
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Usage aggregation with per-response deduplication and turn splitting",
-      "description": "As a developer, I need token usage counted once per API response and grouped into turns so that every cost and context number is correct.",
+      "title": "Detail views: Tools, Agents & MCP, Files, Events, Advisor",
+      "description": "As a user, I want the five remaining panels reachable in the pane, so that nothing from the TUI is lost.",
       "acceptanceCriteria": [
-        "`metrics::Usage` accumulates input, cache_write_5m, cache_write_1h, cache_read, output, thinking; assistant lines sharing a `message.id` contribute once (first occurrence wins)",
-        "Turn boundaries: a turn starts at a non-meta user line whose content has no tool_result block and ends before the next such line; each turn records API call count (distinct message ids), usage, model(s), effort, start/end timestamps",
-        "Cache TTL per call derived from `cache_creation.ephemeral_1h_input_tokens > 0` → 1h else 5m; session-level `observed_ttl` is the most recent",
-        "Context size per turn = cache_read + cache_creation + input of the turn's last API call",
-        "Test on the 13-block fixture asserts total output tokens equals the single response's count; test asserts turn count for session-a matches a hand-counted value",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`plugin/hooks/views/tools.tsx`: table of tool, calls, errors, p50, p95, tokens -> ctx from `query.tools.tools[]` (merged with `model.tools` for the running tool and its elapsed), then `top_ctx[]` as the five top consumers",
+        "`plugin/hooks/views/agents.tsx`: `agents[]` (type, state, elapsed, tokens), `mcp[]` (name, rss, calls, restarts), `tasks[]`",
+        "`plugin/hooks/views/files.tsx`: path, touches (reads/edits/writes), lines +/-, a `re-read` marker when `reread_warning`",
+        "`plugin/hooks/views/events.tsx`: the last 50 of `query.events` as `HH:MM:SS kind text`, newest at the bottom",
+        "`plugin/hooks/views/advisor.tsx`: ranked list of `rule`/`headline`/`saving`; the top item expanded with evidence, explain and action",
+        "Colour semantics as the TUI: hit ratio green >= 0.8, amber >= 0.5, red below; errors red; `≈` marking; `key` = metric id; every `Text` truncates; each view's tree is capped at 400 rows (a test feeds 1000 events and counts rows)",
+        "Missing binary: every detail view renders the single line `needs the cctop binary`",
+        "`plugin/hooks/views/index.ts` exports `renderView(model, el, columns, placement, now)` dispatching on `model.view` (`overview|tools|agents|files|events|advisor`)",
+        "Tests (`tests/pane/views.test.ts`): each view from the fixtures at 50 and 80 columns; expected values present; width respected; missing-binary line",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "PRD ref: US-005/018 · R1 R2"
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Cost model with pricing table and cost-state calibration",
-      "description": "As a user, I want cost figures that match Claude Code's own accounting so that I can trust the dollar amounts.",
+      "title": "Navigation, /cctop arguments and inline placement",
+      "description": "As a user, I want to switch views by hotkey or command and get a sensible pane in the classic renderer.",
       "acceptanceCriteria": [
-        "Bundled `pricing.toml` with per-model USD per MTok: input, cache_write_5m (1.25× input), cache_write_1h (2× input), cache_read (0.1× input), output; user override at `~/.config/cctop/pricing.toml` merged by model id",
-        "`metrics::Cost::estimate(usage, model)` uses the per-call TTL to choose the write price; unknown model → `None` (tokens only)",
-        "When a `cost-state` line exists, `Cost::authoritative` = totalCostUSD and per-model breakdown from modelUsage; `Cost::current()` = authoritative + estimate of calls newer than the cost-state line, flagged `approx: true` when any estimate contributes",
-        "Burn rate = cost over trailing 15 min × 4; tokens/min likewise; both computed from turn timestamps",
-        "Tests: estimate vs the fixture's cost-state total within 5 %; TTL price selection; unknown model",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "A view bar of `Button`s `1 Overview · 2 Tools · 3 Agents · 4 Files · 5 Events · 6 Advisor` with `hotkey` `1`..`6` and `plain`; `onPress` sets `model.view`, persists `{ open, view }` to `$.store` and calls `$.ui.invalidate(\"ui.render\")`",
+        "`command.run` for `cctop`: no args toggles the pane (`$.ui.open` / `$.ui.close`), `<view>` opens it on that view, `close` closes it, anything else answers `{ text: \"usage: /cctop [overview|tools|agents|files|events|advisor|close]\" }`; `$.ui.open` is never called with `focus`",
+        "`ui.render` returns only the header plus the Context and Limits lines when `e.props.placement === 'inline'`; the detail views and the view bar are omitted there",
+        "`ui.render` returns `next(e)` unchanged for any `e.requestId !== 'cctop'`",
+        "Tests (`tests/pane/command.test.ts`): dispatching `command.run` through `fakeOn` with `args` `''`, `tools`, `close`, `bogus` produces the expected `$.ui.open/close` calls, `model.view`, store content and text; `placement: 'inline'` output has no view bar; a `Pane` render for another `requestId` passes through",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "PRD ref: US-005 · R3"
+      "notes": "The usage line names the real command: `usage: /cctop-pane [overview|tools|agents|files|events|advisor|close]` (see US-001). `{ open, view }` is persisted under `$.store` key `pane` on open, close and every view switch; US-008 reads it back. The d.ts says a Button `hotkey` presses `where the site honours one` and names only the AbovePrompt band, so whether a docked Pane fires `1`-`6` is a live check for US-010, not something the harness can settle. The bar wraps onto a second row below 76 body columns (greedy line fill over `[n Label]` widths) so it never overflows."
     },
     {
       "id": "US-008",
-      "title": "Tool call pairing and per-tool statistics",
-      "description": "As a developer, I need tool_use and tool_result joined with durations and context cost so that the Tools panel and Advisor have their data.",
+      "title": "Refresh throttle, lifecycle, store restore and marker file",
+      "description": "As a user, I want the pane to be live without slowing the session down, and to survive reloads.",
       "acceptanceCriteria": [
-        "`tools::Call {id, name, input_summary (≤ 30 chars), started_at, finished_at, duration (Option), is_error, result_tokens_est = len(result_text)/4, approx_duration: bool}` built by pairing tool_use (assistant timestamp) with tool_result (user timestamp)",
-        "MCP tools named `mcp__<server>__<tool>` are reported as `mcp:<server>` with the tool name retained in a field",
-        "`tools::Stats::by_name()` yields calls, errors, p50, p95, last_call_at, tokens_to_ctx sum; `top_ctx(n)` returns the n largest single results",
-        "Durations are flagged `approx` (they include any permission wait) until hook events replace them (later story)",
-        "Tests on session-a fixture: pairing count equals tool_use count, one known Bash call's duration and token estimate match hand-computed values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`$.ui.invalidate(\"ui.render\")` is called through a throttle that allows at most 4 calls per second (trailing call kept); the reducer's `setModel` goes through it",
+        "The usage timer and the poller `start()` on `ui.open` (command or restore) and `stop()` on `ui.close` for every `e.origin` (`plugin`, `person`, `unload`); while closed only the `turn.*`/`tool.call` bookkeeping hooks do work",
+        "On `session.start` with `e.isInteractive === true`, if `$.store.get('pane')` is `{ open: true, view }`, the pane is reopened on that view after the binary check",
+        "The `ui.render` hook body is wrapped in try/catch: a throw renders `<Text color=\"red\">cctop render error: <message></Text>` above the last successfully built tree (kept in the model); the registration also has `.catch`",
+        "Marker file: `writeMarker` writes `${$.env.HOME}/.cctop/pane/<sessionId>.json` = `{ \"version\": <plugin.json version>, \"sessionId\", \"openedAt\", \"heartbeatAt\", \"open\": true }` on open and on every poller tick, and rewrites it with `open: false` and a fresh `heartbeatAt` on `ui.close` (any origin); `$.fs` cannot delete so the file is never removed",
+        "Tests (`tests/pane/lifecycle.test.ts`) with the manual clock: 20 model changes in 1 s produce <= 4 invalidates plus one trailing; timers are cancelled after `ui.close`; store round-trip restores `view` on `session.start`; marker content after open, after a tick, after close; a throwing view renders the error line and the previous tree",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "PRD ref: US-006"
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Subagent transcript reader",
-      "description": "As a developer, I need to read `<sessionId>/subagents/agent-*.jsonl` and their `.meta.json` so that subagents appear with their own usage.",
+      "title": "Skill degrade, split marker check, packaging and version pin",
+      "description": "As a user on any Claude Code build, I want `/cctop` to do the best thing available, and installing the plugin to be enough.",
       "acceptanceCriteria": [
-        "`agents::watch(session_dir)` discovers existing `subagents/agent-*.jsonl` files and new ones via notify; each gets its own Tailer",
-        "`agents::Agent {id, agent_type, description, model, spawn_depth, is_fork, started_at, finished_at, usage (deduped), state (running|done|failed)}`; meta from `agent-<id>.meta.json`; `fork-context-ref.contextLength` stored when present",
-        "State = running while the file is growing and the last line is not a final assistant text; done when a `SubagentStop`-equivalent (last assistant message with stop_reason end_turn and no pending tool_use) is seen; failed when the last tool_result is_error and no further lines for 60 s",
-        "Fixture `fixtures/session-a/subagents/` with one fork agent (meta + jsonl); test asserts type, model and token totals",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`on(\"skill.prompt\", { skill: \"cctop\" }, ...)` opens the pane (same path as `command.run`) and returns `{ text: \"The cctop pane is already open beside the transcript. Reply with exactly one line: \\\"cctop is open in the side pane.\\\" Do not run any tool.\" }`; a test dispatches `skill.prompt` through `fakeOn` and asserts `$.ui.open` was called and the text returned",
+        "`plugin/skills/cctop/SKILL.md` step 3 becomes: read `~/.cctop/pane/<session>.json`; if it has `open: true` and `heartbeatAt` within 30 s, answer `cctop is open in the side pane` and stop; else run `cctop split`; its exit-3 text now also says: `To get the dashboard inside Claude Code itself, start Claude Code with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 and use /tui fullscreen; then /cctop docks the pane without a multiplexer.`",
+        "`src/split.rs`: before host detection, `pane_marker_open(home, session_id) -> bool` reads the marker and, when `open: true` with a fresh heartbeat, prints `cctop pane is already open in this session` and returns 0; unit-tested with a temp dir (fresh, stale, `open: false`, missing); every other exit code and message unchanged",
+        "`plugin/.claude-plugin/plugin.json` version `0.2.0`; `plugin/README.md` gains sections: the pane (what it shows, the view keys, `/cctop [view|close]`), enabling function hooks (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude`, `/tui fullscreen`, the one-time accept in `/plugin`), fallback (`cctop split`), and `Verification status`; root `README.md` install section adds the env var line",
+        "`plugin/hooks/pane.tsx` has `export const TESTED_WITH = \"2.1.269\"` shown in the header badge as `hooks 2.1.269`; `scripts/check-plugin-types.sh` compares the version on line 1 of `plugin/.claude/types/claude-code.d.ts` with `claude --version` and exits 1 with `run: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p '/plugin-types ./.claude/types'` on mismatch; `Makefile` target `check-types` runs it, skipped when `claude` is absent",
+        "`plugin/skills/cctop-insights/SKILL.md` is byte-identical to before",
+        "Typecheck passes",
+        "Tests pass",
+        "`cargo test` passes and `cargo clippy --all-targets -- -D warnings` is clean"
       ],
       "priority": 9,
       "passes": true,
-      "notes": "PRD ref: US-009 · R4"
+      "notes": "skill.prompt{skill:cctop} opens the pane and returns the fixed one-liner (pane.tsx, model.ts's Action/reduce untouched); SKILL.md step 3 checks the US-008 marker before cctop split, exit-3 text gains the function-hooks hint; src/split.rs::pane_marker_open reads the same marker (30 s freshness, reusing metrics::cost::parse_ts_ms) before host detection; plugin.json 0.2.0, plugin/README.md and root README.md gain the pane/enabling-hooks/fallback/verification-status sections; TESTED_WITH='2.1.269' lives in model.ts (re-exported from pane.tsx to satisfy the literal criterion without a pane.tsx->views->pane.tsx import cycle) and widens the header's badge box (14->22 cols) to fit 'hooks 2.1.269'; scripts/check-plugin-types.sh + Makefile check-types (skipped without claude on PATH)."
     },
     {
       "id": "US-010",
-      "title": "Turn, hook and queue metrics from system lines",
-      "description": "As a developer, I need exact turn durations, hook timings and queued-prompt counts from the transcript so that the Turn panel needs no hooks.",
+      "title": "Live verification checklist for a person at a real terminal",
+      "description": "As the maintainer, I want one checklist for everything only a person at a real terminal can verify, so that 'done' is explicit and nothing is silently assumed.",
       "acceptanceCriteria": [
-        "`turn_duration.durationMs` attached to the turn that precedes it; live turn elapsed = now − turn start",
-        "`stop_hook_summary.hookInfos[]` aggregated per turn into hook_runs, hook_ms, hook_errors (from hookErrors)",
-        "`queue-operation` enqueue/dequeue tracked into `queued_prompts` count",
-        "`away_summary` recorded as an event with timestamp",
-        "Tests against session-a: turn 3 duration equals the fixture's value; hook_ms sum equals hand-computed value",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
+        "`docs/verification/pane.md` has one numbered item per live check, each with: the exact setup (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugin`, `/tui fullscreen` or `/tui default`, terminal width), the keys/commands to type, the expected observation, `Claude Code version:`, and `Result: pending`",
+        "Items cover: `/cctop` listed in the slash menu with its description; pane docks at 144 and 110 columns and is inline in `/tui default`; `/cctop` toggles, `/cctop close` closes, `/cctop tools` opens on Tools; `/cctop:cctop` (the skill) still resolves and answers the one-liner (open questions 1 and 2 of the PRD, with a place to record which event fired); hotkeys `1`-`6` act only after `ctrl+x tab`; `ctrl+x` arrows resize and `pluginPanes.dockColumns` appears in settings; Advisor top item equals `cctop query advice --session <id>`; context % changes within 1 s of a response; `/cctop` opens in < 500 ms; `/reload-plugins` reopens the pane; CPU of the `claude` process idle with the pane open < 2 % (`top -pid`); turn latency with vs. without `--plugin-dir` over 20 `say ok` turns differs < 1 %; with the flag OFF `/cctop` in tmux still splits and in Apple Terminal still opens the new window; marker file `~/.cctop/pane/<id>.json` toggles `open`",
+        "`plugin/README.md` `Verification status` section lists every item whose `Result:` is `pending` (all of them until a person runs the list) and links the checklist",
+        "Typecheck passes"
       ],
       "priority": 10,
       "passes": true,
-      "notes": "PRD ref: US-018 · R9"
+      "notes": "Only npm run typecheck applies (docs-only story); no code changed. The checklist covers all 20 live items named across US-001/US-007/US-008/US-009 plus the new ones (Advisor-vs-CLI match, context % latency, open latency, turn-latency parity, flag-off fallback), each with exact setup/keys/expected/Claude Code version/Result: pending; none marked passed by the agent."
     },
     {
       "id": "US-011",
-      "title": "Metrics registry and generated docs",
-      "description": "As a user, I want every metric defined once in code and documented in the README so that I never guess what a number means.",
+      "title": "cctop split fallback: Apple Terminal opens a real window",
+      "description": "As a user without function hooks on macOS, I want the Terminal.app fallback to open a real window, not a tab, so that the dashboard sits beside the session.",
       "acceptanceCriteria": [
-        "`metrics::registry` with `Metric {id, name, unit, formula, sources: &[&str], caveats, estimate_when}` declared via a `metric!` macro; ids are `snake_case`",
-        "Every metric computed so far (usage classes, cache_hit_ratio, cost, burn_rate, context_size, context_velocity, turns_until_compaction, tool stats, tokens_to_ctx, hook_ms, turn_duration) is registered",
-        "`cctop metrics --md` prints a Markdown table grouped by panel; `docs/metrics.md` is committed and a test fails if regenerating it changes the file",
-        "`README.md` includes `docs/metrics.md` via a marked block (`<!-- metrics:start -->` … `<!-- metrics:end -->`) refreshed by `cctop metrics --readme README.md`",
+        "`src/split.rs` `Host::AppleTerminalWindow` writes `~/.cctop/run/<session>.command` (mode 0755, content `#!/bin/sh\\nexec cctop run --session <id>\\n` with the resolved cctop path) and runs `open -na Terminal <file>`, then applies the existing bounds-positioning AppleScript from `adabf68` to `front window`",
+        "A comment in `split.rs` records the root cause (macOS System Settings > Desktop & Dock > 'Prefer tabs when opening documents' merges `do script` windows into tabs) and names the System Events `Move Tab to New Window` approach as the alternative if `open -na` still yields a tab",
+        "Unit tests: the `.command` file content and mode, the `open` argv, and that the positioning script is still emitted",
+        "`docs/hosts.md` Terminal.app row updated: command issued and `Verified: pending (see docs/verification/pane.md)`",
         "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
         "Tests pass (`cargo test`)"
       ],
       "priority": 11,
       "passes": true,
-      "notes": "PRD ref: US-021 · FR-18"
+      "notes": "Host::AppleTerminalWindow now writes ~/.cctop/run/<session>.command (mode 0755, '#!/bin/sh\\nexec <cctop> run --session <id>\\n') and returns the `open -na Terminal <file>` argv from `command()` (writing the file is a side effect of building that argv, same pattern as every other host's `command()` arm); `run()` runs that argv through the existing generic Command path, then on success runs a second osascript (`apple_terminal_position_script`) that waits 0.3s and sets the bounds of the new (frontmost) window using window 2's (the pre-existing window's) bounds, matching adabf68's math but reading from window 2 instead of a pre-`do script` front window since the new window already exists as window 1 by the time this script runs; a comment on the Host::AppleTerminalWindow arm records the 'Prefer tabs when opening documents' root cause and the System Events 'Move Tab to New Window' fallback. docs/hosts.md's Terminal.app row now describes the two-step open+position and is 'Verified: pending (see docs/verification/pane.md)' (US-010 already anticipated this exact design in its flag-off fallback item). Tests: apple_terminal_window_writes_a_launcher_and_opens_it (.command content/mode via a temp HOME, open argv) and apple_terminal_position_script_targets_front_window (script text); commands_per_host_carry_the_session's old AppleTerminalWindow assertions removed since they tested the retired do-script osascript. 178 cargo tests (was 176); make check (fmt/clippy -D warnings/cargo test) and npm run typecheck green."
     },
     {
       "id": "US-012",
-      "title": "Panel trait and layout solver",
-      "description": "As a developer, I need a panel abstraction and a narrow/wide layout solver so that every panel is a small isolated unit.",
+      "title": "cctop split fallback: Linux terminals and idempotency",
+      "description": "As a user without function hooks on Linux, I want a new-window fallback and no duplicate dashboards.",
       "acceptanceCriteria": [
-        "`ui::Panel` trait: `id() -> u8` (hotkey digit), `title()`, `summary() -> Option<String>`, `min_rows()`, `priority()`, `render(frame, area, &State)`, `handle_key(KeyEvent, &mut State) -> Handled`",
-        "`ui::layout::solve(size, panels, hidden) -> Vec<(PanelId, Rect)>`: narrow (< 100 cols) stacks vertically in fixed order; wide (≥ 100) splits into two columns with Advisor and Events full-width at the bottom; rows assigned by priority, low-priority panels shrink to title-only first; Events never below 4 rows",
-        "Collapsed panels render one line: title + summary in the border style",
-        "Snapshot tests (insta) of the solved rectangles at 40×24, 60×51, 122×37 for both layouts with stub panels",
+        "`src/split.rs` adds `Host::LinuxWindow(String)` chosen on Linux (no multiplexer detected) in this order, first that resolves via a mockable `which`: `$TERMINAL`, `x-terminal-emulator`, `gnome-terminal`, `konsole`, `alacritty`, `kitty`, `xterm`; argv shapes: `<term> -e cctop run --session <id>` for `$TERMINAL`/`x-terminal-emulator`/`konsole`/`alacritty`/`xterm`, `gnome-terminal -- cctop run --session <id>`, and for kitty `kitten @ launch --type=os-window cctop run --session <id>` when `$KITTY_LISTEN_ON` is set else `kitty -e cctop run --session <id>`",
+        "Idempotency: `cctop run` writes `~/.cctop/run/<session>.pid` on start and removes it on exit; `cctop split` with a live pid (kill 0 semantics, as `registry::Session::is_alive`) prints `cctop already running for this session (pid N)` and exits 0; a stale pid file is ignored",
+        "`manual_hint` names the Linux fallbacks; iTerm2 new-window path unchanged",
+        "`docs/hosts.md` has a row per Linux terminal (detection, command issued, `Verified: pending`) and the idempotency rule",
+        "Unit tests: detection order with mocked env and `which`; argv per terminal; pid-file live/stale/missing",
         "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
         "Tests pass (`cargo test`)"
       ],
       "priority": 12,
       "passes": true,
-      "notes": "PRD ref: US-003"
-    },
-    {
-      "id": "US-013",
-      "title": "Application loop, key handling and headless render",
-      "description": "As a user, I want a flicker-free TUI with the global keys working, plus a headless mode so that panels can be verified from tests.",
-      "acceptanceCriteria": [
-        "Terminal setup/teardown with crossterm (raw mode, alternate screen, mouse capture) restored on panic via a guard",
-        "Event loop: data events from tailers and a render tick capped at the configured interval (default 250 ms, `+`/`-` between 100 ms and 2 s); ratatui double-buffer diff rendering",
-        "Global keys: `q`/Ctrl-C quit, `?` help overlay listing every binding, `Tab`/Shift-Tab focus cycle, `1`–`9` toggle panels, `p` pause (buffers, shows PAUSED badge), `w` force layout toggle",
-        "Headless: `cctop --once --render-to <file> --size WxH` renders one frame with a TestBackend and writes plain text; used by all later panel stories",
-        "Footer line shows key hints; replaced by a toast for 3 s when `State::toast` is set",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "PRD ref: US-003/014"
-    },
-    {
-      "id": "US-014",
-      "title": "Header panel",
-      "description": "As a user, I want the session's identity and state on the first two lines so that I know what cctop is attached to.",
-      "acceptanceCriteria": [
-        "Line 1: status pill (● BUSY green / ○ IDLE dim / ◆ WAITING amber when a permission request is pending / ⏸ PAUSED / ENDED hh:mm when the pid is gone), turn number, turn elapsed, current running tool + elapsed, cwd (home shortened), git branch with `*` when dirty",
-        "Line 2: permission mode, effort level, plan (from status-line JSON if present else `—`), uptime, cost (`≈ API $x.xx` when approximate), `claude` process CPU % and RSS",
-        "Title border: `cctop ── <session name> ── <model> · v<version>`",
-        "Session ended (pid gone) freezes values and shows ENDED; cctop does not exit (FR-12)",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "PRD ref: Header"
-    },
-    {
-      "id": "US-015",
-      "title": "Context panel",
-      "description": "As a user, I want to see how full the context is and when the next compaction will hit so that I can decide whether to wrap up.",
-      "acceptanceCriteria": [
-        "Gauge = context_size / context_window_size (from status-line JSON when present, else the model's default window, labelled `est`), colour bands ok < 60 %, warn 60–80 %, critical > 80 %",
-        "Breakdown line: prefix (first API call's cache_read + cache_creation) · messages · free",
-        "Sparkline of context_size per turn (last 12 turns); velocity = EMA(5) of Δcontext per turn; `autocompact in ~N turns est` with N = (threshold − current)/velocity, hidden when velocity ≤ 0; threshold default 80 % of window, replaced by the learned value once a compaction is observed for that model",
-        "Compaction detected by a ≥ 30 % drop between consecutive turns; line shows count, turn and tokens dropped",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "PRD ref: US-004 · R10"
-    },
-    {
-      "id": "US-016",
-      "title": "Tokens & Cost panel",
-      "description": "As a user, I want the token breakdown, cache-hit ratio, cost and burn rate so that I understand what the session costs and why.",
-      "acceptanceCriteria": [
-        "Five stacked bars (cache read, cache write, fresh in, output, └ thinking) scaled to the largest, values right-aligned with k/M scaling (≤ 3 significant digits)",
-        "cache_hit_ratio = cache_read / (cache_read + cache_write + input); green ≥ 80 %, amber ≥ 50 %, red below",
-        "Cost line: `≈` prefix when approximate, `$/h` burn rate, `in <n>k/min`; subagent usage included, `a` toggles main-only",
-        "Per-turn sparkline of total tokens and `last turn <n>k · $x.xx`",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "PRD ref: US-005"
-    },
-    {
-      "id": "US-017",
-      "title": "Tools panel",
-      "description": "As a user, I want a sortable table of tool usage with durations, errors and context cost so that I can spot slow or noisy tools.",
-      "acceptanceCriteria": [
-        "Columns TOOL, N, ERR, p50, p95, LAST, TOKENS→CTX; a running tool shows `▶now` in LAST; ERR coloured amber ≥ 1, red ≥ 3; approximate durations suffixed `≈`",
-        "`s`/`S` cycles sort column ascending/descending; `f` opens an inline filter (substring on TOOL); Esc clears",
-        "Final line `top ctx:` lists the 3 largest single results as `<tool> <input summary> <n>k`",
-        "`Enter` opens a full-height detail view: last 20 calls of the selected tool with input summary, duration, tokens; Esc returns",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "PRD ref: US-006"
-    },
-    {
-      "id": "US-018",
-      "title": "Event stream and Events panel",
-      "description": "As a user, I want a colour-coded live log so that I can see what the session just did.",
-      "acceptanceCriteria": [
-        "`events::Event {at, kind: tool|hook|perm|agent|compact|api|note|away, text}` produced from transcript lines (tool start/end, hook summaries, compactions, cost-state, away), agents, and later hook spool; merged in timestamp order",
-        "Panel shows the newest N events, oldest at top, kind coloured (tool green, hook accent, perm/note amber, api/error red, agent accent, compact amber)",
-        "`Enter` opens a full-height scrollable log; `/` searches (substring, highlights, `n` next); Esc returns",
-        "Ring buffer capped at 5 000 events",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "PRD ref: US-011"
-    },
-    {
-      "id": "US-019",
-      "title": "Alert rules and toasts",
-      "description": "As a user, I want alerts on important thresholds so that I notice transitions without watching the page.",
-      "acceptanceCriteria": [
-        "`alerts::Rule` evaluated on every state change; each fires once per crossing per session: context > 80 %; autocompact projected ≤ 2 turns; 5 h limit > 60/80/95 % (when limits are available); projected exhaustion before reset; cache_hit_ratio < 50 % over the last 5 turns; a tool call running > 60 s; permission wait > 30 s; MCP server exited; API error/retry",
-        "Firing appends a `note` event and sets a 3 s footer toast",
-        "`--notify` flag additionally sends a desktop notification (osascript on macOS, notify-send on Linux) for context > 80 %, exhaustion-before-reset and MCP exit",
-        "Tests: each rule fires exactly once on a synthetic state sequence that crosses its threshold twice with a reset in between",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "PRD ref: US-011 §5.4"
-    },
-    {
-      "id": "US-020",
-      "title": "Process tree and MCP server detection",
-      "description": "As a developer, I need the `claude` process's children so that running commands and MCP servers appear with pid and memory.",
-      "acceptanceCriteria": [
-        "`procs::snapshot(pid)` every 1 s returns CPU %, RSS for the session pid and its descendants (libproc on macOS, /proc on Linux) with command lines",
-        "MCP servers identified by matching child command lines against `command` + `args` from `~/.claude/mcp.json`, `<cwd>/.mcp.json` and `~/.claude/settings.json` `mcpServers`; each gets name, pid, rss, started_at, restart count (pid changes)",
-        "Foreground Bash child (descendant whose parent is the session pid and is not an MCP server) exposed as `running_command` with elapsed",
-        "Tests with an injected fake process table",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "PRD ref: US-009"
-    },
-    {
-      "id": "US-021",
-      "title": "Agents & MCP panel",
-      "description": "As a user, I want live subagents, MCP servers and background tasks so that I know what else is running on my behalf.",
-      "acceptanceCriteria": [
-        "Subagent rows: glyph (◐ running, ✓ done, ✗ failed), type, description (≤ 28 chars), elapsed, tokens, model",
-        "MCP rows: `mcp <name>`, pid, RSS, call count and p95 from the `mcp:<name>` tool stats, `idle <t>` when no calls for > 5 min",
-        "Background tasks from `~/.claude/tasks/session-<first 8 of id>/` (one row per file: kind, description/command, elapsed, task id) via directory watch",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "PRD ref: US-009"
-    },
-    {
-      "id": "US-022",
-      "title": "Files panel with git line counts and re-read warning",
-      "description": "As a user, I want to see which files the session touched and how much so that I can review the blast radius and catch wasted re-reads.",
-      "acceptanceCriteria": [
-        "Rows from Read/Edit/Write/MultiEdit/NotebookEdit tool_use inputs (file_path/notebook_path): `R×n E×n W×n`, sorted by last touch; `s` cycles sort by touches / lines / name",
-        "Net lines per file from `git diff --numstat <session-start-commit>` every 5 s when cwd is a git repo (start commit = HEAD at attach time); `—` outside git",
-        "`re-read ⚠` when a file has ≥ 3 Reads with no Edit/Write in between",
-        "Panel summary in the border: `<n> touched · +<a> −<d>`",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "PRD ref: US-012"
-    },
-    {
-      "id": "US-023",
-      "title": "Turn panel",
-      "description": "As a user, I want to see what the current turn is doing and waiting on so that a 'stuck' turn is explained.",
-      "acceptanceCriteria": [
-        "Line 1: elapsed (live), `api <n> calls`, API time vs tool time this turn (from consecutive timestamps), retry time when cost-state shows totalAPIDuration > WithoutRetries",
-        "Line 2: the running tool (`● <tool> <elapsed> <input summary> pid <n>` using the process snapshot for Bash) or `idle` / `waiting for permission` (from a pending PermissionRequest once hooks exist)",
-        "Line 3: `hooks <n> runs · <ms>`, `permission waits <n> · <s>` (`—` until hooks are installed), `queued <n>` when prompts are queued",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "PRD ref: US-018 · R5 R6"
-    },
-    {
-      "id": "US-024",
-      "title": "Status-line shim and install/uninstall",
-      "description": "As a user, I want cctop to see the status-line JSON so that context and rate limits are exact.",
-      "acceptanceCriteria": [
-        "`cctop statusline-shim -- <original command...>` reads stdin, writes it atomically (temp + rename) to `~/.cctop/status/<sessionId>.json` (sessionId from the JSON's `session_id`), then execs the original command with the same stdin, passing stdout and exit code through; with no original command it prints nothing and exits 0; added latency < 3 ms measured in a test",
-        "`cctop install` backs up `~/.claude/settings.json` to `~/.cctop/backups/settings-<ts>.json`, rewrites `statusLine.command` to the shim form (idempotent), prints a unified diff and asks for confirmation unless `--yes`; `cctop uninstall` restores the original command",
-        "`status::watch(sessionId)` tails the file and exposes context_window (total_input_tokens, context_window_size), rate_limits (five_hour, seven_day: used_percentage, resets_at), model, plan, cost fields when present; retains a time series of (at, used_percentage) samples",
-        "Context panel switches from `est` to exact when a status sample exists",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "PRD ref: US-007"
-    },
-    {
-      "id": "US-025",
-      "title": "Limits panel",
-      "description": "As a user, I want rate-limit gauges with countdown and an exhaustion forecast so that I do not get cut off mid-task.",
-      "acceptanceCriteria": [
-        "Two gauges (5 h, 7 d) with used %, `↺ <countdown to resets_at>`; colours ok < 60 %, warn < 85 %, critical above",
-        "Projected exhaustion from a least-squares fit of used_percentage over the last 30 min of samples (min 3 samples, else `—`); shown as `exhausted in <t>` with ✓ green if after reset, ✗ red if before",
-        "Line shows `<n> other live sessions` when the registry has other busy sessions (they share the limit)",
-        "Without the shim: `— run cctop install`",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "PRD ref: US-007 · R7"
-    },
-    {
-      "id": "US-026",
-      "title": "Hook emitter, spool tailer and exact tool timings",
-      "description": "As a user, I want precise tool/permission/compaction/subagent events so that timings are exact.",
-      "acceptanceCriteria": [
-        "`cctop hook` reads stdin JSON, appends one line `{at, event, session_id, tool_use_id?, tool_name?, payload}` to `~/.cctop/events/<session_id>.jsonl`, exits 0 in < 5 ms; never fails the hosting operation (all errors swallowed, exit 0)",
-        "`cctop install` also adds a `command` hook `cctop hook` for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification, SubagentStart, SubagentStop, PreCompact, Stop, SessionEnd — merging into existing hook arrays without removing user hooks; uninstall removes only cctop's entries",
-        "`hooks::watch(sessionId)` tails the spool; PreToolUse/PostToolUse joined by tool_use_id replace approximate tool durations (approx flag cleared); PermissionRequest → PostToolUse − median tool duration gives permission wait (≈); PreCompact records a compaction with the context size before it (feeds the learned threshold)",
-        "Spool files older than 7 days are deleted on start",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "PRD ref: US-008 · R6"
-    },
-    {
-      "id": "US-027",
-      "title": "Turn ledger view",
-      "description": "As a user, I want a per-turn table of tokens, cost, tools and duration so that I can see which turns were expensive and why.",
-      "acceptanceCriteria": [
-        "`Enter` on the Context or Tokens panel opens a full-height table: turn #, start (hh:mm:ss), duration, api calls, cache read, cache write, fresh in, out, thinking, cost, tools (e.g. `Read×3 Bash×1`), `C` marker on compaction turns, effort, model",
-        "`s`/`S` sort by any column; `Enter` on a row lists that turn's tool calls with TOKENS→CTX; Esc returns",
-        "Values come from the aggregation story's Turn records; cost per turn uses the cost model",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the ledger opens (send key `Enter` with `--keys`) with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "PRD ref: US-018"
-    },
-    {
-      "id": "US-028",
-      "title": "Prefix inspector",
-      "description": "As a user, I want to see what makes up the fixed prefix sent on every request so that I can shrink it.",
-      "acceptanceCriteria": [
-        "Opened with `Enter` on the Context panel's prefix line: rows for system prompt (residual), each CLAUDE.md found (`<cwd>/CLAUDE.md`, parents up to git root, `~/.claude/CLAUDE.md`) with bytes and est tokens (bytes/4), tool schemas (count from the transcript's `skill_listing`/`deferred_tools_delta`/`mcp_instructions_delta` lines when present, grouped by MCP server from the MCP config), skills listing, memory index (`~/.claude/projects/<slug>/memory/MEMORY.md`)",
-        "Total reconciled against the first API call's cache_read + cache_creation; the difference is shown as `other`",
-        "Rows sorted by size; the two largest are highlighted",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the inspector opens with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "PRD ref: US-019"
-    },
-    {
-      "id": "US-029",
-      "title": "Advisor engine and panel with rules A01–A06",
-      "description": "As a user, I want one evidence-backed recommendation at a time so that I learn how to work more cheaply with Claude Code.",
-      "acceptanceCriteria": [
-        "`advisor::Rule` trait: `id()`, `evaluate(&State) -> Option<Advice {headline, evidence, action, saving_estimate: Saving::Tokens|Seconds|Avoids, doc_key}>`; engine re-evaluates every turn, ranks by saving per remaining turn (ties by recency), drops retired rules",
-        "Rules A01 cache miss, A02 cache expiry (uses observed TTL), A03 runaway tool result, A04 re-reads, A05 exploring in main context, A06 compaction churn, with the triggers and wording from PRD §5.7",
-        "Panel 9 shows one advice as two lines (headline; action + saving + `n next`), `k of n` in the border; `n`/`N` cycle, `x` dismisses for the session, `Enter` opens an explanation overlay from doc_key",
-        "Each rule has a firing fixture and a non-firing fixture test; a test asserts no rule fires on an empty session; a test asserts the advisor path performs no network or process spawn (feature-gated mock)",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the panel appears with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "PRD ref: US-016"
-    },
-    {
-      "id": "US-030",
-      "title": "Advisor rules A07–A12",
-      "description": "As a user, I want recommendations about idle MCP servers, thinking share, permission waits, long commands, pasted input and chatty turns.",
-      "acceptanceCriteria": [
-        "A07 idle MCP tools (0 calls > 20 min and schema estimate > 2 k tokens), A08 thinking share (> 40 % over 5 turns; cites current effort), A09 permission waits (> 2 min or > 5 prompts same pattern), A10 long foreground command (> 60 s), A11 fresh-input spike (input_tokens > 5 k), A12 chatty turns (median prompt < 8 tokens and > 20 turns/h) implemented per PRD §5.7",
-        "Firing and non-firing fixture tests for each rule",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "PRD ref: US-016"
-    },
-    {
-      "id": "US-031",
-      "title": "Advisor rules A13–A18 and `cctop advise`",
-      "description": "As a user, I want rate-limit pacing, subagent model, error loop, hook overhead, prefix size and hand-off recommendations, and a CLI to print them.",
-      "acceptanceCriteria": [
-        "A13 rate-limit pacing (projected exhaustion before reset), A14 subagent model (Opus agent whose description matches search/summarise/list/find), A15 error loop (same tool + same input hash failed ≥ 3×), A16 hook overhead (> 10 % of turn time), A17 big fixed prefix (> 25 % of window), A18 no hand-off (> 3 h, context > 70 %) implemented per PRD §5.7",
-        "`cctop advise [--session] [--json]` prints the ranked list (text table or JSON with rule id, headline, evidence, action, saving)",
-        "Firing and non-firing fixture tests for each rule",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "PRD ref: US-016"
-    },
-    {
-      "id": "US-032",
-      "title": "`cctop query` JSON interface",
-      "description": "As a user, I want every number in the TUI available as JSON so that my Claude Code session can reason about them.",
-      "acceptanceCriteria": [
-        "Subcommands: `summary`, `ledger [--last n]`, `tools`, `files`, `agents`, `advice`, `prefix`, `events [--since 10m]`, `explain <metric_id>`; all accept `--session` and resolve the session like the TUI; output is JSON on stdout, exit 2 when no session",
-        "Every numeric value is an object `{value, unit, metric_id, approx: bool}`; optional-source fields absent from disk are `{\"source\": \"missing\", \"hint\": \"run cctop install\"}`",
-        "`docs/query.md` documents each subcommand's schema with an example; a test snapshots `summary` and `ledger` output for the fixture session",
-        "State is built from the same collectors as the TUI (shared `State::load(session)`), no duplicated logic",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": "PRD ref: US-022 · FR-19"
-    },
-    {
-      "id": "US-033",
-      "title": "Baselines, session report and export",
-      "description": "As a user, I want this session compared to my recent sessions and a written summary when it ends so that I can tell whether I am improving.",
-      "acceptanceCriteria": [
-        "`baseline::compute(projects_dir, days=7)` scans all transcripts for cost-state lines and turn counts and returns medians for cost/turn, tokens/turn, cache_hit_ratio, tool error rate, model mix; cached in `~/.cctop/baseline.json` refreshed at most hourly",
-        "`cctop query baseline --json` and `×n.n` multipliers shown next to cost/turn and tokens/turn in the Tokens panel when a baseline exists",
-        "`cctop report [--session]` writes `~/.cctop/reports/<YYYY-MM-DD>-<name>.md` with cost, model mix, top 5 context consumers, advisor hits, baseline comparison; the SessionEnd hook triggers it",
-        "`cctop export --json|--csv [--out path]` dumps ledger rows and events",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": "PRD ref: US-020"
-    },
-    {
-      "id": "US-034",
-      "title": "Side-by-side launcher `cctop split`",
-      "description": "As a user, I want one command that opens cctop in a right-hand pane attached to my session so that I keep working without leaving Claude Code.",
-      "acceptanceCriteria": [
-        "`cctop split [--size 45%]` resolves the target session first (same discovery as `run`), then: tmux (`$TMUX`) → `tmux split-window -h -l <size> cctop --session <id>`; zellij (`$ZELLIJ`) → `zellij action new-pane -d right -- cctop --session <id>`; WezTerm (`$WEZTERM_PANE`) → `wezterm cli split-pane --right --percent <n> -- cctop --session <id>`; Kitty (`$KITTY_LISTEN_ON`) → `kitten @ launch --location=vsplit cctop --session <id>`; iTerm2 (`$ITERM_SESSION_ID`) → AppleScript split vertically running the same command",
-        "No supported host: prints a message with the manual command and exits 3",
-        "Quitting cctop in the pane never signals the Claude Code process (test: the launcher spawns cctop detached with its own process group)",
-        "Manual verification matrix in `docs/hosts.md` (tmux, zellij, WezTerm at minimum) with the terminal size observed",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": "PRD ref: US-010"
-    },
-    {
-      "id": "US-035",
-      "title": "Plugin with `/cctop` and `cctop-insights` skills",
-      "description": "As a user, I want a Claude Code plugin so that `/cctop` opens the dashboard and my session can answer questions from cctop's data.",
-      "acceptanceCriteria": [
-        "`plugin/.claude-plugin/plugin.json` with name `cctop`, version from Cargo, skills directory",
-        "`plugin/skills/cctop/SKILL.md`: user-invocable `/cctop` that runs `cctop split` via Bash, and if the binary is missing prints the Homebrew/cargo install line; if `~/.cctop/installed` is absent it asks once whether to run `cctop install --yes` and records the answer; it never prints dashboard output into the conversation",
-        "`plugin/skills/cctop-insights/SKILL.md` (already drafted) reviewed against the final `cctop query` schema; the five example questions in it are answered in a real session with at least one number and one action each, transcript of the check saved to `docs/verification/insights.md`",
-        "`plugin/README.md` with install instructions (`claude plugin add`)",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": "PRD ref: US-010/023"
-    },
-    {
-      "id": "US-036",
-      "title": "Ask-from-TUI via the session messaging socket",
-      "description": "As a user, I want to press `a` on a panel and have a question with that panel's data drafted into my session so that I can dig deeper without retyping numbers.",
-      "acceptanceCriteria": [
-        "`a` on any panel builds a prompt from that panel's current values (template per panel, ≤ 600 characters, e.g. Tools: the top three rows and `top ctx`) and shows it in an overlay with `Enter` send / `Esc` cancel",
-        "Sending writes to the session's `messagingSocketPath` (from the registry) using the same JSON framing Claude Code peers use (documented from an observed exchange in `docs/socket.md`), as a drafted prompt the user submits in Claude Code; if the protocol cannot deliver a draft, fall back to copying the prompt to the clipboard and say so in the toast",
-        "Disabled with a toast `no messaging socket` when the path is missing or unreachable",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": "PRD ref: US-022 (a)"
-    },
-    {
-      "id": "US-037",
-      "title": "Session picker",
-      "description": "As a user with several sessions, I want to switch which one cctop watches so that one dashboard serves all my terminals.",
-      "acceptanceCriteria": [
-        "`L` opens an overlay listing registry sessions: name, cwd (shortened), status, model, uptime, context % (when a status file exists); dead entries greyed with `d` toggling their visibility",
-        "`Enter` attaches: all collectors are torn down and rebuilt for the new session within 300 ms; a test asserts no leaked notify watchers (watcher count returns to baseline)",
-        "Verify by rendering against the fixture transcript: `cctop --session fixtures/session-a --once --render-to /tmp/out.txt --size 60x51` and asserting the picker opens with the expected values",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": "PRD ref: US-013"
-    },
-    {
-      "id": "US-038",
-      "title": "Config file, themes and terminal fallbacks",
-      "description": "As a user, I want layout, theme and panel choices remembered so that cctop opens the way I left it.",
-      "acceptanceCriteria": [
-        "`~/.config/cctop/config.toml`: layout (auto|narrow|wide), theme, refresh_ms, hidden_panels, notify, pricing overrides path; CLI flags override; written back when panels/theme change",
-        "Themes as TOML in `themes/` (bundled: default-dark, default-light, btop, nord, gruvbox, catppuccin-mocha) mapping named roles (bg, fg, dim, accent, ok, warn, crit, border) to colours; user themes in `~/.config/cctop/themes/` hot-reloaded on change; `t` cycles",
-        "`NO_COLOR` → monochrome; `TERM` without truecolour → nearest 16/256 colours; non-UTF-8 `LANG` → ASCII borders and `#`/`-` gauges",
-        "Snapshot tests for one panel under default-dark, NO_COLOR and ASCII mode",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": "PRD ref: US-014"
-    },
-    {
-      "id": "US-039",
-      "title": "Release workflow, Homebrew tap and cargo publish",
-      "description": "As a maintainer, I want tagged releases to produce binaries and a Homebrew formula so that `brew install` works.",
-      "acceptanceCriteria": [
-        "`.github/workflows/release.yml` on tag `v*`: builds macOS (arm64, x86_64) and Linux (x86_64, arm64) binaries, attaches them to a GitHub release with checksums",
-        "Formula template `packaging/homebrew/cctop.rb` filled with version and sha256 by the workflow and pushed to the tap repo (name configured in a workflow variable); `packaging/README.md` documents the tap",
-        "`cargo publish --dry-run` passes in CI",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": "PRD ref: US-017 packaging"
-    },
-    {
-      "id": "US-040",
-      "title": "Product website in `site/` with brand assets",
-      "description": "As a maintainer, I want a static product page built from repository content so that a visitor understands and installs cctop in under a minute.",
-      "acceptanceCriteria": [
-        "`site/index.html` + `site/site.css` (no framework) implementing PRD §12 sections 1–9: hero with wordmark, one sentence, install line with copy button, demo video slot; two-pane screenshot; nine panels/nine sentences; three Advisor examples; install & undo; works-in list; themes row; privacy; footer",
-        "Assets from `brand/`: favicon.ico + favicon.svg, apple-touch-icon, og-image via OpenGraph meta, lockup in the header",
-        "`scripts/build-site.sh` pulls the hero sentence, install block and panel list from README.md marked blocks and injects `docs/metrics.md` into `site/metrics.html`",
-        "Light and dark via prefers-color-scheme; reduced-motion shows the still frame; works with JavaScript disabled except the copy button",
-        "Verify in browser using dev-browser skill at 400 px and 1280 px widths",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "PRD ref: US-017"
-    },
-    {
-      "id": "US-041",
-      "title": "Demo recording and GitHub Pages deployment",
-      "description": "As a maintainer, I want reproducible screenshots and a recording, deployed automatically, so that the site never shows a real session.",
-      "acceptanceCriteria": [
-        "`make demo`: runs cctop headless against `fixtures/session-a` with a fixed clock (`CCTOP_FAKE_NOW`) to produce `site/assets/two-pane.png` (composited with a fixture Claude Code pane), six theme PNGs, and a VHS tape `site/demo.tape` rendered to `site/assets/demo.webm` (≤ 3 MB) and `demo.gif`",
-        "`.github/workflows/pages.yml`: on push to `main` builds the site and deploys with actions/upload-pages-artifact + deploy-pages; on pull requests uploads the built site as an artifact",
-        "Lighthouse CI step asserts performance, accessibility and SEO ≥ 95 on the built page",
-        "Verify in browser using dev-browser skill on the deployed URL",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": "PRD ref: US-017"
-    },
-    {
-      "id": "US-042",
-      "title": "OpenTelemetry receiver (phase 2)",
-      "description": "As a user with telemetry enabled, I want cctop to ingest it locally so that API latency and tool durations are authoritative.",
-      "acceptanceCriteria": [
-        "`cctop --otlp [addr]` starts an OTLP/HTTP receiver on 127.0.0.1:4318 (loopback only, no TLS/auth) accepting metrics and logs (protobuf and JSON)",
-        "Ingests `claude_code.token.usage`, `claude_code.cost.usage`, `claude_code.lines_of_code.count`, `claude_code.active_time.total` and log events `api_request` (duration, ttft when present), `api_error`, `tool_result` (duration, success); attributes keyed by session id",
-        "When OTel data exists for a session the Turn panel shows TTFT and the Tools panel clears the `≈` flags; `cctop install --otel` prints the `env` block to add to settings.json and never writes it",
-        "Test posts a sample OTLP JSON payload and asserts the metrics appear in `cctop query summary`",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": "PRD ref: US-015"
-    },
-    {
-      "id": "US-043",
-      "title": "MCP server (phase 2)",
-      "description": "As a user or agent, I want cctop's queries as MCP tools so that sessions and fleets can use them without Bash.",
-      "acceptanceCriteria": [
-        "`cctop mcp` serves stdio MCP with tools `cctop_summary`, `cctop_ledger`, `cctop_tools`, `cctop_advice`, `cctop_prefix`, `cctop_events`, `cctop_explain_metric` returning the same JSON as `cctop query`",
-        "Tool descriptions ≤ 200 characters each; `docs/mcp.md` records the measured token size of the tool schemas and the `.mcp.json` snippet, with the recommendation to register it as deferred",
-        "Test drives the server over stdio with an initialize + tools/list + tools/call sequence",
-        "Typecheck passes (`cargo check` and `cargo clippy --all-targets -- -D warnings`)",
-        "Tests pass (`cargo test`)"
-      ],
-      "priority": 43,
-      "passes": true,
-      "notes": "PRD ref: US-022 (MCP)"
+      "notes": "Host::LinuxWindow(String) (Host drops Copy; name()/opens_new_window() take &self) chosen by detect_with(env, which, linux) — detect() passes a `which`-based lookup and cfg!(target_os = \"linux\") — from $TERMINAL then LINUX_TERMINALS in the AC's order, first that `which` resolves; command() shapes argv by the basename of the resolved program (`-e` generic, `--` for gnome-terminal, `kitten @ launch --type=os-window` for kitty when KITTY_LISTEN_ON is set else `kitty -e`), so `$TERMINAL=/usr/bin/gnome-terminal` also gets `--`. Idempotency: split::PidFile::write(home, session) writes ~/.cctop/run/<session>.pid (own pid) and its Drop removes it; main.rs run() holds the guard across the interactive TUI only (not headless --once); split::running_pid(home, session) (running_pid_with for a mocked `alive`) reads it and checks registry::pid_alive; run() prints `cctop already running for this session (pid N)` and returns 0 after the pane-marker check. manual_hint names the Linux list; iTerm2 paths untouched. docs/hosts.md: intro names the Linux order, an idempotency paragraph, one row per Linux terminal (Verified: pending). Tests: linux_falls_back_to_the_first_terminal_on_path, linux_window_argv_per_terminal, pid_file_live_stale_missing — 181 cargo tests (was 178); make check green; smoke-tested the binary: live pid → exit 0 one-liner, stale pid → falls through."
     }
   ]
 }

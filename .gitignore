@@ -3,3 +3,8 @@ target/
 brand/contact-sheet.png
 brand/contact-sheet.svg
 .DS_Store
+plugin/.claude/types/claude-code-mcp.d.ts
+.test-build/
+node_modules/
+ralph/.last-branch
+ralph/logs/
