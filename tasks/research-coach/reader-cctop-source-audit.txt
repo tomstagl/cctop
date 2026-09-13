@@ -1,0 +1,334 @@
+SUMMARY: cctop v0.1.1 (17,098 lines incl. tests; 175 test fns) ingests 11 sources into one State (src/ui/state.rs:119-194) via State::apply (transcript fan-out to agg/cost/tools/events/files/prefix, state.rs:493-520), apply_hook (323-428), apply_status (446-472), apply_otel (432-443) and the tick hooks registered in src/attach.rs:36-152 (liveness+git every 5 s, prefix scan 30 s, ps 1 s, registry 5 s, hook spool, status file, tasks 2 s, subagent dir). Every panel, `cctop query` (src/query.rs) and the 7 MCP tools (src/mcp.rs:15-27) read the same State, so a coach view can be fed from State with no new collector for: current turn, running tool, permission state, context/limits, ranked advice. The audit found roughly 35 parsed-but-never-surfaced fields (usage.speed/service_tier, toolUseResult, cost-state totalToolDuration/LinesAdded/Removed, Turn.tool_errors, Agent.spawn_depth/is_fork/inherited_context_len, permission_by_tool, OTel counters, baseline tool_error_rate/model_mix, procs.descendants, most hook-payload fields) and several sources that changed under Claude Code 2.1.269 and now silently degrade: Workflow subagents live one directory deeper than agents.rs scans (this session: 11 agent transcripts and 311 hooked tool calls, `cctop query agents` returns []), the status line carries a full prompt_cache block (hit_ratio, expires_at, warm, recache_tokens_if_cold) plus cost.*, effort.level, thinking.enabled, fast_mode that status.rs ignores, plan is never populated (no plan_type/subscription_type key exists in the payload), ~/.claude/tasks/session-*/ holds only .lock and .highwatermark (tasks.rs would list them as tasks) while the real background-task list arrives in the Stop hook payload, and deferred_tools_delta lines are about 10 bytes per tool so A07's >2k gate cannot fire (largest live server is 1,030 tokens; 49k of a 57k prefix is unattributed). All 18 advisor rules are pure predicates over State (rules.rs:57-751) with hard-coded thresholds; the main weaknesses are session-lifetime scope (A03/A04/A05/A10/A11/A15 never retire, ranking is dominated by the biggest single incident), a saving model that labels one-off amounts as per-turn, missing evidence for A07/A17 (prefix under-measured) and A18 (no task-boundary detection at all despite the PRD). Turns are detected as non-meta user lines without a tool_result block (usage.rs:190-213) and closed by the system turn_duration line; there is no notion of task or milestone anywhere in the code. The TUI has one dashboard plus per-panel full-screen overlays (state.overlay), a session picker (state.picker), an ask popup (state.ask) and a help popup (app.help), all drawn on top in App::draw (app.rs:427-456) and routed in App::handle_key (280-424); the layout engine is a priority-driven collapse/drop stack with WIDE_MIN_COLS=100 and a 40x24 floor. A second top-level view should follow the picker/help pattern (a State/App flag checked before layout::solve) rather than the panel-owned overlay, and must be added to BINDINGS for the help-overlay test.
+
+OPEN: Does Claude Code 2.1.269 still emit PermissionRequest hooks in default/normal permission mode, or only Notification{notification_type: permission_prompt}? Live spools show 3 PermissionRequest vs 3 permission_prompt notifications across 8 sessions; A09/WAITING depend on the former. | What exactly is inside the 49k 'system prompt + other' prefix remainder (system prompt vs deferred tool listing vs memory)? prompt_snapshot attachments (161 KB) may contain the answer and would let A07/A17 attribute it. | Is status-line prompt_cache.expires_at reliable enough to drive a coach countdown (how often is the status file rewritten when the user is idle)? status.rs only re-reads on mtime change. | Are Workflow subagents (subagents/workflows/wf_*/) the only nested layout, or do Team/teammate sessions (~/.claude/teams/session-*) also store transcripts elsewhere that agents.rs should walk? | Should advisor rules carry a time/turn window and retire (A03/A04/A05/A10/A11/A15 are session-lifetime today), and should Saving distinguish one-off vs per-turn amounts before a coach ranks them by urgency? | Where should 'natural boundary' come from for A18: Stop.background_tasks emptiness, SessionStart.source, git commits, ai-title changes, or TodoWrite/TaskCreate inputs (none of which appeared in the three newest transcripts)? | Does the pane PRD's engine-native $.session.usage() expose the same prompt_cache block as the status line, so the pane and the TUI coach can share one cache-expiry model? | Should query/MCP callers get advisor dismissals and first_fired recency (Engine is rebuilt per CLI call today), e.g. by persisting them under ~/.cctop/<session>.advisor.json?
+
+[ING-01] Transcript collector: what State::apply extracts and where it is shown | lever=none | used=yes | conf=high
+  DETAIL: src/transcript.rs models 8 line types (user, assistant, system, cost-state, permission-mode, queue-operation, file-history-snapshot, attachment; everything else is Line::Unknown). State::apply (state.rs:493-520) fans each line to Aggregate (usage.rs: turns, per-turn usage deduped by message.id, context_size, effort, models, cache TTL, tool_result_bytes, tool_calls, tool_errors, prompt_chars, api_ms/tool_ms, hook_runs/hook_ms/hook_errors, queued_prompts, away summaries), CostTracker (cost.rs: cost-state authoritative + priced estimate since), tools::Stats (tools.rs: Call per tool_use with input_summary, started/finished, duration, is_error, result_tokens_est=len/4, turn), events::Log, files::Files (Read/Edit/Write/MultiEdit/NotebookEdit by file_path/notebook_path), prefix::Prefix (4 attachment subtypes). Displayed: Header (turn, elapsed, effort, cost), Context (size/window/prefix/velocity/turns-until-compaction/compactions), Tokens & Cost (5 classes, hit ratio, cost, burn, in/min, per-turn sparkline, 7d multipliers), Turn (elapsed, api calls, api/tool split, retries, hooks, queued), Tools (per-name table + top ctx + detail overlay), Files, Events, ledger overlay, prefix overlay.
+  SRC: src/ui/state.rs:493-520; src/metrics/usage.rs:188-312; src/tools.rs:126-175; src/events.rs:100-227; src/files.rs:41-87; src/prefix.rs:50-117
+  EVID: Aggregate::push at usage.rs:188; Turn struct fields usage.rs:77-118; Stats::push tools.rs:126; panels read via state.agg / state.tools / state.files / state.events / state.prefix
+  ACT: Baseline inventory: any coach signal derived from these structs needs no new collector.
+
+[ING-02] Hook spool collector (cctop install) and what apply_hook keeps | lever=none | used=partial | conf=high
+  DETAIL: hooks.rs registers `cctop hook` for 12 events (hooks.rs:12-25) and spools one JSON line per event to ~/.cctop/events/<session>.jsonl, dropping tool_response/tool_input/transcript_path (hooks.rs:72-77). apply_hook (state.rs:323-428) uses: PreToolUse/PostToolUse timestamps for exact tool durations (set_exact_duration, tools.rs:182-190); PermissionRequest to bump permission_by_tool, set permission_pending/waiting_since; PostToolUse to compute permission_wait = post - perm - tool p50; PreCompact to learn the autocompact threshold per model; SubagentStart/Stop, Notification.message, SessionStart/End/Stop/UserPromptSubmit only as Events. Shown: header WAITING pill, Turn panel permission line, Events, Context threshold (learned), A09.
+  SRC: src/hooks.rs:12-25,57-87; src/ui/state.rs:323-428; src/attach.rs:114-121
+  EVID: Live spool for this session: 287 PreToolUse, 269 PostToolUse, 9 PostToolUseFailure, 10 SubagentStart, 1 Stop, 1 SessionStart, 1 Notification, 0 PermissionRequest, 0 PreCompact (674 lines)
+  ACT: See UNS-11 for the payload fields the spool already carries but apply_hook never reads.
+
+[ING-03] Status-line shim collector: only context_window, rate_limits, plan are applied | lever=none | used=partial | conf=high
+  DETAIL: status.rs::Sample parses session_id, model{id,display_name}, context_window{total_input_tokens,context_window_size,used_percentage}, rate_limits{five_hour,seven_day}{used_percentage,resets_at}, cost{total_cost_usd,total_duration_ms,total_api_duration_ms,total_lines_added/removed}, plan (alias subscription_type/plan_type). apply_status (state.rs:446-472) applies only context_window (exact size/window), plan, rate_limits + the 24 h series for the exhaustion fit (metrics/limits.rs). Shown: Context gauge without 'est', Limits panel, header plan slot.
+  SRC: src/status.rs:25-89,143-201; src/ui/state.rs:446-472; src/metrics/limits.rs:10-39
+  EVID: apply_status touches s.context_window, s.plan, s.rate_limits only; s.cost and s.model are never read (grep: CostInfo only in status.rs)
+  ACT: Extend Sample + apply_status for the fields listed in UNS-13 (prompt_cache, effort, thinking, fast_mode, cost).
+
+[ING-04] Process tree, registry, git, tasks, subagents, OTel, baseline collectors and their displays | lever=none | used=yes | conf=high
+  DETAIL: procs.rs (ps every 1 s, attach.rs:80-98): main Proc -> header cpu/rss; mcp servers matched to .mcp.json/settings configs -> Agents panel rows (pid, rss, calls, p95/idle, restarts); running_command (shell child) -> header/Turn; exited -> mcp_exited alert. registry.rs (attach.rs:99-113): other_live_sessions (busy, alive, not me) -> Limits summary; SessionInfo::from_registry -> name/pid/cwd/version/status/started_at. git.rs (5 s): branch/dirty -> header; files::numstat vs HEAD-at-attach -> Files +/-. tasks.rs (2 s): ~/.claude/tasks/session-<id8>/ files -> Agents 'bg' rows. agents.rs AgentWatcher: <session>/subagents/agent-*.jsonl + .meta.json -> Agents rows, Tokens include-agents total, A14. otel.rs (--otlp loopback receiver): exact tool durations by tool_use_id, per-tool duration samples, TTFT -> Tools p50/p95 without approx, Turn ttft. baseline.rs (main.rs:397-403, load.rs:71-77): medians over last 7 days -> Tokens panel '7d x1.2t x2.0$', report.
+  SRC: src/attach.rs:36-152; src/procs.rs:177-255; src/registry.rs:19-60; src/git.rs:13-31; src/tasks.rs:20-82; src/agents.rs:238-329; src/otel.rs:116-249; src/baseline.rs:131-166
+  EVID: attach.rs pushes 8 tick hooks in order: liveness+git, prefix scan, procs, registry, hooks, status, tasks, agents; then the transcript Tailer as the only LineSource
+  ACT: Baseline inventory of live-only sources (fixtures get none of these except agents via agents::load).
+
+[UNS-01] usage.speed (fast mode) and service_tier parsed, never read | lever=token_savings | used=no | conf=high
+  DETAIL: transcript.rs Usage has `speed: Option<String>` (standard/fast) and `service_tier`; both are only asserted in a unit test. PRD 14.2 promised 'Effort and fast-mode shown in the header (effort, usage.speed)'; only effort is shown.
+  SRC: src/transcript.rs:247-249; grep hits only transcript.rs:481-482
+  EVID: Live transcripts: 80/80 and 34/34 assistant lines carry speed=standard, service_tier=standard
+  ACT: Show fast-mode/tier in header or coach; a coach rule 'fast mode on for a long build turn' or 'standard tier during rate-limit pressure' becomes possible.
+
+[UNS-02] toolUseResult (structured tool result) is parsed as raw Value and never read | lever=less_rework | used=no | conf=high
+  DETAIL: UserLine.tool_use_result is kept (transcript.rs:91-95) but no collector reads it. Real 2.1.269 keys observed: Bash -> stdout, stderr, interrupted, noOutputExpected, isImage, timedOutAfterMs, returnCodeInterpretation, persistedOutputPath, persistedOutputSize, backgroundTaskId; Edit/Write -> filePath, structuredPatch, originalFile, userModified, content; Workflow -> workflowName, transcriptDir, taskId, taskType, runId, status, summary.
+  SRC: src/transcript.rs:91-95; grep tool_use_result only in transcript.rs tests
+  EVID: newest transcript: 36 results with stdout/stderr/interrupted keys, 1 timedOutAfterMs, 1 persistedOutputPath/Size (offloaded output), 1 backgroundTaskId, 2 structuredPatch
+  ACT: Read interrupted (user hit Esc = rework signal), timedOutAfterMs (A10 evidence), persistedOutputSize (true runaway size for A03: what was produced vs what stayed in context), backgroundTaskId (Bash already backgrounded -> suppress A10), userModified (user edited the file Claude wrote).
+
+[UNS-03] cost-state totals for tool duration, lines added/removed, wall duration are parsed but unused | lever=better_outcomes | used=no | conf=high
+  DETAIL: CostState has total_tool_duration, total_lines_added, total_lines_removed, total_duration (transcript.rs:353-360). Only total_cost_usd, totalAPIDuration(+WithoutRetries) and model_usage are read (cost.rs, alerts ApiRetry, Turn retries).
+  SRC: src/transcript.rs:340-363; grep total_tool_duration -> transcript.rs:354 only
+  EVID: Fixture cost-state has total_lines_added=13 (only asserted in a test)
+  ACT: Lines added/removed per session from Claude Code's own accounting (works outside git, unlike files.rs numstat); tool-time share of session = total_tool_duration/total_duration is a one-line 'where the time goes' coach metric.
+
+[UNS-04] Turn.tool_errors is written but never read; per-turn cache_ttl, tool_result_bytes, prompt_chars, tool_calls only feed single rules | lever=less_rework | used=no | conf=high
+  DETAIL: usage.rs:219 increments t.tool_errors; nothing reads it (query.rs:147 is ToolStats.errors). Turn.cache_ttl (usage.rs:97,305) is never read. tool_result_bytes only A01, prompt_chars only A12, tool_calls only A08. None are in the ledger row or query ledger.
+  SRC: src/metrics/usage.rs:100-118,211-221; src/ledger.rs:66-105; src/query.rs:111-137
+  EVID: grep tool_errors: usage.rs:106,219 (write) + registry/query/mcp (different field)
+  ACT: Add tool_errors, tool_calls, tool_result_bytes, prompt_chars to ledger rows/query ledger; an 'error turns in a row' coach signal is then a 3-line rule.
+
+[UNS-05] permission_by_tool exists only for A09; never in a panel or query | lever=less_rework | used=partial | conf=high
+  DETAIL: SessionInfo.permission_by_tool (state.rs:54) counts PermissionRequest per tool_name; only rules.rs:410 reads it. query summary emits count/total only.
+  SRC: src/ui/state.rs:53-54,334-339; src/query.rs:87-91
+  EVID: grep permission_by_tool: state.rs:54,337; rules.rs:410 (+tests)
+  ACT: Surface 'top prompted tool' in Turn panel/coach; suggest the exact permissions.allow pattern.
+
+[UNS-06] Agent metadata (spawn_depth, is_fork, inherited_context_len, api_calls, tool_calls, finished_at) not surfaced | lever=token_savings | used=no | conf=high
+  DETAIL: agents.rs parses meta.json spawnDepth/isFork and the fork-context-ref contextLength line; Agents panel shows glyph/type/description/elapsed/tokens/model; query agents shows id/type/description/model/state/elapsed/tokens.
+  SRC: src/agents.rs:46-69,120-124; src/ui/panels/agents.rs:66-94; src/query.rs:187-203
+  EVID: Fixture fork agent: spawn_depth=1, inherited_context_len=32, api_calls=8 (asserted in agents.rs:344-364 only)
+  ACT: inherited_context_len is the cost of a fork (context copied); showing it enables 'fork vs Explore agent' advice.
+
+[UNS-07] OTel session data beyond TTFT is query-only | lever=better_outcomes | used=partial | conf=high
+  DETAIL: SessionData.tokens (by type), cost_usd, lines_added/removed, active_time_s, api_requests[] (duration_ms, model, cost_usd), api_errors are exposed only in query summary.otel; the Turn panel shows last_ttft_ms only.
+  SRC: src/otel.rs:36-64; src/ui/panels/turn.rs:71-76; src/query.rs:94-107
+  EVID: grep api_errors / active_time_s: otel.rs + query.rs only
+  ACT: api_errors and per-request duration_ms are the only latency/error truth source; a coach 'API slow/erroring' line could use them when --otlp is on.
+
+[UNS-08] Baseline tool_error_rate and model_mix computed but shown nowhere; cache_hit_ratio only in the report | lever=better_outcomes | used=partial | conf=high
+  DETAIL: baseline.rs computes cost_per_turn, tokens_per_turn, cache_hit_ratio, tool_error_rate, model_mix over 7 days (MIN_TURNS=3, REFRESH_MS=1h, cache ~/.cctop/baseline.json). Tokens panel renders only x-tokens and x-cost multipliers (tokens.rs:146-166); report.rs adds cache hit ratio; tool_error_rate and model_mix only via query baseline.
+  SRC: src/baseline.rs:19-31,131-166; src/ui/panels/tokens.rs:146-166; src/report.rs:139-176
+  EVID: Live baseline: sessions=23, cost_per_turn=0.887, tokens_per_turn=828k, cache_hit=0.963, tool_error_rate=0.038, model_mix opus 0.97
+  ACT: 'Error rate 3x your median' and 'this session is 100% opus vs your 97%' are ready-made coach comparisons.
+
+[UNS-09] procs.descendants and McpServer.cpu_pct never displayed | lever=none | used=no | conf=high
+  DETAIL: Snapshot.descendants (every child process) is populated but only used inside procs.rs; McpServer.cpu_pct is captured but the Agents panel shows rss only.
+  SRC: src/procs.rs:154-165,211-218; src/ui/panels/agents.rs:96-133
+  EVID: grep descendants: procs.rs only; cpu_pct in agents.rs appears only in test fixtures
+  ACT: Low value for a coach; note only.
+
+[UNS-10] Aggregate.away, observed_ttl, lines_seen, cache_write 5m/1h split not shown in any panel | lever=token_savings | used=partial | conf=high
+  DETAIL: agg.away (away_summary texts) is only mirrored as an Event; observed_ttl is in query summary and A02 but the Tokens panel never prints the TTL; cache_write_5m/1h are used for pricing only; lines_seen is test-only.
+  SRC: src/metrics/usage.rs:153-162,243-246; src/query.rs:76; src/ui/panels/tokens.rs:71-77
+  EVID: grep observed_ttl: usage.rs, rules.rs:116, query.rs:76
+  ACT: Show TTL next to cache hit; a coach countdown 'cache expires in 4:12' needs the TTL plus last-call time (both in State) or the status line prompt_cache.expires_at (UNS-13).
+
+[UNS-11] Hook payload fields available but unread: duration_ms, error, is_interrupt, agent_id/type, effort, permission_mode, prompt_id, Stop.background_tasks/last_assistant_message, SessionStart.source, Notification.notification_type | lever=less_rework | used=no | conf=high
+  DETAIL: HookEvent.payload keeps everything except tool_response/tool_input/transcript_path; apply_hook reads only payload.message on Notification. Observed key sets: PostToolUse has duration_ms (Claude Code's own exact tool duration, no PreToolUse pairing needed); PostToolUseFailure has error + is_interrupt; PreToolUse/PostToolUse carry agent_id/agent_type for subagent calls (311 of 331 here) which are silently dropped because tool_use_id is not in the main index (state.rs:357); Stop carries background_tasks[] {id,name,type,status,description}, session_crons[], last_assistant_message, stop_hook_active; SessionStart carries source (startup/resume/clear/compact) and model; Notification carries notification_type (permission_prompt, idle_prompt).
+  SRC: src/hooks.rs:57-87; src/ui/state.rs:323-428; ~/.cctop/events/<session>.jsonl (keys only)
+  EVID: payload key sets: 'PostToolUse: agent_id,agent_type,cwd,duration_ms,effort,...' (249), 'PostToolUseFailure: ...,error,...,is_interrupt,...' (9), 'Stop: background_tasks,...,last_assistant_message,...,session_crons,...,stop_hook_active'; Notification types across spools: 3 permission_prompt, 2 idle_prompt; PermissionRequest total across 8 spools: 3
+  ACT: (1) is_interrupt=true is the cleanest 'user aborted' rework signal; (2) Notification permission_prompt can drive WAITING even in modes that never emit PermissionRequest; (3) Stop.background_tasks replaces the empty tasks dir (see TASK-02); (4) SessionStart.source=compact/clear/resume marks context boundaries for A18; (5) duration_ms makes exact tool timing one-event instead of pairing.
+
+[UNS-12] Transcript lines and attachments cctop drops: ai-title, mode, last-prompt, bridge-session, atis-latch, file-history-delta, and 11 injected reminder subtypes | lever=token_savings | used=no | conf=high
+  DETAIL: Unknown types seen live: mode{mode:normal}, last-prompt{lastPrompt,leafUuid}, ai-title{aiTitle} (session title), atis-latch{atis}, bridge-session{bridgeSessionId,lastSequenceNum,...}, file-history-delta{messageId,snapshotMessageId,trackingPath,backup}. Attachment subtypes ignored by prefix.rs: total_tokens_reminder (48 lines, 4.4 KB), prompt_snapshot (2, 161 KB), bash_output_audience_note (19), batching_reminder_sent (9), silent_turn_reminder, ultra_effort_enter, edited_text_file (8 KB), environment (5), session_context, queued_command, remote_session_change, model, date, command_permissions, auto_mode. Top-level assistant/user keys unused: perTurnEffort, apiBlockIndex, wireIngestContext, wireToolInputs, promptId, promptSource, origin, permissionMode (on user lines), gitBranch (per line), entrypoint, userType.
+  SRC: src/transcript.rs:41-58; src/prefix.rs:50-117; jq over the newest ~/.claude/projects transcript (keys and byte counts only)
+  EVID: type counts newest transcript: 80 assistant, 65 attachment, 56 user, 19 mode, 19 bridge-session, 19 atis-latch, 18 last-prompt, 18 ai-title, 5 file-history-snapshot, 4 queue-operation, 2 system; attachment bytes: prompt_snapshot 161,585, deferred_tools_delta 24,505, skill_listing 15,712, edited_text_file 8,252, total_tokens_reminder 4,368
+  ACT: Count injected reminder bytes per turn as 'harness overhead' inside msgs; use ai-title changes and SessionStart.source as task-boundary hints; gitBranch per line removes the git shell-out for branch.
+
+[UNS-13] Status-line 2.1.269 payload has a prompt_cache block, effort, thinking, fast_mode, current_usage, cost - none parsed | lever=token_savings | used=no | conf=high
+  DETAIL: Real ~/.cctop/status/<id>.json key paths include prompt_cache.{hit_ratio, misses, expires_at, ttl, warm, expected_rebuilds, recache_tokens_if_cold, miss_recache_tokens, cache_write_tokens, requests, caching_observed}, effort.level, thinking.enabled, fast_mode, exceeds_200k_tokens, context_window.{current_usage.*, remaining_percentage, total_output_tokens, used_percentage}, cost.{total_cost_usd,total_api_duration_ms,total_duration_ms,total_lines_added,total_lines_removed}, prompt_id, session_name, version, output_style.name, workspace.repo.{host,owner,name}. status.rs parses none of prompt_cache/effort/thinking/fast_mode; cost is parsed but unused. There is no plan_type or subscription_type key, so SessionInfo.plan is always None and query summary reports plan as 'missing' even with the shim installed.
+  SRC: src/status.rs:25-83; ~/.cctop/status/c3254591-....json (key paths only); live `cctop query summary` for this session
+  EVID: jq paths: 'prompt_cache.expires_at', 'prompt_cache.recache_tokens_if_cold', 'prompt_cache.warm', 'effort.level', 'thinking.enabled', 'fast_mode'; top keys lack plan_type/subscription_type; live summary: limits present, plan {source: missing}
+  ACT: Highest-value gap for a coach: expires_at gives an exact 'cache goes cold in mm:ss, cold turn costs N tokens (recache_tokens_if_cold)' countdown replacing A02's after-the-fact detection; hit_ratio/misses are Claude Code's own A01 evidence; effort.level and thinking.enabled feed A08; drop the plan slot or source it from elsewhere.
+
+[UNS-14] HookInfo.command is summed away: A16 cannot name the slow hook | lever=less_rework | used=partial | conf=high
+  DETAIL: stop_hook_summary hookInfos[].command is parsed (transcript.rs:333-338) but Aggregate only sums duration_ms (usage.rs:238-240); events.rs prints count and total. PRD A16 wording names the hook ('PostToolUse lint'); the implementation says 'Hooks add 1.4s per turn'. Also hookAdditionalContext, preventedContinuation, stopReason on the system line are dropped.
+  SRC: src/transcript.rs:331-338; src/metrics/usage.rs:236-241; src/advisor/rules.rs:651-683
+  EVID: real stop_hook_summary keys: hookCount, hookInfos, hookErrors, hookAdditionalContext, preventedContinuation, stopReason, hasOutput, toolUseID
+  ACT: Keep per-command durations in Turn; A16 action becomes 'make <command> async'. preventedContinuation=true is a rework signal (hook blocked the stop).
+
+[RULE-A01] A01 CacheMiss: hit ratio < 60% over last 5 API-bearing turns and >= 3 turns with unexplained cache writes | lever=token_savings | used=yes | conf=high
+  DETAIL: Predicate: recent_turns(5) (turns with api_calls>0, newest first); sum usage; cache_hit_ratio < 0.6; count turns where cache_write > (tool_result_bytes/4)*2 + 2000; fire if >= 3. Saving::Tokens(sum cache_write/5 * 0.9). Weaknesses: uses turn totals so a turn with many API calls accumulates writes legitimately (each tool round-trip writes the new suffix) and is flagged; the 'unexplained' heuristic ignores thinking/assistant output appended to the prefix; ignores the status line prompt_cache.misses/hit_ratio which is authoritative (UNS-13); fires only on a rolling 5-turn window so it retires correctly.
+  SRC: src/advisor/rules.rs:68-106
+  EVID: thresholds 0.6, 3 of 5, 2x+2000; test rules.rs:781-814
+  ACT: Replace the write-vs-tool-bytes heuristic with prompt_cache.misses from the status line when present.
+
+[RULE-A02] A02 CacheExpiry: gap between consecutive turns > observed TTL and next turn's cache_write >= 70% of its context_size | lever=token_savings | used=yes | conf=high
+  DETAIL: Predicate over consecutive api-bearing turn pairs (a.last_at -> b.started_at); TTL = 1 h if agg.observed_ttl is OneHour else 5 min; keeps the LAST match; Saving::Tokens(write). Weaknesses: never retires (a cold turn 3 hours ago still shows for the rest of the session); saving is a one-off amount labelled '/turn'; the status line now exposes prompt_cache.expires_at and recache_tokens_if_cold which would allow a preventive countdown instead of a post-mortem; uses a.last_at which for a turn without turn_duration is the last transcript line, fine.
+  SRC: src/advisor/rules.rs:108-148
+  EVID: gap > ttl_ms && write >= 0.7*context_size; test 817-837
+  ACT: Coach version: 'cache expires in mm:ss; sending now keeps it warm' from prompt_cache.expires_at, or from last_line_at_ms + TTL already in State.
+
+[RULE-A03] A03 RunawayResult: one result > 3k tokens, or same (tool,input_summary) >= 2x with max > 2k | lever=token_savings | used=yes | conf=high
+  DETAIL: Scans all tools.calls for the session; repeats keyed on input_summary (30-char clipped) so distinct long commands sharing a prefix collide and distinct short ones never match; prefers the repeated case if its n*max exceeds the single max. Saving::Tokens(max*n) or (result). Weaknesses: never retires (session-lifetime), so after one big `sed -n` it stays until dismissed and outranks live issues; result_tokens_est counts transcript-truncated text (correct for context) but ignores persistedOutputSize (UNS-02) which is the real runaway evidence; MCP calls are grouped under mcp:<server> so screenshots/snapshots (largest results in the fixture) dominate.
+  SRC: src/advisor/rules.rs:150-193
+  EVID: live this session: fired on `sed -n 58,300p tasks/prd-ccto...` 6.8k tokens; thresholds 3000 / 2000 / n>=2
+  ACT: Scope to the last N turns or since last compaction; add 'still in context' check (post-compaction results are gone).
+
+[RULE-A04] A04 Rereads: any file with reads_since_edit >= 3 | lever=token_savings | used=yes | conf=high
+  DETAIL: files.rs increments reads_since_edit per Read, resets on Edit/Write/MultiEdit/NotebookEdit. Per-read tokens = max result_tokens_est of Read calls whose input_summary ends with the clipped path (fragile: 30-char clip + trim of leading ellipsis). Saving::Tokens(per_read*(reads-1)). Weaknesses: Read with offset/limit (the recommended fix) still counts as a re-read, so following the advice does not clear it; a file read in different turns hours apart is legitimately re-read after compaction; never retires until an edit.
+  SRC: src/advisor/rules.rs:195-234; src/files.rs:24-32,67-86
+  EVID: threshold 3; per_read default 1000 when no Read call matches
+  ACT: Track offset/limit in Files (input has offset/limit keys) and exclude ranged reads; reset counters on compaction.
+
+[RULE-A05] A05 ExploreInMain: >= 8 consecutive Read/Grep/Glob with no Edit/Write (other tools do not break the run) | lever=token_savings | used=yes | conf=high
+  DETAIL: Longest run over the whole session; Bash, Task/Agent, WebFetch etc. neither extend nor reset the run, so a Read/Grep interleaved with Bash for an hour counts as consecutive. Saving::Tokens(run_tokens-1000). Weaknesses: session-lifetime, never retires; does not exclude runs that already happened inside a subagent (main transcript only, correct) but also does not credit runs that ended with a Task/Agent delegation; threshold 8 is arbitrary and a review task legitimately reads 8 files.
+  SRC: src/advisor/rules.rs:236-273
+  EVID: match arms: Read|Grep|Glob extend; Edit|Write|MultiEdit|NotebookEdit reset; `_ => {}`
+  ACT: Count only the current run (ends at now) for a coach prompt 'you are 6 reads into exploration - delegate the rest'; reset on Task/Agent.
+
+[RULE-A06] A06 CompactionChurn: >= 2 compactions detected, or projected within 3 turns | lever=token_savings | used=yes | conf=high
+  DETAIL: Compactions = >= 30% drop between consecutive api-bearing turns' context_size (context.rs:100-109) OR learned via PreCompact hook threshold; projection = (threshold - size)/velocity with velocity = EMA(alpha 0.2) of deltas. Saving::Avoids (ranks above every token rule). Weaknesses: a /clear looks like a compaction (30% drop) and inflates the count; velocity EMA over all turns lags after a burst; threshold default 80% of window until observed; 'while the task is unfinished' from the PRD is not implemented; Avoids rank means it pins the top slot whenever it fires.
+  SRC: src/advisor/rules.rs:275-305; src/metrics/context.rs:78-137
+  EVID: COMPACTION_DROP_RATIO 0.30, DEFAULT_THRESHOLD_RATIO 0.80, EMA_ALPHA 0.2; alert CompactionSoon uses <= 2 turns
+  ACT: Distinguish /clear (SessionStart.source=clear, system local_command) from autocompact; make the projection window-limited.
+
+[RULE-A07] A07 IdleMcp: MCP server with schema tokens > 2k and no calls for > 20 min (or never, measured from first turn) | lever=token_savings | used=yes | conf=high
+  DETAIL: Schema tokens = sum(len(addedLines)/4) of deferred_tools_delta entries per mcp:<server>; idle = now - last_call_at (or session start). Saving::Tokens(schema tokens). Weakness (major): in 2.1.269 addedLines are name-only stubs of ~10-40 bytes each, so the largest live server (claude_ai_Resend, 104 tools) measures 1,030 tokens and no server can cross 2,000; the rule is effectively dead. The real schemas are deferred (loaded on ToolSearch) so the true per-request cost is the listing, which A07 now over-advises against; the 49k 'system prompt + other' remainder hides where the prefix really is.
+  SRC: src/advisor/rules.rs:307-353; src/prefix.rs:139-150; live `cctop query prefix`
+  EVID: live prefix rows: total 57,139; other 49,231; mcp:claude_ai_Resend 1,030 tokens/104 tools; built-in tools 67 tokens/22 tools; A07 gate > 2_000
+  ACT: Re-base the MCP cost model on the listing bytes actually sent (deferred_tools_delta) plus mcp_instructions_delta, and treat a server's ToolSearch loads as the cost event; or lower the gate and reword.
+
+[RULE-A08] A08 ThinkingShare: thinking > 40% of output over last 5 turns, effort != low, and >= 3 of 5 turns had <= 3 tool calls | lever=token_savings | used=yes | conf=high
+  DETAIL: Reads Turn.effort from the transcript `effort` field of the last response. Saving::Tokens(think/5). Weaknesses: 'routine' proxy is tool-call count, so a 5-turn design discussion (0 tools) is flagged as routine; the newer perTurnEffort key and status-line effort.level/thinking.enabled are ignored; with effort=xhigh (live) the action 'lower effort' is right but the rule cannot see whether thinking is even enabled.
+  SRC: src/advisor/rules.rs:355-398
+  EVID: thresholds 0.4, 5 turns, tool_calls <= 3 in >= 3 turns; live session effort=xhigh, thinking present
+  ACT: Use prompt_chars and tool names (Edit-heavy = routine) instead of tool count; read thinking.enabled from the status line.
+
+[RULE-A09] A09 PermissionWaits: total wait > 120 s or > 5 prompts for one tool | lever=less_rework | used=yes | conf=high
+  DETAIL: Needs the hook spool; wait = PostToolUse - PermissionRequest - tool p50. Saving::Seconds(total_wait_s / turns). Weaknesses: keyed by tool_name only (Bash), not the command pattern, so the action 'add Bash to the allow-list' is unsafe advice; in auto/acceptEdits modes PermissionRequest never fires (0 in 7 of 8 live spools) while Notification permission_prompt does; per-turn saving divides by all turns including those without prompts.
+  SRC: src/advisor/rules.rs:400-438; src/ui/state.rs:334-381
+  EVID: live spools: 3 PermissionRequest total across 8 sessions; Notification permission_prompt 3
+  ACT: Key on tool_input (Bash command prefix) - available in the hook stdin before hooks.rs strips tool_input at line 75; keep a summarised pattern.
+
+[RULE-A10] A10 LongForeground: any Bash call > 60 s (finished or still running) | lever=less_rework | used=yes | conf=high
+  DETAIL: Max over all Bash calls of duration_ms or now-started_at. Saving::Seconds(duration). Weaknesses: never retires; cannot tell a command that was already backgrounded (toolUseResult.backgroundTaskId, run_in_background input) from a blocking one, and Claude Code's own Bash timeout/background prompts are invisible; a one-off 82 s command ranks above cache issues for the whole session; the running case duplicates alert ToolRunningLong.
+  SRC: src/advisor/rules.rs:440-472
+  EVID: live: fired on `find / -name ...` 1:22; Bash p95 82,038 ms
+  ACT: Exclude calls whose input has run_in_background or whose result has backgroundTaskId; scope to last N turns.
+
+[RULE-A11] A11 FreshInputSpike: any turn with usage.input (uncached) > 5,000 | lever=token_savings | used=yes | conf=high
+  DETAIL: Max over all turns. Saving::Tokens(input-1000). Weaknesses: usage.input per turn is the sum over all API calls in the turn, and every tool round-trip's new suffix is billed as fresh input, so a long agentic turn with 30 tool calls trips the rule without any paste; the headline 'sent ~N tokens of uncached input' misattributes it to a paste; never retires.
+  SRC: src/advisor/rules.rs:474-496
+  EVID: t.usage.input > 5_000 over agg.turns; fixture (fresh 286 total) is quiet
+  ACT: Use the first API call's input_tokens of the turn (the prompt) or prompt_chars/pastedContents from history.jsonl; not the turn sum.
+
+[RULE-A12] A12 ChattyTurns: > 20 turns started in the last hour and median prompt_chars < 32 | lever=token_savings | used=yes | conf=high
+  DETAIL: Rolling 1 h window on turn started_at; prompt_chars = user text length. Saving::Tokens(context_size/10). Weaknesses: meta-free short prompts like 'y', 'continue' during an interactive loop are exactly what the user wants; interrupt+resume patterns inflate turns; saving is a guess (ctx/10).
+  SRC: src/advisor/rules.rs:498-541
+  EVID: live prompt lengths: n=7 median=109; n=5 median=135 (quiet)
+  ACT: Fine as is; consider excluding turns whose prompt is a slash command (promptSource/local_command).
+
+[RULE-A13] A13 RateLimitPacing: exhaustion_ms < five_hour_resets_at_ms | lever=better_outcomes | used=yes | conf=high
+  DETAIL: Uses the least-squares slope over 30 min of status samples (>= 3). Saving::Avoids. Weaknesses: duplicates alert ExhaustionBeforeReset exactly; slope from account-wide % includes other sessions (shown separately); with sparse status writes (status line only updates when Claude Code redraws) the 3-sample minimum is often unmet; exhaustion_ms is only refreshed in apply_status, so between samples it goes stale relative to clock_ms.
+  SRC: src/advisor/rules.rs:543-572; src/metrics/limits.rs:33-39; src/ui/state.rs:463-470
+  EVID: live: five_hour 0.0, exhaustion null (fit needs 3 samples in 30 min)
+  ACT: Keep; recompute exhaustion on each tick from limits_series_5h (Limits panel already does this at limits.rs:79) so the rule and panel agree.
+
+[RULE-A14] A14 SubagentModel: an agent whose model contains 'opus' and whose type+description matches search/summar/list/find/explore/look for/locate/scan | lever=token_savings | used=yes | conf=high
+  DETAIL: Saving = (opus cost - sonnet-5 cost of the same usage)/5 * 1e6 tokens-equivalent. Weaknesses: keyword match on description is crude ('find the bug and fix it' matches 'find'); 'Explore' agents in 2.1.269 already default to a cheaper model so the rule rarely applies; Workflow subagents are invisible (GAP-01) so the rule misses most agents; pricing table must know the model.
+  SRC: src/advisor/rules.rs:574-613
+  EVID: PATTERNS list at rules.rs:582-584; live agents: [] (11 workflow agents unseen)
+  ACT: Fix GAP-01 first; use meta.agentType == Explore/Plan rather than description keywords.
+
+[RULE-A15] A15 ErrorLoop: same (tool, input_summary) with is_error >= 3 times | lever=less_rework | used=yes | conf=high
+  DETAIL: Session-lifetime count. Saving::Tokens(error tokens / n). Weaknesses: input_summary is 30 chars so `cargo test` failing on different code states across the session counts as a loop (the fixture's anonymised 'make check' fires it by design); no recency, so a loop that was fixed two hours ago still shows; ignores the hook error text/is_interrupt (UNS-11) which distinguishes a real failure from a user interrupt.
+  SRC: src/advisor/rules.rs:615-647
+  EVID: fixture fires with `Bash make check` 3x (test 1098-1126)
+  ACT: Require the 3 failures to be consecutive calls of that input with no success in between and within the last N turns.
+
+[RULE-A16] A16 HookOverhead: hook_ms > 10% of turn_duration over the last 5 turns that had both | lever=less_rework | used=yes | conf=high
+  DETAIL: Only Stop hooks are summarised by Claude Code (stop_hook_summary), so PreToolUse/PostToolUse hooks (the expensive ones) are invisible unless cctop's own spool timestamps are used - which apply_hook does not do for hook overhead. Saving::Seconds(per_turn). Weakness: cannot name the hook (UNS-14); self-reference: cctop's own 12 hooks add to the measured time.
+  SRC: src/advisor/rules.rs:649-683; src/metrics/usage.rs:236-241
+  EVID: fixture hooks ~50 ms; live stop_hook_summary hookCount present
+  ACT: Keep per-command durations; treat `cctop hook` as excluded.
+
+[RULE-A17] A17 BigPrefix: first_call_prefix / window > 25% | lever=token_savings | used=yes | conf=high
+  DETAIL: prefix = cache_read + cache_write of the session's first API call. Saving::Tokens(prefix/10). Weaknesses: with a 1M window this needs > 250k prefix and never fires on Opus/Sonnet 5 (fixture 60k/1M, live 57k/1M); on 200k models it fires at 50k which is the normal 2.1.269 baseline; 'largest' row is unreliable because 86% of the prefix is unattributed (GAP-03); on a resumed session the first call is not the prefix.
+  SRC: src/advisor/rules.rs:685-717; src/metrics/context.rs:120-125
+  EVID: live: prefix 57,139 of 1,000,000 (5.7%); other row 49,231
+  ACT: Express the prefix as cost per turn (prefix x cache_read price x turns) rather than window share; attribute the remainder (system prompt vs CLAUDE.md sizes are known on disk).
+
+[RULE-A18] A18 NoHandoff: session age > 3 h (first turn start to now) and context ratio > 70% | lever=less_rework | used=yes | conf=high
+  DETAIL: No task or boundary input at all: the PRD's 'task list shows a natural boundary' is not implemented; state.tasks, agg.away, git commits, TodoWrite/TaskCreate inputs, ai-title, Stop.background_tasks are all unused here. Saving::Avoids, so once it fires it pins the top slot for the rest of the session. Age is from the first turn's timestamp, which for a --resume session is the original start; the action 'at the next milestone' has no milestone detector.
+  SRC: src/advisor/rules.rs:719-751
+  EVID: predicate `age <= 3*3_600_000 || v.ratio() <= 0.70 -> None`; grep tasks|boundary|milestone in rules.rs: only prose
+  ACT: Implement boundary detection (see TASK-03) before promoting A18 to a coach nudge; otherwise it is a timer.
+
+[RULE-ENGINE] Advisor engine: ranking, dismissal, statelessness across CLI calls | lever=better_outcomes | used=yes | conf=high
+  DETAIL: Engine::evaluate (advisor/mod.rs:84-106) runs all 18 rules each tick, sorts by Saving::rank (Avoids = u64::MAX, Seconds*2000, Tokens) then by first_fired turn (newer first); dismiss() is in-memory for the TUI session only; query::advice/mcp/advise build a fresh Engine so CLI callers never see dismissals and recency ties are lost. Saving labels say '/turn' for one-off amounts. Explain text is static per rule (rules.rs:33-55). Panel shows 1 of N with n/N/x/Enter (advisor.rs:41-58).
+  SRC: src/advisor/mod.rs:57-116; src/query.rs:221-231; src/ui/panels/advisor.rs
+  EVID: rank(): Avoids => u64::MAX; Seconds(s) => s*2000; Tokens(t) => t
+  ACT: A coach needs a severity/urgency axis (act-now vs eventually) and a decay: add `since_turn`/`window` to Advice and retire rules whose evidence is older than N turns.
+
+[TODO-01] No TODO/FIXME markers in src; the only 'phase 2' is the OTel module header; PRD lists the deferred items | lever=none | used=unknown | conf=high
+  DETAIL: grep for TODO|FIXME|XXX|HACK|todo!|unimplemented|not yet|phase 2 over src/ returns no code markers. otel.rs:1 'OpenTelemetry receiver (phase 2)'. rules.rs:53 default explain text 'No explanation for this rule yet.' Dead-parameter markers: tools.rs:79 `let _ = name;`, layout.rs:166 `let _ = slack;`. PRD deferrals: user-defined TOML rules (prd-cctop.md 5.7 'phase-2 item'); autocompact threshold open question (9); pane PRD open questions 1-7 (prd-cctop-pane.md:267-277) incl. 'cctop query pane' combined verb (open question 3) and permission waits without the shim (4).
+  SRC: grep over src/; src/otel.rs:1; src/advisor/rules.rs:53; tasks/prd-cctop.md:213,495-505; tasks/prd-cctop-pane.md:267-277
+  EVID: grep output: only prose matches ('later', 'future' in tests)
+  ACT: Nothing in code is flagged as unfinished; the deferred list lives in the PRDs.
+
+[ALERT-01] Alert engine: 11 edge-triggered rules, thresholds, delivery | lever=better_outcomes | used=yes | conf=high
+  DETAIL: alerts.rs RuleId::ALL: ContextHigh (ratio > 0.80), CompactionSoon (turns_until_compaction <= 2), Limit5h60/80/95 (five_hour_pct > 60/80/95), ExhaustionBeforeReset (exhaustion_ms < five_hour_resets_at_ms), CacheHitLow (< 0.5 over last 5 api-bearing turns), ToolRunningLong (running call > 60 s), PermissionWaitLong (permission_waiting_since > 30 s), McpExited (mcp_exited non-empty), ApiRetry (retry ms increased since last eval; primed on first eval to ignore history). Fires once per crossing (active map), re-arms when false. critical() = ContextHigh | ExhaustionBeforeReset | McpExited -> osascript/notify-send when --notify. deliver(): events.note + 3 s toast. Evaluated on every data change and every render tick (app.rs:202-215,705-708,734).
+  SRC: src/alerts.rs:9-46,56-157,169-231; src/app.rs:193-215
+  EVID: RuleId::ALL length 11; thresholds inline in check()
+  ACT: A coach view can subscribe to the same Fired list (deliver already appends to events); the toast channel is single-slot and 3 s, so multi-line coaching needs its own surface.
+
+[BASE-01] baseline.rs computes 7-day medians per session; report.rs writes a one-page Markdown at SessionEnd | lever=better_outcomes | used=yes | conf=high
+  DETAIL: baseline: transcripts modified in last 7 days under ~/.claude/projects, sessions with >= 3 turns; per session: cost (cost-state), tokens (agg.total.total), cache_hit, tool error rate (calls with is_error / calls), cost by model family; medians + model_mix share; cached at ~/.cctop/baseline.json, refresh 1 h. report.rs::markdown: header (session, model, version, cwd, turns, api calls, tool calls, duration), Cost (total, by model, token classes, hit ratio), Context (final size, prefix, compactions), Top 5 context consumers, 5 most expensive turns (ledger), Advisor (fresh engine), Versus last 7 days (cost/turn, tokens/turn, cache hit vs median). Written to ~/.cctop/reports/<date>-<name>.md by `cctop hook` on SessionEnd (hooks.rs:116-128). export_json = ledger + events; export_csv ledger columns turn..model.
+  SRC: src/baseline.rs:14-197; src/report.rs:11-247; src/hooks.rs:109-131
+  EVID: live baseline: 23 sessions, cost_per_turn 0.887 USD, tokens_per_turn 828k, hit 0.963, tool_error_rate 0.038
+  ACT: Baseline is per-session medians, not per-turn distributions; a coach 'this turn is 3x your median turn' needs per-turn medians (cheap to add in figures()).
+
+[TURN-01] Turn boundaries: a non-meta user line without a tool_result block starts a turn; system turn_duration closes it | lever=none | used=yes | conf=high
+  DETAIL: usage.rs:190-213: is_prompt = !u.is_meta && no tool_result blocks -> push Turn{number, started_at, prompt_chars}; assistant lines before any user line create turn 1 (push_assistant 259-267); turn_duration system line sets duration_ms and last_at (230-234); tools.rs:129-132 keeps its own identical counter for Call.turn. Elapsed = duration_ms if set else now - started_at. Slash commands appear as system local_command lines and as user lines (promptSource key) and are counted as turns. Compaction/clear boundaries are only inferred from a 30% context drop (context.rs:100-109) or PreCompact hook.
+  SRC: src/metrics/usage.rs:188-257; src/tools.rs:128-132; src/metrics/context.rs:100-109
+  EVID: fixture: 15 turns, 143 API calls, 9 turn_duration lines
+  ACT: Turn detection is sound; task detection does not exist (see TASK-*).
+
+[TASK-01] tasks.rs reads ~/.claude/tasks/session-<id8>/ but under 2.1.269 those dirs only contain .lock and .highwatermark, which tasks.rs would list as tasks | lever=better_outcomes | used=partial | conf=high
+  DETAIL: load() takes every regular file, id = file_stem (for '.lock' Rust returns '.lock'), kind = extension or 'task', description = first line; no dotfile filter. Live: 34 session dirs, 4 files total, all .lock (0 B) or .highwatermark (2 B). The dir for this session is empty although the Stop hook payload lists background_tasks and toolUseResult carries backgroundTaskId.
+  SRC: src/tasks.rs:31-82; ls ~/.claude/tasks (names/sizes only)
+  EVID: find ~/.claude/tasks -type f: 4 files: session-c5a3343f/.lock, .highwatermark, session-a6d60f35/.lock, .highwatermark
+  ACT: Filter names starting with '.'; source background tasks from Stop.background_tasks (hook payload) and backgroundTaskId results instead.
+
+[TASK-02] Claude Code's own background-task list is in the Stop/SubagentStop hook payload, unused | lever=better_outcomes | used=no | conf=high
+  DETAIL: Stop and SubagentStop payloads carry background_tasks: [{id, name, type, status, description}], session_crons: [], last_assistant_message (349 chars here), stop_hook_active. A turn that ends with running background tasks is not a boundary; an empty list plus an end_turn is.
+  SRC: ~/.cctop/events/<session>.jsonl Stop payload (keys only); src/ui/state.rs:419-425 (Stop only becomes an Event)
+  EVID: Stop.background_tasks shape: [[{k:description},{k:id},{k:name},{k:status},{k:type}]]
+  ACT: Parse in apply_hook; replaces tasks.rs for live sessions and gives A18/coach a 'nothing pending' signal.
+
+[TASK-03] Candidate 'natural boundary' signals present in State or on disk that A18 could use today | lever=less_rework | used=no | conf=medium
+  DETAIL: (1) Stop hook with background_tasks empty and stop_reason end_turn (TASK-02); (2) SessionStart.source in {clear, compact, resume} and system local_command lines (/clear, /compact) mark hard boundaries; (3) ai-title line changes (session title re-generated) hint topic shifts; (4) git: session-meta counts git_commits, and toolUseResult of `git commit` Bash calls is visible in tools.calls input_summary; (5) TodoWrite/TaskCreate/TaskUpdate tool_use inputs (not present in the 3 newest transcripts: tools were Bash/Write/Read/Workflow) and ~/.claude/plans/*.md (3 files) for plan-mode boundaries; (6) agg.away summaries; (7) idle gaps > TTL between turns (A02 already computes gap). None are wired.
+  SRC: src/advisor/rules.rs:719-751; UNS-11/UNS-12 evidence; ls ~/.claude/plans
+  EVID: tool_use names newest transcripts: Bash 42/Write 2/Read 2; Bash 19/Workflow 1 (no TodoWrite/TaskCreate)
+  ACT: Define boundary = (Stop with no background tasks) AND (last assistant text, no pending tool_use) AND (git commit or plan file touched in the last N turns); fire A18 only at such a moment.
+
+[QUERY-01] Query JSON schema and whether a coach can be fed from existing State | lever=better_outcomes | used=yes | conf=high
+  DETAIL: query.rs verbs: summary (session{name,session_id,pid,cwd,version,model,alive,permission_mode,effort,plan}, turns, api_calls, current_turn_elapsed, context{size,window,ratio,prefix,velocity,turns_until_compaction,compactions}, tokens{5 classes,cache_hit_ratio,cache_ttl}, cost, cost_by_model, burn_rate, input_rate, limits{five_hour,seven_day,five_hour_resets_at_ms,exhaustion_ms,other_live_sessions}|missing, tool_calls, tokens_to_ctx, agents, hooks_installed, permission_waits|missing, queued_prompts, advice_count, otel|missing); ledger [--last]; tools {tools[], top_ctx[]}; files[]; agents {agents[],mcp[]|missing,tasks[]}; advice[] (+explain text); prefix {total,rows[]}; events [--since]; explain <metric_id>; baseline. Every number is {value,unit,metric_id,approx}; 50 metric ids in registry.rs:52-109. State built by load::state_from (load.rs:48-79): transcript + agents::load + prefix.scan + one status sample + hook spool replay + baseline; no procs/git/registry in CLI mode. Everything a coach needs right now (current turn, running tool via tools.running(), permission_pending/since, limits, context view, advice, events tail, queued prompts, last cache-writing call time) is already in State; a `coach` verb is a pure function of State like the others. Not in State without new collectors: prompt_cache/expires_at (UNS-13), Stop.background_tasks (TASK-02), workflow subagents (GAP-01), interrupts (UNS-02/11).
+  SRC: src/query.rs:25-261; src/load.rs:43-79; src/metrics/registry.rs:50-109; src/snapshots/cctop__query__tests__query_summary.snap
+  EVID: MCP tools: cctop_summary, cctop_ledger, cctop_tools, cctop_advice, cctop_prefix, cctop_events, cctop_explain_metric (no files/agents/baseline tools); summary snapshot pinned by insta
+  ACT: Add `query coach` returning {now: {turn, elapsed, running_tool, waiting_on}, next: [ranked actions with urgency], soon: [countdowns]} from State; extend the MCP tool list to match; the pane PRD's open question 3 ('cctop query pane') is the same verb.
+
+[LAYOUT-01] Layout engine constraints a second view must respect | lever=none | used=yes | conf=high
+  DETAIL: layout.rs: Mode::Wide at width >= WIDE_MIN_COLS=100 (13), else Narrow stack in NARROW_ORDER [0,1,2,3,4,5,6,7,9,8] (64). PanelSpec min_rows are content rows (+2 border, header is 2 content rows drawn without border = 4 rows in snapshots): header 2/prio 255/Top; Context 4/90/Left; Tokens 7/80/Left; Limits 3/70/Left; Turn 3/60/Left; Tools 7/85/Right/flexible; Agents 5/50/Right; Files 3/40/Right; Advisor 2/75/Bottom; Events 4/95/Bottom/flexible with floor EVENTS_MIN_ROWS 4 (+2). Full narrow stack needs 40 content + 20 border + 1 footer = 61 rows. assign_rows (114-168): collapse lowest priority to 1-row title line first, then drop entirely, until it fits; slack goes to flexible panels by priority, else Events, else the last visible. Wide: left_w = width/2+1 sharing one border column; bottom panels take min rows first, columns share the rest. draw_frame needs width >= 4 (panel.rs:94). Snapshots: 40x24 -> header 4, Context 6, panels 2-7 and 9 collapsed to 1 row each, Events 6; 60x51 -> everything but Agents/Files (collapsed) fits; 122x37 wide -> Turn collapsed. FR-6: no scrolling at >= 50x35, usable to 40x24. Config persists hidden_panels/layout/theme/refresh (config.rs:11-20). Panel content widths in use: Tools header string is 53 chars (tools.rs:61), ledger overlay ~110 chars, files name_w = width-36 clamped 8..40.
+  SRC: src/ui/layout.rs:13-257; src/ui/panel.rs:22-127; src/ui/snapshots/cctop__ui__layout__tests__*.snap; src/config.rs
+  EVID: narrow_40x24 snapshot: '1: y=4 h=6', '2: y=10 h=1' ... '8: y=17 h=6', footer y=23
+  ACT: A coach view at 40-60 cols has ~22-50 usable rows; design for 40x24 as a flat list of <= 5 lines of 38 chars plus a 1-row footer; do not depend on wide mode.
+
+[VIEW-01] How the TUI switches views today: panel-owned overlays, picker, ask, help; where a coach view plugs in | lever=none | used=yes | conf=high
+  DETAIL: (a) state.overlay: Option<PanelId> (state.rs:170) = full-screen view owned by one panel; set by the panel's handle_key (Context Enter -> ledger_view::open sets overlay=Some(1) + context_view=Ledger, context.rs:49-53; 'i' -> Prefix 54-58; Tokens Enter -> ledger, tokens.rs:49-53; Tools Enter -> detail, tools.rs:141-145; Events Enter, events.rs:115-118; Advisor Enter, advisor.rs:54); drawn by App::draw after the dashboard: Clear body (all rows but footer) then panel.render_overlay (app.rs:440-446); keys go to the owner first, unhandled Esc closes (329-336). (b) state.picker: Option<PickerUi> opened by global 'L' (373-378), intercepts all keys first (291-296), Enter sets app.pending_switch which run_tui attaches next loop (723-729); rendered centered popup last (450-452). (c) state.ask: Option<(PanelId,String)> popup (297-328, 447-449). (d) app.help bool (281-284, 453-455). (e) 'w' toggles mode_override + save_config (390-399); '1'-'9' toggle hidden + save_config (410-417); Tab/BackTab cycle focus over visible_ids (239-264). Footer text is fixed (508-511) and BINDINGS (36-69) is asserted in the help test (app.rs:832-847) and FR-11 requires every key there. Headless: `cctop run --once --keys 'X' --size WxH` renders any view for tests/screenshots (main.rs:189-209, 406-436).
+  SRC: src/app.rs:71-102,266-456,686-741; src/ui/state.rs:150-194; src/ui/panels/context.rs:40-72; src/ui/ledger_view.rs:15-54; src/ui/picker.rs:69-91
+  EVID: App::draw order: panels -> footer -> overlay -> ask -> picker -> help
+  ACT: Simplest reuse: add `pub view: View` (Dashboard|Coach) to State, branch at the top of App::draw (skip layout::solve, render coach body + footer), add one global key (e.g. 'v' or 'c') in handle_key before the '1'-'9' arm, add to BINDINGS, persist in Config, and give the coach its own key handler like ledger_view::handle_key. The overlay slot is a poorer fit because it requires an owning Panel and is closed by Esc from any focused panel.
+
+[GAP-01] Workflow subagents are invisible: they live under subagents/workflows/wf_<id>/agent-*.jsonl, one level below what agents.rs scans | lever=token_savings | used=no | conf=high
+  DETAIL: AgentWatcher::scan and agents::load read_dir(session/subagents) non-recursively and accept only agent-*.jsonl at that level; the notify watcher is Recursive so events fire but scan() finds nothing. This session: subagents/ contains only workflows/; 11 agent-*.jsonl + .meta.json under workflows/wf_89cf.../; hooks recorded 311 PreToolUse with agent_type=workflow-subagent and 10 SubagentStart; `cctop query agents` -> agents: []; Tokens 'include agents' therefore undercounts, A14 cannot see them.
+  SRC: src/agents.rs:194-226,269-286; ~/.claude/projects/-Users-tom-code-cctop/<session>/subagents/workflows/ (names only); ~/.cctop/events/<session>.jsonl
+  EVID: toolUseResult.transcriptDir = ~/.claude/projects/<slug>/<session>/subagents/workflows/wf_89cf8717-8a9; find -name '*.jsonl' there: 11; sample agent last usage line: input 32, cache_creation 2636, cache_read 75872, output 572
+  ACT: Make scan() recursive (walk subagents/**), read agent-*.meta.json beside each file, and register agents from SubagentStart hook events (agent_id/agent_type) so they appear before their transcript is created.
+
+[GAP-02] Subagent tool calls arriving through the hook spool are dropped because their tool_use_id is not in the main index | lever=less_rework | used=no | conf=high
+  DETAIL: apply_hook looks up self.tools.get(&id) (state.rs:357) and set_exact_duration only for known ids; 311 of 331 PreToolUse events here belonged to workflow subagents and produced nothing. duration_ms in the payload (exact) is also ignored for main calls.
+  SRC: src/ui/state.rs:354-389; hook spool key sets
+  EVID: agent_type values in PreToolUse: 20 main, 311 workflow-subagent; PostToolUse.duration_ms stats n=319 p50=197 p95=14,715 max=120,221 ms
+  ACT: Route hook events with agent_id to the agent's own tool stats; use payload.duration_ms directly.
+
+[GAP-03] 86% of the fixed prefix is unattributed; deferred_tools_delta stubs make MCP schema sizes ~10 bytes per tool | lever=token_savings | used=partial | conf=high
+  DETAIL: Prefix rows are CLAUDE.md files on disk, deferred_tools_delta addedLines bytes, mcp_instructions_delta, skill_listing content, agent_listing_delta; remainder = first call tokens minus known. Live: total 57,139; other 49,231; skills 3,627 (49 skills); largest MCP server 1,030 tokens for 104 tools; built-in 22 tools = 67 tokens. CLAUDE.md rows absent for this repo (none on disk) - fine. The system prompt itself (the bulk) is never estimated; A07 and A17 build on these numbers.
+  SRC: src/prefix.rs:139-236; live `cctop query prefix`
+  EVID: rows: other 49,231 / skills 3,627 / mcp:claude_ai_Resend 1,030 (104) / built-in tools 67 (22)
+  ACT: Treat the listing lines as the true per-request cost (they are what is sent), show 'N deferred tools listed, M loaded via ToolSearch' from tool calls named ToolSearch, and stop implying schemas ride along.
+
+[GAP-04] Offloaded tool output (tool-results/ + persistedOutputPath) is neither counted nor shown | lever=token_savings | used=no | conf=high
+  DETAIL: PRD D2b says tool-results/<id>.txt are offloaded results and TOKENS->CTX must use the transcript text (correct). But the transcript's toolUseResult.persistedOutputSize says how big the real output was and that Claude Code truncated it; cctop never reads it, so a command that dumped 1 MB shows as the truncated ~2k tokens. This session has 35 files in tool-results/.
+  SRC: src/transcript.rs:91-95; tasks/prd-cctop.md D2b row; ~/.claude/projects/<slug>/<session>/tool-results (count only)
+  EVID: toolUseResult keys persistedOutputSize / persistedOutputPath observed (1 and 2 occurrences in the two newest transcripts); 35 offloaded files
+  ACT: A03 evidence line: 'produced 1.2 MB, 8k tokens kept in context' and a coach hint to narrow the command before the model re-reads the persisted file.
+
+[GAP-05] Injected harness reminders are context the user cannot see and cctop does not count | lever=token_savings | used=no | conf=medium
+  DETAIL: total_tokens_reminder (48 lines, 4.4 KB), batching_reminder_sent (9), bash_output_audience_note (19), silent_turn_reminder, prompt_snapshot (161 KB across 2) are attachment lines Claude Code injects; they sit inside 'msgs' in the Context breakdown with no attribution. prompt_snapshot in particular is large.
+  SRC: src/prefix.rs:50-117 (only 4 subtypes handled); attachment byte counts from the newest transcript
+  EVID: attachment n/bytes: prompt_snapshot 2/161,585; total_tokens_reminder 48/4,368; bash_output_audience_note 19; batching_reminder_sent 9
+  ACT: Count attachment bytes per subtype per turn as 'harness overhead' in the Context breakdown; a rising total_tokens_reminder count is itself a signal the harness thinks the session is heavy.
+
+[GAP-06] gitBranch, permissionMode, promptSource and version are on every transcript line; cctop shells out to git every 5 s and reads permission-mode lines only | lever=none | used=partial | conf=high
+  DETAIL: assistant/user lines carry gitBranch, cwd, version, entrypoint, userType; user prompt lines carry permissionMode, promptSource, origin. git.rs runs `git rev-parse`/`symbolic-ref`/`status --porcelain` every 5 s (dirty needs the shell-out, branch does not). Fixture sessions (no cwd) therefore never show a branch.
+  SRC: src/git.rs:13-31; src/attach.rs:51-56; transcript key sets
+  EVID: assistant keys include gitBranch, entrypoint, perTurnEffort, requestId, apiBlockIndex
+  ACT: Read gitBranch from lines; keep the shell-out for dirty/numstat only.
+
+[GAP-07] Session-level analytics Claude Code already computes are not read: stats-cache.json, usage-data/session-meta, history.jsonl | lever=less_rework | used=no | conf=high
+  DETAIL: ~/.claude/stats-cache.json: dailyActivity[{date,messageCount,sessionCount,toolCallCount}], dailyModelTokens[{date,tokensByModel}], modelUsage{model:{inputTokens,outputTokens,cacheReadInputTokens,cacheCreationInputTokens,costUSD,contextWindow,maxOutputTokens,webSearchRequests}}, hourCounts, longestSession, totalSessions/Messages. usage-data/session-meta/<id>.json: duration_minutes, user/assistant_message_count, tool_counts, tool_errors, tool_error_categories, user_interruptions, user_response_times[], git_commits/pushes, lines_added/removed, files_modified, uses_task_agent/mcp/web_search, first_prompt, message_hours. usage-data/facets: underlying_goal, goal_categories, outcome, user_satisfaction_counts, friction_counts, friction_detail, primary_success. history.jsonl: display, pastedContents, project, sessionId, timestamp. PRD 8 lists cross-session analytics as a non-goal, but baseline.rs re-derives a subset from transcripts.
+  SRC: ~/.claude/stats-cache.json, ~/.claude/usage-data/{facets,session-meta}, ~/.claude/history.jsonl (key names only); tasks/prd-cctop.md section 8
+  EVID: session-meta keys include user_interruptions, tool_error_categories, user_response_times; facets keys include friction_counts, outcome
+  ACT: user_interruptions and tool_error_categories give a per-session rework baseline for free; pastedContents in history.jsonl is the direct A11 evidence (paste vs typed).
+
+[GAP-08] State fields that exist but are not exposed by any query verb (coach/pane would need them) | lever=better_outcomes | used=partial | conf=high
+  DETAIL: Not in query output: session.permission_pending / permission_waiting_since_ms (only the summary count), session.status (busy/idle from registry), tools.running() (running tool name/elapsed), procs.running_command, procs.mcp_missing/mcp_exited, limits_series_5h, learned_thresholds, context history/velocity sparkline data (velocity is there, history is not), agg.away, per-turn tool_errors/prompt_chars, advice dismissed state, events kinds filter. The pane PRD (US-005) wants 'waiting on' and 'state busy/idle' in Overview; query summary does not carry them.
+  SRC: src/query.rs:25-109; src/ui/state.rs:119-194; tasks/prd-cctop-pane.md:120-129
+  EVID: summary keys: session{...alive,permission_mode,effort,plan}, turns, api_calls, current_turn_elapsed, context, tokens, cost, cost_by_model, burn_rate, input_rate, limits, tool_calls, tokens_to_ctx, agents, hooks_installed, permission_waits, queued_prompts, advice_count, otel
+  ACT: A `coach`/`pane` verb should serialise: status pill, running tool + elapsed + pid, permission_pending/since, queued prompts, context history[], cache-warm countdown, top 3 advice with urgency.
+
