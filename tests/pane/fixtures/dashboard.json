@@ -17,15 +17,15 @@
     "version": "2.1.247"
   },
   "lines": {
-    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ pipe through head/grep or Glob, or ask a subagent…",
     "l1": "◐40% ○— ○50m ◐1 ▸",
     "l2": "◐○○◐"
   },
   "nudge": {
     "acting": false,
     "class": "LATER",
-    "id": "A17",
-    "line": "Fixed prefix 60k tokens ≈$0.10/turn at 8 calls — trim CLAUDE.md, move rarely-used rules to skills,…",
+    "id": "A03",
+    "line": "mcp:claude-in-chrome results: 152k since the last… — pipe through head/grep or Glob, or ask a subagent…",
     "tag": "LATER · turn 14"
   },
   "rows": [
@@ -468,17 +468,12 @@
       ]
     },
     {
-      "detail": [
-        {
-          "text": "LATER A03 mcp:claude-in-chrome results: 152k sinc…",
-          "tone": "dim"
-        }
-      ],
+      "detail": [],
       "digit": 9,
       "name": "Advisor",
       "values": [
         {
-          "text": "LATER A17",
+          "text": "LATER A03",
           "tone": "fg"
         },
         {
@@ -486,7 +481,7 @@
           "tone": "dim"
         },
         {
-          "text": "next runaway-result → when the slot frees · mcp…",
+          "text": "next —",
           "tone": "dim"
         },
         {

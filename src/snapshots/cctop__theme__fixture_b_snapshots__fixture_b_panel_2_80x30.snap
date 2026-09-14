@@ -10,7 +10,7 @@ expression: "render_to_string(&app, 80, 30)"
        ○ limits                          ▄█   ● rework
  ▀▀▀   no status line                     █   1 · correction
      %                                    ▀   edits 3 ✓ none 9h00
- ▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE… LATER · turn 6
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: '… LATER · turn 6
  1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 …
              +146k/turn · autocompact 567k · 425k left · compactions 1 · since …
  2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
@@ -27,8 +27,8 @@ expression: "render_to_string(&app, 80, 30)"
 
  8 Events    23:29 api cost-state $18.75 · api 22:14 · retries… · 23:29 note /c…
              23:28 tool Bash ✓ 49 · 23:28 tool Bash git commit -m "$(cat lorem_…
- 9 Advisor   LATER A17 · next long-foreground → when the slot frees · `c… · sno…
-             LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…
+ 9 Advisor   LATER A10 · next — · snoozed —
+
 
 
  ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q

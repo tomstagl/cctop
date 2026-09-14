@@ -153,6 +153,9 @@ pub struct Advice {
     /// Rule-private snapshot taken when it fired (a count, a tier), read
     /// back by the rule's `acted` predicate.
     pub mark: u64,
+    /// Never takes the slot: it waits in the `next` row (plan-first, the
+    /// context cost below 200 k).
+    pub next_row_only: bool,
 }
 
 impl Advice {
@@ -178,6 +181,7 @@ impl Advice {
                 Urgency::Later => "3 turns",
             },
             mark: 0,
+            next_row_only: false,
         }
     }
 }
@@ -735,6 +739,7 @@ impl Engine {
         fired.sort_by(|a, b| {
             a.urgency
                 .cmp(&b.urgency)
+                .then_with(|| a.next_row_only.cmp(&b.next_row_only))
                 .then_with(|| {
                     order_index(a.urgency, a.family).cmp(&order_index(b.urgency, b.family))
                 })
@@ -742,8 +747,11 @@ impl Engine {
         });
 
         // Promote, within the budget.
-        if self.promotable(fired.first(), turn) {
-            let a = fired.remove(0);
+        // The first slot-eligible candidate (next-row-only rules wait in
+        // the queue whatever their rank).
+        let eligible = fired.iter().position(|a| !a.next_row_only);
+        if eligible.is_some_and(|i| self.promotable(Some(&fired[i]), turn)) {
+            let a = fired.remove(eligible.unwrap_or(0));
             if let Some(old) = self.occupant.take() {
                 self.retire(old, "pre-empted", now);
             }
@@ -1033,7 +1041,11 @@ impl Engine {
             .current
             .get(if self.occupant.is_some() { 1 } else { 0 })?;
         let cond = match (self.occupant.as_ref(), a.urgency) {
-            (Some(o), u) if u < o.advice.urgency => "on its NOW event",
+            _ if a.next_row_only => "next-row only",
+            (Some(o), Urgency::Now) if o.advice.urgency != Urgency::Now => "on its NOW event",
+            (Some(o), Urgency::Next) if o.advice.urgency == Urgency::Later => {
+                "at the next boundary"
+            }
             (Some(_), _) => "when the slot frees",
             (None, Urgency::Now) => "now",
             (None, _) => "next prompt",
@@ -1166,7 +1178,7 @@ mod tests {
         assert!(e.current.is_empty());
         assert!(e.occupant.is_none());
         let ids = e.rule_ids();
-        assert_eq!(ids.len(), 16, "{ids:?}");
+        assert_eq!(ids.len(), 22, "{ids:?}");
         assert!(!ids.contains(&"A15"), "A15 retired for A38");
         assert!(!ids.contains(&"A18"), "A18 retired for A42");
         assert!(
@@ -1577,8 +1589,8 @@ mod tests {
             .iter()
             .map(|a| (a.urgency.label(), a.rule))
             .collect();
-        assert_eq!(ranked, [("LATER", "A17"), ("LATER", "A10")], "{ranked:?}");
-        assert_eq!(e.occupant.as_ref().unwrap().advice.rule, "A17");
+        assert_eq!(ranked, [("LATER", "A10")], "{ranked:?}");
+        assert_eq!(e.occupant.as_ref().unwrap().advice.rule, "A10");
         assert_eq!(
             e.session_mode,
             SessionMode::Interactive,

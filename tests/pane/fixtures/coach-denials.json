@@ -116,6 +116,11 @@
       "python3 - lor… ok 19m ago"
     ]
   },
-  "suppressed": [],
+  "suppressed": [
+    [
+      "A23",
+      "team session"
+    ]
+  ],
   "turn": 5
 }

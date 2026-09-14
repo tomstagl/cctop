@@ -12,7 +12,7 @@ expression: "render_to_string(&app, w, h)"
  ▀▀▀   no status line           █   1 · correction
      %                          ▀   edits 3 ✓ none 9h00
 
- ▸ Fixed prefix 49k tokens ≈$0.15/turn at 15… LATER · turn 6
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked … LATER · turn 6
 
  1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefi…
              +146k/turn · autocompact 567k · 425k left · co…
@@ -30,8 +30,8 @@ expression: "render_to_string(&app, w, h)"
 
  8 Events    23:29 api cost-state $18.75 · api 22:14 · retr…
              23:28 tool Bash ✓ 49 · 23:28 tool Bash git com…
- 9 Advisor   LATER A17 · next long-foreground → when the sl…
-             LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blo…
+ 9 Advisor   LATER A10 · next — · snoozed —
+
 
 
 

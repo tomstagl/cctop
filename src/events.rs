@@ -56,6 +56,13 @@ pub struct Event {
 /// A priced moment becomes a `cost` row from this many tokens.
 pub const COST_ROW_TOKENS: u64 = 20_000;
 
+fn ttl_label(ttl: crate::transcript::CacheTtl) -> &'static str {
+    match ttl {
+        crate::transcript::CacheTtl::OneHour => "1h",
+        crate::transcript::CacheTtl::FiveMinutes => "5m",
+    }
+}
+
 /// Bounded, time-ordered event log.
 #[derive(Debug, Default)]
 pub struct Log {
@@ -67,6 +74,8 @@ pub struct Log {
     last_context: Option<u64>,
     /// Model of the last real API response, for the switch row.
     last_model: Option<String>,
+    /// Cache TTL of the last call that wrote cache, for the flip row.
+    last_ttl: Option<crate::transcript::CacheTtl>,
     /// Tool calls issued in the current turn, for the interrupt event.
     turn_calls: usize,
     /// The transcript's version (first seen), for the compaction fallback.
@@ -214,6 +223,21 @@ impl Log {
                         });
                     }
                     self.last_model = Some(model);
+                }
+                // The TTL flipped (a plan-usage cap, a setting): a priced fact.
+                if let Some(ttl) = usage.cache_ttl() {
+                    if let Some(prev) = self.last_ttl.filter(|p| *p != ttl) {
+                        self.push(Event {
+                            at,
+                            kind: Kind::Cost,
+                            text: format!(
+                                "cache TTL now {} (was {})",
+                                ttl_label(ttl),
+                                ttl_label(prev)
+                            ),
+                        });
+                    }
+                    self.last_ttl = Some(ttl);
                 }
                 let write = usage.cache_creation_input_tokens;
                 let total = usage.total_input();
@@ -375,6 +399,26 @@ impl Log {
                         )
                     ),
                 });
+            }
+            Line::ScheduledTaskFire(v) => {
+                // A `/loop` or `/goal` wake-up: the whole context re-read on
+                // an idle turn.
+                if let Some(at) = v
+                    .get("timestamp")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(parse_ts_ms)
+                {
+                    let ctx = self.last_context.unwrap_or(0);
+                    self.push(Event {
+                        at,
+                        kind: if ctx >= COST_ROW_TOKENS {
+                            Kind::Cost
+                        } else {
+                            Kind::Note
+                        },
+                        text: format!("loop fire · re-reads {}", crate::ui::fmt::tokens(ctx)),
+                    });
+                }
             }
             Line::ContinuedIn(c) => {
                 if let Some(at) = c.timestamp.as_deref().and_then(parse_ts_ms) {

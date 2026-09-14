@@ -10,11 +10,11 @@ expression: "render_to_string(&app, 56, 20)"
 │ ○ limits   — no status line                          │
 │ ○ rework   edits 1 ✓ none 7m                         │
 ├──────────────────────────────────────────────────────┤
-│ ▸ Fixed prefix 49k tokens ≈$0.86/turn at 35 calls    │
-│   trim CLAUDE.md, move rarely-used rules to skills,… │
-│   LATER · since turn 4 · +1 queued (n)               │
+│ ▸ ctx 333k → ≈$.18/call, ≈$6.3/turn (was ≈$2.2)      │
+│   clean stop: /compact <focus>, or hand-off + /clear │
+│   NEXT · since turn 4 · +2 queued (n)                │
 │                                                      │
-│ next     reread → when the slot frees · lorem_ipsum… │
+│ next     prefix-tip → when the slot frees · Fixed p… │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
 

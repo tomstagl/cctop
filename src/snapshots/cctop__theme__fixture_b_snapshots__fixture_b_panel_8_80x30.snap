@@ -27,7 +27,7 @@ expression: "render_to_string(&app, 80, 30)"
 │ 23:27:56 tool   Bash ✓ 16                                                    │
 │ 23:28:41 tool   Bash git commit -m "$(cat lorem_i lorem lore lor lorem_i lor…│
 │ 23:28:45 tool   Bash ✓ 49                                                    │
-│ 23:28:45 coach  LATER A17 fired · Fixed prefix 49k tokens ≈$0.15/turn at 15 …│
+│ 23:28:45 coach  LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked t…│
 │ 23:29:30 note   /clear · continued in a new session                          │
 │ 23:29:30 api    cost-state $18.75 · api 22:14 · retries 0:00                 │
 └──────────────────────────────────────────────────────────────────────────────┘

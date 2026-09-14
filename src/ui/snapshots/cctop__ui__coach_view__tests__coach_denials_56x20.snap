@@ -12,9 +12,9 @@ expression: "render_to_string(&app, 56, 20)"
 ├──────────────────────────────────────────────────────┤
 │ ▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls    │
 │   trim CLAUDE.md, move rarely-used rules to skills,… │
-│   LATER · since turn 5 · +2 queued (n)               │
+│   LATER · since turn 5 · +3 queued (n)               │
 │                                                      │
-│ next     reread → when the slot frees · lorem_ipsum… │
+│ next     context-reset → next-row only · ctx 720k →… │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
 

@@ -40,6 +40,14 @@ enum Command {
     Mcp,
     /// Print the current Advisor recommendations.
     Advise(AdviseArgs),
+    /// Replay transcripts through the coach and count fires per rule.
+    CoachReplay {
+        /// Transcript files (`.jsonl`); a directory is scanned for them.
+        paths: Vec<PathBuf>,
+        /// Print JSON instead of the table.
+        #[arg(long)]
+        json: bool,
+    },
     /// Write an end-of-session report.
     Report(ReportArgs),
     /// Export ledger and events.
@@ -355,6 +363,39 @@ fn main() {
             }
         },
         Command::Advise(a) => advise(a),
+        Command::CoachReplay { paths, json } => {
+            // Transcripts named directly, or found one level under a
+            // directory (`~/.claude/projects/<slug>/*.jsonl`); subagent
+            // files live deeper and are never replayed.
+            fn scan(dir: &std::path::Path, depth: u8, files: &mut Vec<PathBuf>) {
+                let Ok(rd) = std::fs::read_dir(dir) else {
+                    return;
+                };
+                for e in rd.flatten() {
+                    let f = e.path();
+                    if f.is_dir() && depth > 0 {
+                        scan(&f, depth - 1, files);
+                    } else if f.extension().is_some_and(|x| x == "jsonl") {
+                        files.push(f);
+                    }
+                }
+            }
+            let mut files: Vec<PathBuf> = Vec::new();
+            for p in paths {
+                if p.is_dir() {
+                    scan(&p, 1, &mut files);
+                } else {
+                    files.push(p);
+                }
+            }
+            files.sort();
+            let r = cctop::replay::replay(&files);
+            if json {
+                emit(&format!("{}\n", serde_json::to_string_pretty(&r).unwrap()));
+            } else {
+                emit(&cctop::replay::table(&r));
+            }
+        }
         Command::Report(r) => {
             let state = load_state(&r.attach);
             let md = cctop::report::markdown(&state, state.baseline.as_ref());

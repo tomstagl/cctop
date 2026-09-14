@@ -1175,7 +1175,7 @@ mod tests {
         assert_eq!(v["schema"], 1);
         assert_eq!(v["lights"].as_array().unwrap().len(), 4);
         assert_eq!(v["lights"][0]["id"], "context");
-        assert_eq!(v["nudge"]["id"], "A17");
+        assert_eq!(v["nudge"]["id"], "A10");
         assert_eq!(v["nudge"]["class"], "LATER");
         assert_eq!(v["session_mode"], "interactive");
         assert!(
@@ -1202,21 +1202,21 @@ mod tests {
             rows[3], "● rework   1 correction · edits 3 ✓ none 9h00 · com…",
             "the interrupt, three unverified edits and an unchecked commit"
         );
-        assert_eq!(
-            c.next_row(),
-            "next     long-foreground → when the slot frees · `c…"
-        );
+        assert_eq!(c.next_row(), "next     —");
         assert_eq!(c.snoozed_row(), "snoozed  —");
         assert_eq!(
             c.line(80),
-            "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…"
+            "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ queue: 'run builds and test suites longer than a …"
         );
         assert_eq!(c.line(56), "○14% ○— ○59m ●1 ▸");
         assert_eq!(c.line(30), "○○○●");
-        assert_eq!(c.queued, 1);
+        assert_eq!(c.queued, 0);
         let n = c.nudge.as_ref().unwrap();
-        assert_eq!(n.line1, "▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls");
-        assert_eq!(n.evidence, "  LATER · since turn 6 · +1 queued (n)");
+        assert_eq!(
+            n.line1,
+            "▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…"
+        );
+        assert_eq!(n.evidence, "  LATER · since turn 6 · +0 queued");
         assert_eq!(
             c.lights[0].lines[1],
             "threshold 567k · 425k left · prefix 49k (35 %)"

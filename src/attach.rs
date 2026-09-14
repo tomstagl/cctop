@@ -154,6 +154,23 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     // The advisor's snoozes and fire records, shared with `query` and the
     // pane; the TUI is the single writer.
     app.attach_advisor(&cctop_home, true);
+    // `~/.claude/history.jsonl`: the person's slash commands and paste
+    // sizes, read from the last offset every tick.
+    if let Some(path) = crate::history::default_path() {
+        let mut tailer = crate::history::Tailer::new(&path);
+        let mut last = Instant::now() - Duration::from_secs(10);
+        app.tick_hooks.push(Box::new(move |state: &mut State| {
+            if last.elapsed() < Duration::from_secs(2) {
+                return;
+            }
+            last = Instant::now();
+            let rows = tailer.poll();
+            if !rows.is_empty() {
+                let (id, cwd) = (state.session.session_id.clone(), state.session.cwd.clone());
+                state.history.absorb(&rows, &id, &cwd);
+            }
+        }));
+    }
     // Status-line samples.
     let mut status = crate::status::Watcher::new(&app.state.session.session_id);
     app.tick_hooks.push(Box::new(move |state: &mut State| {

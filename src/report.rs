@@ -295,7 +295,7 @@ mod tests {
             md.contains("- nudges: 1 fired, 0 acted, 0 snoozed · session mode interactive"),
             "{md}"
         );
-        assert!(md.contains("- **LATER A17**"), "{md}");
+        assert!(md.contains("- **LATER A03**"), "{md}");
         let none = markdown(&s, None);
         assert!(none.contains("no baseline yet"));
         let p = report_path(Path::new("/h"), &s);

@@ -19,15 +19,15 @@
     "version": "2.1.270"
   },
   "lines": {
-    "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ queue: 'run builds and test suites longer than a …",
     "l1": "○14% ○— ○59m ●1 ▸",
     "l2": "○○○●"
   },
   "nudge": {
     "acting": false,
     "class": "LATER",
-    "id": "A17",
-    "line": "Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE.md, move rarely-used rules to skills,…",
+    "id": "A10",
+    "line": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run builds and test suites longer than a …",
     "tag": "LATER · turn 6"
   },
   "rows": [
@@ -462,17 +462,12 @@
       ]
     },
     {
-      "detail": [
-        {
-          "text": "LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…",
-          "tone": "dim"
-        }
-      ],
+      "detail": [],
       "digit": 9,
       "name": "Advisor",
       "values": [
         {
-          "text": "LATER A17",
+          "text": "LATER A10",
           "tone": "fg"
         },
         {
@@ -480,7 +475,7 @@
           "tone": "dim"
         },
         {
-          "text": "next long-foreground → when the slot frees · `c…",
+          "text": "next —",
           "tone": "dim"
         },
         {

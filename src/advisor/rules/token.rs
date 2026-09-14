@@ -1,5 +1,8 @@
 //! Token-axis rules: what the context costs and why (A01–A04, A07, A08,
-//! A11, A12, A14, A17, A25). Phase 5 adds A19–A23, A27 and A30 here.
+//! A11, A12, A14, A17, A25) and the Phase 5 set: A19 cache countdown, A21
+//! switch window (warm) / A21b (cold), A23 the cost of continuing, A27 a
+//! loop armed on a large context, A30 cold resume. A20 (the named cache
+//! miss) is A01's trigger; A22 folded into it.
 
 use super::{calls_per_turn, human_turns_since, model_short, recent_turns, usd_label, PriceKind};
 use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
@@ -21,6 +24,12 @@ pub fn all() -> Vec<Box<dyn Rule>> {
         Box::new(SubagentModel),
         Box::new(BigPrefix),
         Box::new(ExploreRun),
+        Box::new(CacheCountdown),
+        Box::new(SwitchWindow),
+        Box::new(ColdSwitch),
+        Box::new(ContextCost),
+        Box::new(LoopArmed),
+        Box::new(ColdResume),
     ]
 }
 
@@ -719,8 +728,8 @@ impl Rule for SubagentModel {
     }
 }
 
-/// A17 — the fixed prefix costs ≥ $0.10 per turn at the cache-read price,
-/// or is ≥ 60 k tokens.
+/// A17 — the fixed prefix costs ≥ $0.25 per turn at the cache-read price,
+/// or is ≥ 100 k tokens (a fifth of a 200 k window).
 pub struct BigPrefix;
 impl Rule for BigPrefix {
     fn id(&self) -> &'static str {
@@ -740,7 +749,7 @@ impl Rule for BigPrefix {
         let cpt = calls_per_turn(state);
         let per_turn_tokens = (v.prefix as f64 * cpt) as u64;
         let per_turn_usd = super::usd(state, per_turn_tokens, PriceKind::CacheRead);
-        if per_turn_usd.is_none_or(|u| u < 0.10) && v.prefix < 60_000 {
+        if per_turn_usd.is_none_or(|u| u < 0.25) && v.prefix < 100_000 {
             return None;
         }
         let rows = state.prefix.rows(v.prefix);
@@ -1263,21 +1272,772 @@ mod tests {
     fn a17_big_prefix_is_priced_per_turn() {
         let mut s = State::new(Pricing::bundled());
         s.apply(&prompt("2026-01-01T00:00:00Z"));
-        // 60k of prefix on the first call: over the 60k floor.
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":60000,"input_tokens":10}}}"#).unwrap());
+        // 120k of prefix on the first call: over the 100k floor.
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":120000,"input_tokens":10}}}"#).unwrap());
         let a = BigPrefix.evaluate(&s).expect("fires");
         assert!(
-            a.headline.starts_with("Fixed prefix 60k tokens ≈$"),
+            a.headline.starts_with("Fixed prefix 120k tokens ≈$"),
             "{}",
             a.headline
         );
         assert!(a.headline.ends_with("/turn at 1 calls"), "{}", a.headline);
         assert_eq!(a.action_kind, ActionKind::Setting);
-        assert_eq!(a.saving, Saving::Tokens(12_000));
-        // 30k on Opus at one call per turn: $0.015/turn, quiet.
+        assert_eq!(a.saving, Saving::Tokens(24_000));
+        // 60k on Opus at one call per turn: $0.03/turn, quiet — a prefix
+        // this size is every session's on a plugin-heavy setup.
         let mut small = State::new(Pricing::bundled());
         small.apply(&prompt("2026-01-01T00:00:00Z"));
-        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":30000,"input_tokens":10}}}"#).unwrap());
+        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":60000,"input_tokens":10}}}"#).unwrap());
         assert!(BigPrefix.evaluate(&small).is_none());
+        // 60k at 15 calls per turn on Opus: ≈$0.45/turn, fires.
+        let mut busy = State::new(Pricing::bundled());
+        busy.apply(&prompt("2026-01-01T00:00:00Z"));
+        for i in 0..15 {
+            busy.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:0{}Z","message":{{"id":"c{i}","model":"claude-opus-5","content":[],"usage":{{"cache_read_input_tokens":60000,"input_tokens":10}}}}}}"#, i % 10)).unwrap());
+        }
+        assert!(BigPrefix.evaluate(&busy).is_some());
+    }
+}
+
+// ---------------------------------------------------------------- Phase 5
+
+/// A19 — the cache entry expires within the countdown band while the
+/// person is asked (or idle) and a reply now would keep ≥ 50 k warm.
+pub struct CacheCountdown;
+impl Rule for CacheCountdown {
+    fn id(&self) -> &'static str {
+        "A19"
+    }
+    fn family(&self) -> &'static str {
+        "cache-countdown"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Now
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let clock = state.cache_clock()?;
+        if clock.remaining_ms <= 0 {
+            return None;
+        }
+        // The shim's figure is ignored when its file predates the last
+        // assistant line (`cache_clock` already falls back and marks ≈).
+        let rewrite = if state.cache.from_shim && state.cache.recache_tokens_if_cold > 0 {
+            state.cache.recache_tokens_if_cold
+        } else {
+            state.context().size
+        };
+        if rewrite < 50_000 {
+            return None;
+        }
+        let one_hour = state.cache_ttl_ms() >= 3_600_000;
+        let band = if one_hour { 300_000 } else { 120_000 };
+        if clock.remaining_ms > band {
+            return None;
+        }
+        // Only while the turn is not running: the person is asked, or idle.
+        let turn_running = state
+            .agg
+            .current_turn()
+            .is_some_and(|t| t.duration_ms.is_none() && t.interrupted_after_calls.is_none())
+            && state
+                .tools
+                .running()
+                .is_some_and(|c| !matches!(c.name.as_str(), "AskUserQuestion" | "ExitPlanMode"));
+        if turn_running {
+            return None;
+        }
+        let idle_ms = state
+            .last_line_at_ms
+            .map(|t| state.clock_ms() - t)
+            .unwrap_or(0);
+        if one_hour && idle_ms < 60_000 && state.waiting().is_none() {
+            return None;
+        }
+        let left = crate::coach::short_duration(clock.remaining_ms);
+        let warm = super::usd(state, rewrite, super::PriceKind::CacheRead);
+        let cold = super::usd(state, rewrite, super::PriceKind::CacheWrite);
+        let mut a = Advice::new("A19", "cache-countdown", Urgency::Now);
+        a.headline = if one_hour {
+            format!(
+                "cache cold in {left} · reply now {}, later {}",
+                warm.map(|v| format!("≈{}", crate::coach::usd_short(v)))
+                    .unwrap_or_else(|| "cheap".into()),
+                cold.map(|v| format!("≈{}", crate::coach::usd_short(v)))
+                    .unwrap_or_else(|| "a full re-write".into())
+            )
+        } else {
+            format!(
+                "cache cold in {left} (5m TTL) · reply or lose {}",
+                fmt::tokens(rewrite)
+            )
+        };
+        a.evidence = format!(
+            "re-cache {} tok{}",
+            fmt::tokens(rewrite),
+            if clock.approx { " · clock ≈" } else { "" }
+        );
+        a.action = "reply now to keep the cache · done? /clear + hand-off note".into();
+        a.action_kind = ActionKind::Advice;
+        a.saving = Saving::OneOff(rewrite);
+        a.retires_on = "the next API call";
+        a.mark = state.agg.api_calls() as u64;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state.agg.api_calls() as u64 > fired.mark
+    }
+    fn ttl(&self) -> crate::advisor::Ttl {
+        crate::advisor::Ttl::NextPrompt
+    }
+}
+
+/// A21 — a model switch while the cache is warm and the context large
+/// (from `PreModelSwitch` when hooks run, else a `/model` or `/fast` row of
+/// history.jsonl); when the cache is cold and this project switches a lot,
+/// the cheap moment is named instead.
+pub struct SwitchWindow;
+impl Rule for SwitchWindow {
+    fn id(&self) -> &'static str {
+        "A21"
+    }
+    fn family(&self) -> &'static str {
+        "warm-switch"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Now
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let now = state.clock_ms();
+        let warm = state.cache_warm().is_some_and(|(w, _)| w);
+        let ctx = if state.cache.from_shim && state.cache.recache_tokens_if_cold > 0 {
+            state.cache.recache_tokens_if_cold
+        } else {
+            state.context().size
+        };
+        // The hook's own record wins: it says whether the cache was warm.
+        let hook = state
+            .model_switches
+            .iter()
+            .rev()
+            .find(|s| now - s.at_ms <= 120_000)
+            .filter(|s| s.source.as_deref() != Some("auto"))
+            .filter(|s| s.cache_warm == Some(true) && s.context_tokens.unwrap_or(ctx) > 100_000);
+        let history = state
+            .history
+            .switches_since(now - 120_000)
+            .last()
+            .filter(|_| warm && ctx > 100_000)
+            .map(|r| {
+                (
+                    r.at_ms,
+                    format!(
+                        "{} {}",
+                        r.command.as_deref().unwrap_or("/model"),
+                        r.arg.as_deref().unwrap_or("")
+                    ),
+                )
+            });
+        let mut a = Advice::new("A21", "warm-switch", Urgency::Now);
+        let (at, what) = match (hook, history) {
+            (Some(s), _) => (
+                s.at_ms,
+                format!(
+                    "{} → {}",
+                    fmt::model_short(&s.from),
+                    fmt::model_short(&s.to)
+                ),
+            ),
+            (None, Some((at, cmd))) => (at, cmd.trim().to_string()),
+            (None, None) => return None,
+        };
+        let tokens = hook.and_then(|s| s.context_tokens).unwrap_or(ctx);
+        let price = hook
+            .and_then(|s| s.estimated_cache_write_usd)
+            .or_else(|| super::usd(state, tokens, super::PriceKind::CacheWrite));
+        let left = state
+            .cache_clock()
+            .filter(|c| c.remaining_ms > 0)
+            .map(|c| crate::coach::short_duration(c.remaining_ms));
+        a.headline = format!(
+            "Switch re-reads {} uncached{}",
+            fmt::tokens(tokens),
+            price
+                .map(|p| format!(" (≈{})", crate::coach::usd_short(p)))
+                .unwrap_or_default()
+        );
+        a.evidence = format!(
+            "{what} at {} · cache warm{}",
+            fmt::clock_hhmm(at),
+            left.as_ref()
+                .map(|l| format!(" for {l}"))
+                .unwrap_or_default()
+        );
+        a.action = match left {
+            Some(l) => format!("cache dies in {l}: /model back, or switch after /clear"),
+            None => "/model back, or switch after /clear".into(),
+        };
+        a.action_text = "/model".into();
+        a.action_kind = ActionKind::Slash;
+        a.saving = Saving::OneOff(tokens);
+        a.retires_on = "a /model back or a /clear";
+        a.mark = at as u64;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        // A later switch (back) or a boundary.
+        state
+            .history
+            .switches_since(fired.mark as i64)
+            .iter()
+            .any(|r| r.at_ms > fired.mark as i64)
+            || state
+                .model_switches
+                .iter()
+                .any(|s| s.at_ms > fired.mark as i64)
+            || state
+                .agg
+                .boundaries
+                .last()
+                .and_then(|b| b.at.as_deref())
+                .and_then(crate::metrics::cost::parse_ts_ms)
+                .is_some_and(|t| t > fired.mark as i64)
+    }
+    fn ttl(&self) -> crate::advisor::Ttl {
+        crate::advisor::Ttl::NextPrompt
+    }
+}
+
+/// A21's cold half — the cache is cold and this project switches models
+/// often: now is the free moment.
+pub struct ColdSwitch;
+impl Rule for ColdSwitch {
+    fn id(&self) -> &'static str {
+        "A21b"
+    }
+    fn family(&self) -> &'static str {
+        "cold-switch"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Next
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let cold = state.cache_warm().is_some_and(|(w, _)| !w);
+        if !cold || state.history.project_switches < 3 || state.context().size < 100_000 {
+            return None;
+        }
+        let mut a = Advice::new("A21b", "cold-switch", Urgency::Next);
+        a.headline = "Cache is cold: /model or /effort costs nothing now".into();
+        a.evidence = format!(
+            "{} switches in this project · the next call re-writes {} anyway",
+            state.history.project_switches,
+            fmt::tokens(state.context().size)
+        );
+        a.action = "pick one and hold it until the next /clear".into();
+        a.action_text = "/model".into();
+        a.action_kind = ActionKind::Slash;
+        a.saving = Saving::OneOff(state.context().size);
+        a.retires_on = "the next API call";
+        a.mark = state.agg.api_calls() as u64;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state.agg.api_calls() as u64 > fired.mark
+    }
+}
+
+/// A23 — the cost of continuing: what every call re-reads at this
+/// context. In the `next` row from 200 k; the slot only at a clean turn
+/// end above 300 k on a 1M window (or the warn band elsewhere).
+pub struct ContextCost;
+impl Rule for ContextCost {
+    fn id(&self) -> &'static str {
+        "A23"
+    }
+    fn family(&self) -> &'static str {
+        "context-reset"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Next
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let v = state.context();
+        if v.size < 200_000 {
+            return None;
+        }
+        let g = state.gradient_priced(false)?;
+        let big = v.window >= 900_000 && v.size >= 300_000 || state.bands().warn_at <= v.size;
+        let clean = {
+            let t = state.agg.current_turn()?;
+            t.duration_ms.is_some()
+                && t.last_stop_reason.as_deref() == Some("end_turn")
+                && state.session.background_tasks.is_empty()
+                && t.pending_background_agents.unwrap_or(0) == 0
+        };
+        let at_100k = g.per_turn_at_100k;
+        let mut a = Advice::new("A23", "context-reset", Urgency::Next);
+        a.headline = format!(
+            "ctx {} → ≈{}/call, ≈{}/turn (was ≈{})",
+            fmt::tokens(v.size),
+            crate::coach::usd_short(g.per_call),
+            crate::coach::usd_short(g.per_turn),
+            crate::coach::usd_short(at_100k)
+        );
+        a.evidence = format!(
+            "{:.0} calls per turn on this session · next 30 calls ≈{}",
+            g.calls_per_turn,
+            crate::coach::usd_short(g.next_30_calls)
+        );
+        a.action = if clean {
+            "clean stop: /compact <focus>, or hand-off + /clear".into()
+        } else {
+            "at the next clean stop: /compact <focus>, or hand-off + /clear".into()
+        };
+        a.action_text = "/compact ".into();
+        a.action_kind = ActionKind::Slash;
+        a.saving =
+            Saving::Tokens((v.size.saturating_sub(100_000) as f64 * g.calls_per_turn) as u64);
+        a.next_row_only = !(big && clean);
+        a.retires_on = "a /compact or /clear";
+        a.mark = boundaries_and_compacts(state);
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        boundaries_and_compacts(state) > fired.mark
+    }
+}
+
+fn boundaries_and_compacts(state: &State) -> u64 {
+    let clears = state
+        .agg
+        .boundaries
+        .iter()
+        .filter(|b| {
+            matches!(
+                b.kind,
+                crate::metrics::usage::BoundaryKind::Clear
+                    | crate::metrics::usage::BoundaryKind::Fork
+                    | crate::metrics::usage::BoundaryKind::Compact
+            )
+        })
+        .count();
+    let compacts = state
+        .agg
+        .slash_commands
+        .iter()
+        .filter(|(_, c)| c.starts_with("/compact"))
+        .count()
+        + state
+            .history
+            .commands
+            .iter()
+            .filter(|r| r.command.as_deref() == Some("/compact"))
+            .count();
+    (clears + compacts) as u64
+}
+
+/// A27 — a `/loop` or `/goal` is armed on a large context: every wake-up
+/// re-reads it.
+pub struct LoopArmed;
+impl Rule for LoopArmed {
+    fn id(&self) -> &'static str {
+        "A27"
+    }
+    fn family(&self) -> &'static str {
+        "loop-armed"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Next
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let ctx = state.context().size;
+        if ctx <= 150_000 {
+            return None;
+        }
+        let armed = state.session.session_crons > 0
+            || state.history.last("/loop").is_some()
+            || state.history.last("/goal").is_some();
+        if !armed {
+            return None;
+        }
+        let loop_row = state.history.last("/loop");
+        let interval = loop_row
+            .and_then(|r| r.arg.clone())
+            .unwrap_or_else(|| "5m".into());
+        let minutes: f64 = interval
+            .trim_end_matches('m')
+            .parse::<f64>()
+            .unwrap_or(5.0)
+            .max(1.0);
+        let per_hour = (60.0 / minutes) as u64 * ctx;
+        let mut a = Advice::new("A27", "loop-armed", Urgency::Next);
+        a.headline = format!(
+            "/loop {interval} on {} ctx ≈ {} cache-read tok/h idle",
+            fmt::tokens(ctx),
+            fmt::tokens(per_hour)
+        );
+        a.evidence = format!(
+            "{} · each wake-up re-reads the whole context",
+            if state.session.session_crons > 0 {
+                format!("{} session cron(s)", state.session.session_crons)
+            } else {
+                "a /loop or /goal in this session".into()
+            }
+        );
+        a.action = "/clear first, widen the interval, or narrow it".into();
+        a.action_text = "/clear".into();
+        a.action_kind = ActionKind::Slash;
+        a.saving = Saving::Tokens(ctx);
+        a.retires_on = "a /clear";
+        a.mark = state
+            .agg
+            .boundaries
+            .iter()
+            .filter(|b| b.kind == crate::metrics::usage::BoundaryKind::Clear)
+            .count() as u64;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state
+            .agg
+            .boundaries
+            .iter()
+            .filter(|b| b.kind == crate::metrics::usage::BoundaryKind::Clear)
+            .count() as u64
+            > fired.mark
+    }
+    fn cooldown_turns(&self) -> usize {
+        usize::MAX / 2 // once per session
+    }
+}
+
+/// A30 — a cold resume: the session idled past the cache TTL on a large
+/// context, or Claude Code's own resume said the cache likely expired.
+pub struct ColdResume;
+impl Rule for ColdResume {
+    fn id(&self) -> &'static str {
+        "A30"
+    }
+    fn family(&self) -> &'static str {
+        "cold-resume"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Next
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let ctx = state.context().size;
+        if ctx <= 100_000 {
+            return None;
+        }
+        let now = state.clock_ms();
+        let idle = state.last_line_at_ms.map(|t| now - t).unwrap_or(0);
+        let ended = state.agg.current_turn().is_some_and(|t| {
+            t.duration_ms.is_some() || t.last_stop_reason.as_deref() == Some("end_turn")
+        });
+        let primary =
+            ended && idle > state.cache_ttl_ms() && state.cache_warm().is_some_and(|(w, _)| !w);
+        let secondary = state
+            .session
+            .resume
+            .as_ref()
+            .filter(|r| matches!(r.source.as_str(), "resume" | "fork"))
+            .filter(|r| r.prompt_cache_likely_expired == Some(true))
+            .filter(|r| state.last_api_call_ms().is_none_or(|c| c < r.at_ms));
+        if !primary && secondary.is_none() {
+            return None;
+        }
+        let rewrite = secondary.and_then(|r| r.context_tokens).unwrap_or(ctx);
+        let mut a = Advice::new("A30", "cold-resume", Urgency::Next);
+        a.headline = format!(
+            "Idle {} · cache cold · next msg re-writes {}",
+            fmt::duration_ms(idle),
+            fmt::tokens(rewrite)
+        );
+        a.evidence = format!(
+            "{}{}",
+            if primary {
+                format!(
+                    "no call for longer than the {} TTL",
+                    if state.cache_ttl_ms() >= 3_600_000 {
+                        "1h"
+                    } else {
+                        "5m"
+                    }
+                )
+            } else {
+                "Claude Code's resume says the cache likely expired".into()
+            },
+            secondary
+                .and_then(|r| r.estimated_cache_write_usd)
+                .or_else(|| super::usd(state, rewrite, super::PriceKind::CacheWrite))
+                .map(|u| format!(" · ≈{}", crate::coach::usd_short(u)))
+                .unwrap_or_default()
+        );
+        a.action = "Done? /clear + hand-off note · else /compact (½)".into();
+        a.action_text = "/clear".into();
+        a.action_kind = ActionKind::Slash;
+        a.saving = Saving::OneOff(rewrite / 2);
+        a.retires_on = "the next API call or a /clear";
+        a.mark = state.agg.api_calls() as u64;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state.agg.api_calls() as u64 > fired.mark
+            || state
+                .agg
+                .boundaries
+                .last()
+                .is_some_and(|b| b.kind == crate::metrics::usage::BoundaryKind::Clear)
+    }
+}
+
+#[cfg(test)]
+mod phase5_tests {
+    use super::super::fixtures::{prompt, response};
+    use super::*;
+    use crate::metrics::Pricing;
+    use crate::transcript::Line;
+
+    fn t(ts: &str) -> i64 {
+        crate::metrics::cost::parse_ts_ms(ts).unwrap()
+    }
+
+    /// A session of one turn with a 150k context, the cache written at
+    /// 10:00:05 on the 5 m TTL, a question pending since 10:00:06.
+    fn asked() -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.session.alive = true;
+        s.apply(&prompt("2026-01-01T10:00:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":150000,"cache_read_input_tokens":0,"output_tokens":10}}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:06Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"tool_use","id":"q","name":"AskUserQuestion","input":{"questions":[]}}],"usage":{"input_tokens":2,"cache_read_input_tokens":150000,"output_tokens":10}}}"#).unwrap());
+        s
+    }
+
+    #[test]
+    fn a19_cache_countdown_in_the_band_while_asked() {
+        let mut s = asked();
+        s.now_ms = t("2026-01-01T10:02:00Z"); // 3:06 left of the 5 m entry
+        assert!(
+            CacheCountdown.evaluate(&s).is_none(),
+            "outside the 2-minute band of a 5 m TTL"
+        );
+        s.now_ms = t("2026-01-01T10:03:30Z"); // 1:36 left
+        let a = CacheCountdown.evaluate(&s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "cache cold in 1:36 (5m TTL) · reply or lose 150k"
+        );
+        assert_eq!(a.urgency, Urgency::Now);
+        assert_eq!(
+            a.saving,
+            Saving::OneOff(150_002),
+            "the whole context, inputs included"
+        );
+        assert!(!CacheCountdown.acted(&s, &a));
+        // The reply's API call retires it.
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:04:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q","content":"yes"}]}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:04:01Z","message":{"id":"m3","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,"cache_read_input_tokens":150000,"output_tokens":10}}}"#).unwrap());
+        assert!(CacheCountdown.acted(&s, &a));
+        // A small context never fires; a running turn never fires.
+        let mut small = State::new(Pricing::bundled());
+        small.session.alive = true;
+        small.apply(&prompt("2026-01-01T10:00:00Z"));
+        small.apply(&response("m", "2026-01-01T10:00:05Z", 2, 20_000, 0));
+        small.now_ms = t("2026-01-01T10:03:30Z");
+        assert!(CacheCountdown.evaluate(&small).is_none());
+        let mut running = asked();
+        running.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:07Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q","content":"yes"}]}}"#).unwrap());
+        running.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:08Z","message":{"id":"m4","model":"claude-opus-5","content":[{"type":"tool_use","id":"b","name":"Bash","input":{"command":"cargo test"}}],"usage":{"input_tokens":2,"cache_read_input_tokens":150000,"output_tokens":10}}}"#).unwrap());
+        running.now_ms = t("2026-01-01T10:03:30Z");
+        assert!(
+            CacheCountdown.evaluate(&running).is_none(),
+            "a Bash call runs"
+        );
+    }
+
+    #[test]
+    fn a21_warm_switch_from_the_hook_or_history_and_the_cold_hint() {
+        let mut s = asked();
+        s.now_ms = t("2026-01-01T10:01:00Z");
+        assert!(SwitchWindow.evaluate(&s).is_none());
+        // The hook: a warm switch on 150k.
+        s.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:50Z"), serde_json::json!({"hook_event_name":"PreModelSwitch","from_model":"claude-opus-5","to_model":"claude-sonnet-5","source":"command","prompt_cache_warm":true,"context_tokens":150000,"estimated_cache_write_usd":0.9})).unwrap());
+        let a = SwitchWindow.evaluate(&s).expect("fires");
+        assert_eq!(a.headline, "Switch re-reads 150k uncached (≈$.90)");
+        assert!(
+            a.evidence
+                .starts_with("opus-5 → sonnet-5 at 10:00 · cache warm for "),
+            "{}",
+            a.evidence
+        );
+        assert!(a.action.starts_with("cache dies in "), "{}", a.action);
+        assert_eq!(a.urgency, Urgency::Now);
+        assert!(!SwitchWindow.acted(&s, &a));
+        // A switch back (another hook event later) counts as acted.
+        s.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:55Z"), serde_json::json!({"hook_event_name":"PreModelSwitch","from_model":"claude-sonnet-5","to_model":"claude-opus-5","source":"command","prompt_cache_warm":true,"context_tokens":150000})).unwrap());
+        assert!(SwitchWindow.acted(&s, &a));
+        // `source: auto` (Claude Code's own downgrade) never fires.
+        let mut auto = asked();
+        auto.now_ms = t("2026-01-01T10:01:00Z");
+        auto.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:50Z"), serde_json::json!({"hook_event_name":"PreModelSwitch","from_model":"claude-opus-5","to_model":"claude-sonnet-5","source":"auto","prompt_cache_warm":true,"context_tokens":150000})).unwrap());
+        assert!(SwitchWindow.evaluate(&auto).is_none());
+        // Without hooks: a /model row of history.jsonl for this session.
+        let mut h = asked();
+        h.session.session_id = "s1".into();
+        h.now_ms = t("2026-01-01T10:01:00Z");
+        let row = crate::history::parse_row(&format!(r#"{{"display":"/model sonnet","pastedContents":{{}},"timestamp":{},"project":"/p","sessionId":"s1"}}"#, t("2026-01-01T10:00:50Z"))).unwrap();
+        h.history.absorb(&[row], "s1", std::path::Path::new("/p"));
+        let a = SwitchWindow.evaluate(&h).expect("fires from history");
+        assert!(
+            a.evidence.starts_with("/model sonnet at 10:00"),
+            "{}",
+            a.evidence
+        );
+        // Cold and a switching project: the free-moment hint.
+        let mut cold = asked();
+        cold.now_ms = t("2026-01-01T10:20:00Z");
+        cold.history.project_switches = 4;
+        let c = ColdSwitch.evaluate(&cold).expect("cold hint");
+        assert_eq!(
+            c.headline,
+            "Cache is cold: /model or /effort costs nothing now"
+        );
+        assert_eq!(c.urgency, Urgency::Next);
+        cold.history.project_switches = 2;
+        assert!(ColdSwitch.evaluate(&cold).is_none());
+        assert!(ColdSwitch.evaluate(&s).is_none(), "warm");
+    }
+
+    #[test]
+    fn a23_context_cost_is_next_row_below_the_bar_and_slot_at_a_clean_stop() {
+        let big = |ctx: u64, ended: bool| -> State {
+            let mut s = State::new(Pricing::bundled());
+            s.apply(&prompt("2026-01-01T10:00:00Z"));
+            s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{{"id":"m1","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"stop_reason":"end_turn","usage":{{"input_tokens":2,"cache_read_input_tokens":{ctx},"output_tokens":10}}}}}}"#)).unwrap());
+            if ended {
+                s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T10:00:06Z","durationMs":6000}"#).unwrap());
+            }
+            s
+        };
+        assert!(
+            ContextCost.evaluate(&big(150_000, true)).is_none(),
+            "below 200k"
+        );
+        let a = ContextCost.evaluate(&big(250_000, true)).expect("fires");
+        assert!(a.next_row_only, "250k on 1M: the next row only");
+        assert!(a.headline.starts_with("ctx 250k → ≈$"), "{}", a.headline);
+        let a = ContextCost.evaluate(&big(420_000, false)).expect("fires");
+        assert!(a.next_row_only, "a turn runs: no clean stop yet");
+        assert!(
+            a.action.starts_with("at the next clean stop"),
+            "{}",
+            a.action
+        );
+        let a = ContextCost.evaluate(&big(420_000, true)).expect("fires");
+        assert!(!a.next_row_only, "420k and a clean stop: the slot");
+        assert_eq!(
+            a.action,
+            "clean stop: /compact <focus>, or hand-off + /clear"
+        );
+        assert_eq!(a.action_text, "/compact ");
+        // A /compact counts as acted.
+        let mut s = big(420_000, true);
+        assert!(!ContextCost.acted(&s, &a));
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:01:00Z","message":{"role":"user","content":"<command-name>/compact</command-name><command-message>compact</command-message><command-args>focus</command-args>"}}"#).unwrap());
+        assert!(ContextCost.acted(&s, &a));
+        // The engine keeps a next-row-only rule out of the slot but in the queue.
+        let mut e = crate::advisor::Engine::new(vec![Box::new(ContextCost)]);
+        let mut st = big(250_000, true);
+        for i in 1..=3 {
+            st.apply(&prompt(&format!("2026-01-01T10:0{i}:00Z")));
+            st.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T10:0{i}:05Z","message":{{"id":"m{i}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"stop_reason":"end_turn","usage":{{"input_tokens":2,"cache_read_input_tokens":250000,"output_tokens":10}}}}}}"#)).unwrap());
+        }
+        e.evaluate(&st);
+        assert!(e.occupant.is_none());
+        assert_eq!(e.current.len(), 1);
+        assert_eq!(e.next_up().unwrap().1, "next-row only");
+    }
+
+    #[test]
+    fn a27_loop_armed_on_a_large_context_once() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T10:00:00Z"));
+        s.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 180_000));
+        assert!(LoopArmed.evaluate(&s).is_none(), "nothing armed");
+        s.session.session_crons = 1;
+        let a = LoopArmed.evaluate(&s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "/loop 5m on 180k ctx ≈ 2.16M cache-read tok/h idle"
+        );
+        assert_eq!(a.action_text, "/clear");
+        assert!(LoopArmed.cooldown_turns() > 1_000, "once per session");
+        // From history with an interval.
+        let mut h = State::new(Pricing::bundled());
+        h.session.session_id = "s1".into();
+        h.apply(&prompt("2026-01-01T10:00:00Z"));
+        h.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 180_000));
+        let row = crate::history::parse_row(r#"{"display":"/loop 15m check ci","pastedContents":{},"timestamp":1,"project":"/p","sessionId":"s1"}"#).unwrap();
+        h.history.absorb(&[row], "s1", std::path::Path::new("/p"));
+        let a = LoopArmed.evaluate(&h).expect("fires");
+        assert!(
+            a.headline.starts_with("/loop 15m on 180k ctx ≈ 720k"),
+            "{}",
+            a.headline
+        );
+        // A small context: quiet.
+        let mut small = State::new(Pricing::bundled());
+        small.session.session_crons = 2;
+        small.apply(&prompt("2026-01-01T10:00:00Z"));
+        small.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 50_000));
+        assert!(LoopArmed.evaluate(&small).is_none());
+    }
+
+    #[test]
+    fn a30_cold_resume_from_the_idle_gap_or_the_resume_hook() {
+        let mut s = State::new(Pricing::bundled());
+        s.session.alive = true;
+        s.apply(&prompt("2026-01-01T10:00:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T10:00:06Z","durationMs":6000}"#).unwrap());
+        s.now_ms = t("2026-01-01T10:03:00Z");
+        assert!(ColdResume.evaluate(&s).is_none(), "still warm");
+        s.now_ms = t("2026-01-01T12:14:06Z");
+        let a = ColdResume.evaluate(&s).expect("fires");
+        assert_eq!(
+            a.headline,
+            "Idle 2h 14m · cache cold · next msg re-writes 182k"
+        );
+        assert!(
+            a.evidence.starts_with("no call for longer than the 5m TTL"),
+            "{}",
+            a.evidence
+        );
+        assert_eq!(a.action, "Done? /clear + hand-off note · else /compact (½)");
+        assert_eq!(a.family, "cold-resume");
+        assert!(!ColdResume.acted(&s, &a));
+        s.apply(&prompt("2026-01-01T12:15:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T12:15:05Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
+        assert!(ColdResume.acted(&s, &a));
+        // The resume hook's own verdict.
+        let mut r = State::new(Pricing::bundled());
+        r.session.alive = true;
+        r.apply(&prompt("2026-01-01T10:00:00Z"));
+        r.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 150_000));
+        r.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:10Z"), serde_json::json!({"hook_event_name":"SessionStart","source":"resume","seconds_since_last_response":7200,"context_tokens":150000,"prompt_cache_likely_expired":true,"estimated_cache_write_usd":1.1})).unwrap());
+        r.now_ms = t("2026-01-01T10:00:20Z");
+        let a = ColdResume.evaluate(&r).expect("fires");
+        assert!(
+            a.evidence
+                .starts_with("Claude Code's resume says the cache likely expired · ≈$1.1"),
+            "{}",
+            a.evidence
+        );
+        // Below 100k: nothing.
+        let mut small = State::new(Pricing::bundled());
+        small.session.alive = true;
+        small.apply(&prompt("2026-01-01T10:00:00Z"));
+        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"cache_creation_input_tokens":40000,"output_tokens":10}}}"#).unwrap());
+        small.now_ms = t("2026-01-01T12:14:06Z");
+        assert!(ColdResume.evaluate(&small).is_none());
     }
 }

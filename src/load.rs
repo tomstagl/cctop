@@ -153,6 +153,14 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
     for ev in hooks.poll() {
         state.apply_hook(&ev);
     }
+    // The person's slash commands and paste sizes for a live session.
+    if state.session.pid.is_some() {
+        if let Some(path) = crate::history::default_path() {
+            let rows = crate::history::Tailer::new(&path).poll();
+            let (id, cwd) = (state.session.session_id.clone(), state.session.cwd.clone());
+            state.history.absorb(&rows, &id, &cwd);
+        }
+    }
     // Your last-7-days medians are an account fact too: never beside a
     // fixture file, so its query output is the same on every machine.
     if state.session.pid.is_some() {

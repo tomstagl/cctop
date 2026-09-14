@@ -76,6 +76,19 @@ pub struct SessionInfo {
     pub end_reason: Option<String>,
 }
 
+/// A `PreModelSwitch` hook event.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModelSwitch {
+    pub at_ms: i64,
+    pub from: String,
+    pub to: String,
+    /// `command`, `picker`, `auto`…
+    pub source: Option<String>,
+    pub cache_warm: Option<bool>,
+    pub context_tokens: Option<u64>,
+    pub estimated_cache_write_usd: Option<f64>,
+}
+
 /// One permission-prompt shape and what Claude Code offered to allow.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PermissionAsk {
@@ -332,6 +345,12 @@ pub struct State {
     pub claude_env: std::collections::BTreeMap<String, String>,
     /// `permissions.allow` from settings, as written.
     pub allow_rules: Vec<String>,
+    /// What `~/.claude/history.jsonl` says about this session and project
+    /// (slash commands and paste sizes only).
+    pub history: crate::history::History,
+    /// Model switches the hook spool reported (`PreModelSwitch`):
+    /// `(epoch ms, from, to, source, cache warm, context tokens)`.
+    pub model_switches: Vec<ModelSwitch>,
     /// Claude Code's own tips shown in the last ten startups (`tipsHistory`
     /// ids): the coach does not repeat what its host just said.
     pub tips_recent: std::collections::BTreeSet<String>,
@@ -901,6 +920,17 @@ impl State {
                 let to = pstr("to_model").unwrap_or_default();
                 let warm = p.get("prompt_cache_warm").and_then(|v| v.as_bool());
                 let usd = p.get("estimated_cache_write_usd").and_then(|v| v.as_f64());
+                if ev.event == "PreModelSwitch" {
+                    self.model_switches.push(ModelSwitch {
+                        at_ms: at,
+                        from: from.clone(),
+                        to: to.clone(),
+                        source: pstr("source"),
+                        cache_warm: warm,
+                        context_tokens: p.get("context_tokens").and_then(|v| v.as_u64()),
+                        estimated_cache_write_usd: usd,
+                    });
+                }
                 let mut text = format!(
                     "{} {from} → {to}",
                     if ev.event == "PreModelSwitch" {
@@ -917,7 +947,12 @@ impl State {
                 }
                 self.events.push(crate::events::Event {
                     at,
-                    kind: Kind::Api,
+                    // A warm-cache switch re-writes the context: a priced moment.
+                    kind: if warm == Some(true) {
+                        Kind::Cost
+                    } else {
+                        Kind::Api
+                    },
                     text,
                 });
             }

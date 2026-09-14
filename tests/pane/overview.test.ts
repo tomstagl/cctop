@@ -102,7 +102,7 @@ test('the dashboard fixture parses into tiles, a nudge and nine rows', () => {
   );
   assert.ok(d.headerLine.startsWith('cctop  claude-sonnet-5 · turn 14'), d.headerLine);
   assert.equal(d.phase.word, 'IDLE');
-  assert.ok(d.nudge !== null && d.nudge.line.startsWith('Fixed prefix 60k tokens'), JSON.stringify(d.nudge));
+  assert.ok(d.nudge !== null && d.nudge.line.startsWith('mcp:claude-in-chrome results: 152k'), JSON.stringify(d.nudge));
   assert.equal(d.tiles[0].figure, '40');
   assert.equal(d.tiles[0].unit, '%');
   assert.equal(dashboardOf(null), null);
@@ -134,10 +134,10 @@ for (const columns of [50, 72, 100]) {
     const names = lines.filter((l) => /[○◐●] (context|cache|limits|rework)/.test(l));
     assert.ok(names.length >= 2, JSON.stringify(lines));
     assert.ok(names[0].includes('context') && names[0].includes('cache'), names[0]);
-    has(lines, /^ ▸ Fixed prefix 60k tokens/);
+    has(lines, /^ ▸ mcp:claude-in-chrome results: 152k/);
     for (let d = 1; d <= 9; d++) assert.ok(lines.some((l) => new RegExp(`^ ?${d} `).test(l)), `row ${d}: ${JSON.stringify(lines)}`);
     has(lines, /^ ?1 Context\s+▇/);
-    has(lines, /^ ?9 Advisor\s+LATER A17/);
+    has(lines, /^ ?9 Advisor\s+LATER A03/);
     // The detail rows sit under their value rows from 50 columns.
     has(lines, /^ {13}\S/);
   });
@@ -257,5 +257,5 @@ test('the nudge line carries its class tag and the tile levels colour the digits
   const nudge = lines.find((l) => l.startsWith(' ▸ '))!;
   assert.ok(nudge.includes('LATER · turn 14'), nudge);
   const next = lines[lines.indexOf(nudge) + 1];
-  assert.ok(next.startsWith('   trim CLAUDE.md'), next);
+  assert.ok(next.startsWith('   pipe through head/grep'), next);
 });

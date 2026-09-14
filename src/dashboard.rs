@@ -955,8 +955,9 @@ mod tests {
         assert_eq!(d.header.phase.glyph, '●');
         let n = d.nudge.as_ref().unwrap();
         assert!(
-            n.line
-                .starts_with("Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE.md"),
+            n.line.starts_with(
+                "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run builds"
+            ),
             "{}",
             n.line
         );
@@ -1003,7 +1004,7 @@ mod tests {
             text_of(&d.rows[7].values)
         );
         assert!(
-            text_of(&d.rows[8].values).starts_with("LATER A17 · next long-foreground"),
+            text_of(&d.rows[8].values).starts_with("LATER A10 · next —"),
             "{}",
             text_of(&d.rows[8].values)
         );

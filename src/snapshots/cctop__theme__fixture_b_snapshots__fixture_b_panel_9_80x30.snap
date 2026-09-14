@@ -2,19 +2,19 @@
 source: src/theme.rs
 expression: "render_to_string(&app, 80, 30)"
 ---
-┌ LATER A17 — Fixed prefix 49k tokens ≈$0.15/turn at 15 calls  (Esc back) ─────┐
-│ Evidence  largest: built-in tools (schemas) (12k) · /context: 88k used       │
-│ Action    trim CLAUDE.md, move rarely-used rules to skills, disable unused   │
-│MCP servers and plugins                                                       │
-│ Saving    ~147k/turn                                                         │
-│ Retires   on 3 turns · since turn 6 · window 1 turn                          │
+┌ LATER A10 — `cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09  (Esc ┐
+│ Evidence  a foreground Bash call longer than a minute; Claude waited for it  │
+│ Action    queue: 'run builds and test suites longer than a minute in the     │
+│background'                                                                   │
+│ prompt    Run builds and test suites longer than a minute in the background  │
+│and keep working meanwhile.                                                   │
+│ Saving    ~9:09/turn                                                         │
+│ Retires   on 3 turns · since turn 6 · window 5 turns                         │
 │                                                                              │
-│ Why       The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills,  │
-│plugins) is sent on every request. Even as a cache read it is billed on every │
-│call, so its cost per turn is prefix × cache-read price × calls per turn. Trim│
-│CLAUDE.md, move rarely used rules into skills, and disable MCP servers and    │
-│plugins you do not use in this project.                                       │
-│                                                                              │
+│ Why       A foreground Bash call blocks the turn until it exits. For builds  │
+│and test suites that take more than a minute, run them in the background      │
+│(`run_in_background`): Claude keeps working and is notified when the command  │
+│finishes. Calls Claude Code backgrounded itself do not count.                 │
 │                                                                              │
 │                                                                              │
 │                                                                              │
