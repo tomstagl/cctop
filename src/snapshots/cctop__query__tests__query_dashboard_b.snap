@@ -1,0 +1,553 @@
+---
+source: src/query.rs
+expression: "serde_json::to_string_pretty(&d).unwrap()"
+---
+{
+  "header": {
+    "cwd": "/home/user/project",
+    "elapsed": "9h 25m",
+    "line": "cctop  claude-sonnet-5 · turn 6 · 9h 25m · /home/user/project · PR #121",
+    "model": "claude-sonnet-5",
+    "phase": {
+      "glyph": "●",
+      "tokens": [
+        "4c +180",
+        "silent 3:09",
+        "▸ steer window"
+      ],
+      "word": "COMMITTING"
+    },
+    "pr": 121,
+    "session": "session-b",
+    "turn": 6,
+    "version": "2.1.270"
+  },
+  "lines": {
+    "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l1": "○14% ○— ○59m ●1 ▸",
+    "l2": "○○○●"
+  },
+  "nudge": {
+    "acting": false,
+    "class": "LATER",
+    "id": "A17",
+    "line": "Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE.md, move rarely-used rules to skills,…",
+    "tag": "LATER · turn 6"
+  },
+  "rows": [
+    {
+      "detail": [
+        {
+          "text": "+146k/turn",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "autocompact 567k",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "425k left",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "compactions 1",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "since clear 23:29",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "re-reads 0",
+          "tone": "dim"
+        }
+      ],
+      "digit": 1,
+      "name": "Context",
+      "values": [
+        {
+          "text": "▇▇▇▇▇▇",
+          "tone": "accent"
+        },
+        {
+          "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+          "tone": "dim"
+        },
+        {
+          "text": " prefix 49k · inputs ≈538 · results ≈180 · thinking 355 · harness ≈7.8k",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "$18.7",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$1.01/h",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$/call ≈$.03",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$/turn ≈$.50",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "next 30c ≈$1.0",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "skill:admit 1 %",
+          "tone": "dim"
+        }
+      ],
+      "digit": 2,
+      "name": "Tokens",
+      "values": [
+        {
+          "text": "cache read 28.46M",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "write 311k",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "output 107k",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "warm 59m ≈",
+          "tone": "ok"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "89% of your usage was at >150k context",
+          "tone": "dim"
+        }
+      ],
+      "digit": 3,
+      "name": "Limits",
+      "values": [
+        {
+          "text": "no status line",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "weight ×3 (sonnet)",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "long_context 8860 %",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "elapsed 8h 40m · 4 api calls · 4 tool calls",
+          "tone": "dim"
+        }
+      ],
+      "digit": 4,
+      "name": "Turn",
+      "values": [
+        {
+          "text": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",
+          "tone": "accent"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "api ≈3:48 · tools 8h 35m",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "Denied 4",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "Other 2",
+          "tone": "dim"
+        }
+      ],
+      "digit": 5,
+      "name": "Tools",
+      "values": [
+        {
+          "text": "140 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "6 err",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "explore 39 (3 ✗)",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "commit 8",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "test 8",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "Read 30",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "Edit 29",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "AskUserQuestion 1",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "top ctx Read /home…",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "detail": [],
+      "digit": 6,
+      "name": "Agents",
+      "values": [
+        {
+          "text": "—",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "detail": [],
+      "digit": 7,
+      "name": "Files",
+      "values": [
+        {
+          "text": "44 touched",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "40cde3.md E×1",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "c1c889.rs E×2 IDE edit",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "commit 0:00 ago",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "23:28 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Bash git commit -m \"$(cat lorem_i lorem…",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "23:27 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Bash ✓ 16",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "23:27 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Bash git push lorem_ lore 2>&…",
+          "tone": "fg"
+        }
+      ],
+      "digit": 8,
+      "name": "Events",
+      "values": [
+        {
+          "text": "23:29 ",
+          "tone": "dim"
+        },
+        {
+          "text": "api ",
+          "tone": "crit"
+        },
+        {
+          "text": "cost-state $18.75 · api 22:14 · retries…",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "23:29 ",
+          "tone": "dim"
+        },
+        {
+          "text": "note ",
+          "tone": "dim"
+        },
+        {
+          "text": "/clear · continued in a new session",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "23:28 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Bash…",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…",
+          "tone": "dim"
+        }
+      ],
+      "digit": 9,
+      "name": "Advisor",
+      "values": [
+        {
+          "text": "LATER A17",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "next long-foreground → when the slot frees · `c…",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "snoozed —",
+          "tone": "dim"
+        }
+      ]
+    }
+  ],
+  "schema": 1,
+  "session_mode": "interactive",
+  "tiles": [
+    {
+      "approx": true,
+      "figure": "14",
+      "glyph": "○",
+      "id": "context",
+      "level": "quiet",
+      "name": "context",
+      "source": "transcript",
+      "sub1": "142k of 1.00M",
+      "sub2": "≈$.03/call",
+      "unit": "%"
+    },
+    {
+      "approx": true,
+      "figure": "59",
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "name": "cache",
+      "source": "transcript",
+      "sub1": "warm · 59m (1h) TTL",
+      "sub2": "misses 0",
+      "unit": "m"
+    },
+    {
+      "approx": false,
+      "figure": "—",
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "name": "limits",
+      "source": "status line",
+      "sub1": "no status line",
+      "sub2": "",
+      "unit": "%"
+    },
+    {
+      "approx": false,
+      "figure": "1",
+      "glyph": "●",
+      "id": "rework",
+      "level": "act",
+      "name": "rework",
+      "source": "transcript",
+      "sub1": "1 · correction",
+      "sub2": "edits 3 ✓ none 9h00",
+      "unit": ""
+    }
+  ]
+}

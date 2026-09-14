@@ -12,6 +12,7 @@ pub mod baseline;
 pub mod claude_home;
 pub mod coach;
 pub mod config;
+pub mod dashboard;
 pub mod discover;
 pub mod events;
 pub mod files;

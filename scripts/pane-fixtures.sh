@@ -16,7 +16,7 @@ session=${1:-fixtures/session-a.jsonl}
 suffix=${2:+-$2}
 out=tests/pane/fixtures
 mkdir -p "$out"
-for verb in summary tools files agents advice coach events; do
+for verb in summary dashboard tools files agents advice coach events; do
   cargo run -q -- query "$verb" --session "$session" > "$out/$verb$suffix.json"
   echo "$out/$verb$suffix.json"
 done

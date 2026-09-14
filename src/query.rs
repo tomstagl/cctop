@@ -378,6 +378,14 @@ pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
     v
 }
 
+/// `cctop query dashboard`: the drawn form of the dashboard (header, four
+/// tiles, the nudge line, nine ledger rows of tagged segments cut at 118
+/// cells).
+pub fn dashboard(state: &State) -> Value {
+    let engine = advisor::Engine::for_state(state);
+    serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null)
+}
+
 /// `cctop query coach --line`: the one-line form at `columns`.
 pub fn coach_line(state: &State, columns: usize) -> String {
     let engine = advisor::Engine::for_state(state);
@@ -509,6 +517,16 @@ mod tests {
         }
         s.session.ended_at_ms = s.last_line_at_ms;
         s
+    }
+
+    #[test]
+    fn fixture_b_dashboard_snapshot() {
+        let s = state_b();
+        let d = dashboard(&s);
+        insta::assert_snapshot!(
+            "query_dashboard_b",
+            serde_json::to_string_pretty(&d).unwrap()
+        );
     }
 
     #[test]

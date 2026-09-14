@@ -85,6 +85,8 @@ enum QueryWhat {
     Agents,
     /// Ranked Advisor recommendations with explanations.
     Advice,
+    /// The dashboard object: header, four tiles, the nudge, nine ledger rows.
+    Dashboard,
     /// The coach object: state line, four lights, the nudge, next, snoozed.
     Coach {
         /// Print the one-line status form instead of JSON.
@@ -574,6 +576,7 @@ fn query(q: QueryArgs) {
                 QueryWhat::Files => qy::files(&state),
                 QueryWhat::Agents => qy::agents(&state),
                 QueryWhat::Advice => qy::advice(&state),
+                QueryWhat::Dashboard => qy::dashboard(&state),
                 QueryWhat::Coach {
                     snooze,
                     snooze_session,
