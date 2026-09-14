@@ -169,13 +169,13 @@ test('every metric row is keyed by an id from docs/metrics.md', () => {
   const doc = readFileSync(join(repo, 'docs', 'metrics.md'), 'utf8');
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));
   assert.ok(ids.size > 40, `metrics.md parsed ${ids.size} ids`);
-  const keys = [...keyed(renderOverview(build({ advice: [{ severity: 'high', headline: 'x' }] }), el, 80, 'dock', NOW)).keys()];
+  const keys = [...keyed(renderOverview(build({ advice: { schema: 2, primary: { class: 'NOW', rule: 'A47', headline: 'x' }, items: [] } }), el, 80, 'dock', NOW)).keys()];
   assert.ok(keys.length >= 20, `only ${keys.length} keyed rows`);
   for (const key of keys) assert.ok(ids.has(key), `row key ${key} is not a metric id`);
 });
 
 test('every row Text truncates and colours are theme keys only', () => {
-  const tree = renderOverview(build({ advice: [{ severity: 'high', headline: 'x' }] }), el, 80, 'dock', NOW);
+  const tree = renderOverview(build({ advice: { schema: 2, primary: { class: 'NOW', rule: 'A47', headline: 'x' }, items: [] } }), el, 80, 'dock', NOW);
   let texts = 0;
   const visit = (node: RenderNode | undefined, inText: boolean): void => {
     if (node === undefined || typeof node === 'string' || node.type === 'engine') return;
@@ -218,17 +218,29 @@ test('the header dims the badges that are off and colours the ones on', () => {
   );
 });
 
-test('a high-severity Advisor headline is the last row', () => {
-  const advice = fixture<Record<string, unknown>[]>('advice');
-  const none = rows(build({ advice }), 80);
-  assert.ok(!none.some((r) => r.includes(String(advice[0].headline))), 'no row without a severity');
-  const lines = rows(build({ advice: [{ ...advice[0], severity: 'high' }] }), 80);
+test("the coach's slot occupant is the last row, coloured by class", () => {
+  const advice = fixture<{ items: Record<string, unknown>[]; primary: Record<string, unknown> }>('advice');
+  const queued = { ...advice, primary: null };
+  const none = rows(build({ advice: queued }), 80);
+  assert.ok(!none.some((r) => r.includes(String(advice.items[0].headline))), 'no row without an occupant');
+  const lines = rows(build({ advice }), 80);
   const last = lines.filter((r) => r !== '').at(-1)!;
-  assert.ok(last.includes('`Bash make check` failed 3× with the same input'), last);
-  assert.ok(!rows(build({ advice: [{ ...advice[0], severity: 'medium' }] }), 80).includes(last));
+  assert.ok(last.startsWith(`▸ LATER A17 ${String(advice.primary.headline)}`.slice(0, 40)), last);
   // In its own frame, the last one on the screen.
-  const titles = frameTitles(raw(build({ advice: [{ ...advice[0], severity: 'high' }] }), 80));
+  const titles = frameTitles(raw(build({ advice }), 80));
   assert.equal(titles.at(-1), '9 Advisor');
+  // A NOW occupant is red, a NEXT one yellow, a LATER one plain.
+  const colourOf = (cls: string): string | undefined => {
+    const primary = { ...advice.primary, class: cls, rule: 'A47', headline: 'Rate limit (session) · resets 22:20' };
+    let found: string | undefined;
+    walk(renderOverview(build({ advice: { ...advice, primary } }), el, 80, 'dock', NOW), (n) => {
+      if (n.type === 'Text' && textOf(n.children).includes(`▸ ${cls} A47`)) found = THEME_KEYS[String(n.props?.color)] ?? String(n.props?.color);
+    });
+    return found;
+  };
+  assert.equal(colourOf('NOW'), 'red');
+  assert.equal(colourOf('NEXT'), 'yellow');
+  assert.equal(colourOf('LATER'), 'undefined');
 });
 
 test('a missing binary draws one line per binary-backed section and keeps the engine rows', () => {

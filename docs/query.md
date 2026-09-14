@@ -42,7 +42,7 @@ An optional source that is not on disk is reported, never guessed:
 | `tools` | `tools[]` (tool, calls, errors, running, p50, p95, last_call_at_ms, tokens_to_ctx) sorted by calls, and `top_ctx[]` (the 5 largest single results) |
 | `files` | Per touched file: path, reads, edits, writes, touches, lines_added/removed (or missing outside git), reread_warning |
 | `agents` | `agents[]` (id, type, description, model, state, elapsed, tokens), `mcp[]` (name, pid, rss, restarts, calls) or missing for fixtures, `tasks[]` |
-| `advice` | Ranked Advisor items: rule, headline, evidence, action, saving, doc_key, explain |
+| `advice` | Schema 2: `schema`, `session_mode` (interactive / loop / machine / team / workflow / remote), `primary` (the coach's slot occupant, with `acting`), `next` (the queued nudge and what promotes it), `items[]` (occupant first, then the ranked queue: rule, family, class NOW/NEXT/LATER, headline, evidence, action, action_text, action_kind, saving, since_turn, window_turns, retires_on, doc_key, explain), `snoozed[]` (rule, until_turn or null for the session), `suppressed[]` (rule, why), `recent[]` (retired nudges). Snoozes persist in `~/.cctop/<session>.advisor.json`, so the TUI, the pane and this query agree |
 | `prefix` | `total` and `rows[]` (kind, name, bytes, tokens, count) of what rides on every request |
 | `events [--since 10m]` | `[{at_ms, kind, text}]`; `--since` accepts `90s`, `10m`, `2h`, `1d` |
 | `explain <metric_id>` | id, panel, name, unit, formula, sources, caveats, estimate_when — no session needed |
@@ -59,8 +59,8 @@ $ cctop query ledger --last 3 | jq '.[] | [.turn, .api_calls.value, .cost.value]
 [14, 52, 4.07]
 [15, 0, null]
 
-$ cctop query advice | jq '.[0] | {rule, headline, saving}'
-{"rule":"A15","headline":"`Bash make check` failed 3× with the same input","saving":"~481/turn"}
+$ cctop query advice | jq '.primary | {class, rule, headline, saving}'
+{"class":"NEXT","rule":"A25","headline":"EXPLORING ×8 · +31k ctx this run","saving":"~31k/turn"}
 
 $ cctop query explain cache_hit_ratio | jq .formula
 "cache_read / (cache_read + cache_write + fresh_input)"

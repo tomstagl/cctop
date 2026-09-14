@@ -522,9 +522,9 @@ fn query(q: QueryArgs) {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
         what => {
             let mut state = load_state(&q.attach);
-            let mut engine = cctop::advisor::Engine::default();
-            engine.evaluate(&state);
+            let engine = cctop::advisor::Engine::for_state(&state);
             state.advice = engine.current.clone();
+            state.advice_view.has_occupant = engine.occupant.is_some();
             match what {
                 QueryWhat::Summary => qy::summary(&state),
                 QueryWhat::Ledger { last } => qy::ledger_json(&state, *last),
@@ -559,34 +559,48 @@ fn query(q: QueryArgs) {
 
 fn advise(a: AdviseArgs) {
     let state = load_state(&a.attach);
-    let mut engine = cctop::advisor::Engine::default();
-    engine.evaluate(&state);
+    let engine = cctop::advisor::Engine::for_state(&state);
     if a.json {
-        let items: Vec<serde_json::Value> = engine
-            .current
-            .iter()
-            .map(|x| {
-                serde_json::json!({
-                    "rule": x.rule,
-                    "headline": x.headline,
-                    "evidence": x.evidence,
-                    "action": x.action,
-                    "saving": x.saving.label(),
-                    "doc_key": x.doc_key,
-                })
-            })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&items).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&cctop::query::advice_of(&engine)).unwrap()
+        );
         return;
     }
     if engine.current.is_empty() {
         println!("cctop advise: no recommendation — the session looks efficient");
+        if !engine.suppressed.is_empty() {
+            for (rule, why) in &engine.suppressed {
+                println!("   held back: {rule} ({why})");
+            }
+        }
         return;
     }
     for (i, x) in engine.current.iter().enumerate() {
-        println!("{}. [{}] {}", i + 1, x.rule, x.headline);
+        let slot = if i == 0 && engine.occupant.is_some() {
+            " ← slot"
+        } else {
+            ""
+        };
+        println!(
+            "{}. [{} {}] {}{slot}",
+            i + 1,
+            x.urgency.label(),
+            x.rule,
+            x.headline
+        );
         println!("   evidence: {}", x.evidence);
         println!("   action:   {}", x.action);
-        println!("   saving:   {}", x.saving.label());
+        if !x.action_text.is_empty() {
+            println!("   {}: {}", x.action_kind.label(), x.action_text);
+        }
+        println!(
+            "   saving:   {} · retires on {}",
+            x.saving.label(),
+            x.retires_on
+        );
+    }
+    for (rule, why) in &engine.suppressed {
+        println!("   held back: {rule} ({why})");
     }
 }

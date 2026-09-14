@@ -314,15 +314,16 @@ export function turnBlock(model: Model, now: number): Block {
   return { hotkey: '4', title: 'Turn', rows, summary: elapsed === null ? undefined : formatDuration(elapsed) };
 }
 
-/** The top Advisor headline when its severity is high; the binary line while it is missing; else null. */
+/** The coach's slot occupant (`▸ NOW A47 headline`, red for NOW, yellow for NEXT); the binary line while it is missing; else null. */
 export function advisorLine(model: Model): Row | null {
   if (model.binary === 'missing') return line('advice_saving', NEEDS_BINARY);
-  const advice = model.query.advice;
-  if (!Array.isArray(advice) || advice.length === 0) return null;
-  const first: unknown = advice[0];
-  if (at(first, 'severity') !== 'high') return null;
-  const headline = stringAt(first, 'headline');
-  return headline === null ? null : { ...line('advice_saving', `▲ ${headline}`), color: 'red' };
+  const primary = at(model.query.advice, 'primary');
+  if (primary === null || typeof primary !== 'object') return null;
+  const headline = stringAt(primary, 'headline');
+  const cls = stringAt(primary, 'class') ?? '';
+  if (headline === null) return null;
+  const color: Color | undefined = cls === 'NOW' ? 'red' : cls === 'NEXT' ? 'yellow' : undefined;
+  return { ...line('advice_saving', `▸ ${cls} ${stringAt(primary, 'rule') ?? ''} ${headline}`), color };
 }
 
 const STATUS_PILL: Record<TurnState, string> = { busy: 'BUSY', idle: 'IDLE', waiting: 'WAITING' };

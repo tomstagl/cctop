@@ -20,6 +20,12 @@ pub enum Kind {
     Api,
     Note,
     Away,
+    /// The coach's own lifecycle: a nudge fired, was acted on, expired or
+    /// was snoozed.
+    Coach,
+    /// The ticker's tape: a priced moment worth ≥ 20 k tokens or ≥ $0.10 —
+    /// a named cache miss, a cold write, a model switch.
+    Cost,
 }
 
 impl Kind {
@@ -33,6 +39,8 @@ impl Kind {
             Kind::Api => "api",
             Kind::Note => "note",
             Kind::Away => "away",
+            Kind::Coach => "coach",
+            Kind::Cost => "cost",
         }
     }
 }
@@ -45,6 +53,9 @@ pub struct Event {
     pub text: String,
 }
 
+/// A priced moment becomes a `cost` row from this many tokens.
+pub const COST_ROW_TOKENS: u64 = 20_000;
+
 /// Bounded, time-ordered event log.
 #[derive(Debug, Default)]
 pub struct Log {
@@ -54,6 +65,8 @@ pub struct Log {
     /// Pending tool names by id, for the end event.
     pending: std::collections::HashMap<String, String>,
     last_context: Option<u64>,
+    /// Model of the last real API response, for the switch row.
+    last_model: Option<String>,
     /// Tool calls issued in the current turn, for the interrupt event.
     turn_calls: usize,
     /// The transcript's version (first seen), for the compaction fallback.
@@ -169,7 +182,13 @@ impl Log {
                             .unwrap_or(a.message.usage.cache_creation_input_tokens);
                         self.push(Event {
                             at,
-                            kind: Kind::Api,
+                            // ≥ 20 k re-written is a priced moment; smaller
+                            // misses are API detail.
+                            kind: if tokens >= COST_ROW_TOKENS {
+                                Kind::Cost
+                            } else {
+                                Kind::Api
+                            },
                             text: format!(
                                 "cache miss: {} {}",
                                 miss.kind,
@@ -177,6 +196,37 @@ impl Log {
                             ),
                         });
                     }
+                }
+                // Priced moments without a diagnostic: a model switch, and a
+                // cold write (the context re-written at the write price).
+                let usage = &a.message.usage;
+                let model = a.message.model.clone();
+                if !model.is_empty() && !model.starts_with('<') {
+                    if let Some(prev) = self.last_model.as_deref().filter(|p| *p != model) {
+                        self.push(Event {
+                            at,
+                            kind: Kind::Cost,
+                            text: format!(
+                                "model {} → {}",
+                                crate::ui::fmt::model_short(prev),
+                                crate::ui::fmt::model_short(&model)
+                            ),
+                        });
+                    }
+                    self.last_model = Some(model);
+                }
+                let write = usage.cache_creation_input_tokens;
+                let total = usage.total_input();
+                if write >= COST_ROW_TOKENS
+                    && total > 0
+                    && write as f64 >= total as f64 * 0.7
+                    && a.cache_miss_reason().is_none_or(|m| !m.is_named())
+                {
+                    self.push(Event {
+                        at,
+                        kind: Kind::Cost,
+                        text: format!("cold write {}", crate::ui::fmt::tokens(write)),
+                    });
                 }
                 // A context drop is a compaction only on transcripts that
                 // cannot say so themselves (`compact_boundary`, 2.1.263+).

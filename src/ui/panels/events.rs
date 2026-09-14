@@ -19,8 +19,9 @@ fn kind_style(t: &crate::theme::Theme, k: Kind) -> Style {
     match k {
         Kind::Tool => t.ok(),
         Kind::Hook | Kind::Agent => t.accent(),
-        Kind::Perm | Kind::Note | Kind::Compact | Kind::Away => t.warn(),
+        Kind::Perm | Kind::Note | Kind::Compact | Kind::Away | Kind::Cost => t.warn(),
         Kind::Api => t.crit(),
+        Kind::Coach => t.accent(),
     }
 }
 

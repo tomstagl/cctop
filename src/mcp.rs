@@ -49,9 +49,9 @@ fn state_for(args: &Value) -> Result<crate::ui::State, String> {
         wait: false,
     };
     let mut state = crate::load::state(&t).map_err(|e| e.to_string())?;
-    let mut engine = crate::advisor::Engine::default();
-    engine.evaluate(&state);
+    let engine = crate::advisor::Engine::for_state(&state);
     state.advice = engine.current.clone();
+    state.advice_view.has_occupant = engine.occupant.is_some();
     Ok(state)
 }
 

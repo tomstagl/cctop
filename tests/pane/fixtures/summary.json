@@ -1,5 +1,6 @@
 {
-  "advice_count": 1,
+  "advice_count": 2,
+  "advice_primary": "A17",
   "agents": {
     "approx": false,
     "metric_id": "agent_state",

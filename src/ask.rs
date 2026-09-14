@@ -99,7 +99,15 @@ pub fn compose(state: &State, panel: u8) -> Option<String> {
         }
         9 => {
             let a = state.advice.get(state.advice_index.min(state.advice.len().saturating_sub(1)))?;
-            format!("cctop advises: {} — {} ({}). Can you apply this now in this session?", a.headline, a.action, a.evidence)
+            match a.action_kind {
+                // A prompt or a slash command is the exact text to send.
+                crate::advisor::ActionKind::Prompt | crate::advisor::ActionKind::Slash
+                    if !a.action_text.is_empty() =>
+                {
+                    a.action_text.clone()
+                }
+                _ => format!("cctop advises: {} — {} ({}). Can you apply this now in this session?", a.headline, a.action, a.evidence),
+            }
         }
         _ => return None,
     };

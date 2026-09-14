@@ -67,6 +67,8 @@ pub struct Agent {
     pub hook_tool_calls: usize,
     pub hook_tool_ms: u64,
     pub hook_tool_errors: usize,
+    /// Tool calls by display name, from the agent's own transcript.
+    pub tools_by_name: std::collections::BTreeMap<String, usize>,
     // -- derived-state inputs
     pending_tool_uses: usize,
     last_was_error_result: bool,
@@ -95,6 +97,7 @@ impl Agent {
             hook_tool_calls: 0,
             hook_tool_ms: 0,
             hook_tool_errors: 0,
+            tools_by_name: Default::default(),
             pending_tool_uses: 0,
             last_was_error_result: false,
             last_assistant_ended_with_text: false,
@@ -162,12 +165,16 @@ impl Agent {
                         self.model = a.message.model.clone();
                     }
                 }
-                let uses = a
-                    .message
-                    .content
-                    .iter()
-                    .filter(|b| matches!(b, AssistantBlock::ToolUse { .. }))
-                    .count();
+                let mut uses = 0;
+                for b in &a.message.content {
+                    if let AssistantBlock::ToolUse { name, .. } = b {
+                        uses += 1;
+                        *self
+                            .tools_by_name
+                            .entry(crate::tools::display_name(name).0)
+                            .or_insert(0) += 1;
+                    }
+                }
                 self.tool_calls += uses;
                 self.pending_tool_uses += uses;
                 self.last_assistant_ended_with_text =
@@ -196,6 +203,22 @@ impl Agent {
         } else {
             self.finished_at = None;
         }
+    }
+
+    /// Edits the agent made (Edit / Write / MultiEdit / NotebookEdit).
+    pub fn edits(&self) -> usize {
+        ["Edit", "Write", "MultiEdit", "NotebookEdit"]
+            .iter()
+            .filter_map(|n| self.tools_by_name.get(*n))
+            .sum()
+    }
+
+    /// Search-shaped calls (Read / Grep / Glob / WebFetch / LS / Bash).
+    pub fn search_calls(&self) -> usize {
+        ["Read", "Grep", "Glob", "WebFetch", "LS", "Bash"]
+            .iter()
+            .filter_map(|n| self.tools_by_name.get(*n))
+            .sum()
     }
 
     /// Current state given the wall clock (epoch ms).

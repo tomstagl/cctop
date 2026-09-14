@@ -110,6 +110,7 @@ pub fn summary(state: &State) -> Value {
         },
         "queued_prompts": m(state.agg.queued_prompts, "count", "queued_prompts", false),
         "advice_count": state.advice.len(),
+        "advice_primary": state.advice.first().filter(|_| state.advice_view.has_occupant).map(|a| a.rule),
         "otel": match &state.otel {
             Some(o) => json!({
                 "tokens": o.tokens,
@@ -328,16 +329,54 @@ pub fn agents(state: &State) -> Value {
     })
 }
 
+/// One advice item as JSON.
+pub fn advice_item(x: &advisor::Advice) -> Value {
+    json!({
+        "rule": x.rule,
+        "family": x.family,
+        "class": x.urgency.label(),
+        "headline": x.headline,
+        "evidence": x.evidence,
+        "action": x.action,
+        "action_text": x.action_text,
+        "action_kind": x.action_kind.label(),
+        "saving": x.saving.label(),
+        "since_turn": x.since_turn,
+        "window_turns": x.window_turns,
+        "retires_on": x.retires_on,
+        "doc_key": x.doc_key,
+        "explain": advisor::rules::explain(x.doc_key),
+    })
+}
+
+/// `cctop query advice`: schema 2 — the slot occupant (`primary`) first,
+/// then the ranked queue in `items`, plus what the engine holds back.
 pub fn advice(state: &State) -> Value {
-    let mut engine = advisor::Engine::default();
-    engine.evaluate(state);
-    Value::Array(
-        engine
-            .current
-            .iter()
-            .map(|x| json!({"rule": x.rule, "headline": x.headline, "evidence": x.evidence, "action": x.action, "saving": x.saving.label(), "doc_key": x.doc_key, "explain": advisor::rules::explain(x.doc_key)}))
-            .collect(),
-    )
+    let engine = advisor::Engine::for_state(state);
+    advice_of(&engine)
+}
+
+pub fn advice_of(engine: &advisor::Engine) -> Value {
+    let items: Vec<Value> = engine.current.iter().map(advice_item).collect();
+    let primary = engine.occupant.as_ref().map(|o| {
+        let mut v = advice_item(&engine.current[0]);
+        v["acting"] = json!(o.acting);
+        v["fired_at_ms"] = json!(o.fired_at_ms);
+        v
+    });
+    let next = engine
+        .next_up()
+        .map(|(a, cond)| json!({"rule": a.rule, "class": a.urgency.label(), "headline": a.headline, "promotes": cond}));
+    json!({
+        "schema": 2,
+        "session_mode": engine.session_mode.label(),
+        "primary": primary,
+        "next": next,
+        "items": items,
+        "snoozed": engine.snoozed().iter().map(|(r, until)| json!({"rule": r, "until_turn": until})).collect::<Vec<_>>(),
+        "suppressed": engine.suppressed.iter().map(|(r, why)| json!({"rule": r, "why": why})).collect::<Vec<_>>(),
+        "recent": engine.recent.iter().map(|l| json!({"rule": l.rule, "what": l.what, "detail": l.detail, "at_ms": l.at_ms})).collect::<Vec<_>>(),
+    })
 }
 
 pub fn prefix(state: &State) -> Value {
@@ -480,11 +519,18 @@ mod tests {
         assert_eq!(a["agents"][0]["type"], "fork");
         assert_eq!(a["mcp"]["source"], "missing");
         let adv = advice(&s);
-        assert!(adv
-            .as_array()
-            .unwrap()
+        assert_eq!(adv["schema"], 2);
+        assert_eq!(adv["session_mode"], "remote", "fixture A is bridged");
+        let items = adv["items"].as_array().unwrap();
+        assert!(!items.is_empty());
+        assert!(items
             .iter()
-            .all(|x| x["explain"].is_string()));
+            .all(|x| x["explain"].is_string() && x["class"].is_string()));
+        assert_eq!(
+            adv["primary"]["rule"], items[0]["rule"],
+            "the slot occupant leads"
+        );
+        assert!(adv["snoozed"].as_array().unwrap().is_empty());
         let p = prefix(&s);
         assert_eq!(p["total"]["value"], 60_582);
         // The fixture's last prompt came 9 min after its last event.

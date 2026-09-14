@@ -1,8 +1,18 @@
 [
   {
+    "at_ms": 1787822688206,
+    "kind": "cost",
+    "text": "cold write 60k"
+  },
+  {
     "at_ms": 1787822689057,
     "kind": "tool",
     "text": "Read /home/user/project/src/a3d75d… ▶"
+  },
+  {
+    "at_ms": 1787822689057,
+    "kind": "cost",
+    "text": "cold write 60k"
   },
   {
     "at_ms": 1787822689570,
@@ -351,12 +361,12 @@
   },
   {
     "at_ms": 1787823296772,
-    "kind": "api",
+    "kind": "cost",
     "text": "cache miss: tools_changed 77k"
   },
   {
     "at_ms": 1787823298992,
-    "kind": "api",
+    "kind": "cost",
     "text": "cache miss: tools_changed 77k"
   },
   {
@@ -366,7 +376,7 @@
   },
   {
     "at_ms": 1787823300951,
-    "kind": "api",
+    "kind": "cost",
     "text": "cache miss: tools_changed 77k"
   },
   {
@@ -446,7 +456,7 @@
   },
   {
     "at_ms": 1787823870285,
-    "kind": "api",
+    "kind": "cost",
     "text": "cache miss: tools_changed 88k"
   },
   {

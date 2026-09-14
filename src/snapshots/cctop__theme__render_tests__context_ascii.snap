@@ -38,11 +38,11 @@ expression: text
 +----------------------------------------------------------+
 -6 Agents & MCP - 0/1 agents -------------------------------
 -7 Files - 4 touched ---------------------------------------
--9 Advisor - 1 of 1 ----------------------------------------
-+8 Events - 539 -------------------------------------------+
-| 10:08:02 tool   mcp:claude-in-chrome ✓ 118               |
+-9 Advisor - 1 of 2 ----------------------------------------
++8 Events - 542 -------------------------------------------+
 | 10:08:04 tool   mcp:claude-in-chrome ✓ 68                |
 | 10:17:27 note   interrupted after 125 calls              |
 | 10:17:27 api    cost-state $9.90 · api 18:45 · retries 0…|
+| 10:17:27 coach  LATER A17 fired · Fixed prefix 60k token…|
 +----------------------------------------------------------+
  ?help 1-9 panels ⇥focus a ask t theme L sessions q quit

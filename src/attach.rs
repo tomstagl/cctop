@@ -151,6 +151,9 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     if app.state.session.pid.is_some() {
         app.state.load_autocompact();
     }
+    // The advisor's snoozes and fire records, shared with `query` and the
+    // pane; the TUI is the single writer.
+    app.attach_advisor(&cctop_home, true);
     // Status-line samples.
     let mut status = crate::status::Watcher::new(&app.state.session.session_id);
     app.tick_hooks.push(Box::new(move |state: &mut State| {

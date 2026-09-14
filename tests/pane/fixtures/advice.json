@@ -1,11 +1,65 @@
-[
-  {
-    "action": "Interrupt and give the fix or the missing context yourself in one prompt.",
-    "doc_key": "A15",
-    "evidence": "1.4k tokens of error output re-read across the retries",
-    "explain": "When the same command fails repeatedly with the same error, each retry re-injects the full error output and the model rarely finds a new angle. Interrupt, read the error yourself, and give the fix or the missing context in one prompt.",
-    "headline": "`Bash make check` failed 3× with the same input",
-    "rule": "A15",
-    "saving": "~481/turn"
-  }
-]
+{
+  "items": [
+    {
+      "action": "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins",
+      "action_kind": "setting",
+      "action_text": "",
+      "class": "LATER",
+      "doc_key": "A17",
+      "evidence": "largest: skills listing (1.0k)",
+      "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project.",
+      "family": "prefix-tip",
+      "headline": "Fixed prefix 60k tokens ≈$0.10/turn at 8 calls",
+      "retires_on": "3 turns",
+      "rule": "A17",
+      "saving": "~96k/turn",
+      "since_turn": 14,
+      "window_turns": 1
+    },
+    {
+      "action": "pipe through head/grep or Glob, or ask a subagent for a summary — every later call re-reads it",
+      "action_kind": "advice",
+      "action_text": "",
+      "class": "LATER",
+      "doc_key": "A03",
+      "evidence": "biggest: `mcp:claude-in-chrome lorem` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
+      "explain": "Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request; `/context` flags a tool once its results pass 15 % of the window. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary. A result Claude Code spilled to disk (`<persisted-output>`) kept only its head; the rest cost the run, not the context.",
+      "family": "runaway-result",
+      "headline": "mcp:claude-in-chrome results: 152k since the last boundary (15 % of the window)",
+      "retires_on": "the next boundary",
+      "rule": "A03",
+      "saving": "~152k/turn",
+      "since_turn": 14,
+      "window_turns": 13
+    }
+  ],
+  "next": {
+    "class": "LATER",
+    "headline": "mcp:claude-in-chrome results: 152k since the last boundary (15 % of the window)",
+    "promotes": "when the slot frees",
+    "rule": "A03"
+  },
+  "primary": {
+    "acting": false,
+    "action": "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins",
+    "action_kind": "setting",
+    "action_text": "",
+    "class": "LATER",
+    "doc_key": "A17",
+    "evidence": "largest: skills listing (1.0k)",
+    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project.",
+    "family": "prefix-tip",
+    "fired_at_ms": 1787825847564,
+    "headline": "Fixed prefix 60k tokens ≈$0.10/turn at 8 calls",
+    "retires_on": "3 turns",
+    "rule": "A17",
+    "saving": "~96k/turn",
+    "since_turn": 14,
+    "window_turns": 1
+  },
+  "recent": [],
+  "schema": 2,
+  "session_mode": "team",
+  "snoozed": [],
+  "suppressed": []
+}

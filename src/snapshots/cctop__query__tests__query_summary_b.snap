@@ -4,6 +4,7 @@ expression: "serde_json::to_string_pretty(&sum).unwrap()"
 ---
 {
   "advice_count": 0,
+  "advice_primary": null,
   "agents": {
     "approx": false,
     "metric_id": "agent_state",

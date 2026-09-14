@@ -11,6 +11,18 @@ pub fn tokens(n: u64) -> String {
     }
 }
 
+/// `claude-opus-5` → `opus-5`, `claude-haiku-4-5-20251001` → `haiku-4-5`.
+pub fn model_short(model: &str) -> String {
+    let m = model.trim_start_matches("claude-");
+    // Drop a trailing date stamp.
+    match m.rsplit_once('-') {
+        Some((head, tail)) if tail.len() == 8 && tail.chars().all(|c| c.is_ascii_digit()) => {
+            head.to_string()
+        }
+        _ => m.to_string(),
+    }
+}
+
 /// `$4.37`, `$0.004`, `$12.5`.
 pub fn usd(v: f64) -> String {
     if v >= 100.0 {

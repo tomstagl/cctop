@@ -33,7 +33,7 @@ If `cctop` is not on PATH, say so and give the install line (`brew install <tap>
 
 1. Run the narrowest query that answers the question; `summary` first only if the question is vague.
 2. Quote the numbers with their units and mark estimates as cctop marks them (`est`, `≈`). Every value carries a `metric_id`; if the user asks what it means, run `explain`.
-3. Lead with the one change that saves the most (advice is already ranked by `saving_estimate`). Give the evidence line, then the action. Do not list all recommendations unless asked.
+3. Lead with `advice.primary` — the coach's slot occupant (class NOW › NEXT › LATER, then the published order). Give the evidence line, then the action; when `action_text` is set and its `action_kind` is `prompt` or `slash`, offer that exact text. Do not list all recommendations unless asked, never re-propose a rule listed under `snoozed`, and do not act on a nudge when `session_mode` is `machine` or `loop`.
 4. When a recommendation is something you can do in this session (delegate exploration to a subagent, read a file range instead of the whole file, run a long command in the background), offer to do it — that is the point.
 5. Do not paste raw JSON into the answer. Two to six lines is usually right.
 
@@ -43,7 +43,7 @@ If `cctop` is not on PATH, say so and give the install line (`brew install <tap>
 `cctop query summary | jq '{cost, burn_rate, tokens}'`, then `cctop query ledger --last 10 | jq '.[] | [.turn, .api_calls.value, .cost.value, .tools]'`. Answer pattern: total and burn rate; the two or three turns that dominate and what they did (tool results size, compaction, cold cache); the top advice item.
 
 **"Why is my cache hit ratio low?"**
-`cctop query advice` (rule A01/A02 will be present if relevant) and `cctop query ledger --last 10 | jq '.[] | [.turn, .cache_read.value, .cache_write.value]'` to show which turns wrote cache instead of reading it. Name the cause cctop found (prompt gap longer than the cache TTL, a changing prefix, a CLAUDE.md edit) and the fix.
+`cctop query advice` (A01 names a cache miss — model switch, tool list change, rewritten message — and A02 a cache that expired between prompts, when either happened in the last three turns) and `cctop query ledger --last 10 | jq '.[] | [.turn, .cache_read.value, .cache_write.value, .miss_cause]'` to show which turns wrote cache instead of reading it. Name the cause cctop found and the fix.
 
 **"What is filling my context?"**
 `cctop query prefix | jq '.rows[:5]'` and `cctop query tools | jq '.top_ctx'`. Answer: prefix size and its biggest parts; the largest individual tool results; turns until autocompact.

@@ -244,6 +244,11 @@ impl Prefix {
         }
     }
 
+    /// Enabled plugins: `(name, always-on tokens, unused for N startups)`.
+    pub fn plugins(&self) -> &[(String, u64, Option<u64>)] {
+        &self.plugins
+    }
+
     /// Skills listing budget: Claude Code caps it at 1 % of the window's
     /// characters; `(used chars, budget chars)`.
     pub fn skills_budget(&self, window: u64) -> (u64, u64) {

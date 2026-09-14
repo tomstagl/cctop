@@ -158,25 +158,31 @@ for (const columns of [50, 80]) {
     assert.equal(clock(last.at_ms), new Date(last.at_ms).toISOString().slice(11, 19));
   });
 
-  test(`advisor at ${columns} columns: the ranked list with the top item expanded`, () => {
-    const advice = fixture<Record<string, string>[]>('advice');
-    const second = { ...advice[0], rule: 'A03', headline: 'second headline', saving: '~12/turn' };
-    const model = build({ query: { advice: [advice[0], second] } });
+  test(`advisor at ${columns} columns: the slot occupant expanded, then the queue`, () => {
+    const advice = fixture<{ items: Record<string, string>[]; primary: Record<string, string> }>('advice');
+    const first: Record<string, string> = { ...advice.items[0], class: 'NEXT', rule: 'A25', headline: 'EXPLORING ×8 · +31k ctx this run', saving: '~31k/turn', action_kind: 'prompt', action_text: 'Use an Explore subagent for the rest.' };
+    const second: Record<string, string> = { ...advice.items[0], class: 'LATER', rule: 'A03', headline: 'second headline', saving: '~12/turn' };
+    const model = build({ query: { advice: { schema: 2, session_mode: 'interactive', primary: first, items: [first, second], snoozed: [{ rule: 'A17', until_turn: 9 }] } } });
     const lines = rows('advisor', model, columns);
     fits(lines, columns);
-    has(lines, columns >= 80 ? /^\s+▸\s+A15\s+`Bash make check` failed 3× with the same input\s+~481\/turn$/ : /^\s+▸\s+A15\s+`Bash make check` fail.*~481\/turn$/);
-    has(lines, /^\s+2\.\s+A03\s+second headline\s+~12\/turn$/);
-    assert.deepEqual(frameTitles(rawRows('advisor', model, columns)), ['9 Advisor ─ 1 of 2']);
+    has(lines, columns >= 80 ? /^\s+▸\s+NEXT\s+A25\s+EXPLORING ×8 · \+31k ctx this run\s+~31k\/turn$/ : /^\s+▸\s+NEXT\s+A25\s+EXPLORING.*~31k\/turn$/);
+    has(lines, /^\s+2\.\s+LATER\s+A03\s+second headline\s+~12\/turn$/);
+    assert.deepEqual(frameTitles(rawRows('advisor', model, columns)), ['9 Advisor ─ 1 of 2 · 1 snoozed']);
     const text = lines.join(' ').replace(/\s+/g, ' ');
-    for (const field of ['evidence', 'action', 'saving', 'why']) has(lines, new RegExp(`^\\s+${field}\\s`));
-    assert.ok(text.includes(advice[0].evidence), text);
-    assert.ok(text.includes(advice[0].action), text);
-    assert.ok(text.includes(advice[0].explain), text);
+    for (const field of ['evidence', 'action', 'prompt', 'saving', 'retires', 'why']) has(lines, new RegExp(`^\\s+${field}\\s`));
+    assert.ok(text.includes(first.evidence), text);
+    assert.ok(text.includes(first.action), text);
+    assert.ok(text.includes(first.action_text), text);
+    assert.ok(text.includes(first.explain), text);
+    assert.ok(text.includes('snoozed: A17'), text);
     // The expansion sits between the first and the second row.
     const top = lines.findIndex((r) => r.includes('▸'));
     const next = lines.findIndex((r) => r.includes('second headline'));
     const why = lines.findIndex((r) => /^\s+why\s/.test(r));
     assert.ok(top < why && why < next, JSON.stringify(lines));
+    // The pre-schema-2 bare array still renders, without a slot marker.
+    const legacy = rows('advisor', build({ query: { advice: [second] } }), columns);
+    has(legacy, /^\s+1\.\s+LATER\s+A03\s+second headline/);
   });
 }
 

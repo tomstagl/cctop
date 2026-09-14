@@ -28,12 +28,17 @@ pub struct Baseline {
     pub tool_error_rate: Option<f64>,
     /// Share of cost by model family (`opus`, `sonnet`, `haiku`, …).
     pub model_mix: BTreeMap<String, f64>,
+    /// Median API calls per session: the coach's "expected remaining
+    /// calls" scale.
+    #[serde(default)]
+    pub calls_per_session: Option<f64>,
 }
 
 /// One session's figures, before taking medians.
 #[derive(Debug, Clone, Default)]
 struct SessionFigures {
     turns: usize,
+    api_calls: usize,
     cost: Option<f64>,
     tokens: u64,
     cache_hit: Option<f64>,
@@ -76,6 +81,7 @@ fn figures(path: &Path) -> Option<SessionFigures> {
     }
     Some(SessionFigures {
         turns: agg.human_turns(),
+        api_calls: agg.api_calls(),
         cost: cost_state.as_ref().map(|c| c.total_cost_usd),
         tokens: agg.total.total(),
         cache_hit: agg.total.cache_hit_ratio(),
@@ -162,6 +168,7 @@ pub fn compute(projects_dir: &Path, days: u64, now_ms: i64) -> Baseline {
         cache_hit_ratio: median(figs.iter().filter_map(|f| f.cache_hit).collect()),
         tool_error_rate: median(figs.iter().filter_map(|f| f.error_rate).collect()),
         model_mix: mix,
+        calls_per_session: median(figs.iter().map(|f| f.api_calls as f64).collect()),
     }
 }
 

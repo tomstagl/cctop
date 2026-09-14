@@ -229,14 +229,64 @@ impl App {
         if !fired.is_empty() {
             crate::alerts::deliver(&fired, &mut self.state, self.desktop_notify);
         }
-        for rule in std::mem::take(&mut self.state.advice_dismissed) {
-            self.advisor.dismiss(rule);
+        let now = self.state.clock_ms();
+        let turn = self.state.agg.human_turns();
+        for (rule, session) in std::mem::take(&mut self.state.advice_snoozed) {
+            let toast = if session {
+                self.advisor.snooze_session(rule, now)
+            } else {
+                self.advisor.snooze(rule, turn, now)
+            };
+            self.state.set_toast(toast);
+        }
+        if std::mem::take(&mut self.state.advice_acting) {
+            self.advisor.acting();
         }
         self.advisor.evaluate(&self.state);
+        for ev in self.advisor.drain_events() {
+            self.state.events.push(crate::events::Event {
+                at: ev.at_ms,
+                kind: crate::events::Kind::Coach,
+                text: ev.text,
+            });
+        }
+        self.advisor.save();
         self.state.advice = self.advisor.current.clone();
+        self.state.advice_view = crate::ui::state::AdviceView {
+            session_mode: Some(self.advisor.session_mode),
+            has_occupant: self.advisor.occupant.is_some(),
+            acting: self.advisor.occupant.as_ref().is_some_and(|o| o.acting),
+            next_condition: self.advisor.next_up().map(|(_, c)| c),
+            snoozed: self.advisor.snoozed(),
+            suppressed: self.advisor.suppressed.clone(),
+            recent: self.advisor.recent.clone(),
+        };
         if self.state.advice_index >= self.state.advice.len() {
             self.state.advice_index = 0;
         }
+    }
+
+    /// Attach the advisor to the session's persisted state under `home`
+    /// (`~/.cctop`), as the writer when this is the live TUI.
+    pub fn attach_advisor(&mut self, home: &std::path::Path, writer: bool) {
+        self.advisor.release();
+        let mut engine = crate::advisor::Engine::default();
+        let id = self.state.session.session_id.clone();
+        if !id.is_empty() {
+            engine.attach(home, &id, writer);
+        }
+        self.advisor = engine;
+    }
+
+    /// The SessionEnd tally: `(fired, acted, snoozed)`.
+    pub fn advisor_tally(&self) -> (usize, usize, usize) {
+        self.advisor.tally()
+    }
+
+    /// Release the advisor's writer lock (on exit).
+    pub fn release_advisor(&mut self) {
+        self.advisor.save();
+        self.advisor.release();
     }
 
     /// Feed one transcript line; buffered while paused.
@@ -759,6 +809,7 @@ pub fn run_tui(mut app: App) -> std::io::Result<()> {
             dirty = false;
         }
     }
+    app.release_advisor();
     Ok(())
 }
 

@@ -59,6 +59,25 @@ pub struct Call {
     pub truncated: bool,
     /// Turn number the call belongs to (1-based), if known.
     pub turn: usize,
+    /// The call did not block the turn: `run_in_background`, or Claude Code
+    /// moved it to the background itself (`backgroundTaskId`,
+    /// `timedOutAfterMs`).
+    pub background: bool,
+}
+
+/// What an `Agent` call reported back (`toolUseResult`), without its text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentSpawn {
+    pub at: Option<i64>,
+    pub turn: usize,
+    pub agent_id: Option<String>,
+    pub agent_type: Option<String>,
+    /// The model Claude Code resolved for it (`resolvedModel`).
+    pub resolved_model: Option<String>,
+    pub tool_uses: Option<u64>,
+    pub is_async: bool,
+    /// `usage.total()` on synchronous completions.
+    pub tokens: u64,
 }
 
 /// Claude Code's own tool-error taxonomy (`tool_error_categories` in
@@ -268,6 +287,8 @@ pub struct Stats {
     pub commits: Vec<(i64, String, usize)>,
     /// Pushes and PR actions: `(epoch ms, what)`.
     pub git_events: Vec<(i64, String)>,
+    /// Every `Agent` result, in order.
+    pub agent_spawns: Vec<AgentSpawn>,
 }
 
 impl Stats {
@@ -320,6 +341,8 @@ impl Stats {
                             c.test_marker = b.test_marker;
                             c.persisted_output_size = b.persisted_output_size;
                             c.truncated |= b.persisted_output_size.is_some();
+                            c.background |=
+                                b.background_task_id.is_some() || b.timed_out_after_ms.is_some();
                             if let Some(g) = &b.git_operation {
                                 let when = at.unwrap_or(0);
                                 if let Some((sha, _)) = &g.commit {
@@ -339,6 +362,18 @@ impl Stats {
                                 tokens += rd.image_tokens().unwrap_or(1_500);
                                 images = images.saturating_sub(1);
                             }
+                        }
+                        Some(ToolUseDetail::Agent(ag)) => {
+                            self.agent_spawns.push(AgentSpawn {
+                                at,
+                                turn: c.turn,
+                                agent_id: ag.agent_id.clone(),
+                                agent_type: ag.agent_type.clone(),
+                                resolved_model: ag.resolved_model.clone(),
+                                tool_uses: ag.total_tool_use_count,
+                                is_async: ag.is_async,
+                                tokens: ag.usage.as_ref().map(|u| u.total()).unwrap_or(0),
+                            });
                         }
                         _ => {}
                     }
@@ -405,6 +440,10 @@ impl Stats {
                             error_class: None,
                             truncated: false,
                             turn: self.turn.max(1),
+                            background: input
+                                .get("run_in_background")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false),
                         });
                     }
                 }

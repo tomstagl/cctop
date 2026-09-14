@@ -213,6 +213,18 @@ pub struct CompactionRecord {
     pub duration_ms: u64,
 }
 
+/// One named cache miss: the cause and the tokens re-written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheMissRecord {
+    pub at: Option<String>,
+    pub turn: usize,
+    /// `model_changed` / `tools_changed` / `messages_changed`.
+    pub kind: String,
+    /// `cache_missed_input_tokens`, else the call's cache write.
+    pub tokens: u64,
+    pub message_id: String,
+}
+
 /// A point after which the model's context is not what it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoundaryKind {
@@ -306,6 +318,9 @@ pub struct Aggregate {
     /// Named cache misses (`diagnostics.cache_miss_reason`, actionable
     /// kinds only): `(turn, cause)`, once per response.
     pub miss_causes_by_turn: Vec<(usize, String)>,
+    /// Every named cache miss with what it re-wrote (`diagnostics.
+    /// cache_miss_reason`), in order.
+    pub cache_misses: Vec<CacheMissRecord>,
     /// The last `goal_status` attachment (`/goal`): met, tokens, iterations.
     pub goal: Option<GoalStatus>,
 }
@@ -660,6 +675,15 @@ impl Aggregate {
         }
         if let Some(miss) = a.cache_miss_reason().filter(|m| m.is_named()) {
             self.miss_causes_by_turn.push((t.number, miss.kind.clone()));
+            self.cache_misses.push(CacheMissRecord {
+                at: a.timestamp.clone(),
+                turn: t.number,
+                kind: miss.kind.clone(),
+                tokens: miss
+                    .cache_missed_input_tokens
+                    .unwrap_or(a.message.usage.cache_creation_input_tokens),
+                message_id: a.message.id.clone(),
+            });
         }
         t.api_calls += 1;
         t.usage.add(&u);

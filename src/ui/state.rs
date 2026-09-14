@@ -52,6 +52,9 @@ pub struct SessionInfo {
     pub permission_wait_ms: i64,
     /// Permission prompts per tool name.
     pub permission_by_tool: std::collections::BTreeMap<String, usize>,
+    /// Permission prompts per rule-shaped key (`Bash(gh api)`, `Edit`),
+    /// with the rule Claude Code itself suggested, verbatim.
+    pub permission_asks: std::collections::BTreeMap<String, PermissionAsk>,
     /// The last `Notification` hook: `(notification_type, epoch ms)` —
     /// `permission_prompt`, `idle_prompt`, `agent_needs_input`…; cleared by
     /// the next prompt or tool result.
@@ -71,6 +74,38 @@ pub struct SessionInfo {
     pub hook_prompt_id: Option<String>,
     /// `SessionEnd.reason`, once it fired.
     pub end_reason: Option<String>,
+}
+
+/// One permission-prompt shape and what Claude Code offered to allow.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PermissionAsk {
+    pub count: usize,
+    /// `permission_suggestions[].rules[].ruleContent` as `Tool(content)`.
+    pub rule: Option<String>,
+}
+
+/// The rule-shaped key of a permission prompt: `Bash(<argv0> <sub>)` for
+/// Bash (the subcommand only when it is a word, not a flag or a path),
+/// else the tool name.
+pub fn permission_key(tool: &str, command: Option<&str>) -> String {
+    if tool != "Bash" {
+        return tool.to_string();
+    }
+    let Some(cmd) = command else {
+        return "Bash".to_string();
+    };
+    let mut words = cmd.split_whitespace();
+    let argv0 = words.next().unwrap_or("");
+    let sub = words
+        .next()
+        .filter(|w| !w.starts_with('-') && !w.contains('/') && !w.contains('=') && w.len() <= 20)
+        .map(|w| format!(" {w}"))
+        .unwrap_or_default();
+    if argv0.is_empty() {
+        "Bash".to_string()
+    } else {
+        format!("Bash({argv0}{sub})")
+    }
 }
 
 /// `SessionStart` on a resume or fork: what Claude Code expects the first
@@ -295,6 +330,11 @@ pub struct State {
     pub autocompact: crate::metrics::context::AutocompactConfig,
     /// The allowlisted variables of the claude process (`—` when absent).
     pub claude_env: std::collections::BTreeMap<String, String>,
+    /// `permissions.allow` from settings, as written.
+    pub allow_rules: Vec<String>,
+    /// Claude Code's own tips shown in the last ten startups (`tipsHistory`
+    /// ids): the coach does not repeat what its host just said.
+    pub tips_recent: std::collections::BTreeSet<String>,
     // -- ui
     /// Panel that receives keys; `None` = global.
     pub focused: Option<PanelId>,
@@ -335,10 +375,31 @@ pub struct State {
     pub messaging_socket: Option<std::path::PathBuf>,
     /// Your last-7-days medians, when computed.
     pub baseline: Option<crate::baseline::Baseline>,
-    /// Ranked advice from the Advisor engine (best first).
+    /// Advice from the Advisor engine: the slot occupant first, then the
+    /// ranked queue.
     pub advice: Vec<crate::advisor::Advice>,
     pub advice_index: usize,
-    pub advice_dismissed: Vec<&'static str>,
+    /// Snoozes the panel asked for: `(rule, for the session)`; the app
+    /// hands them to the engine.
+    pub advice_snoozed: Vec<(&'static str, bool)>,
+    /// The person pressed Enter on the occupant: the engine marks it acting.
+    pub advice_acting: bool,
+    /// What the engine says beside the list.
+    pub advice_view: AdviceView,
+}
+
+/// The engine's state beside the advice list, for the panel and the query.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AdviceView {
+    pub session_mode: Option<crate::advisor::SessionMode>,
+    /// `advice[0]` is the slot occupant (not merely the top of the queue).
+    pub has_occupant: bool,
+    pub acting: bool,
+    /// What promotes the queued nudge (`next prompt`, `when the slot frees`).
+    pub next_condition: Option<&'static str>,
+    pub snoozed: Vec<(&'static str, Option<usize>)>,
+    pub suppressed: Vec<(&'static str, String)>,
+    pub recent: Vec<crate::advisor::Lifecycle>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -516,6 +577,31 @@ impl State {
                     .permission_by_tool
                     .entry(ev.tool_name.clone().unwrap_or_else(|| "tool".into()))
                     .or_default() += 1;
+                let key = permission_key(
+                    ev.tool_name.as_deref().unwrap_or("tool"),
+                    p.get("command").and_then(|v| v.as_str()),
+                );
+                let suggested = p
+                    .get("permission_suggestions")
+                    .and_then(|v| v.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter(|s| s.get("type").and_then(|t| t.as_str()) == Some("addRules"))
+                    .filter_map(|s| s.get("rules").and_then(|r| r.as_array()))
+                    .flatten()
+                    .find_map(|r| {
+                        let tool = r.get("toolName").and_then(|t| t.as_str())?;
+                        let content = r.get("ruleContent").and_then(|c| c.as_str());
+                        Some(match content {
+                            Some(c) if !c.is_empty() => format!("{tool}({c})"),
+                            _ => tool.to_string(),
+                        })
+                    });
+                let ask = self.session.permission_asks.entry(key).or_default();
+                ask.count += 1;
+                if suggested.is_some() {
+                    ask.rule = suggested;
+                }
                 self.session.permission_pending = true;
                 self.session.permission_waiting_since_ms = Some(at);
                 if !id.is_empty() {
@@ -954,6 +1040,7 @@ impl State {
             self.session.tier = Some(t);
         }
         self.previous_session = crate::claude_home::previous_session(v, &self.session.cwd);
+        self.tips_recent = crate::claude_home::tips_recent(v, 10);
     }
 
     /// The observed cache TTL in milliseconds: the shim's, else the last
@@ -1430,6 +1517,14 @@ impl State {
             Some(&settings),
             &self.claude_env,
         );
+        self.allow_rules = settings
+            .get("permissions")
+            .and_then(|p| p.get("allow"))
+            .and_then(|a| a.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r.as_str().map(str::to_string))
+            .collect();
     }
 
     /// Context-window view for the current model.

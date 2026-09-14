@@ -121,14 +121,19 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
     }
 
     out.push_str("\n## Advisor\n\n");
-    let mut engine = crate::advisor::Engine::default();
-    engine.evaluate(state);
+    let engine = crate::advisor::Engine::for_state(state);
+    let (fired, acted, snoozed) = engine.tally();
+    out.push_str(&format!(
+        "- nudges: {fired} fired, {acted} acted, {snoozed} snoozed · session mode {}\n",
+        engine.session_mode.label()
+    ));
     if engine.current.is_empty() {
         out.push_str("- nothing to fix — the session looked efficient\n");
     }
     for a in &engine.current {
         out.push_str(&format!(
-            "- **{}** {} — {} _(saves {})_\n",
+            "- **{} {}** {} — {} _(saves {})_\n",
+            a.urgency.label(),
             a.rule,
             a.headline,
             a.action,
@@ -286,7 +291,11 @@ mod tests {
             md.contains("cost per turn: $0.71 vs median $0.33 (×2.1)"),
             "{md}"
         );
-        assert!(md.contains("- **A15**"), "{md}");
+        assert!(
+            md.contains("- nudges: 1 fired, 0 acted, 0 snoozed · session mode remote"),
+            "{md}"
+        );
+        assert!(md.contains("- **LATER A17**"), "{md}");
         let none = markdown(&s, None);
         assert!(none.contains("no baseline yet"));
         let p = report_path(Path::new("/h"), &s);

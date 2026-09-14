@@ -40,15 +40,15 @@ expression: "render_to_string(&app, 60, 51)"
 ╰──────────────────────────────────────────────────────────╯
 ─6 Agents & MCP ─ — ────────────────────────────────────────
 ─7 Files ─ 44 touched ──────────────────────────────────────
-╭9 Advisor ─ 1 of 3 ───────────────────────────────────────╮
-│ ▸ Compaction is coming again                             │
-│   Finish this unit of work…  avoids a hard stop · n next │
+╭9 Advisor ─ 1 of 2 ───────────────────────────────────────╮
+│ ▸ LATER A17 Fixed prefix 49k tokens ≈$0.15/turn at 15 c… │
+│   trim CLAUDE.md, move …  ~147k/turn · n next · x snooze │
 ╰──────────────────────────────────────────────────────────╯
-╭8 Events ─ 299 ───────────────────────────────────────────╮
-│ 23:27:53 tool   Bash git push lorem_ lore 2>&1 ▶         │
+╭8 Events ─ 303 ───────────────────────────────────────────╮
 │ 23:27:56 tool   Bash ✓ 16                                │
 │ 23:28:41 tool   Bash git commit -m "$(cat lorem_i lorem …│
 │ 23:28:45 tool   Bash ✓ 49                                │
+│ 23:28:45 coach  LATER A17 fired · Fixed prefix 49k token…│
 │ 23:29:30 note   /clear · continued in a new session      │
 │ 23:29:30 api    cost-state $18.75 · api 22:14 · retries …│
 ╰──────────────────────────────────────────────────────────╯

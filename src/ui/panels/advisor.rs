@@ -1,4 +1,7 @@
-//! Advisor: one evidence-backed recommendation at a time.
+//! Advisor: one evidence-backed recommendation at a time — the coach's
+//! slot occupant first, then the ranked queue. `x` snoozes a rule for five
+//! human turns (the third time for the session), `X` for the session;
+//! `Enter` opens the explanation and marks the occupant as being acted on.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
@@ -22,10 +25,16 @@ impl Panel for AdvisorPanel {
     }
     fn summary(&self, state: &State) -> Option<String> {
         let n = state.advice.len();
-        Some(if n == 0 {
-            "nothing to fix".into()
+        let snoozed = state.advice_view.snoozed.len();
+        let tail = if snoozed > 0 {
+            format!(" · {snoozed} snoozed")
         } else {
-            format!("{} of {n}", state.advice_index.min(n - 1) + 1)
+            String::new()
+        };
+        Some(if n == 0 {
+            format!("nothing to fix{tail}")
+        } else {
+            format!("{} of {n}{tail}", state.advice_index.min(n - 1) + 1)
         })
     }
     fn min_rows(&self) -> u16 {
@@ -43,15 +52,24 @@ impl Panel for AdvisorPanel {
         match key.code {
             KeyCode::Char('n') if n > 0 => state.advice_index = (state.advice_index + 1) % n,
             KeyCode::Char('N') if n > 0 => state.advice_index = (state.advice_index + n - 1) % n,
-            KeyCode::Char('x') if n > 0 => {
+            KeyCode::Char(c @ ('x' | 'X')) if n > 0 => {
                 let i = state.advice_index.min(n - 1);
                 let rule = state.advice[i].rule;
-                state.advice_dismissed.push(rule);
+                state.advice_snoozed.push((rule, c == 'X'));
                 state.advice.remove(i);
                 state.advice_index = 0;
-                state.set_toast(format!("{rule} dismissed for this session"));
+                state.set_toast(if c == 'X' {
+                    format!("{rule} snoozed for the session")
+                } else {
+                    format!("{rule} snoozed for 5 turns")
+                });
             }
-            KeyCode::Enter if n > 0 && state.overlay.is_none() => state.overlay = Some(self.id()),
+            KeyCode::Enter if n > 0 && state.overlay.is_none() => {
+                if state.advice_index == 0 && state.advice_view.has_occupant {
+                    state.advice_acting = true;
+                }
+                state.overlay = Some(self.id());
+            }
             _ => return Handled::No,
         }
         Handled::Yes
@@ -75,11 +93,26 @@ impl Panel for AdvisorPanel {
             return;
         };
         let w = inner.width.saturating_sub(4) as usize;
+        let is_slot = state.advice_index == 0 && state.advice_view.has_occupant;
+        let class = format!(
+            "{} {}{} ",
+            a.urgency.label(),
+            a.rule,
+            if is_slot && state.advice_view.acting {
+                " acting…"
+            } else {
+                ""
+            }
+        );
         let l1 = Line::from(vec![
-            Span::styled(" ▸ ", amber),
-            Span::raw(fmt::clip(&a.headline, w)),
+            Span::styled(if is_slot { " ▸ " } else { " · " }, amber),
+            Span::styled(class.clone(), dim),
+            Span::raw(fmt::clip(
+                &a.headline,
+                w.saturating_sub(class.chars().count()),
+            )),
         ]);
-        let tail = format!("  {} · n next", a.saving.label());
+        let tail = format!("  {} · n next · x snooze", a.saving.label());
         let action_w = w.saturating_sub(tail.chars().count());
         let l2 = Line::from(vec![
             Span::raw("   "),
@@ -97,14 +130,15 @@ impl Panel for AdvisorPanel {
             return;
         };
         let block = Block::default().borders(Borders::ALL).title(format!(
-            " {} — {}  (Esc back) ",
+            " {} {} — {}  (Esc back) ",
+            a.urgency.label(),
             a.rule,
             fmt::clip(&a.headline, 60)
         ));
         let inner = block.inner(area);
         frame.render_widget(block, area);
         let dim = state.theme.dim();
-        let lines = vec![
+        let mut lines = vec![
             Line::from(vec![
                 Span::styled(" Evidence  ", dim),
                 Span::raw(a.evidence.clone()),
@@ -113,16 +147,59 @@ impl Panel for AdvisorPanel {
                 Span::styled(" Action    ", dim),
                 Span::raw(a.action.clone()),
             ]),
-            Line::from(vec![
-                Span::styled(" Saving    ", dim),
-                Span::raw(a.saving.label()),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled(" Why       ", dim),
-                Span::raw(crate::advisor::rules::explain(a.doc_key)),
-            ]),
         ];
+        if !a.action_text.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled(format!(" {:<10}", a.action_kind.label()), dim),
+                Span::raw(a.action_text.clone()),
+            ]));
+        }
+        lines.push(Line::from(vec![
+            Span::styled(" Saving    ", dim),
+            Span::raw(a.saving.label()),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled(" Retires   ", dim),
+            Span::raw(format!(
+                "on {} · since turn {} · window {} turn{}",
+                a.retires_on,
+                a.since_turn,
+                a.window_turns,
+                if a.window_turns == 1 { "" } else { "s" }
+            )),
+        ]));
+        let v = &state.advice_view;
+        if !v.snoozed.is_empty() {
+            let parts: Vec<String> = v
+                .snoozed
+                .iter()
+                .map(|(r, until)| match until {
+                    Some(t) => format!("{r} until turn {t}"),
+                    None => format!("{r} this session"),
+                })
+                .collect();
+            lines.push(Line::from(vec![
+                Span::styled(" Snoozed   ", dim),
+                Span::raw(parts.join(" · ")),
+            ]));
+        }
+        if !v.recent.is_empty() {
+            let parts: Vec<String> = v
+                .recent
+                .iter()
+                .take(3)
+                .map(|l| format!("{} {}", l.rule, l.what))
+                .collect();
+            lines.push(Line::from(vec![
+                Span::styled(" Recent    ", dim),
+                Span::raw(parts.join(" · ")),
+            ]));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(" Why       ", dim),
+            Span::raw(crate::advisor::rules::explain(a.doc_key)),
+        ]));
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     }
 }
@@ -173,14 +250,27 @@ mod tests {
         let out = render_to_string(&app, 80, 24);
         assert!(out.contains("Evidence") && out.contains("Why"), "{out}");
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        let rule = app.state.advice[app.state.advice_index].rule;
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
         assert_eq!(app.state.advice.len(), n - 1);
-        assert_eq!(app.state.advice_dismissed.len(), 1);
+        assert_eq!(app.state.advice_snoozed, vec![(rule, false)]);
         app.tick();
-        assert_eq!(
-            app.state.advice.len(),
-            n - 1,
-            "dismissed rule stays out after re-evaluation"
+        assert!(
+            app.state.advice.iter().all(|a| a.rule != rule),
+            "snoozed rule stays out after re-evaluation"
         );
+        assert_eq!(app.state.advice_view.snoozed.len(), 1);
+        assert!(
+            app.state.advice_view.snoozed[0].1.is_some(),
+            "five turns, not the session"
+        );
+        assert!(
+            app.state
+                .events
+                .iter()
+                .any(|e| e.kind == crate::events::Kind::Coach && e.text.contains("snoozed")),
+            "the snooze is an Events row"
+        );
+        assert!(render_to_string(&app, 60, 60).contains("1 snoozed"));
     }
 }

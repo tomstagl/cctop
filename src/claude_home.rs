@@ -89,6 +89,18 @@ pub fn tips_history(v: &Value) -> std::collections::BTreeMap<String, u64> {
         .unwrap_or_default()
 }
 
+/// Tip ids Claude Code showed within the last `within` startups.
+pub fn tips_recent(v: &Value, within: u64) -> std::collections::BTreeSet<String> {
+    let Some(now) = num_startups(v) else {
+        return Default::default();
+    };
+    tips_history(v)
+        .into_iter()
+        .filter(|(_, shown)| now.saturating_sub(*shown) <= within)
+        .map(|(id, _)| id)
+        .collect()
+}
+
 /// `numStartups`, for "shown in the last N startups".
 pub fn num_startups(v: &Value) -> Option<u64> {
     v.get("numStartups")?.as_u64()

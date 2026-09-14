@@ -14,6 +14,11 @@ expression: "serde_json::to_string_pretty(&events(&s, Some(5 * 60_000))).unwrap(
     "text": "Bash git commit -m \"$(cat lorem_i lorem_ipsu lorem_i lore cctop lor lorem_ip add lor lorem view lorem_ lo lorem_ lore lorem_ipsu l lorem_ip lorem_ipsum_ l cctop lo lorem_ip lor lorem_ipsum_ lorem_ips lore… ▶"
   },
   {
+    "at_ms": 1789428426352,
+    "kind": "cost",
+    "text": "model opus-5 → sonnet-5"
+  },
+  {
     "at_ms": 1789428428068,
     "kind": "tool",
     "text": "Bash ✓ 32"
