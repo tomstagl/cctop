@@ -234,3 +234,44 @@ test('turn.complete records the context size for the sparkline, capped at HISTOR
   const velocity = lines.find((r) => r.includes('velocity'));
   assert.ok(velocity !== undefined && /velocity\s+[▁▂▃▄▅▆▇█]{4,12}\s+\+50k\/turn/.test(velocity), velocity);
 });
+
+// Issue #2: `/clear` gives the session a new id under the running pane.
+test('session.id: the first id is learned, the same id is a no-op, a new id drops the old session', () => {
+  let model = run(SEQUENCE);
+  model = reduce(model, { type: 'usage', usage: { context: { tokens: 90_000, window: 200_000 }, rateLimits: [] }, at: T0 });
+  model = reduce(model, { type: 'binary', binary: 'present' });
+  model = reduce(model, { type: 'verbs', verbs: ['summary', 'tools'] });
+  model = reduce(model, { type: 'query', verb: 'summary', data: fixture('summary') });
+  model = reduce(model, { type: 'tick', at: T0 + 3000, ok: true });
+  model = reduce(model, { type: 'stale', stale: true });
+  model = { ...model, open: true, view: 'tools', openedAt: T0, version: '0.2.0', loadedAt: T0, contextHistory: [80_000, 90_000] };
+
+  const learned = reduce(model, { type: 'session.id', id: 'session-a' });
+  assert.equal(learned.sessionId, 'session-a');
+  assert.deepEqual({ ...learned, sessionId: null }, model, 'learning the id changes nothing else');
+  assert.equal(reduce(learned, { type: 'session.id', id: 'session-a' }), learned, 'the same id again is the same model');
+
+  const rotated = reduce(learned, { type: 'session.id', id: 'session-b' });
+  assert.equal(rotated.sessionId, 'session-b');
+  // The old session's figures go: the engine's bookkeeping and the query JSON alike.
+  assert.equal(rotated.usage, null);
+  assert.equal(rotated.usageAt, null);
+  assert.deepEqual(rotated.tools, {});
+  assert.equal(rotated.compactions, 0);
+  assert.deepEqual(rotated.query, {});
+  assert.equal(rotated.queryAt, null);
+  assert.equal(rotated.stale, false);
+  assert.deepEqual(rotated.contextHistory, []);
+  assert.deepEqual(rotated.turn, { ...learned.turn, number: 0, lastDurationMs: null, lastReason: null });
+  // The pane's own state, the binary and its verbs are the process's and stay.
+  for (const key of ['open', 'view', 'openedAt', 'version', 'loadedAt', 'binary', 'verbs', 'modelName', 'placement'] as const) {
+    assert.deepEqual(rotated[key], learned[key], key);
+  }
+
+  // A turn running at the rotation is the new session's first.
+  const busy = reduce(learned, { type: 'turn.start', at: T0 + 5000 });
+  const rotatedBusy = reduce(busy, { type: 'session.id', id: 'session-b' });
+  assert.equal(rotatedBusy.turn.number, 1);
+  assert.equal(rotatedBusy.turn.state, 'busy');
+  assert.equal(rotatedBusy.turn.startedAt, T0 + 5000);
+});

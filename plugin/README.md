@@ -78,6 +78,17 @@ Every open answers with where the pane went, so the state is never a guess:
 | `cctop pane drawn above the prompt: /tui fullscreen docks it …` | inline, classic renderer |
 | `cctop pane is open but not shown: the /diff panel holds the side dock. Run /diff …` | hidden behind the diff panel |
 
+### `/clear` and the session id
+
+`/clear` starts a new transcript under a new session id in the same Claude
+Code process, and the plugin API fires no `session.start` for it. The pane
+reads the id again on every turn and every poll, so after a `/clear` it
+follows the new session: the old session's figures are dropped, the context
+is re-read from the engine, `cctop query` is run for the new id at once, and
+the marker file of the old id says `open: false` while the new id gets its
+own. Before 0.3.1 the pane kept the first id and every query then failed with
+`no session matches` for the rest of the process (issue #2).
+
 ### The `/diff` panel and the pane share one dock
 
 Claude Code's built-in `/diff` panel and a plugin pane occupy the same
@@ -170,6 +181,9 @@ The `Result:` lines below are still for a person to fill in:
 22. an open while the diff panel shows answers "open but not shown"
 23. `cctop pane status` from inside a session reports every line ✓ once the
     pane is docked, and names the missing prerequisites otherwise
+24. `/clear` under an open pane: the next turn's queries run for the new
+    session id, the old id's marker says `open: false`, the new id's
+    `open: true`, and no `no session matches` line appears in the debug log
 
 See the checklist for the exact setup, keys and expected observation for each.
 

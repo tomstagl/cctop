@@ -319,6 +319,24 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+24. **`/clear` rotates the session id under the pane** (issue #2). `/clear`
+    starts a new transcript under a new id in the same process and fires no
+    `session.start`; the module re-reads the id on every turn and poll and
+    follows it.
+    Setup: `/tui fullscreen`, ≥ 110 columns, `cctop` binary installed,
+    `/cctop-pane` docked, one prompt answered; note the session id in the
+    marker filename (`ls -t ~/.cctop/pane | head -1`).
+    Keys: `/clear`, then one short prompt (`say ok`); wait for the answer.
+    Expected: the header shows `turn 1` and a context of a few k tokens; the
+    Tools view fills again within 2 s of the turn; the debug log shows
+    `cctop: session <old id> rotated to <new id>: following it` and its
+    `cctop query … --session <new id>` lines, and no `no session matches`
+    line; `~/.cctop/pane/<old id>.json` reads `open: false`,
+    `~/.cctop/pane/<new id>.json` reads `open: true` with a fresh
+    `heartbeatAt`; `!cctop pane status` reports the pane open.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

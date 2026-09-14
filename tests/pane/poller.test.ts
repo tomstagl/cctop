@@ -325,6 +325,148 @@ test('the pane names each unsupported verb', async () => {
   assert.ok(!rows.some((r) => r.startsWith('events:')));
 });
 
+// Issue #2: `/clear` gives the session a new id under the running pane, the
+// registry entry is rewritten, and every `cctop query --session <old id>`
+// exits 2 with "no session matches"; no session.start announces the change.
+const NEXT = 'next-session';
+const NEXT_MARKER = `/home/user/.cctop/pane/${NEXT}.json`;
+const NO_MATCH: ProcessRunResult = { exitCode: 2, stdout: '', stderr: `cctop: no session matches "${SESSION}"` };
+
+// The binary after a `/clear`: the old id is unknown to it, the new one answers.
+function rotatedScripts(): Record<string, ProcessScript> {
+  const scripts = binaryScripts();
+  for (const verb of QUERY_FIXTURES) {
+    scripts[`cctop query ${verb} --session ${SESSION}`] = NO_MATCH;
+    scripts[`cctop query ${verb} --session ${NEXT}`] = ok(JSON.stringify(fixture(verb)));
+  }
+  return scripts;
+}
+
+const readMarker = ($: FakeEngine, path: string) => JSON.parse($.fs.files.get(path) ?? 'null') as Record<string, unknown> | null;
+
+test('a rotated session id: the next tick follows it, swaps the markers and drops the old data', async () => {
+  const scripts = binaryScripts();
+  scripts[`cctop query tools --session ${SESSION}`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  const from: Model = { ...reduce(initialModel(), { type: 'binary', binary: 'present' }), open: true, openedAt: T0 };
+  const { $, poller, advance, model } = bootPoller(scripts, from);
+  poller.start();
+  await settle();
+  assert.equal(model().sessionId, SESSION);
+  assert.equal(readMarker($, MARKER)?.open, true);
+  assert.equal($.ui.logs.filter((l) => l.includes('query tools failed')).length, 1);
+
+  // `/clear`: the engine serves the new id, the binary forgets the old one
+  // and its tools verb is broken as well.
+  $.session.scripted.id = NEXT;
+  Object.assign($.process.script, rotatedScripts());
+  $.process.script[`cctop query tools --session ${NEXT}`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  await advance(10000);
+  assert.equal(model().sessionId, NEXT);
+  assert.ok($.ui.logs.some((l) => l === `cctop: session ${SESSION} rotated to ${NEXT}: following it`), JSON.stringify($.ui.logs));
+  const old = readMarker($, MARKER);
+  assert.equal(old?.open, false, 'the old id is not where the pane is open');
+  assert.equal(old?.sessionId, SESSION);
+  assert.equal(old?.heartbeatAt, new Date(T0 + 10000).toISOString());
+  const next = readMarker($, NEXT_MARKER);
+  assert.equal(next?.open, true, 'the new id is');
+  assert.equal(next?.sessionId, NEXT);
+  assert.equal(next?.loaded, true);
+  assert.equal(next?.openedAt, new Date(T0).toISOString(), 'the pane was not reopened');
+  const tick2 = queries($).slice(QUERY_VERBS.length);
+  assert.equal(tick2.length, QUERY_VERBS.length, 'the same round queried the new id');
+  assert.ok(tick2.every((argv) => argv[4] === NEXT), JSON.stringify(tick2));
+  assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), 'the old id is never queried again');
+  assert.equal($.process.calls.filter((argv) => argv[2] === '--help').length, 1, 'the verbs are the binary’s, read once');
+  assert.deepEqual(model().query.summary, fixture('summary'));
+  assert.equal(model().stale, false);
+  // The new session's failures are its own: logged once again.
+  assert.equal($.ui.logs.filter((l) => l.includes('query tools failed')).length, 2);
+  await advance(10000);
+  assert.equal($.ui.logs.filter((l) => l.includes('query tools failed')).length, 2);
+});
+
+test('a query answered after the session rotated is discarded; stale is judged from the rotation', async () => {
+  let answer: (r: ProcessRunResult) => void = () => {};
+  const scripts = binaryScripts();
+  scripts[`cctop query summary --session ${SESSION}`] = () => new Promise<ProcessRunResult>((resolve) => (answer = resolve));
+  for (const verb of QUERY_FIXTURES) scripts[`cctop query ${verb} --session ${NEXT}`] = ok(JSON.stringify(fixture(verb)));
+  const { $, poller, advance, model } = bootPoller(scripts);
+  poller.start();
+  await settle();
+  assert.equal(queries($).length, 1, 'summary hangs');
+  await advance(40000);
+  assert.equal(model().stale, true);
+
+  // `/clear` while it hangs, noticed by a turn (pane.tsx calls sync).
+  $.session.scripted.id = NEXT;
+  assert.equal(await poller.sync(), true);
+  assert.equal(await poller.sync(), false, 'a second look finds nothing new');
+  assert.equal(model().sessionId, NEXT);
+  assert.equal(model().stale, false, 'the new session has had no time to go stale');
+  // The old session's summary arrives late: the round goes on with the old
+  // id and every answer is dropped, without a failure logged.
+  answer(ok(JSON.stringify({ session: { model: 'old' } })));
+  await settle();
+  assert.equal(model().query.summary, undefined, 'the old session’s answer is not the new one’s');
+  assert.deepEqual(model().query, {});
+  assert.ok(!$.ui.logs.some((l) => l.includes('failed')), JSON.stringify($.ui.logs));
+  assert.equal(model().stale, false);
+  // The next round queries the new id and fills the model.
+  await poller.tick();
+  assert.deepEqual(model().query.summary, fixture('summary'));
+  assert.ok(queries($).slice(-QUERY_VERBS.length).every((argv) => argv[4] === NEXT));
+});
+
+test('/clear between turns: the open pane follows the new id at the next turn, with no session.start', async () => {
+  const { $, start, open, turnStart, turnComplete, render } = bootHooks(binaryScripts());
+  await start();
+  await settle();
+  await open();
+  await settle();
+  await turnStart();
+  await turnComplete();
+  await settle();
+  assert.equal(readMarker($, MARKER)?.open, true);
+  const before = queries($).length;
+
+  // `/clear`: a new id, a fresh context, and the binary forgets the old id.
+  $.session.scripted.id = NEXT;
+  $.session.scripted.usage = { context: { tokens: 12_000, window: 200_000 }, rateLimits: [] };
+  Object.assign($.process.script, rotatedScripts());
+  await turnStart();
+  await settle();
+  await settle();
+  assert.equal(readMarker($, MARKER)?.open, false, 'the old id’s marker closed');
+  const next = readMarker($, NEXT_MARKER);
+  assert.equal(next?.open, true, 'the new id’s marker open');
+  assert.equal(next?.loaded, true);
+  const after = queries($).slice(before);
+  assert.ok(after.length >= QUERY_VERBS.length, 'the new session is queried at once, not at the next timer');
+  assert.ok(after.every((argv) => argv[4] === NEXT), JSON.stringify(after));
+  assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), JSON.stringify($.ui.logs));
+  const rows = await render(80);
+  assert.ok(rows.some((r) => r.includes('12k / 200k (6 %)')), `the new session’s context, read at once: ${JSON.stringify(rows)}`);
+  assert.ok(rows.some((r) => /turn 1\b/.test(r)), `the running turn is the new session’s first: ${JSON.stringify(rows)}`);
+  assert.ok(!rows.some((r) => r.includes('stale')));
+});
+
+test('/clear while the pane is closed: the markers follow the id and nothing is polled', async () => {
+  const { $, start, turnStart } = bootHooks(binaryScripts());
+  await start();
+  await settle();
+  assert.equal(readMarker($, MARKER)?.loaded, true);
+  $.session.scripted.id = NEXT;
+  Object.assign($.process.script, rotatedScripts());
+  await turnStart();
+  await settle();
+  assert.equal(readMarker($, MARKER)?.open, false);
+  const next = readMarker($, NEXT_MARKER);
+  assert.equal(next?.loaded, true, 'cctop pane status finds the module under the new id');
+  assert.equal(next?.open, false);
+  assert.equal(next?.sessionId, NEXT);
+  assert.equal(queries($).length, 0, 'closed: nothing polled');
+});
+
 test('a pane opened before detection ends starts polling once the binary is found', async () => {
   let answer: (r: ProcessRunResult) => void = () => {};
   const scripts = binaryScripts();

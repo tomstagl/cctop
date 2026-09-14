@@ -266,15 +266,25 @@ function updateMarker($: EngineInterface): void {
   writeMarker(pollerEngine($), model).catch((err: unknown) => $.ui.log(`cctop: marker write failed: ${String(err)}`));
 }
 
-// Learns the session id once after session.start and writes the marker with
-// `open: false`: from then on `cctop pane status` can tell that the hooks
-// module runs in this session, before any pane was opened.
+// Learns the session id after session.start; the poller's sync writes the
+// marker with `open: false`, so from then on `cctop pane status` can tell
+// that the hooks module runs in this session, before any pane was opened.
 function noteSession($: EngineInterface): void {
-  $.session
-    .id()
-    .then((id) => {
-      apply($, { type: 'session.id', id });
-      updateMarker($);
+  poller?.sync().catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
+}
+
+// `/clear` gives the session a new id and fires no session.start (the d.ts:
+// "Not `/clear`"), so every turn reads the id again. When it changed, the
+// model has just dropped the old session (model.ts) and, while the pane is
+// open, the new one is read at once instead of at the next timer. Never
+// awaited by the hook: the turn owes the pane nothing.
+function followSession($: EngineInterface): void {
+  poller
+    ?.sync()
+    .then((rotated) => {
+      if (!rotated || !model.open) return;
+      readUsage($);
+      void poller?.tick();
     })
     .catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
 }
@@ -336,10 +346,12 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   };
   persistPane($);
   if (!opened) {
+    // The id first, so a `/clear` since the last look does not wipe the
+    // usage read next.
+    await poller?.sync();
     if (model.binary === 'present') poller?.start();
     if (model.turn.state === 'busy') startUsageTimer($);
     readUsage($);
-    if (model.sessionId === null) apply($, { type: 'session.id', id: await $.session.id() });
     updateMarker($);
   }
   const rendered = awaitRender($);
@@ -523,11 +535,12 @@ export const register: Register = (on) => {
   });
 
   // While the pane is closed the turn and tool hooks keep the books and
-  // nothing else: no timer, no poll, no usage read.
+  // follow the session id, nothing else: no timer, no poll, no usage read.
   on('turn.start', ($, e, next) => {
     apply($, { type: 'turn.start', at: $.clock.now() });
     if (model.open) startUsageTimer($);
     poller?.reschedule();
+    followSession($);
     return next(e);
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.start failed: ${next.error.message ?? next.error.kind}`);

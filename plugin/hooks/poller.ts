@@ -3,7 +3,8 @@
 // in-flight promise, every 2 s while a turn runs and every 10 s idle. A verb
 // the binary lacks (per `cctop query --help`, read once) is never called; a
 // failed or unparsable call keeps the verb's previous JSON, and the model
-// turns `stale` once no tick has fully succeeded for 30 s.
+// turns `stale` once no tick has fully succeeded for 30 s. It also follows
+// the session id (`sync`): `/clear` rotates it under the running pane.
 //
 // The poller never sees `$` itself: `claude plugin validate` follows `$` only
 // into functions declared in pane.tsx, so it receives `PollerEngine`, the
@@ -30,6 +31,14 @@ export type Poller = {
   /** Re-arms the timer when the cadence changed with the turn state; a no-op while stopped. */
   reschedule(): void;
   running(): boolean;
+  /**
+   * Reads `$.session.id()` again and follows it: learns the id the first
+   * time, and when a known id changed (`/clear` rotates it in place, with no
+   * session.start) drops the old session from the model, closes its marker
+   * and writes the new one. Resolves to whether a known id changed. Runs
+   * whether or not the binary is present or the poller started.
+   */
+  sync(): Promise<boolean>;
 };
 
 export const BUSY_POLL_MS = 2000;
@@ -121,6 +130,9 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     try {
       const argv = ['cctop', 'query', verb, '--session', sessionId];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
+      // The session rotated while the binary ran: whatever it answered is
+      // the old session's, not the new one's.
+      if (getModel().sessionId !== sessionId) return false;
       if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}: ${result.stderr.trim()}`);
       dispatch({ type: 'query', verb, data: JSON.parse(result.stdout) as unknown });
       failing.delete(verb);
@@ -134,13 +146,38 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     }
   };
 
-  const round = async (): Promise<void> => {
-    if (getModel().binary !== 'present') return;
-    let sessionId = getModel().sessionId;
-    if (sessionId === null) {
-      sessionId = await $.session.id();
-      dispatch({ type: 'session.id', id: sessionId });
+  // After `/clear` the engine serves a new session id for the same process
+  // and, the d.ts says, no session.start; the registry entry is rewritten
+  // and every `cctop query --session <old id>` exits 2 with "no session
+  // matches". So the id is read again here, at every round and turn. The
+  // model is switched before the markers are written, so a failing write
+  // costs one round, never the switch.
+  const sync = async (): Promise<boolean> => {
+    const id = await $.session.id();
+    const before = getModel();
+    if (before.sessionId === id) return false;
+    const rotated = before.sessionId !== null;
+    if (rotated) {
+      // Each verb's next failure is the new session's own, logged once
+      // again; stale is judged from here, the new session having had no
+      // success yet.
+      failing.clear();
+      startedAt = $.clock.now();
+      $.ui.log(`cctop: session ${before.sessionId} rotated to ${id}: following it`);
     }
+    dispatch({ type: 'session.id', id });
+    // The old id's marker says the pane is not open there (`$.fs` cannot
+    // delete): `cctop split` would otherwise refuse for 30 s more, and the
+    // new id's marker says the module runs in this session.
+    if (rotated) await writeMarker($, { ...before, open: false });
+    await writeMarker($, getModel());
+    return rotated;
+  };
+
+  const round = async (): Promise<void> => {
+    await sync();
+    const sessionId = getModel().sessionId;
+    if (sessionId === null || getModel().binary !== 'present') return;
     if (getModel().verbs === null) await readVerbs();
     let ok = true;
     let called = 0;
@@ -189,6 +226,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       });
     },
     running: () => active,
+    sync,
   };
   return poller;
 }

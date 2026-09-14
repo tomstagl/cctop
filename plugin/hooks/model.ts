@@ -65,7 +65,9 @@ export type Model = {
   tools: Record<string, ToolStats>;
   compactions: number;
   binary: Binary;
-  /** `$.session.id()`, read by the poller on its first tick. */
+  /** `$.session.id()`, read after session.start and again on every turn and
+   * poller tick: `/clear` rotates it in place (a new transcript, the registry
+   * entry rewritten) and no session.start says so. */
   sessionId: string | null;
   // Precedence between the two sources: the Context and Limits rows come
   // from `usage` (engine-native, live) when it is present, else from
@@ -223,7 +225,26 @@ export function reduce(model: Model, action: Action): Model {
     case 'binary':
       return { ...model, binary: action.binary };
     case 'session.id':
-      return { ...model, sessionId: action.id };
+      if (model.sessionId === action.id) return model;
+      if (model.sessionId === null) return { ...model, sessionId: action.id };
+      // A different id for a known session: `/clear` rotated it, and every
+      // figure the pane held describes a session that is over. The engine's
+      // own bookkeeping and the query JSON start again (a turn running now
+      // is the new session's first); the pane's own state, the binary and
+      // its verbs are the process's and stay.
+      return {
+        ...model,
+        sessionId: action.id,
+        usage: null,
+        usageAt: null,
+        turn: { ...model.turn, number: model.turn.state === 'idle' ? 0 : 1, lastDurationMs: null, lastReason: null },
+        tools: {},
+        compactions: 0,
+        query: {},
+        queryAt: null,
+        stale: false,
+        contextHistory: [],
+      };
     case 'verbs':
       return { ...model, verbs: action.verbs };
     case 'query':
