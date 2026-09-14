@@ -62,6 +62,9 @@ struct QueryArgs {
     what: QueryWhat,
     #[command(flatten)]
     attach: Attach,
+    /// Feed only the first N transcript lines (a point in time; fixtures).
+    #[arg(long, global = true)]
+    lines: Option<usize>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -82,6 +85,22 @@ enum QueryWhat {
     Agents,
     /// Ranked Advisor recommendations with explanations.
     Advice,
+    /// The coach object: state line, four lights, the nudge, next, snoozed.
+    Coach {
+        /// Print the one-line status form instead of JSON.
+        #[arg(long)]
+        line: bool,
+        /// Columns for `--line` (L0 at ≥ 80, L1 at ≥ 40, L2 below).
+        #[arg(long, default_value_t = 80)]
+        columns: usize,
+        /// Snooze this rule for five turns first (queued while the
+        /// dashboard runs).
+        #[arg(long, value_name = "RULE")]
+        snooze: Option<String>,
+        /// Snooze this rule for the session first.
+        #[arg(long, value_name = "RULE")]
+        snooze_session: Option<String>,
+    },
     /// What rides on every request.
     Prefix,
     /// Event log.
@@ -503,11 +522,18 @@ fn target(attach: &Attach) -> cctop::load::Target {
         session: attach.session.clone(),
         cwd: attach.cwd.clone(),
         wait: attach.wait,
+        lines: None,
     }
 }
 
 fn load_state(attach: &Attach) -> cctop::ui::State {
-    match cctop::load::state(&target(attach)) {
+    load_state_lines(attach, None)
+}
+
+fn load_state_lines(attach: &Attach, lines: Option<usize>) -> cctop::ui::State {
+    let mut t = target(attach);
+    t.lines = lines;
+    match cctop::load::state(&t) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("cctop: {e}");
@@ -520,8 +546,17 @@ fn query(q: QueryArgs) {
     use cctop::query as qy;
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
+        QueryWhat::Coach {
+            line: true,
+            columns,
+            ..
+        } => {
+            let state = load_state_lines(&q.attach, q.lines);
+            emit(&format!("{}\n", qy::coach_line(&state, *columns)));
+            return;
+        }
         what => {
-            let mut state = load_state(&q.attach);
+            let mut state = load_state_lines(&q.attach, q.lines);
             let engine = cctop::advisor::Engine::for_state(&state);
             state.advice = engine.current.clone();
             state.advice_view.has_occupant = engine.occupant.is_some();
@@ -532,6 +567,17 @@ fn query(q: QueryArgs) {
                 QueryWhat::Files => qy::files(&state),
                 QueryWhat::Agents => qy::agents(&state),
                 QueryWhat::Advice => qy::advice(&state),
+                QueryWhat::Coach {
+                    snooze,
+                    snooze_session,
+                    ..
+                } => qy::coach(
+                    &state,
+                    snooze
+                        .as_deref()
+                        .map(|r| (r, false))
+                        .or_else(|| snooze_session.as_deref().map(|r| (r, true))),
+                ),
                 QueryWhat::Prefix => qy::prefix(&state),
                 QueryWhat::Baseline => qy::baseline(state.baseline.as_ref()),
                 QueryWhat::Events { since } => {

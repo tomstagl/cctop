@@ -463,6 +463,11 @@ fn lock_path(path: &Path) -> PathBuf {
     path.with_extension("lock")
 }
 
+/// Snoozes a reader could not apply itself, queued for the writer.
+fn requests_path(path: &Path) -> PathBuf {
+    path.with_extension("requests")
+}
+
 /// `$HOME/.cctop`, where the advisor state lives.
 pub fn default_home() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -922,6 +927,96 @@ impl Engine {
         }
         self.current.retain(|a| a.rule != rule);
         self.dirty = true;
+    }
+
+    /// A snooze from a surface that may not hold the lock (`cctop query
+    /// coach --snooze`, the pane, the MCP tool): applied here when this
+    /// process may write, else queued for the writer to pick up on its next
+    /// tick. Returns what happened, for the caller's message.
+    pub fn snooze_request(
+        &mut self,
+        rule: &'static str,
+        session_wide: bool,
+        turn: usize,
+        now: i64,
+    ) -> String {
+        let queued = self
+            .path
+            .as_ref()
+            .filter(|p| !self.writer && lock_alive(&lock_path(p)));
+        match queued {
+            Some(path) => {
+                let line = serde_json::json!({"rule": rule, "session": session_wide, "at_ms": now});
+                let req = requests_path(path);
+                let mut text = std::fs::read_to_string(&req).unwrap_or_default();
+                text.push_str(&line.to_string());
+                text.push('\n');
+                if std::fs::write(&req, text).is_ok() {
+                    // Reflect it locally so this reader's own output agrees.
+                    self.snoozed.insert(
+                        rule,
+                        Snooze {
+                            until_turn: (!session_wide).then_some(turn + 5),
+                            count: if session_wide { 3 } else { 1 },
+                        },
+                    );
+                    self.current.retain(|a| a.rule != rule);
+                    if self
+                        .occupant
+                        .as_ref()
+                        .is_some_and(|o| o.advice.rule == rule)
+                    {
+                        self.occupant = None;
+                    }
+                    format!("{rule} snooze queued for the running dashboard")
+                } else {
+                    format!("{rule}: could not queue the snooze")
+                }
+            }
+            None => {
+                let text = if session_wide {
+                    self.snooze_session(rule, now)
+                } else {
+                    self.snooze(rule, turn, now)
+                };
+                self.save();
+                text
+            }
+        }
+    }
+
+    /// The writer applies the snoozes readers queued.
+    pub fn poll_requests(&mut self, turn: usize, now: i64) -> Vec<String> {
+        let mut out = Vec::new();
+        let Some(path) = self.path.clone().filter(|_| self.writer) else {
+            return out;
+        };
+        let req = requests_path(&path);
+        let Ok(text) = std::fs::read_to_string(&req) else {
+            return out;
+        };
+        let _ = std::fs::remove_file(&req);
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                continue;
+            };
+            let rule = v.get("rule").and_then(|r| r.as_str()).unwrap_or("");
+            let Some(id) = self.rules.iter().map(|r| r.id()).find(|id| *id == rule) else {
+                continue;
+            };
+            let session_wide = v.get("session").and_then(|s| s.as_bool()).unwrap_or(false);
+            out.push(if session_wide {
+                self.snooze_session(id, now)
+            } else {
+                self.snooze(id, turn, now)
+            });
+        }
+        out
+    }
+
+    /// The rule id in the catalog for `rule`, if any.
+    pub fn rule_id(&self, rule: &str) -> Option<&'static str> {
+        self.rules.iter().map(|r| r.id()).find(|id| *id == rule)
     }
 
     /// `Enter`: the person is acting on the occupant.
@@ -1425,6 +1520,25 @@ mod tests {
             Some(9),
             "the reader could not write over the writer"
         );
+        // A reader's snooze request is queued while the writer lives, and
+        // the writer applies it on its next poll.
+        let mut q2 = mk();
+        q2.attach(&home, "s1", false);
+        assert_eq!(
+            q2.snooze_request("A", true, 6, 0),
+            "A snooze queued for the running dashboard"
+        );
+        assert_eq!(q2.snoozed(), vec![("A", None)], "the reader reflects it");
+        assert_eq!(
+            read().snoozed["A"].until_turn,
+            Some(9),
+            "the file is the writer's"
+        );
+        let applied = e.poll_requests(6, 0);
+        assert_eq!(applied, vec!["A snoozed for the session".to_string()]);
+        e.save();
+        assert_eq!(read().snoozed["A"].until_turn, None);
+        assert!(e.poll_requests(6, 0).is_empty(), "consumed");
         e.release();
         q.dirty = true;
         q.save();
@@ -1433,6 +1547,15 @@ mod tests {
             None,
             "no lock: the reader may write"
         );
+        // Without a writer the request applies directly (and a rule already
+        // snoozed for the session stays so: the count persisted).
+        let mut q3 = mk();
+        q3.attach(&home, "s1", false);
+        assert_eq!(
+            q3.snooze_request("A", false, 20, 0),
+            "A snoozed for the session (third snooze)"
+        );
+        assert_eq!(read().snoozed["A"].until_turn, None);
         let _ = std::fs::remove_dir_all(&home);
     }
 

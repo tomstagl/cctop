@@ -1,0 +1,1512 @@
+[
+  {
+    "at_ms": 1789394525414,
+    "kind": "note",
+    "text": "/clear"
+  },
+  {
+    "at_ms": 1789394574881,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/f58ab3… ▶"
+  },
+  {
+    "at_ms": 1789394575294,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394575669,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/d93e76… ▶"
+  },
+  {
+    "at_ms": 1789394575900,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/76f7db… ▶"
+  },
+  {
+    "at_ms": 1789394576015,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394576221,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394579820,
+    "kind": "tool",
+    "text": "Bash grep -n lorem lorem_ip lorem_ipsu lorem_ipsum_dolor_sit_amet_consectetur_adip.md | head -80 ▶"
+  },
+  {
+    "at_ms": 1789394579971,
+    "kind": "tool",
+    "text": "Bash ✓ 396"
+  },
+  {
+    "at_ms": 1789394581687,
+    "kind": "tool",
+    "text": "Bash ls && echo lore lor ---\" && ls lor lorem 2>/dev/null | head -80 && echo lore plugin ---\" && find plugin -type l | grep -v lorem_ipsum_ | head -40 && echo lore lorem ---\" && ls lorem 2>/dev/null && ec… ▶"
+  },
+  {
+    "at_ms": 1789394581893,
+    "kind": "tool",
+    "text": "Bash ✓ 483"
+  },
+  {
+    "at_ms": 1789394585714,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/76f7db… ▶"
+  },
+  {
+    "at_ms": 1789394585841,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394589123,
+    "kind": "tool",
+    "text": "Bash grep -rln lorem_i lor plugin lore lorem_.md lorem_ip lorem_ipsum_ echo lore lorem lor ---\"; ls lorem_ echo lore lor.json status ---\"; for l in lorem_ipsum_d do echo lor $lor python3 -c l lorem_ lorem… ▶"
+  },
+  {
+    "at_ms": 1789394590778,
+    "kind": "tool",
+    "text": "Bash ✓ 247"
+  },
+  {
+    "at_ms": 1789394599528,
+    "kind": "tool",
+    "text": "Bash ls lorem_ipsum_d && for l in lorem_ipsum_dolor_sit do echo lor $lor python3 -c l lorem_ lore lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_c lo lorem_ipsum_dolo lo lo lorem_ipsum_dolor lorem_ips… ▶"
+  },
+  {
+    "at_ms": 1789394600901,
+    "kind": "api",
+    "text": "Bash ✗ error"
+  },
+  {
+    "at_ms": 1789394606558,
+    "kind": "tool",
+    "text": "Bash ls lorem_ipsum_dolor_sit_amet_consec && for l in lorem_ipsum_dolor_sit_amet_consectetur_ad do echo lor $lor python3 -c l lorem_ lore lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_c lo lorem_ipsu… ▶"
+  },
+  {
+    "at_ms": 1789394608150,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394624149,
+    "kind": "tool",
+    "text": "Bash git remote -v | head -2 && echo lore lorem_i lor lor lo lo lorem_ip lor lorem_ lorem_ ---\" && grep -n lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_eli lorem_ipsum_dolor_s.ts | head -30 && echo l… ▶"
+  },
+  {
+    "at_ms": 1789394624389,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394625890,
+    "kind": "tool",
+    "text": "Bash echo lore lorem_ipsum_ lo lorem_i lorem_i ---\" && grep -n lor lorem_i lorem_ip -r lor | head && echo && grep -n lor lorem_ipsum lorem_ipsum_ lorem_ip lorem_ips lorem_ipsum_ lor lorem_ipsum_.rs | head… ▶"
+  },
+  {
+    "at_ms": 1789394626047,
+    "kind": "tool",
+    "text": "Bash ✓ 105"
+  },
+  {
+    "at_ms": 1789394628308,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/7961c1… ▶"
+  },
+  {
+    "at_ms": 1789394628385,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394632378,
+    "kind": "tool",
+    "text": "Bash echo lore lorem_ip lorem_i lorem_ipsu lor lo ---\"; grep -l lorem_ipsum_dolor_sit_amet_consectetur lorem_ipsum_dolor_si.json lorem_ipsum_ echo lore lorem_ipsu lorem for lore lo ---\"; ls lorem_ipsum_do… ▶"
+  },
+  {
+    "at_ms": 1789394634383,
+    "kind": "tool",
+    "text": "Bash ✓ 191"
+  },
+  {
+    "at_ms": 1789394646615,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_a && for lo in lorem_ipsum_dolor_sit_amet_consectet lorem_ipsum_dolor_sit_amet_consectetu do echo lor $lore lore -f lorem_ lor lore lor $lorem_ips echo -n lo… ▶"
+  },
+  {
+    "at_ms": 1789394648403,
+    "kind": "tool",
+    "text": "Bash ✓ 132"
+  },
+  {
+    "at_ms": 1789394668151,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_a && python3 - lorem_i lorem_ lorem lorem_ip lor lorem_i lorem_ lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_ei lorem_ipsum_dol lorem lorem_… ▶"
+  },
+  {
+    "at_ms": 1789394669532,
+    "kind": "tool",
+    "text": "Bash ✓ 175"
+  },
+  {
+    "at_ms": 1789394684774,
+    "kind": "tool",
+    "text": "Bash grep -n -i lorem_ipsum_dolor_sit_amet_consectetur_adipisci lorem_ipsum_dolor_sit_amet_consect.ts | grep -v lorem_ip | head -30; echo lore lorem_ lorem_i lo lorem_i ---\"; sed -n lorem_ip lorem_ipsum_d… ▶"
+  },
+  {
+    "at_ms": 1789394687325,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394690588,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/17809d… ▶"
+  },
+  {
+    "at_ms": 1789394690661,
+    "kind": "tool",
+    "text": "Read ✓ 229"
+  },
+  {
+    "at_ms": 1789394692384,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ipsu lorem_ipsum_dolor_sit_amet_consectetur echo lore lorem_ipsum_dolor ---\"; grep -n lorem_ipsu lorem_ipsum_dolor_ -A lo lorem_ipsum_dolor_sit_amet_consect.ts | grep -n lorem_ipsum_dolo… ▶"
+  },
+  {
+    "at_ms": 1789394692525,
+    "kind": "tool",
+    "text": "Bash ✓ 173"
+  },
+  {
+    "at_ms": 1789394708130,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolor_sit_amet_consectetur_adipisc lorem_ipsu.rs | head -20; echo lore lor.rs ---\"; grep -n lorem_ipsum_dolor_ lorem_i lorem_ipsum_dolor_sit_ lorem_i.rs | head -10; echo lore lore… ▶"
+  },
+  {
+    "at_ms": 1789394709841,
+    "kind": "tool",
+    "text": "Bash ✓ 203"
+  },
+  {
+    "at_ms": 1789394739430,
+    "kind": "tool",
+    "text": "Write /home/user/project/src/098b24… ▶"
+  },
+  {
+    "at_ms": 1789394739539,
+    "kind": "tool",
+    "text": "Write ✓ 52"
+  },
+  {
+    "at_ms": 1789394742576,
+    "kind": "tool",
+    "text": "Bash gh issue create -R lorem_ipsum_do --label lor --title lorem_ lorem `cctop query` lorem lore lor lorem_i lorem_ip lorem lorem_ip lorem_i lor lorem_i lor --body-file lorem_ipsum_dolor_sit_amet_consecte… ▶"
+  },
+  {
+    "at_ms": 1789394746478,
+    "kind": "tool",
+    "text": "Bash ✓ 10"
+  },
+  {
+    "at_ms": 1789394758600,
+    "kind": "hook",
+    "text": "Stop hooks 2 ran, 61ms"
+  },
+  {
+    "at_ms": 1789394758605,
+    "kind": "note",
+    "text": "turn done in 3:07"
+  },
+  {
+    "at_ms": 1789394800809,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/9b16db… ▶"
+  },
+  {
+    "at_ms": 1789394800880,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394801319,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/500710… ▶"
+  },
+  {
+    "at_ms": 1789394801382,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394803501,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/7d0f18… ▶"
+  },
+  {
+    "at_ms": 1789394803568,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394807624,
+    "kind": "tool",
+    "text": "Bash ls lorem_ipsu lorem_ipsum_dolor_s 2>/dev/null && wc -l lorem_ipsum_.ts && echo lore lorem_i.json lorem_i ---\" && python3 -c lorem_i lorem lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do… ▶"
+  },
+  {
+    "at_ms": 1789394809309,
+    "kind": "tool",
+    "text": "Bash ✓ 329"
+  },
+  {
+    "at_ms": 1789394811077,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/cc1006… ▶"
+  },
+  {
+    "at_ms": 1789394811144,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394811489,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/e6e3cf… ▶"
+  },
+  {
+    "at_ms": 1789394811545,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394818416,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ip lorem_ipsum_dolor_sit_ame.ts lorem_ipsum_dolor_sit_a.ts lorem_ipsum_dolor_sit_a.ts && echo lore lorem_ lorem_i lorem_ ---\" && grep -rn lorem_ipsum_dolor_sit_amet_consecte lorem_ipsum… ▶"
+  },
+  {
+    "at_ms": 1789394818561,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394821217,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/67cead… ▶"
+  },
+  {
+    "at_ms": 1789394821286,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394821971,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/67cead… ▶"
+  },
+  {
+    "at_ms": 1789394822048,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394828422,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/257db4… ▶"
+  },
+  {
+    "at_ms": 1789394828491,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789394830103,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ip lorem_ip.rs && echo lore lore lorem_ip lo lor lorem_ ---\" && grep -n lorem_ipsum_dolor_s lorem_ipsum_dolor_sit_a.md lorem_ipsum_d.md lorem_.md lorem_ipsum_dolor_sit_.md | head -40 ▶"
+  },
+  {
+    "at_ms": 1789394830224,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394854022,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_lab lorem_ipsum_dolor_si.tsx lorem_ipsum_dolor_si.ts | sed lorem_ipsum_dolor_sit_ame | head -50 ▶"
+  },
+  {
+    "at_ms": 1789394855445,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789394857987,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/5354e8… ▶"
+  },
+  {
+    "at_ms": 1789394858074,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395072620,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/824737… ▶"
+  },
+  {
+    "at_ms": 1789395072673,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/84518f… ▶"
+  },
+  {
+    "at_ms": 1789395072807,
+    "kind": "tool",
+    "text": "Read ✓ 136"
+  },
+  {
+    "at_ms": 1789395072850,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395079189,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/500710… ▶"
+  },
+  {
+    "at_ms": 1789395079287,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395083230,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/500710… ▶"
+  },
+  {
+    "at_ms": 1789395083344,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395090841,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/9b16db… ▶"
+  },
+  {
+    "at_ms": 1789395090928,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395104462,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/9b16db… ▶"
+  },
+  {
+    "at_ms": 1789395104606,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395105697,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/9b16db… ▶"
+  },
+  {
+    "at_ms": 1789395105825,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395110181,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/9b16db… ▶"
+  },
+  {
+    "at_ms": 1789395110257,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395116308,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/7d0f18… ▶"
+  },
+  {
+    "at_ms": 1789395116397,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395119874,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/7d0f18… ▶"
+  },
+  {
+    "at_ms": 1789395119973,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395122354,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/7d0f18… ▶"
+  },
+  {
+    "at_ms": 1789395122455,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395127396,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/7d0f18… ▶"
+  },
+  {
+    "at_ms": 1789395127475,
+    "kind": "tool",
+    "text": "Edit ✓ 37"
+  },
+  {
+    "at_ms": 1789395130865,
+    "kind": "tool",
+    "text": "Bash npm run lorem_ips 2>&1 | tail -5 && npm test 2>&1 | tail -25 ▶"
+  },
+  {
+    "at_ms": 1789395138875,
+    "kind": "tool",
+    "text": "Bash ✓ 138"
+  },
+  {
+    "at_ms": 1789395143642,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/84518f… ▶"
+  },
+  {
+    "at_ms": 1789395143708,
+    "kind": "tool",
+    "text": "Read ✓ 455"
+  },
+  {
+    "at_ms": 1789395158329,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/84518f… ▶"
+  },
+  {
+    "at_ms": 1789395158416,
+    "kind": "tool",
+    "text": "Edit ✓ 38"
+  },
+  {
+    "at_ms": 1789395197359,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ lorem_ipsum_dolor_sit_am.ts | head -12; grep -n lorem_ipsum_d l lorem_ips lorem_ipsum_dolor_sit_amet_.tsx | head -10; grep -n lorem_ipsum_dolor_sit lorem lorem_ipsum_dolor_sit_a.ts | h… ▶"
+  },
+  {
+    "at_ms": 1789395198872,
+    "kind": "tool",
+    "text": "Bash ✓ 369"
+  },
+  {
+    "at_ms": 1789395222558,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/cc1006… ▶"
+  },
+  {
+    "at_ms": 1789395222645,
+    "kind": "tool",
+    "text": "Edit ✓ 38"
+  },
+  {
+    "at_ms": 1789395272676,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/cc1006… ▶"
+  },
+  {
+    "at_ms": 1789395272772,
+    "kind": "tool",
+    "text": "Edit ✓ 38"
+  },
+  {
+    "at_ms": 1789395275947,
+    "kind": "tool",
+    "text": "Bash npm run lorem_ips 2>&1 | tail -5 && npm test 2>&1 | grep -E lorem_ lorem lorem_ipsum_dolor_sit_amet_consectetur_adi lorem_ipsum_dolor_ ▶"
+  },
+  {
+    "at_ms": 1789395284036,
+    "kind": "tool",
+    "text": "Bash ✓ 136"
+  },
+  {
+    "at_ms": 1789395288926,
+    "kind": "note",
+    "text": "destructive git: git stash"
+  },
+  {
+    "at_ms": 1789395288926,
+    "kind": "tool",
+    "text": "Bash git stash push -q -- lorem_ipsum_ && (npm test 2>&1 | grep -E lorem_ lorem_ lorem_ipsum_dolor_sit_amet_consectetur_ad lorem_ipsum_do git stash lor -q && git status --short ▶"
+  },
+  {
+    "at_ms": 1789395293814,
+    "kind": "tool",
+    "text": "Bash ✓ 33"
+  },
+  {
+    "at_ms": 1789395305751,
+    "kind": "note",
+    "text": "destructive git: git stash"
+  },
+  {
+    "at_ms": 1789395305751,
+    "kind": "tool",
+    "text": "Bash git stash push -q -- lorem_ipsum_ && (npm test 2>&1 | grep -E lorem_ lor | head -5); git stash lor -q; echo lore lorem_ip lorem lorem_i lor lore.start lorem_ lorem_ip ---\"; cp lorem_ipsum_dolor_s.ts … ▶"
+  },
+  {
+    "at_ms": 1789395314340,
+    "kind": "tool",
+    "text": "Bash ✓ 220"
+  },
+  {
+    "at_ms": 1789395325190,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ lo l lorem_ lorem_ipsum_dolor_s.ts && claude plugin validate --strict lorem_ip 2>&1 | tail -5; echo lore lorem_ lore lorem_i ---\"; grep -n lorem_ipsum_dolor_sit_amet_c lor lorem_ipsum_… ▶"
+  },
+  {
+    "at_ms": 1789395327809,
+    "kind": "tool",
+    "text": "Bash ✓ 315"
+  },
+  {
+    "at_ms": 1789395330549,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2d280a… ▶"
+  },
+  {
+    "at_ms": 1789395330624,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395331152,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2d280a… ▶"
+  },
+  {
+    "at_ms": 1789395331218,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395334344,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ip lorem_ipsum_dolor_sit_.md && echo lore tail ---\" && grep -n lore lorem_ipsum lorem lorem_ipsum_dolor_sit_.md | tail -12 ▶"
+  },
+  {
+    "at_ms": 1789395334485,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789395336638,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ip lorem_ipsum_dolor_sit_.md ▶"
+  },
+  {
+    "at_ms": 1789395336764,
+    "kind": "tool",
+    "text": "Bash ✓ 371"
+  },
+  {
+    "at_ms": 1789395343046,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/2d280a… ▶"
+  },
+  {
+    "at_ms": 1789395343139,
+    "kind": "tool",
+    "text": "Edit ✓ 36"
+  },
+  {
+    "at_ms": 1789395345897,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/2d280a… ▶"
+  },
+  {
+    "at_ms": 1789395346025,
+    "kind": "tool",
+    "text": "Edit ✓ 36"
+  },
+  {
+    "at_ms": 1789395352505,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/38ef2e… ▶"
+  },
+  {
+    "at_ms": 1789395352600,
+    "kind": "tool",
+    "text": "Edit ✓ 38"
+  },
+  {
+    "at_ms": 1789395358581,
+    "kind": "tool",
+    "text": "Bash cat lorem_ipsum_dolor_sit_amet_c.json && grep -rn lorem.0 lorem_ipsum.json lorem_ipsum.md lorem_ipsum.rs lorem_ipsum.sh lorem_ipsum.toml lorem_ipsum_dolor_ l 2>/dev/null | grep -v lorem_ipsum_dolor_s… ▶"
+  },
+  {
+    "at_ms": 1789395358730,
+    "kind": "tool",
+    "text": "Bash ✓ 113"
+  },
+  {
+    "at_ms": 1789395364849,
+    "kind": "tool",
+    "text": "Bash git log --oneline -8 -- lorem_ipsum_dolor_sit_amet_c.json && echo lore lorem_ipsum ---\" && ls lorem_ipsum_do lorem_ipsum_ find l -name lorem_ipsum.json -not -path lorem_ipsum_dolor_ -not -path lorem_… ▶"
+  },
+  {
+    "at_ms": 1789395365282,
+    "kind": "tool",
+    "text": "Bash ✓ 119"
+  },
+  {
+    "at_ms": 1789395368708,
+    "kind": "tool",
+    "text": "Bash cat lorem_ipsum_dolor_sit_amet.json && git show lorem_i --stat lorem_ipsum_d -- lorem_ipsum_dolor_sit_amet_c.json lorem_ipsum_dolor_sit_amet.json | head && git show lorem_i -- lorem_ipsum_dolor_sit_a… ▶"
+  },
+  {
+    "at_ms": 1789395368893,
+    "kind": "tool",
+    "text": "Bash ✓ 157"
+  },
+  {
+    "at_ms": 1789395374387,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/4dad89… ▶"
+  },
+  {
+    "at_ms": 1789395374478,
+    "kind": "tool",
+    "text": "Edit ✓ 40"
+  },
+  {
+    "at_ms": 1789395375946,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/2d280a… ▶"
+  },
+  {
+    "at_ms": 1789395376088,
+    "kind": "tool",
+    "text": "Edit ✓ 36"
+  },
+  {
+    "at_ms": 1789395382535,
+    "kind": "tool",
+    "text": "Bash grep -rn lorem.0 lorem_.md lore lore plugin lorem_i lorem_ip lor lorem_ips 2>/dev/null | grep -v lorem_ipsum_do | lorem echo lore lorem ---\"; npm run lorem_ips 2>&1 | grep -c lorem_i ; npm test 2>&1 … ▶"
+  },
+  {
+    "at_ms": 1789395395753,
+    "kind": "tool",
+    "text": "Bash ✓ 87"
+  },
+  {
+    "at_ms": 1789395399054,
+    "kind": "tool",
+    "text": "Bash git diff --stat && git diff lorem_ipsum_d ▶"
+  },
+  {
+    "at_ms": 1789395399225,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789395421581,
+    "kind": "hook",
+    "text": "Stop hooks 2 ran, 62ms"
+  },
+  {
+    "at_ms": 1789395421585,
+    "kind": "note",
+    "text": "turn done in 10:25"
+  },
+  {
+    "at_ms": 1789395506673,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/cd54f5… ▶"
+  },
+  {
+    "at_ms": 1789395506750,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395524428,
+    "kind": "hook",
+    "text": "Stop hooks 2 ran, 68ms"
+  },
+  {
+    "at_ms": 1789395524432,
+    "kind": "note",
+    "text": "turn done in 0:33"
+  },
+  {
+    "at_ms": 1789395589839,
+    "kind": "tool",
+    "text": "Bash git branch -a && git status --short && git checkout -b lorem_ipsum_dolor_si 2>&1 | tail -1 ▶"
+  },
+  {
+    "at_ms": 1789395591478,
+    "kind": "tool",
+    "text": "Bash ✓ 113"
+  },
+  {
+    "at_ms": 1789395600243,
+    "kind": "tool",
+    "text": "Bash git add lorem_ipsum_dolor_sit_.md lorem_ipsum_dolor_sit_amet_c.json lorem_ipsum_d.md lorem_ipsum_dolor_.ts lorem_ipsum_dolor.tsx lorem_ipsum_dolor_s.ts lorem_ipsum_dolor_sit_.ts lorem_ipsum_dolor_sit… ▶"
+  },
+  {
+    "at_ms": 1789395602250,
+    "kind": "tool",
+    "text": "Bash ✓ 14"
+  },
+  {
+    "at_ms": 1789395605953,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/6c374d… ▶"
+  },
+  {
+    "at_ms": 1789395606030,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395607495,
+    "kind": "tool",
+    "text": "Bash grep -n lor lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_.jsonl lorem_ip.rs | head -60 ▶"
+  },
+  {
+    "at_ms": 1789395607620,
+    "kind": "tool",
+    "text": "Bash ✓ 136"
+  },
+  {
+    "at_ms": 1789395611455,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ip lorem_ip.rs && echo lore lorem_ipsum_dolor_sit_amet_ ---\" && sed -n lorem_ip lorem_ip.rs && sed -n lorem_ip lorem_ip.rs ▶"
+  },
+  {
+    "at_ms": 1789395611602,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789395616310,
+    "kind": "tool",
+    "text": "Bash grep -n lore lorem_ lorem_ipsum_ -A lo lorem_ipsum_.rs | head -60 && echo lore lorem_ipsum_ l lorem_ipsum_d ---\" && grep -n lor lorem_ipsum_dolo lorem_ipsum_do -A lo lorem_ipsum_.rs | head -70 && ech… ▶"
+  },
+  {
+    "at_ms": 1789395616536,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789395634116,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolor_sit_amet_c lorem_ipsum_do.rs | head -12; echo lore lorem.apply lore lo lorem_ipsum ---\"; grep -n lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmo lorem_i… ▶"
+  },
+  {
+    "at_ms": 1789395634307,
+    "kind": "tool",
+    "text": "Bash ✓ 415"
+  },
+  {
+    "at_ms": 1789395668764,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolor_sit_amet_c lorem.toml lorem_ips.rs | head -5 && grep -n lor lorem_i lorem_ip -r lor lorem lore lorem_.md plugin 2>/dev/null | grep -v lorem_ipsum_d.rs | head ▶"
+  },
+  {
+    "at_ms": 1789395668911,
+    "kind": "tool",
+    "text": "Bash ✓ 199"
+  },
+  {
+    "at_ms": 1789395671849,
+    "kind": "tool",
+    "text": "Bash grep -n lor lorem_ipsum_dolor_sit_amet_consectetur lore lorem_ips.rs lorem_ip.rs lorem_ips.rs lorem_ipsu.rs | head -8 && sed -n lorem_ip lorem_ips.rs ▶"
+  },
+  {
+    "at_ms": 1789395671997,
+    "kind": "tool",
+    "text": "Bash ✓ 458"
+  },
+  {
+    "at_ms": 1789395684809,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/6c374d… ▶"
+  },
+  {
+    "at_ms": 1789395684907,
+    "kind": "tool",
+    "text": "Edit ✓ 34"
+  },
+  {
+    "at_ms": 1789395690231,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/d92998… ▶"
+  },
+  {
+    "at_ms": 1789395690361,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395695384,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolo lorem_ip.rs lorem_ipsum_.rs | lorem tail -5 lorem_ip.rs ▶"
+  },
+  {
+    "at_ms": 1789395695516,
+    "kind": "tool",
+    "text": "Bash ✓ 22"
+  },
+  {
+    "at_ms": 1789395711729,
+    "kind": "tool",
+    "text": "Bash cat >> lorem_ip.rs lorem_i lorem_ipsum_ lor lorem l lor lorem_ips lor lorem_ip lor lorem_ipsum_dolor_sit lorem_ipsum_ lorem lo lore l lorem_ipsum_dolor_sit_amet_consectetur_ lorem lo lore l lorem_ips… ▶"
+  },
+  {
+    "at_ms": 1789395722581,
+    "kind": "tool",
+    "text": "Bash ✓ 23"
+  },
+  {
+    "at_ms": 1789395730420,
+    "kind": "tool",
+    "text": "Bash cargo fmt && cargo clippy --quiet --all-targets 2>&1 | grep -E lorem_ipsum_dolor_ | head -5; echo lore lorem lo ---\"; cargo run --quiet -- query lorem_i --session lorem_ipsum_dolor_sit_amet_consectet… ▶"
+  },
+  {
+    "at_ms": 1789395756273,
+    "kind": "tool",
+    "text": "Bash ✓ 189"
+  },
+  {
+    "at_ms": 1789395762725,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_d lorem_ipsu.md lorem_.md lorem_ip.md lorem_ipsum_dolor_sit_amet_consect.md | head -20 ▶"
+  },
+  {
+    "at_ms": 1789395762851,
+    "kind": "tool",
+    "text": "Bash ✓ 148"
+  },
+  {
+    "at_ms": 1789395764985,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2ab7e9… ▶"
+  },
+  {
+    "at_ms": 1789395765053,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395770334,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/2ab7e9… ▶"
+  },
+  {
+    "at_ms": 1789395770420,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395771386,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum_dolor_sit lorem_ips.rs | head -5 ▶"
+  },
+  {
+    "at_ms": 1789395771514,
+    "kind": "tool",
+    "text": "Bash ✓ 24"
+  },
+  {
+    "at_ms": 1789395773908,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ lorem_ips.rs ▶"
+  },
+  {
+    "at_ms": 1789395774026,
+    "kind": "tool",
+    "text": "Bash ✓ 287"
+  },
+  {
+    "at_ms": 1789395781435,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/2ab7e9… ▶"
+  },
+  {
+    "at_ms": 1789395781514,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395783443,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/e7bb7c… ▶"
+  },
+  {
+    "at_ms": 1789395783529,
+    "kind": "tool",
+    "text": "Edit ✓ 34"
+  },
+  {
+    "at_ms": 1789395789538,
+    "kind": "tool",
+    "text": "Bash cargo fmt --check 2>&1 | head -3; cargo clippy --quiet --all-targets 2>&1 | grep -E lorem_ipsum_dolor_ | head -5; cargo test --quiet 2>&1 | grep -E lorem_ lorem_ipsum_dolor_sit_a | head -5; git statu… ▶"
+  },
+  {
+    "at_ms": 1789395803177,
+    "kind": "tool",
+    "text": "Bash ✓ 87"
+  },
+  {
+    "at_ms": 1789395811089,
+    "kind": "tool",
+    "text": "Bash git add lorem_ipsu.md lorem_ip.rs lorem_ip.rs lorem_ipsum_.rs && git commit -q -F - lorem_i lorem_ lorem_ for l lorem_i lo lor lorem_ip lo lorem_ lorem `--session lorem lorem_i lorem_ip lorem_i lorem… ▶"
+  },
+  {
+    "at_ms": 1789395812731,
+    "kind": "tool",
+    "text": "Bash ✓ 29"
+  },
+  {
+    "at_ms": 1789395817207,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/cd54f5… ▶"
+  },
+  {
+    "at_ms": 1789395817323,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395818805,
+    "kind": "tool",
+    "text": "Bash grep -n lore lo lorem lorem_ lorem_ip lorem_ipsum_ lorem_ipsum_do lorem_ipsum_dolor_ lorem_ipsum_ lorem_ipsum_dol lorem_i.rs | head -50 ▶"
+  },
+  {
+    "at_ms": 1789395818919,
+    "kind": "tool",
+    "text": "Bash ✓ 380"
+  },
+  {
+    "at_ms": 1789395821558,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/c1c889… ▶"
+  },
+  {
+    "at_ms": 1789395821637,
+    "kind": "tool",
+    "text": "Read ✓ 471"
+  },
+  {
+    "at_ms": 1789395822214,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/c1c889… ▶"
+  },
+  {
+    "at_ms": 1789395822284,
+    "kind": "tool",
+    "text": "Read ✓ 331"
+  },
+  {
+    "at_ms": 1789395823000,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/c1c889… ▶"
+  },
+  {
+    "at_ms": 1789395823084,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395857419,
+    "kind": "tool",
+    "text": "Bash grep -n lore lo lorem_ipsum_dolor_ lor lorem_ipsum_dolo lorem_ip.rs | head -12; echo lore lorem_ips ---\"; sed -n lorem_ip lorem_ipsum echo lore run() lorem lorem_ ---\"; sed -n lorem_ip lorem_ipsum_ e… ▶"
+  },
+  {
+    "at_ms": 1789395859006,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1789395912117,
+    "kind": "tool",
+    "text": "Bash grep -n lore lo lorem_ipsu -A l lorem_ipsum_.rs && grep -n lore lo lorem_ips -A l lorem_ipsum_.rs && grep -n lore lorem_ lorem_ -A l lorem_ipsum_.rs | head -12 && grep -n lore lorem_ipsum lorem_ip lo… ▶"
+  },
+  {
+    "at_ms": 1789395912344,
+    "kind": "tool",
+    "text": "Bash ✓ 226"
+  },
+  {
+    "at_ms": 1789395914649,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/d92998… ▶"
+  },
+  {
+    "at_ms": 1789395914727,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1789395918956,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/d92998… ▶"
+  },
+  {
+    "at_ms": 1789395919039,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395925402,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/cd54f5… ▶"
+  },
+  {
+    "at_ms": 1789395925495,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395929132,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/cd54f5… ▶"
+  },
+  {
+    "at_ms": 1789395929236,
+    "kind": "tool",
+    "text": "Edit ✓ 35"
+  },
+  {
+    "at_ms": 1789395938070,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/c1c889… ▶"
+  },
+  {
+    "at_ms": 1789395938151,
+    "kind": "tool",
+    "text": "Edit ✓ 34"
+  },
+  {
+    "at_ms": 1789395940306,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/c1c889… ▶"
+  },
+  {
+    "at_ms": 1789395940384,
+    "kind": "tool",
+    "text": "Edit ✓ 34"
+  },
+  {
+    "at_ms": 1789395957807,
+    "kind": "tool",
+    "text": "Bash sed -n lorem_ lorem_ipsum_.rs && grep -n lorem_ipsum_dolo lorem_ipsu.rs lorem_i.rs | head -3 && grep -n lor lorem_ipsum_dolor lo lorem_ipsum_.rs | head -5 && sed -n lorem_ lorem_ipsum_.rs ▶"
+  },
+  {
+    "at_ms": 1789395957970,
+    "kind": "tool",
+    "text": "Bash ✓ 212"
+  },
+  {
+    "at_ms": 1789395961570,
+    "kind": "tool",
+    "text": "Bash grep -n lor lorem_ipsum_d lo lorem_ipsum_.rs | head -5 && sed -n \"$(grep -n lor lorem lorem_ipsum_.rs | head -1 | cut -d: -f1),+22p\" lorem_ipsum_.rs && sed -n lorem_ip lorem_i.rs ▶"
+  },
+  {
+    "at_ms": 1789395962922,
+    "kind": "tool",
+    "text": "Bash ✓ 279"
+  },
+  {
+    "at_ms": 1789395966177,
+    "kind": "tool",
+    "text": "Bash ls lorem_ipsum_dolor && python3 -c l lorem_ lorem_ips for l in lorem_ipsum_dolor_sit_amet_consectetur_adipisc lorem_ipsum_dolor_sit lorem_ip lorem_ipsum_d lorem_ipsum_dolor_s lorem_ipsum_dol && grep … ▶"
+  },
+  {
+    "at_ms": 1789395967674,
+    "kind": "api",
+    "text": "Bash ✗ error"
+  },
+  {
+    "at_ms": 1789395973172,
+    "kind": "tool",
+    "text": "Bash grep -n lorem_ipsum lorem_i.rs | head -3 && sed -n \"$(grep -n lor lorem_ lorem_i.rs | head -1 | cut -d: -f1),+12p\" lorem_i.rs ▶"
+  },
+  {
+    "at_ms": 1789395974894,
+    "kind": "tool",
+    "text": "Bash ✓ 126"
+  },
+  {
+    "at_ms": 1789395992378,
+    "kind": "tool",
+    "text": "Bash cat >> lorem_ipsu.rs lorem_i lorem_ipsum_ lor lorem l lor lorem_ips lor lorem_ipsum_dolor_sit_ame lo lor lorem_ip lorem_ips lorem.json lo lorem_ips lor lor lo lorem_ip lo lo lore test lorem_ips lore … ▶"
+  },
+  {
+    "at_ms": 1789396002436,
+    "kind": "tool",
+    "text": "Bash ✓ 51"
+  },
+  {
+    "at_ms": 1789396009085,
+    "kind": "tool",
+    "text": "Bash cargo fmt --check 2>&1 | head -3; cargo clippy --quiet --all-targets 2>&1 | grep -E lorem_ipsum_dolor_ | head -5; cargo test --quiet 2>&1 | grep -E lorem_ lorem_ipsum_dolor_sit_a | head -3; echo lore… ▶"
+  },
+  {
+    "at_ms": 1789396024986,
+    "kind": "tool",
+    "text": "Bash ✓ 130"
+  },
+  {
+    "at_ms": 1789396034128,
+    "kind": "tool",
+    "text": "Bash python3 - lorem_i lorem_ipsum.rs lorem_ips.read lorem_ipsum_dol lo lorem_ipsu -> lorem_i l lor lore l lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_ lorem_ipsum_dolor_sit_amet_c lo lorem… ▶"
+  },
+  {
+    "at_ms": 1789396054114,
+    "kind": "tool",
+    "text": "Bash ✓ 118"
+  },
+  {
+    "at_ms": 1789396062097,
+    "kind": "tool",
+    "text": "Bash git add lorem_ip.rs && git commit -q --amend --no-edit && git log --oneline -2 && git status --short ▶"
+  },
+  {
+    "at_ms": 1789396063617,
+    "kind": "tool",
+    "text": "Bash ✓ 41"
+  },
+  {
+    "at_ms": 1789396068798,
+    "kind": "tool",
+    "text": "Bash grep -n lore lorem_ l lorem_.md | head -40 && grep -n lorem_ip lorem_ipsum_dolor_sit_ lorem_.md | head -8 ▶"
+  },
+  {
+    "at_ms": 1789396070337,
+    "kind": "tool",
+    "text": "Bash ✓ 100"
+  },
+  {
+    "at_ms": 1789396072297,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/40cde3… ▶"
+  },
+  {
+    "at_ms": 1789396072371,
+    "kind": "tool",
+    "text": "Read ✓ 248"
+  },
+  {
+    "at_ms": 1789396074576,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/40cde3… ▶"
+  },
+  {
+    "at_ms": 1789396074672,
+    "kind": "tool",
+    "text": "Read ✓ 231"
+  },
+  {
+    "at_ms": 1789396078315,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/40cde3… ▶"
+  },
+  {
+    "at_ms": 1789396078401,
+    "kind": "tool",
+    "text": "Edit ✓ 34"
+  },
+  {
+    "at_ms": 1789396095065,
+    "kind": "tool",
+    "text": "Bash which lore && lore -V && ls -la lorem_ipsum_dolor_ | cut -c1-60 && lore ls 2>&1 | head -5 ▶"
+  },
+  {
+    "at_ms": 1789396096846,
+    "kind": "tool",
+    "text": "Bash ✓ 35"
+  },
+  {
+    "at_ms": 1789396099928,
+    "kind": "tool",
+    "text": "Bash lore lorem_ipsum -d -s lorem_ipsum_ -x lor -y lo -c lorem_ipsum_dolor_sit 'claude' && sleep l && lore lorem_ipsum_ -t lorem_ipsum_ -p | grep -v lorem_i | tail -12 ▶"
+  },
+  {
+    "at_ms": 1789396109657,
+    "kind": "tool",
+    "text": "Bash ✓ 299"
+  },
+  {
+    "at_ms": 1789396120153,
+    "kind": "tool",
+    "text": "Bash python3 - lorem_i lorem_ lorem_ipsum_dolor lorem_ips for l in lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_ lore lorem_ipsum_dolor_si lorem_i lorem_ip if lorem_ipsum_dolor_sit_amet_cons… ▶"
+  },
+  {
+    "at_ms": 1789396135911,
+    "kind": "tool",
+    "text": "Bash ✓ 154"
+  },
+  {
+    "at_ms": 1789396143305,
+    "kind": "tool",
+    "text": "Bash lore lorem_ips -t lorem_ipsum_do.0 lorem_ip && sleep l && lore lorem_ips -t lorem_ipsum_do.0 lorem && sleep l && echo lore lorem_ip lor ---\" && python3 -c l lorem_ lorem lorem_ipsum_dolor_sit_amet_co… ▶"
+  },
+  {
+    "at_ms": 1789396149971,
+    "kind": "tool",
+    "text": "Bash ✓ 93"
+  },
+  {
+    "at_ms": 1789396164688,
+    "kind": "tool",
+    "text": "Bash ls -la lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incidi lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incidi 2>&1 | awk lorem_i $lo $… ▶"
+  },
+  {
+    "at_ms": 1789396166515,
+    "kind": "tool",
+    "text": "Bash ✓ 398"
+  },
+  {
+    "at_ms": 1789396195097,
+    "kind": "tool",
+    "text": "Bash lore lorem_ips -t lorem_ipsum_do.0 lore lo lorem_ lorem && sleep lo && lore lorem_ipsum_ -t lorem_ipsum_do.1 -p | grep -v lorem_i | sed -n lore && lore lorem_ipsum_ -t lorem_ipsum_do.1 -p | grep -E l… ▶"
+  },
+  {
+    "at_ms": 1789396210875,
+    "kind": "tool",
+    "text": "Bash ✓ 122"
+  },
+  {
+    "at_ms": 1789396226192,
+    "kind": "tool",
+    "text": "Bash cargo build --quiet 2>&1 | grep -E lorem_ipsum_dolor_ | head -3; ls -la lorem_ipsum_dolor_ | awk lorem_i $lo $lo $lore lore lorem_ips -t lorem_ipsum_dolor python3 -c l lorem_ lorem lorem_ipsum_dolor_… ▶"
+  },
+  {
+    "at_ms": 1789396243124,
+    "kind": "tool",
+    "text": "Bash ✓ 69"
+  },
+  {
+    "at_ms": 1789396247659,
+    "kind": "tool",
+    "text": "Bash lore lorem_ips -t lorem_ipsum_do.0 lorem_ip && sleep l && lore lorem_ips -t lorem_ipsum_do.0 lorem && for l in l l l l l lo do sleep lo lore lorem_ipsum_ -t lorem_ipsum_do.1 -p | grep -i lorem_ip lo … ▶"
+  },
+  {
+    "at_ms": 1789396256403,
+    "kind": "tool",
+    "text": "Bash ✓ 114"
+  },
+  {
+    "at_ms": 1789396262136,
+    "kind": "tool",
+    "text": "Bash lore lorem_ips -t lorem_ipsum_do.0 lore lo lore lorem lorem && sleep lo && lore lorem_ipsum_ -t lorem_ipsum_do.1 -p | grep -v lorem_i | sed -n lore && lore lorem_ipsum_ -t lorem_ipsum_do.1 -p | grep … ▶"
+  },
+  {
+    "at_ms": 1789396277527,
+    "kind": "tool",
+    "text": "Bash ✓ 88"
+  },
+  {
+    "at_ms": 1789396285710,
+    "kind": "tool",
+    "text": "Bash lore lorem_ips -t lorem_ipsum_do.1 lo sleep lo lore lorem_ips -t lorem_ipsum_do.0 lorem_i lorem_ sleep lo lore lorem_ipsum_ -t lorem_ipsum_ lorem_ipsum_ lore ls 2>&1 | head -2; kill -0 lorem 2>/dev/n… ▶"
+  },
+  {
+    "at_ms": 1789396291215,
+    "kind": "tool",
+    "text": "Bash ✓ 32"
+  },
+  {
+    "at_ms": 1789396300597,
+    "kind": "tool",
+    "text": "Bash git add lorem_.md lorem_i.rs lorem_ipsu.rs lorem_ipsum_.rs && git commit -q -F - lorem_i lore lorem_ips lore lorem_ lorem lor lorem_i l lor lo `cctop run` l `cctop split` lorem lorem lorem_ip lorem_i… ▶"
+  },
+  {
+    "at_ms": 1789396302300,
+    "kind": "tool",
+    "text": "Bash ✓ 63"
+  },
+  {
+    "at_ms": 1789396313732,
+    "kind": "hook",
+    "text": "Stop hooks 2 ran, 41ms"
+  },
+  {
+    "at_ms": 1789396313739,
+    "kind": "note",
+    "text": "turn done in 12:38"
+  },
+  {
+    "at_ms": 1789396403309,
+    "kind": "tool",
+    "text": "Bash git status --short | wc -l && git checkout -q lore && git merge --ff-only lorem_ipsum_dolor_si 2>&1 | tail -2 && git log --oneline -4 && git status -sb | head -1 ▶"
+  },
+  {
+    "at_ms": 1789396405147,
+    "kind": "tool",
+    "text": "Bash ✓ 98"
+  },
+  {
+    "at_ms": 1789396407601,
+    "kind": "hook",
+    "text": "Stop hooks 2 ran, 85ms"
+  },
+  {
+    "at_ms": 1789396407609,
+    "kind": "note",
+    "text": "turn done in 0:07"
+  },
+  {
+    "at_ms": 1789396452609,
+    "kind": "tool",
+    "text": "Bash lorem_i lor lore lorem_ lorem_ipsum_dolor_sit_amet_consectet 2>&1 | grep -v lorem_ipsum_dolor_sit_amet_consec lorem_ipsum_dolor_sit_a | head -6 ▶"
+  },
+  {
+    "at_ms": 1789396452609,
+    "kind": "cost",
+    "text": "model opus-5 → sonnet-5"
+  },
+  {
+    "at_ms": 1789396470043,
+    "kind": "perm",
+    "text": "Bash ✗ automode-blocked"
+  },
+  {
+    "at_ms": 1789396515043,
+    "kind": "tool",
+    "text": "Bash cd lore && rm -rf lorem_ && git lorem --quiet --depth lo --branch lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_consectetur_ad.git lorem_ 2>&1 | tail -5 wc -l lorem_ipsum_dolor_sit_amet_con.md ▶"
+  },
+  {
+    "at_ms": 1789396515070,
+    "kind": "perm",
+    "text": "Bash ✗ permission-rule"
+  },
+  {
+    "at_ms": 1789396560070,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consect git lorem lorem_ -q git log --oneline lorem_ipsum_dolor | head -5 ▶"
+  },
+  {
+    "at_ms": 1789397109193,
+    "kind": "perm",
+    "text": "Bash ✗ automode-unavailable"
+  },
+  {
+    "at_ms": 1789397154193,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_ sed lorem_ipsum_dolor_sit_amet_… ▶"
+  },
+  {
+    "at_ms": 1789397154193,
+    "kind": "cost",
+    "text": "model sonnet-5 → opus-5"
+  },
+  {
+    "at_ms": 1789397157074,
+    "kind": "perm",
+    "text": "Bash ✗ user-rejected"
+  },
+  {
+    "at_ms": 1789397202074,
+    "kind": "tool",
+    "text": "TaskUpdate completed ▶"
+  },
+  {
+    "at_ms": 1789397202146,
+    "kind": "tool",
+    "text": "TaskUpdate ✓ 5"
+  },
+  {
+    "at_ms": 1789397247146,
+    "kind": "api",
+    "text": "API error: request failed"
+  },
+  {
+    "at_ms": 1789397292146,
+    "kind": "note",
+    "text": "interrupted after 6 calls"
+  },
+  {
+    "at_ms": 1789397341648,
+    "kind": "compact",
+    "text": "compacted auto 567k → 230k in 1:20"
+  },
+  {
+    "at_ms": 1789397342982,
+    "kind": "api",
+    "text": "API error: invalid_request 400"
+  },
+  {
+    "at_ms": 1789397387982,
+    "kind": "tool",
+    "text": "AskUserQuestion ▶"
+  },
+  {
+    "at_ms": 1789428336352,
+    "kind": "tool",
+    "text": "AskUserQuestion ✓ 83"
+  },
+  {
+    "at_ms": 1789428426352,
+    "kind": "tool",
+    "text": "Bash git commit -m \"$(cat lorem_i lorem_ipsu lorem_i lore cctop lor lorem_ip add lor lorem view lorem_ lo lorem_ lore lorem_ipsu l lorem_ip lorem_ipsum_ l cctop lo lorem_ip lor lorem_ipsum_ lorem_ips lore… ▶"
+  },
+  {
+    "at_ms": 1789428426352,
+    "kind": "cost",
+    "text": "model opus-5 → sonnet-5"
+  },
+  {
+    "at_ms": 1789428428068,
+    "kind": "tool",
+    "text": "Bash ✓ 32"
+  },
+  {
+    "at_ms": 1789428473068,
+    "kind": "tool",
+    "text": "Bash git push lorem_ lore 2>&1 ▶"
+  },
+  {
+    "at_ms": 1789428476823,
+    "kind": "tool",
+    "text": "Bash ✓ 16"
+  },
+  {
+    "at_ms": 1789428521823,
+    "kind": "tool",
+    "text": "Bash git commit -m \"$(cat lorem_i lorem lore lor lorem_i lorem_ip lorem_i lorem_i in lor install lore lor lor lorem_i lo lorem_i lorem_ lor release lo lor workflow lore lorem_i lor lorem_ipsum_d lorem_ in… ▶"
+  },
+  {
+    "at_ms": 1789428525471,
+    "kind": "tool",
+    "text": "Bash ✓ 49"
+  },
+  {
+    "at_ms": 1789428570471,
+    "kind": "note",
+    "text": "/clear · continued in a new session"
+  },
+  {
+    "at_ms": 1789428570471,
+    "kind": "api",
+    "text": "cost-state $18.75 · api 22:14 · retries 0:00"
+  }
+]

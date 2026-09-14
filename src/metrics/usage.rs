@@ -160,6 +160,15 @@ pub struct Turn {
     pub hook_blocked: bool,
     /// `file-history-snapshot` lines in this turn: rewind points.
     pub checkpoints: usize,
+    /// Timestamp of the model's last text block (prose) in this turn.
+    pub last_text_at: Option<String>,
+    /// Tool calls issued since the model last wrote prose (the silent run).
+    pub calls_since_text: usize,
+    /// `silent_turn_reminder` attachments the harness injected this turn.
+    pub silent_reminders: usize,
+    /// The person's last input in this turn: the prompt, or an answer to
+    /// `AskUserQuestion` / `ExitPlanMode`.
+    pub last_human_input_at: Option<String>,
 }
 
 impl Turn {
@@ -410,6 +419,7 @@ impl Aggregate {
                         prompt_source: u.prompt_source.clone(),
                         started_at: u.timestamp.clone(),
                         last_at: u.timestamp.clone(),
+                        last_human_input_at: u.timestamp.clone(),
                         prompt_chars: u.message.content.text().chars().count(),
                         prompt_images: u.message.content.images(),
                         ..Default::default()
@@ -430,6 +440,12 @@ impl Aggregate {
                             }
                             if u.tool_denial_kind.is_some() {
                                 t.denials += 1;
+                            }
+                            if matches!(
+                                u.tool_use_detail(),
+                                Some(crate::transcript::ToolUseDetail::AskUserQuestion(_))
+                            ) {
+                                t.last_human_input_at = u.timestamp.clone();
                             }
                             t.last_at = u.timestamp.clone().or(t.last_at.take());
                         }
@@ -487,6 +503,11 @@ impl Aggregate {
                         ..
                     } => {
                         *self.hook_ms_by_command.entry(command).or_default() += duration_ms;
+                    }
+                    AttachmentKind::SilentTurnReminder => {
+                        if let Some(t) = self.turns.last_mut() {
+                            t.silent_reminders += 1;
+                        }
                     }
                     _ => {}
                 }
@@ -657,17 +678,21 @@ impl Aggregate {
             self.last_ts = Some((ts, LastKind::Assistant));
         }
         let t = self.turns.last_mut().expect("turn exists");
-        t.tool_calls += a
+        let uses = a
             .message
             .content
             .iter()
             .filter(|b| matches!(b, crate::transcript::AssistantBlock::ToolUse { .. }))
             .count();
+        t.tool_calls += uses;
+        t.calls_since_text += uses;
         t.last_at = a.timestamp.clone().or(t.last_at.take());
         let prose = a.text_chars();
         if prose > 0 {
             t.ended_with_question = a.ends_with_question();
             t.prose_chars += prose;
+            t.last_text_at = a.timestamp.clone();
+            t.calls_since_text = 0;
         }
         if !self.seen_ids.insert(a.message.id.clone()) {
             return; // another block of a response already counted

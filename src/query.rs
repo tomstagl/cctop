@@ -356,6 +356,34 @@ pub fn advice(state: &State) -> Value {
     advice_of(&engine)
 }
 
+/// `cctop query coach`: the coach object (state line, four lights, the
+/// nudge, next, snoozed, recent), every line cut at 52 cells. `snooze`
+/// applies (or queues, while the dashboard runs) a snooze first.
+pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
+    let mut engine = advisor::Engine::for_state(state);
+    let mut message = None;
+    if let Some((rule, session_wide)) = snooze {
+        message = Some(match engine.rule_id(rule) {
+            Some(id) => {
+                engine.snooze_request(id, session_wide, state.agg.human_turns(), state.clock_ms())
+            }
+            None => format!("{rule}: no such rule"),
+        });
+        engine.evaluate(state);
+    }
+    let mut v = serde_json::to_value(crate::coach::snapshot(state, &engine)).unwrap_or(Value::Null);
+    if let Some(m) = message {
+        v["snooze"] = json!(m);
+    }
+    v
+}
+
+/// `cctop query coach --line`: the one-line form at `columns`.
+pub fn coach_line(state: &State, columns: usize) -> String {
+    let engine = advisor::Engine::for_state(state);
+    crate::coach::snapshot(state, &engine).line(columns)
+}
+
 pub fn advice_of(engine: &advisor::Engine) -> Value {
     let items: Vec<Value> = engine.current.iter().map(advice_item).collect();
     let primary = engine.occupant.as_ref().map(|o| {

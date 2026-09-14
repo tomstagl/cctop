@@ -242,6 +242,9 @@ impl App {
         if std::mem::take(&mut self.state.advice_acting) {
             self.advisor.acting();
         }
+        for toast in self.advisor.poll_requests(turn, now) {
+            self.state.set_toast(toast);
+        }
         self.advisor.evaluate(&self.state);
         for ev in self.advisor.drain_events() {
             self.state.events.push(crate::events::Event {

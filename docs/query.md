@@ -43,6 +43,7 @@ An optional source that is not on disk is reported, never guessed:
 | `files` | Per touched file: path, reads, edits, writes, touches, lines_added/removed (or missing outside git), reread_warning |
 | `agents` | `agents[]` (id, type, description, model, state, elapsed, tokens), `mcp[]` (name, pid, rss, restarts, calls) or missing for fixtures, `tasks[]` |
 | `advice` | Schema 2: `schema`, `session_mode` (interactive / loop / machine / team / workflow / remote), `primary` (the coach's slot occupant, with `acting`), `next` (the queued nudge and what promotes it), `items[]` (occupant first, then the ranked queue: rule, family, class NOW/NEXT/LATER, headline, evidence, action, action_text, action_kind, saving, since_turn, window_turns, retires_on, doc_key, explain), `snoozed[]` (rule, until_turn or null for the session), `suppressed[]` (rule, why), `recent[]` (retired nudges). Snoozes persist in `~/.cctop/<session>.advisor.json`, so the TUI, the pane and this query agree |
+| `coach [--line] [--columns N] [--snooze RULE] [--snooze-session RULE]` | The coach object ("Lights"): `state` (kind, line, tokens), `lights[4]` (id, level quiet/watch/act, glyph, number, figure, unit, text, source, approx, lines[3]), `agents`, `nudge` (id, family, class, line1, line2, evidence, action_text, action_kind, since_turn, retires_on, acting, queued, saving, explain), `next` (id, class, headline, promotes, row), `snoozed[]`, `recent[]`, `suppressed[]`, `session_mode`, `nudges_this_hour`. Every line is cut at 52 cells so the TUI, the pane and this output show the same text. `--line` prints the one-line form (L0 at ≥ 80 columns, L1 at ≥ 40, L2 below); `--snooze` applies a five-turn snooze first (queued for the dashboard while it runs), `--snooze-session` one for the session. `--lines N` (global) reads only the first N transcript lines of a fixture; `CCTOP_FAKE_NOW` (epoch ms) moves the clock |
 | `prefix` | `total` and `rows[]` (kind, name, bytes, tokens, count) of what rides on every request |
 | `events [--since 10m]` | `[{at_ms, kind, text}]`; `--since` accepts `90s`, `10m`, `2h`, `1d` |
 | `explain <metric_id>` | id, panel, name, unit, formula, sources, caveats, estimate_when — no session needed |
@@ -61,6 +62,9 @@ $ cctop query ledger --last 3 | jq '.[] | [.turn, .api_calls.value, .cost.value]
 
 $ cctop query advice | jq '.primary | {class, rule, headline, saving}'
 {"class":"NEXT","rule":"A25","headline":"EXPLORING ×8 · +31k ctx this run","saving":"~31k/turn"}
+
+$ cctop query coach --line
+○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…
 
 $ cctop query explain cache_hit_ratio | jq .formula
 "cache_read / (cache_read + cache_write + fresh_input)"

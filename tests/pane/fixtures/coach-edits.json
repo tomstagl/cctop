@@ -1,0 +1,91 @@
+{
+  "agents": null,
+  "lights": [
+    {
+      "approx": true,
+      "figure": 23.0,
+      "glyph": "◐",
+      "id": "context",
+      "level": "watch",
+      "lines": [
+        "next 20c ≈$2.6 · fresh ≈$1.3",
+        "threshold 967k · 739k left · prefix 49k (22 %)"
+      ],
+      "number": "227k",
+      "source": "transcript",
+      "text": "227k ▇▇▁▁▁▁▁▁▁▁ 23% · ≈$.13/call",
+      "unit": "%"
+    },
+    {
+      "approx": true,
+      "figure": 59.0,
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "lines": [
+        "hit ratio 97 % · misses 0",
+        "TTL 1h (observed)",
+        "re-write if cold 227k ≈$1.4"
+      ],
+      "number": "59m",
+      "source": "transcript",
+      "text": "warm 59m (1h) ≈",
+      "unit": "m"
+    },
+    {
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "approx": false,
+      "figure": 2.0,
+      "glyph": "○",
+      "id": "rework",
+      "level": "quiet",
+      "lines": [
+        "last check `npm run lorem_ips 2>&1 …` ok 2m ago",
+        "fails: Other 1",
+        "rewind 1 checkpoints this turn"
+      ],
+      "number": "2",
+      "source": "transcript",
+      "text": "edits 2 ✓ none 1m",
+      "unit": ""
+    }
+  ],
+  "model": "claude-opus-5",
+  "next": null,
+  "nudge": null,
+  "nudges_this_hour": 0,
+  "queued": 0,
+  "recent": [],
+  "schema": 1,
+  "session": "session-b",
+  "session_mode": "team",
+  "snoozed": [],
+  "state": {
+    "kind": "IMPLEMENTING",
+    "line": "IMPLEMENTING · 30c +8.4k · silent 7m",
+    "tokens": [
+      "30c +8.4k",
+      "silent 7m"
+    ]
+  },
+  "suppressed": [
+    [
+      "A17",
+      "first two turns"
+    ]
+  ],
+  "turn": 2
+}

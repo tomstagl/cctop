@@ -20,6 +20,7 @@ pub fn tools() -> Vec<Value> {
         json!({"name":"cctop_ledger","description":"One row per turn: duration, API calls, cache read/write, fresh input, output, thinking, cost, tools, compaction, effort, model.","inputSchema":obj(json!({"session":session,"last":{"type":"integer","description":"Only the last N turns"}}), vec![])}),
         json!({"name":"cctop_tools","description":"Per-tool statistics (calls, errors, p50/p95, tokens pushed into context) and the five largest single results.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_advice","description":"The coach's nudge (primary: class, headline, action_text, evidence, saving, explanation), the ranked queue, snoozed rules, session mode.","inputSchema":obj(json!({"session":session}), vec![])}),
+        json!({"name":"cctop_coach","description":"The coach: state line, four lights (context, cache, limits, rework), the nudge to act on now, what is next or snoozed.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_prefix","description":"What rides on every request: CLAUDE.md files, tool schemas per MCP server, skills listing, memory index, reconciled against the first call.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_events","description":"Recent events (tool start/end, hooks, permissions, compactions, alerts). `since` like 10m, 2h.","inputSchema":obj(json!({"session":session,"since":{"type":"string"}}), vec![])}),
         json!({"name":"cctop_explain_metric","description":"Definition, formula, sources and caveats of a metric id from docs/metrics.md.","inputSchema":obj(json!({"metric_id":{"type":"string"}}), vec!["metric_id"])}),
@@ -47,6 +48,7 @@ fn state_for(args: &Value) -> Result<crate::ui::State, String> {
             .or_else(parent_session),
         cwd: None,
         wait: false,
+        lines: None,
     };
     let mut state = crate::load::state(&t).map_err(|e| e.to_string())?;
     let engine = crate::advisor::Engine::for_state(&state);
@@ -76,6 +78,7 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
         }
         "cctop_tools" => Ok(query::tools(&state_for(args)?)),
         "cctop_advice" => Ok(query::advice(&state_for(args)?)),
+        "cctop_coach" => Ok(query::coach(&state_for(args)?, None)),
         "cctop_prefix" => Ok(query::prefix(&state_for(args)?)),
         "cctop_events" => {
             let since = match args.get("since").and_then(Value::as_str) {
@@ -175,9 +178,9 @@ mod tests {
             );
             assert!(t["inputSchema"]["type"] == "object");
         }
-        assert_eq!(tools().len(), 7);
+        assert_eq!(tools().len(), 8);
         let tokens = schema_tokens();
-        assert!(tokens < 600, "schemas ≈ {tokens} tokens");
+        assert!(tokens < 700, "schemas ≈ {tokens} tokens");
     }
 
     #[test]
@@ -212,7 +215,7 @@ mod tests {
         );
         assert_eq!(lines[0]["result"]["serverInfo"]["name"], "cctop");
         assert_eq!(lines[0]["result"]["protocolVersion"], PROTOCOL_VERSION);
-        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 7);
+        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 8);
         let summary: Value =
             serde_json::from_str(lines[2]["result"]["content"][0]["text"].as_str().unwrap())
                 .unwrap();

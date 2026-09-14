@@ -342,6 +342,9 @@ pub struct State {
     pub hidden: Vec<PanelId>,
     /// Wall clock for the frame being rendered (epoch ms).
     pub now_ms: i64,
+    /// `now_ms` is the clock even for a dead session (`CCTOP_FAKE_NOW`):
+    /// renders of a fixture at a chosen moment.
+    pub clock_override: bool,
     /// Footer replacement: message and the epoch ms it expires.
     pub toast: Option<(String, i64)>,
     /// Updates are buffered, not applied.
@@ -1097,7 +1100,7 @@ impl State {
 
     /// "Now" for elapsed-time arithmetic: frozen at the end for dead sessions.
     pub fn clock_ms(&self) -> i64 {
-        if self.session.alive {
+        if self.session.alive || self.clock_override {
             self.now_ms
         } else {
             self.session.ended_at_ms.unwrap_or(self.now_ms)
@@ -1416,8 +1419,14 @@ impl State {
     /// The cost gradient at the current context, priced cold when the cache
     /// is (or the shim says the next call re-writes).
     pub fn gradient(&self) -> Option<crate::metrics::cost::Gradient> {
-        let model = self.model()?;
         let cold = self.cache_warm().is_some_and(|(warm, _)| !warm);
+        self.gradient_priced(cold)
+    }
+
+    /// The gradient at the warm (or the cold) price, whatever the cache
+    /// state is now.
+    pub fn gradient_priced(&self, cold: bool) -> Option<crate::metrics::cost::Gradient> {
+        let model = self.model()?;
         let ttl = match self.cache_ttl_ms() {
             3_600_000 => crate::transcript::CacheTtl::OneHour,
             _ => crate::transcript::CacheTtl::FiveMinutes,

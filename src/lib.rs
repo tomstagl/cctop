@@ -10,6 +10,7 @@ pub mod ask;
 pub mod attach;
 pub mod baseline;
 pub mod claude_home;
+pub mod coach;
 pub mod config;
 pub mod discover;
 pub mod events;

@@ -18,6 +18,7 @@ All commands accept `--session <id|name|pid>` (default: the session you are in, 
 | Tool usage, slow/noisy tools, context pushed by results | `cctop query tools` |
 | Files touched, re-reads | `cctop query files` |
 | Subagents, MCP servers, background tasks | `cctop query agents` |
+| What should I do now / next (the coach: four lights, the one nudge, what is next or snoozed) | `cctop query coach` |
 | Current ranked recommendations with evidence and explanation | `cctop query advice` |
 | What is in the fixed prefix (CLAUDE.md, tool schemas, MCP) | `cctop query prefix` |
 | Recent events (tools, hooks, permissions, compactions) | `cctop query events --since 10m` |

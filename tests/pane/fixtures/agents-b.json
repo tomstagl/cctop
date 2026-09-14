@@ -1,0 +1,19 @@
+{
+  "agents": [],
+  "depth": 0,
+  "mcp": {
+    "hint": "no live process (fixture)",
+    "source": "missing"
+  },
+  "mcp_failed": [],
+  "mcp_needs_auth": [],
+  "tasks": [],
+  "teammates": [
+    {
+      "name": "team-lead",
+      "type": "team-lead"
+    }
+  ],
+  "tool_search_loads": {},
+  "workflows": []
+}

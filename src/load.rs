@@ -14,6 +14,8 @@ pub struct Target {
     pub session: Option<String>,
     pub cwd: Option<PathBuf>,
     pub wait: bool,
+    /// Feed only the first N transcript lines: a point in time.
+    pub lines: Option<usize>,
 }
 
 /// A `--session` value naming an existing `.jsonl` (or a stem with one next
@@ -96,14 +98,30 @@ pub fn archived_transcript(projects: &Path, key: &str) -> Option<PathBuf> {
 /// sample and hook spool.
 pub fn state(t: &Target) -> Result<State, DiscoverError> {
     let (transcript, info) = resolve(t)?;
-    Ok(state_from(&transcript, info))
+    Ok(state_from_prefix(
+        &transcript,
+        info,
+        t.lines.unwrap_or(usize::MAX),
+    ))
 }
 
 pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
+    state_from_prefix(transcript, info, usize::MAX)
+}
+
+/// Like [`state_from`] but only the first `n` lines — a point in time.
+/// `CCTOP_FAKE_NOW` (epoch ms) moves the clock of a dead session past its
+/// last line, for renders of an idle moment.
+pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> State {
     let mut state = State::new(crate::metrics::Pricing::load());
     state.session = info;
     state.now_ms = crate::app::now_ms();
-    for line in crate::transcript::parse_file(transcript).unwrap_or_default() {
+    state.clock_override = std::env::var_os("CCTOP_FAKE_NOW").is_some();
+    for line in crate::transcript::parse_file(transcript)
+        .unwrap_or_default()
+        .into_iter()
+        .take(n)
+    {
         state.apply(&line);
     }
     state.agents = crate::agents::load(&transcript.with_extension(""));
@@ -135,12 +153,16 @@ pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
     for ev in hooks.poll() {
         state.apply_hook(&ev);
     }
-    if let Some(projects) = crate::baseline::default_projects_dir() {
-        state.baseline = Some(crate::baseline::load_or_compute(
-            &crate::status::cctop_dir(),
-            &projects,
-            state.now_ms,
-        ));
+    // Your last-7-days medians are an account fact too: never beside a
+    // fixture file, so its query output is the same on every machine.
+    if state.session.pid.is_some() {
+        if let Some(projects) = crate::baseline::default_projects_dir() {
+            state.baseline = Some(crate::baseline::load_or_compute(
+                &crate::status::cctop_dir(),
+                &projects,
+                state.now_ms,
+            ));
+        }
     }
     state
 }

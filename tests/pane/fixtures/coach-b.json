@@ -1,0 +1,110 @@
+{
+  "agents": null,
+  "lights": [
+    {
+      "approx": true,
+      "figure": 14.0,
+      "glyph": "○",
+      "id": "context",
+      "level": "quiet",
+      "lines": [
+        "next 15c ≈$.50 · fresh ≈$.38",
+        "threshold 567k · 425k left · prefix 49k (35 %)"
+      ],
+      "number": "142k",
+      "source": "transcript",
+      "text": "142k ▇▁▁▁▁▁▁▁▁▁ 14% · ≈$.03/call",
+      "unit": "%"
+    },
+    {
+      "approx": true,
+      "figure": 59.0,
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "lines": [
+        "hit ratio 99 % · misses 0",
+        "TTL 1h (observed)",
+        "re-write if cold 142k ≈$.36"
+      ],
+      "number": "59m",
+      "source": "transcript",
+      "text": "warm 59m (1h) ≈",
+      "unit": "m"
+    },
+    {
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "approx": false,
+      "figure": 1.0,
+      "glyph": "●",
+      "id": "rework",
+      "level": "act",
+      "lines": [
+        "last check `python3 - lorem_i lorem…` ok 9h01 ago",
+        "fails: Denied 4 · Other 2",
+        "rewind 0 checkpoints this turn"
+      ],
+      "number": "1",
+      "source": "transcript",
+      "text": "1 correction · edits 3 ✓ none 9h00 · commit 0s unchecked",
+      "unit": ""
+    }
+  ],
+  "model": "claude-sonnet-5",
+  "next": {
+    "class": "LATER",
+    "family": "long-foreground",
+    "headline": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+    "id": "A10",
+    "promotes": "when the slot frees",
+    "row": "next     long-foreground → when the slot frees · `c…"
+  },
+  "nudge": {
+    "acting": false,
+    "action_kind": "setting",
+    "action_text": "",
+    "class": "LATER",
+    "evidence": "  LATER · since turn 6 · +1 queued (n)",
+    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project.",
+    "family": "prefix-tip",
+    "fired_at_ms": 1789428525471,
+    "id": "A17",
+    "line1": "▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls",
+    "line2": "  trim CLAUDE.md, move rarely-used rules to skills,…",
+    "queued": 1,
+    "retires_on": "3 turns",
+    "saving": "~147k/turn",
+    "since_turn": 6
+  },
+  "nudges_this_hour": 1,
+  "queued": 1,
+  "recent": [],
+  "schema": 1,
+  "session": "session-b",
+  "session_mode": "team",
+  "snoozed": [],
+  "state": {
+    "kind": "COMMITTING",
+    "line": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",
+    "tokens": [
+      "4c +180",
+      "silent 3:09",
+      "▸ steer window"
+    ]
+  },
+  "suppressed": [],
+  "turn": 6
+}

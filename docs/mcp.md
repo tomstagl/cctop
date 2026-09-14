@@ -10,6 +10,7 @@ counterpart prints, so `docs/query.md` describes the shapes.
 | `cctop_ledger` (`last`) | `cctop query ledger --last N` |
 | `cctop_tools` | `cctop query tools` |
 | `cctop_advice` | `cctop query advice` |
+| `cctop_coach` | `cctop query coach` |
 | `cctop_prefix` | `cctop query prefix` |
 | `cctop_events` (`since`) | `cctop query events --since` |
 | `cctop_explain_metric` (`metric_id`) | `cctop query explain <id>` |

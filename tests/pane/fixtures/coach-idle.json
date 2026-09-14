@@ -1,0 +1,109 @@
+{
+  "agents": null,
+  "lights": [
+    {
+      "approx": true,
+      "figure": 33.0,
+      "glyph": "●",
+      "id": "context",
+      "level": "act",
+      "lines": [
+        "next 35c ≈$6.3 · fresh ≈$2.2",
+        "threshold 967k · 633k left · prefix 49k (15 %)"
+      ],
+      "number": "333k",
+      "source": "transcript",
+      "text": "333k ▇▇▇▁▁▁▁▁▁▁ 33% · ≈$.18/call",
+      "unit": "%"
+    },
+    {
+      "approx": true,
+      "figure": 55.0,
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "lines": [
+        "hit ratio 99 % · misses 0",
+        "TTL 1h (observed)",
+        "re-write if cold 333k ≈$2.1"
+      ],
+      "number": "55m",
+      "source": "transcript",
+      "text": "warm 55m (1h) ≈",
+      "unit": "m"
+    },
+    {
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "approx": false,
+      "figure": 1.0,
+      "glyph": "○",
+      "id": "rework",
+      "level": "quiet",
+      "lines": [
+        "last check `python3 - lorem_i lorem…` ok 8m ago",
+        "fails: Other 2",
+        "rewind 0 checkpoints this turn"
+      ],
+      "number": "1",
+      "source": "transcript",
+      "text": "edits 1 ✓ none 7m",
+      "unit": ""
+    }
+  ],
+  "model": "claude-opus-5",
+  "next": {
+    "class": "LATER",
+    "family": "reread",
+    "headline": "lorem_ipsum_.rs was read 3× with no edit in between",
+    "id": "A04",
+    "promotes": "when the slot frees",
+    "row": "next     reread → when the slot frees · lorem_ipsum…"
+  },
+  "nudge": {
+    "acting": false,
+    "action_kind": "setting",
+    "action_text": "",
+    "class": "LATER",
+    "evidence": "  LATER · since turn 4 · +1 queued (n)",
+    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project.",
+    "family": "prefix-tip",
+    "fired_at_ms": 1789396553739,
+    "id": "A17",
+    "line1": "▸ Fixed prefix 49k tokens ≈$0.86/turn at 35 calls",
+    "line2": "  trim CLAUDE.md, move rarely-used rules to skills,…",
+    "queued": 1,
+    "retires_on": "3 turns",
+    "saving": "~344k/turn",
+    "since_turn": 4
+  },
+  "nudges_this_hour": 1,
+  "queued": 1,
+  "recent": [],
+  "schema": 1,
+  "session": "session-b",
+  "session_mode": "team",
+  "snoozed": [],
+  "state": {
+    "kind": "IDLE",
+    "line": "IDLE 4m · python3 - lor… ok 8m ago",
+    "tokens": [
+      "4m",
+      "python3 - lor… ok 8m ago"
+    ]
+  },
+  "suppressed": [],
+  "turn": 4
+}

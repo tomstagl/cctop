@@ -1,0 +1,435 @@
+{
+  "bash_by_class": [
+    {
+      "calls": 39,
+      "class": "explore",
+      "errors": 3
+    },
+    {
+      "calls": 8,
+      "class": "commit",
+      "errors": 0
+    },
+    {
+      "calls": 8,
+      "class": "test",
+      "errors": 0
+    },
+    {
+      "calls": 6,
+      "class": "implement",
+      "errors": 2
+    },
+    {
+      "calls": 6,
+      "class": "wait",
+      "errors": 0
+    },
+    {
+      "calls": 5,
+      "class": "gitread",
+      "errors": 1
+    },
+    {
+      "calls": 4,
+      "class": "build-lint",
+      "errors": 0
+    },
+    {
+      "calls": 2,
+      "class": "ops",
+      "errors": 0
+    }
+  ],
+  "errors_by_class": [
+    {
+      "class": "Denied",
+      "count": 4
+    },
+    {
+      "class": "Other",
+      "count": 2
+    }
+  ],
+  "input_to_ctx": [
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 221
+      },
+      "tool": "AskUserQuestion"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 8949
+      },
+      "tool": "Bash"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 7492
+      },
+      "tool": "Edit"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 240
+      },
+      "tool": "Read"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 11
+      },
+      "tool": "TaskUpdate"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 508
+      },
+      "tool": "Write"
+    }
+  ],
+  "tool_search_loads": {},
+  "tools": [
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 78
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 6
+      },
+      "last_call_at_ms": 1789428521823,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 1642
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 17434
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 16263
+      },
+      "tool": "Bash"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 30
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789396074576,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 77
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 346
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 13601
+      },
+      "tool": "Read"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 29
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789396078315,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 93
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 142
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 1050
+      },
+      "tool": "Edit"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789397387982,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 30948370
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 30948370
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 83
+      },
+      "tool": "AskUserQuestion"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789397202074,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 72
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 72
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 5
+      },
+      "tool": "TaskUpdate"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789394739430,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 109
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 109
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 52
+      },
+      "tool": "Write"
+    }
+  ],
+  "top_ctx": [
+    {
+      "input": "/home/user/project/src/f58ab3…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 112,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.0112
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Read",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "/home/user/project/src/d93e76…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 112,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.0112
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Read",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "/home/user/project/src/76f7db…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 112,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.0112
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Read",
+      "truncated": true,
+      "turn": 1
+    },
+    {
+      "input": "/home/user/project/src/76f7db…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 110,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.011
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Read",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "ls lorem_ipsum_dolor_sit_amet_consec && for l in lorem_ipsum_dolor_sit_amet_consectetur_ad do echo lor $lor python3 -c l lorem_ lore lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_c lo lorem_ipsu…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 108,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.0108
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Bash",
+      "truncated": false,
+      "turn": 1
+    }
+  ]
+}
