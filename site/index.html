@@ -67,6 +67,8 @@ header.top nav a:hover,header.top nav a:focus-visible{color:var(--accent);text-d
 .panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px}
 .pnl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
 .pnl h3{font-family:var(--mono);font-weight:500;font-size:13px;margin:0 0 6px;color:var(--accent)}
+.pnl h3 a{color:inherit;text-decoration:none}
+.pnl h3 a:hover,.pnl h3 a:focus-visible{text-decoration:underline}
 .pnl p{font-size:14px;color:var(--muted);margin:0}
 .advice{display:grid;gap:10px;margin-top:16px}
 .adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px}
@@ -103,6 +105,7 @@ footer a{color:var(--muted)}
     <a href="#panels">Panels</a>
     <a href="#advisor">Advisor</a>
     <a href="#install">Install</a>
+    <a href="guide/">Guide</a>
     <a href="metrics.html">Metrics</a>
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>
@@ -211,15 +214,16 @@ footer a{color:var(--muted)}
 
 <section id="panels">
   <h2>What each panel answers</h2>
-  <div class="panels"><div class="pnl"><h3>1 Context</h3><p>How full is the window, how fast is it filling, how many turns until autocompact</p></div>
-<div class="pnl"><h3>2 Tokens &amp; Cost</h3><p>Cache read / write / fresh / output / thinking, cache-hit ratio, $ and burn rate</p></div>
-<div class="pnl"><h3>3 Limits</h3><p>5 h and 7 d usage, reset countdown, will I run out before the reset</p></div>
-<div class="pnl"><h3>4 Turn</h3><p>What the turn is doing right now, API vs tool time, hook overhead, permission waits</p></div>
-<div class="pnl"><h3>5 Tools</h3><p>Calls, errors, p50/p95, and tokens each tool pushed into context</p></div>
-<div class="pnl"><h3>6 Agents &amp; MCP</h3><p>Subagents, MCP server processes, background tasks</p></div>
-<div class="pnl"><h3>7 Files</h3><p>Blast radius and wasted re-reads</p></div>
-<div class="pnl"><h3>8 Events</h3><p>Tool / hook / permission / compaction / note stream</p></div>
-<div class="pnl"><h3>9 Advisor</h3><p>One evidence-backed recommendation at a time, ranked by tokens saved</p></div></div>
+  <p>Click a panel for what each of its metrics means, why it matters, and what to do about it — or read the <a href="guide/">full guide</a>.</p>
+  <div class="panels"><div class="pnl"><h3><a href="guide/context.html">1 Context</a></h3><p>How full is the window, how fast is it filling, how many turns until autocompact</p></div>
+<div class="pnl"><h3><a href="guide/tokens-cost.html">2 Tokens &amp; Cost</a></h3><p>Cache read / write / fresh / output / thinking, cache-hit ratio, $ and burn rate</p></div>
+<div class="pnl"><h3><a href="guide/limits.html">3 Limits</a></h3><p>5 h and 7 d usage, reset countdown, will I run out before the reset</p></div>
+<div class="pnl"><h3><a href="guide/turn.html">4 Turn</a></h3><p>What the turn is doing right now, API vs tool time, hook overhead, permission waits</p></div>
+<div class="pnl"><h3><a href="guide/tools.html">5 Tools</a></h3><p>Calls, errors, p50/p95, and tokens each tool pushed into context</p></div>
+<div class="pnl"><h3><a href="guide/agents-mcp.html">6 Agents &amp; MCP</a></h3><p>Subagents, MCP server processes, background tasks</p></div>
+<div class="pnl"><h3><a href="guide/files.html">7 Files</a></h3><p>Blast radius and wasted re-reads</p></div>
+<div class="pnl"><h3><a href="guide/events.html">8 Events</a></h3><p>Tool / hook / permission / compaction / note stream</p></div>
+<div class="pnl"><h3><a href="guide/advisor.html">9 Advisor</a></h3><p>One evidence-backed recommendation at a time, ranked by tokens saved</p></div></div>
 </section>
 
 <section id="advisor">
@@ -265,6 +269,7 @@ claude plugin install cctop               # adds /cctop and cctop-insights
 <footer>
   <a href="https://github.com/tomstagl/cctop">GitHub</a>
   <a href="https://github.com/tomstagl/cctop/releases">Releases</a>
+  <a href="guide/">Guide: what to do about it</a>
   <a href="metrics.html">Every metric, explained</a>
   <a href="https://github.com/tomstagl/cctop/blob/main/LICENSE">MIT</a>
   <span>© 2026 Thomas Stagl</span>

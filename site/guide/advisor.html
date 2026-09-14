@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advisor — cctop guide</title>
+<meta name="description" content="All 18 Advisor rules: what triggers each one and what to do about it.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="../assets/favicon.ico">
+<style>
+/* IBM Plex, SIL OFL 1.1 — latin subsets as served by Google Fonts, self-hosted so they can be preloaded. */
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:optional;src:url(assets/fonts/ibm-plex-mono-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:optional;src:url(assets/fonts/ibm-plex-mono-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:optional;src:url(assets/fonts/ibm-plex-mono-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400 600;font-display:optional;src:url(assets/fonts/ibm-plex-sans-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans Condensed';font-style:normal;font-weight:700;font-display:optional;src:url(assets/fonts/ibm-plex-sans-condensed-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+:root{
+  --bg:#F1F3F6;--panel:#FFFFFF;--ink:#1A212C;--muted:#5A6577;--line:#D5DAE2;--line-soft:#E6E9EF;
+  --accent:#177F86;--accent-soft:#DCEFF0;--ok:#2F8F58;--warn:#C7911E;--crit:#C9403F;
+  --term-bg:#0E1318;--term-fg:#D6DEE8;--term-dim:#8593A6;--term-acc:#4CC2C2;--term-ok:#5FC77E;--term-warn:#E2B04A;--term-crit:#E5605E;--term-border:#2A3644;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;--cond:"IBM Plex Sans Condensed",var(--sans);--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0F1419;--panel:#161C24;--ink:#E3E8EF;--muted:#8B95A7;--line:#2A3441;--line-soft:#1F2833;--accent:#4CC2C2;--accent-soft:#12303A;--ok:#5FC77E;--warn:#E2B04A;--crit:#E5605E}}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-block:0 64px;padding-inline:clamp(16px,4vw,40px)}
+.wrap{max-width:960px;margin:0 auto}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.9em;background:var(--line-soft);padding:1px 5px;border-radius:3px}
+h1,h2,h3{font-family:var(--cond);letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:clamp(34px,5vw,52px);line-height:1.05;margin:0 0 12px}
+h2{font-size:26px;margin:0 0 12px}
+h3{font-size:18px;margin:20px 0 6px}
+p{max-width:68ch;margin:0 0 12px}
+section{padding-block:40px 0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:20px;border-bottom:1px solid var(--line)}
+header.top img{height:36px;width:90px}
+header.top nav{display:flex;gap:18px;font-family:var(--mono);font-size:13px}
+header.top nav a{color:var(--muted);text-decoration:none}
+header.top nav a:hover,header.top nav a:focus-visible{color:var(--accent);text-decoration:underline}
+.hero{padding-block:56px 24px}
+.hero .lede{font-size:20px;max-width:60ch}
+.install{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0 8px}
+.install code{font-size:15px;background:var(--term-bg);color:var(--term-fg);padding:12px 16px;border-radius:6px;border:1px solid var(--term-border);white-space:nowrap;overflow-x:auto;max-width:100%}
+.install button{font:inherit;font-family:var(--mono);font-size:13px;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.install button:hover,.install button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+.install button[hidden]{display:none}
+.subline{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.term{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.32;box-shadow:0 12px 40px -18px rgba(0,0,0,.5)}
+.term pre{margin:0;font:inherit;white-space:pre}
+.term .b{color:var(--term-dim)}.term .t{color:var(--term-acc);font-weight:600}.term .g{color:var(--term-ok)}.term .w{color:var(--term-warn)}.term .r{color:var(--term-crit)}.term .d{color:var(--term-dim)}.term .a{color:var(--term-acc)}
+.demo{margin:20px 0 8px}
+.demo video,.demo img{display:block;width:100%;max-width:100%;border-radius:8px;border:1px solid var(--term-border)}
+.cap{font-family:var(--mono);font-size:12px;color:var(--muted);margin:6px 0 0}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px}
+.pnl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
+.pnl h3{font-family:var(--mono);font-weight:500;font-size:13px;margin:0 0 6px;color:var(--accent)}
+.pnl h3 a{color:inherit;text-decoration:none}
+.pnl h3 a:hover,.pnl h3 a:focus-visible{text-decoration:underline}
+.pnl p{font-size:14px;color:var(--muted);margin:0}
+.advice{display:grid;gap:10px;margin-top:16px}
+.adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px}
+.adv .h{color:var(--term-warn)}.adv .a{color:var(--term-acc)}.adv .s{color:var(--term-dim)}
+.hosts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.hosts span{font-family:var(--mono);font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.themes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.theme{border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;border:1px solid var(--line)}
+.theme i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel);margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tr:last-child td{border-bottom:0}
+pre.block{background:var(--term-bg);color:var(--term-fg);padding:14px 16px;border-radius:6px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5;border:1px solid var(--term-border)}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+footer a{color:var(--muted)}
+@media (max-width:520px){header.top nav{display:none}.hero{padding-block:32px 16px}}
+@media (prefers-reduced-motion:reduce){.demo video{display:none}.demo img.still{display:block}}
+@media (prefers-reduced-motion:no-preference){.demo img.still{display:none}}
+.why{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;margin:6px 0 18px}
+.why b{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:4px}
+.why.do b{color:var(--ok)}
+.metric{margin-top:28px;padding-top:4px;border-top:1px solid var(--line-soft)}
+.metric:first-of-type{border-top:0}
+.metric h3{margin-bottom:2px}
+.metric .unit{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 10px}
+.rules{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:2px 0 0}
+.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:20px}
+.guide-grid a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;text-decoration:none;color:var(--ink)}
+.guide-grid a:hover,.guide-grid a:focus-visible{border-color:var(--accent)}
+.guide-grid h3{margin:0 0 6px;color:var(--accent);font-family:var(--mono);font-size:14px;font-weight:500}
+.guide-grid p{margin:0;color:var(--muted);font-size:14px}
+.rule{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px;margin-bottom:10px;scroll-margin-top:16px}
+.rule .h{color:var(--term-warn)}
+.rule .a{color:var(--term-acc)}
+.rule .t{color:var(--term-dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a href="../" aria-label="cctop home">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="../assets/cctop-lockup-horizontal-dark.svg">
+      <img src="../assets/cctop-lockup-horizontal-light.svg" alt="cctop" width="90" height="36">
+    </picture>
+  </a>
+  <nav>
+    <a href="./">Guide</a>
+    <a href="../metrics.html">Metrics</a>
+    <a href="../#panels">Panels</a>
+    <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  </nav>
+</header>
+<main class="metrics">
+<h1>9 Advisor</h1>
+<p>Eighteen deterministic rules over the same data the other eight panels show — no model call, no network. Each rule fires on a concrete threshold, names the evidence it found, and estimates what following it saves for the rest of the session. The Advisor panel surfaces one recommendation at a time, ranked by that estimate; every rule below can also fire silently and show up cross-referenced from the panel page where its trigger lives.</p>
+<p>Ask a running session about any of them directly — the bundled <code>cctop-insights</code> skill answers from <code>cctop query</code> — or run <code>cctop advise</code> for the current recommendations.</p>
+<div class="rule" id="A01"><span class="t">A01</span> — <span class="h">Cache misses</span><br><span class="t">Fires when:</span> cache-hit ratio &lt; 60 % over 5 turns with cache writes that are not explained by large tool output.<br><span class="a">Prompt caching only works on an unchanged prefix. If any byte before the last cache breakpoint differs between requests, the whole prefix is re-written at the cache-write price (1.25× or 2× input) instead of read at 0.1×. Usual causes: a hook or status line that injects the time, a random id, or a counter; CLAUDE.md edited mid-session; tool schemas that change order.</span></div><div class="rule" id="A02"><span class="t">A02</span> — <span class="h">Cache expiry</span><br><span class="t">Fires when:</span> a prompt gap longer than the observed cache TTL followed by a full-context cache write.<br><span class="a">A cache entry lives 5 minutes (or 1 hour on this session, as the API reported). After that, the next request re-writes the entire context. Batching questions or keeping the session busy avoids the cold write; a cold turn on a 400k context costs as much as ~20 warm ones.</span></div><div class="rule" id="A03"><span class="t">A03</span> — <span class="h">Runaway tool results</span><br><span class="t">Fires when:</span> one tool result &gt; 3k tokens, or the same input &gt; 2k twice.<br><span class="a">Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request. One 4k-token `ls -R` repeated twice is 8k tokens on every subsequent call. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary.</span></div><div class="rule" id="A04"><span class="t">A04</span> — <span class="h">Re-reads</span><br><span class="t">Fires when:</span> a file read ≥ 3× with no edit in between.<br><span class="a">Reading a file again re-injects it whole. If the model needs to see it again, a Read with offset/limit on the relevant range costs a fraction; better, ask it to note the lines it needs in its own summary.</span></div><div class="rule" id="A05"><span class="t">A05</span> — <span class="h">Exploring in the main context</span><br><span class="t">Fires when:</span> ≥ 8 consecutive Read/Grep/Glob calls with no Edit/Write.<br><span class="a">Long runs of Read/Grep/Glob in the main thread fill the main context with raw files that persist until compaction. An Explore subagent does the same search in its own context and hands back a paragraph.</span></div><div class="rule" id="A06"><span class="t">A06</span> — <span class="h">Compaction churn</span><br><span class="t">Fires when:</span> ≥ 2 compactions, or one projected within 3 turns.<br><span class="a">Each compaction spends output tokens on a summary and loses detail the model then re-reads. Two compactions in one session usually cost more than ending the session at a natural boundary with a short hand-off note and starting fresh.</span></div><div class="rule" id="A07"><span class="t">A07</span> — <span class="h">Idle MCP servers</span><br><span class="t">Fires when:</span> an MCP server with no calls for &gt; 20 min whose schemas cost &gt; 2k tokens.<br><span class="a">Every MCP server's tool schemas are part of the prefix sent on each request, whether or not the server is used. A server with no calls for a long stretch is pure overhead: disable it for this project (.mcp.json) or rely on deferred loading so its schemas are fetched only when needed.</span></div><div class="rule" id="A08"><span class="t">A08</span> — <span class="h">Thinking share</span><br><span class="t">Fires when:</span> thinking &gt; 40 % of output over 5 turns, effort not already low.<br><span class="a">Thinking tokens are billed as output. On routine edits the model rarely needs deep reasoning; a lower effort level cuts thinking without changing the edit. Reserve high effort for design and debugging.</span></div><div class="rule" id="A09"><span class="t">A09</span> — <span class="h">Permission waits</span><br><span class="t">Fires when:</span> &gt; 2 min waiting on permissions, or &gt; 5 prompts for one tool.<br><span class="a">While a permission prompt is open the model does nothing and the wall clock runs. A tool pattern approved many times is a candidate for the allow-list in settings (permissions.allow), which removes the prompt entirely.</span></div><div class="rule" id="A10"><span class="t">A10</span> — <span class="h">Long foreground commands</span><br><span class="t">Fires when:</span> a Bash call longer than 60 s.<br><span class="a">A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background: Claude keeps working and is notified when the command finishes.</span></div><div class="rule" id="A11"><span class="t">A11</span> — <span class="h">Pasted input</span><br><span class="t">Fires when:</span> a turn with &gt; 5k uncached input tokens.<br><span class="a">Uncached input tokens are the most expensive kind. A large paste is billed in full on that turn and then stays in context. Point Claude at the file (it reads only what it needs) or paste the relevant slice.</span></div><div class="rule" id="A12"><span class="t">A12</span> — <span class="h">Chatty turns</span><br><span class="t">Fires when:</span> median prompt &lt; 8 tokens (~32 chars) and &gt; 20 turns in the last hour.<br><span class="a">Every turn re-sends the whole context, cache reads included. Many tiny prompts multiply that cost; one prompt with several instructions costs a single context read and usually gets a more coherent answer.</span></div><div class="rule" id="A13"><span class="t">A13</span> — <span class="h">Rate-limit pacing</span><br><span class="t">Fires when:</span> the 5 h limit is projected to run out before it resets.<br><span class="a">Rate limits are account-wide and reset on a fixed schedule. If the current burn reaches 100 % before the reset, the session stops mid-task. Moving exploration and summaries to cheaper subagents lowers the burn; pausing heavy work until the reset avoids the cut-off.</span></div><div class="rule" id="A14"><span class="t">A14</span> — <span class="h">Subagent model choice</span><br><span class="t">Fires when:</span> an Opus subagent doing search/summarise work.<br><span class="a">Search, listing and summarising tasks do not need the most capable model. Running such subagents on Sonnet or Haiku cuts their cost several-fold with the same result, and leaves Opus for the reasoning-heavy main thread.</span></div><div class="rule" id="A15"><span class="t">A15</span> — <span class="h">Error loops</span><br><span class="t">Fires when:</span> the same tool with the same input failed ≥ 3×.<br><span class="a">When the same command fails repeatedly with the same error, each retry re-injects the full error output and the model rarely finds a new angle. Interrupt, read the error yourself, and give the fix or the missing context in one prompt.</span></div><div class="rule" id="A16"><span class="t">A16</span> — <span class="h">Hook overhead</span><br><span class="t">Fires when:</span> hook time &gt; 10 % of turn time over recent turns.<br><span class="a">Hooks run synchronously inside the turn. A slow PostToolUse or Stop hook adds its full duration to every tool call or turn. Make expensive hooks asynchronous, or narrow their matcher to the tools and paths they care about.</span></div><div class="rule" id="A17"><span class="t">A17</span> — <span class="h">Oversized prefix</span><br><span class="t">Fires when:</span> the fixed prefix is more than a quarter of the window.<br><span class="a">The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills) is sent on every request. Even as a cache read it is billed, and it crowds out working context. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers you do not use in this project.</span></div><div class="rule" id="A18"><span class="t">A18</span> — <span class="h">Missing hand-off</span><br><span class="t">Fires when:</span> &gt; 3 h in one context with &gt; 70 % of the window used.<br><span class="a">Long sessions accumulate stale context: superseded plans, old tool output, resolved errors. Past a natural boundary, a short hand-off note and a fresh session cost fewer tokens than carrying everything forward through compactions.</span></div>
+</main>
+<footer><a href="./">← Guide</a><a href="../">cctop</a><a href="https://github.com/tomstagl/cctop">GitHub</a></footer>
+</div>
+</body>
+</html>

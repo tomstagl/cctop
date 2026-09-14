@@ -30,14 +30,22 @@ lede = inline_md(block("lede").replace("\n", " "))
 # install: fenced code → text
 install = re.sub(r"^```\n|\n```$", "", block("install").strip("`\n"))
 install = html.escape(install)
-# panels: markdown table → cards
+# panels: markdown table → cards, each linking to its guide subpage
+GUIDE_SLUGS = {
+    "Context": "context", "Tokens & Cost": "tokens-cost", "Limits": "limits",
+    "Turn": "turn", "Tools": "tools", "Agents & MCP": "agents-mcp",
+    "Files": "files", "Events": "events", "Advisor": "advisor",
+}
 cards = []
 for line in block("panels").splitlines()[2:]:
     cells = [c.strip() for c in line.strip("|").split("|")]
     if len(cells) < 3:
         continue
     n, name, answers = cells[0], re.sub(r"\*", "", cells[1]), cells[2]
-    cards.append(f'<div class="pnl"><h3>{n} {html.escape(name)}</h3><p>{inline_md(answers)}</p></div>')
+    slug = GUIDE_SLUGS.get(name)
+    href = f"guide/{slug}.html" if slug else None
+    title = f'<a href="{href}">{n} {html.escape(name)}</a>' if href else f"{n} {html.escape(name)}"
+    cards.append(f'<div class="pnl"><h3>{title}</h3><p>{inline_md(answers)}</p></div>')
 # themes
 themes = []
 for path in sorted(glob.glob("themes/*.toml")):

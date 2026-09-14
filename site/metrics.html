@@ -67,6 +67,8 @@ header.top nav a:hover,header.top nav a:focus-visible{color:var(--accent);text-d
 .panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px}
 .pnl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
 .pnl h3{font-family:var(--mono);font-weight:500;font-size:13px;margin:0 0 6px;color:var(--accent)}
+.pnl h3 a{color:inherit;text-decoration:none}
+.pnl h3 a:hover,.pnl h3 a:focus-visible{text-decoration:underline}
 .pnl p{font-size:14px;color:var(--muted);margin:0}
 .advice{display:grid;gap:10px;margin-top:16px}
 .adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px}
@@ -103,6 +105,7 @@ footer a{color:var(--muted)}
     <a href="#panels">Panels</a>
     <a href="#advisor">Advisor</a>
     <a href="#install">Install</a>
+    <a href="guide/">Guide</a>
     <a href="metrics.html">Metrics</a>
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>

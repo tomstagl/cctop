@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — cctop guide</title>
+<meta name="description" content="What every cctop panel and metric means, why it matters, and what to do about it.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="../assets/favicon.ico">
+<style>
+/* IBM Plex, SIL OFL 1.1 — latin subsets as served by Google Fonts, self-hosted so they can be preloaded. */
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:optional;src:url(assets/fonts/ibm-plex-mono-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:optional;src:url(assets/fonts/ibm-plex-mono-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:optional;src:url(assets/fonts/ibm-plex-mono-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400 600;font-display:optional;src:url(assets/fonts/ibm-plex-sans-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans Condensed';font-style:normal;font-weight:700;font-display:optional;src:url(assets/fonts/ibm-plex-sans-condensed-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+:root{
+  --bg:#F1F3F6;--panel:#FFFFFF;--ink:#1A212C;--muted:#5A6577;--line:#D5DAE2;--line-soft:#E6E9EF;
+  --accent:#177F86;--accent-soft:#DCEFF0;--ok:#2F8F58;--warn:#C7911E;--crit:#C9403F;
+  --term-bg:#0E1318;--term-fg:#D6DEE8;--term-dim:#8593A6;--term-acc:#4CC2C2;--term-ok:#5FC77E;--term-warn:#E2B04A;--term-crit:#E5605E;--term-border:#2A3644;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;--cond:"IBM Plex Sans Condensed",var(--sans);--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0F1419;--panel:#161C24;--ink:#E3E8EF;--muted:#8B95A7;--line:#2A3441;--line-soft:#1F2833;--accent:#4CC2C2;--accent-soft:#12303A;--ok:#5FC77E;--warn:#E2B04A;--crit:#E5605E}}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-block:0 64px;padding-inline:clamp(16px,4vw,40px)}
+.wrap{max-width:960px;margin:0 auto}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.9em;background:var(--line-soft);padding:1px 5px;border-radius:3px}
+h1,h2,h3{font-family:var(--cond);letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:clamp(34px,5vw,52px);line-height:1.05;margin:0 0 12px}
+h2{font-size:26px;margin:0 0 12px}
+h3{font-size:18px;margin:20px 0 6px}
+p{max-width:68ch;margin:0 0 12px}
+section{padding-block:40px 0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:20px;border-bottom:1px solid var(--line)}
+header.top img{height:36px;width:90px}
+header.top nav{display:flex;gap:18px;font-family:var(--mono);font-size:13px}
+header.top nav a{color:var(--muted);text-decoration:none}
+header.top nav a:hover,header.top nav a:focus-visible{color:var(--accent);text-decoration:underline}
+.hero{padding-block:56px 24px}
+.hero .lede{font-size:20px;max-width:60ch}
+.install{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0 8px}
+.install code{font-size:15px;background:var(--term-bg);color:var(--term-fg);padding:12px 16px;border-radius:6px;border:1px solid var(--term-border);white-space:nowrap;overflow-x:auto;max-width:100%}
+.install button{font:inherit;font-family:var(--mono);font-size:13px;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.install button:hover,.install button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+.install button[hidden]{display:none}
+.subline{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.term{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.32;box-shadow:0 12px 40px -18px rgba(0,0,0,.5)}
+.term pre{margin:0;font:inherit;white-space:pre}
+.term .b{color:var(--term-dim)}.term .t{color:var(--term-acc);font-weight:600}.term .g{color:var(--term-ok)}.term .w{color:var(--term-warn)}.term .r{color:var(--term-crit)}.term .d{color:var(--term-dim)}.term .a{color:var(--term-acc)}
+.demo{margin:20px 0 8px}
+.demo video,.demo img{display:block;width:100%;max-width:100%;border-radius:8px;border:1px solid var(--term-border)}
+.cap{font-family:var(--mono);font-size:12px;color:var(--muted);margin:6px 0 0}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px}
+.pnl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
+.pnl h3{font-family:var(--mono);font-weight:500;font-size:13px;margin:0 0 6px;color:var(--accent)}
+.pnl h3 a{color:inherit;text-decoration:none}
+.pnl h3 a:hover,.pnl h3 a:focus-visible{text-decoration:underline}
+.pnl p{font-size:14px;color:var(--muted);margin:0}
+.advice{display:grid;gap:10px;margin-top:16px}
+.adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px}
+.adv .h{color:var(--term-warn)}.adv .a{color:var(--term-acc)}.adv .s{color:var(--term-dim)}
+.hosts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.hosts span{font-family:var(--mono);font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.themes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.theme{border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;border:1px solid var(--line)}
+.theme i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel);margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tr:last-child td{border-bottom:0}
+pre.block{background:var(--term-bg);color:var(--term-fg);padding:14px 16px;border-radius:6px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5;border:1px solid var(--term-border)}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+footer a{color:var(--muted)}
+@media (max-width:520px){header.top nav{display:none}.hero{padding-block:32px 16px}}
+@media (prefers-reduced-motion:reduce){.demo video{display:none}.demo img.still{display:block}}
+@media (prefers-reduced-motion:no-preference){.demo img.still{display:none}}
+.why{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;margin:6px 0 18px}
+.why b{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:4px}
+.why.do b{color:var(--ok)}
+.metric{margin-top:28px;padding-top:4px;border-top:1px solid var(--line-soft)}
+.metric:first-of-type{border-top:0}
+.metric h3{margin-bottom:2px}
+.metric .unit{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 10px}
+.rules{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:2px 0 0}
+.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:20px}
+.guide-grid a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;text-decoration:none;color:var(--ink)}
+.guide-grid a:hover,.guide-grid a:focus-visible{border-color:var(--accent)}
+.guide-grid h3{margin:0 0 6px;color:var(--accent);font-family:var(--mono);font-size:14px;font-weight:500}
+.guide-grid p{margin:0;color:var(--muted);font-size:14px}
+.rule{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px;margin-bottom:10px;scroll-margin-top:16px}
+.rule .h{color:var(--term-warn)}
+.rule .a{color:var(--term-acc)}
+.rule .t{color:var(--term-dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a href="../" aria-label="cctop home">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="../assets/cctop-lockup-horizontal-dark.svg">
+      <img src="../assets/cctop-lockup-horizontal-light.svg" alt="cctop" width="90" height="36">
+    </picture>
+  </a>
+  <nav>
+    <a href="./">Guide</a>
+    <a href="../metrics.html">Metrics</a>
+    <a href="../#panels">Panels</a>
+    <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  </nav>
+</header>
+<main class="metrics">
+<h1>Guide</h1>
+<p>What each of cctop's nine panels shows, why each metric is worth looking at, and what to actually do when it moves. For how each number is computed and which data source it comes from, see <a href="../metrics.html">every metric, explained</a>.</p>
+<div class="guide-grid"><a href="context.html"><h3>1 Context</h3><p>How full the context window is, how fast it's filling, and how many turns are left before the next compaction rewrites it.</p></a>
+<a href="tokens-cost.html"><h3>2 Tokens &amp; Cost</h3><p>Where every token went — cache read, cache write, fresh input, output and thinking — and what the session costs, live.</p></a>
+<a href="limits.html"><h3>3 Limits</h3><p>Account-wide 5-hour and 7-day usage, when the window resets, and whether the current trend runs out before it does.</p></a>
+<a href="turn.html"><h3>4 Turn</h3><p>What the current turn is actually waiting on — the model, a hook, a permission prompt, or nothing at all.</p></a>
+<a href="tools.html"><h3>5 Tools</h3><p>Call counts, error rates, latency, and exactly how many tokens each tool pushed into context.</p></a>
+<a href="agents-mcp.html"><h3>6 Agents &amp; MCP</h3><p>Subagents and MCP server processes running alongside the main thread, and what each is costing.</p></a>
+<a href="files.html"><h3>7 Files</h3><p>Every file this session touched, how much changed, and which reads were wasted re-reads.</p></a>
+<a href="events.html"><h3>8 Events</h3><p>The chronological stream of tool, hook, permission and compaction events behind every other panel.</p></a>
+<a href="advisor.html"><h3>9 Advisor</h3><p>All 18 rules the Advisor checks, what triggers each one, and what to do about it.</p></a></div>
+</main>
+<footer><a href="./">← Guide</a><a href="../">cctop</a><a href="https://github.com/tomstagl/cctop">GitHub</a></footer>
+</div>
+</body>
+</html>
