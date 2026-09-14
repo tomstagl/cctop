@@ -94,9 +94,9 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D3 
 
 | Metric | Unit | How it is computed | Sources | Caveats | Estimate |
 |---|---|---|---|---|---|
-| **Touches** <a id="file_touches"></a> `file_touches` | count | Read / Edit / Write / MultiEdit / NotebookEdit tool_use inputs per file path | D8 | — | never |
+| **Touches** <a id="file_touches"></a> `file_touches` | count | Read / Edit / Write / MultiEdit / NotebookEdit calls per file path, plus Bash `cat` / `sed -n` / `head` / `tail` reads of it | D8 | A read counts when its result arrives | never |
 | **Lines ±** <a id="file_lines"></a> `file_lines` | lines | `git diff --numstat` against HEAD at attach time | D7 | Outside a git repo the column is empty | never |
-| **Re-reads** <a id="file_rereads"></a> `file_rereads` | count | Reads of a file with no Edit/Write in between; ⚠ at ≥ 3 | D8 | — | never |
+| **Re-reads** <a id="file_rereads"></a> `file_rereads` | count | Whole-file reads (Read or a Bash reader) with no Edit/Write in between; ⚠ at ≥ 3 | D8 | Ranged reads (offset/limit) and `file_unchanged` results do not count; the counter resets when the file changed under the model (an IDE edit, a stale-read recovery) and at every context boundary | never |
 
 ## Advisor
 

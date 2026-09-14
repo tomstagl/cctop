@@ -178,6 +178,8 @@ mod tests {
         let mut app = fixture_app();
         for i in 0..3 {
             app.feed(Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-08-27T10:2{i}:00Z","message":{{"id":"rr{i}","model":"m","content":[{{"type":"tool_use","id":"rr{i}","name":"Read","input":{{"file_path":"/home/user/project/src/render.rs"}}}}],"usage":{{}}}}}}"#)).unwrap());
+            // A read counts once its result shows the whole file came back.
+            app.feed(Line::parse(&format!(r#"{{"type":"user","timestamp":"2026-08-27T10:2{i}:01Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"rr{i}","content":"…"}}]}},"toolUseResult":{{"type":"text","file":{{"filePath":"/home/user/project/src/render.rs","content":"…","numLines":40,"startLine":1,"totalLines":40}}}}}}"#)).unwrap());
         }
         app.state.files.apply_numstat(
             Path::new("/home/user/project"),

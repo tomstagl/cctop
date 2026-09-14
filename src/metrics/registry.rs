@@ -107,9 +107,9 @@ pub const METRICS: &[Metric] = &[
     metric!(mcp_rss, "Agents & MCP", "MCP memory", "bytes", "RSS of the MCP server process", ["D5"], "", ""),
     metric!(mcp_calls, "Agents & MCP", "MCP calls", "count", "Calls of tools named `mcp__<server>__*`", ["D2"], "", ""),
     // -- Files
-    metric!(file_touches, "Files", "Touches", "count", "Read / Edit / Write / MultiEdit / NotebookEdit tool_use inputs per file path", ["D8"], "", ""),
+    metric!(file_touches, "Files", "Touches", "count", "Read / Edit / Write / MultiEdit / NotebookEdit calls per file path, plus Bash `cat` / `sed -n` / `head` / `tail` reads of it", ["D8"], "A read counts when its result arrives", ""),
     metric!(file_lines, "Files", "Lines ±", "lines", "`git diff --numstat` against HEAD at attach time", ["D7"], "Outside a git repo the column is empty", ""),
-    metric!(file_rereads, "Files", "Re-reads", "count", "Reads of a file with no Edit/Write in between; ⚠ at ≥ 3", ["D8"], "", ""),
+    metric!(file_rereads, "Files", "Re-reads", "count", "Whole-file reads (Read or a Bash reader) with no Edit/Write in between; ⚠ at ≥ 3", ["D8"], "Ranged reads (offset/limit) and `file_unchanged` results do not count; the counter resets when the file changed under the model (an IDE edit, a stale-read recovery) and at every context boundary", ""),
     // -- Advisor
     metric!(advice_saving, "Advisor", "Estimated saving", "tokens|seconds", "Rule-specific estimate of what following the advice saves per remaining turn", ["D2"], "Ranking key; always an estimate", "≈ always"),
 ];

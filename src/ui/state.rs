@@ -2,7 +2,7 @@
 //! panels only read it, except for UI-local fields (focus, hidden, sort keys)
 //! which key handlers mutate.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::metrics::{Aggregate, CostTracker, Pricing};
 use crate::tools;
@@ -637,6 +637,9 @@ impl State {
                     "compact" => self.agg.push_boundary(BoundaryKind::Compact, at),
                     _ => {}
                 }
+                if source != "startup" {
+                    self.files.boundary();
+                }
                 self.events.push(crate::events::Event {
                     at,
                     kind: Kind::Hook,
@@ -966,7 +969,11 @@ impl State {
 
     /// Feed one main-transcript line to every collector.
     pub fn apply(&mut self, line: &Line) {
+        let turns_before = self.agg.turns.len();
         self.agg.push(line);
+        if self.agg.turns.len() > turns_before {
+            self.files.new_turn();
+        }
         self.cost.push(line);
         self.tools.push(line);
         self.events.apply(line);
@@ -1004,6 +1011,7 @@ impl State {
             if self.session.cwd.as_os_str().is_empty() {
                 self.session.cwd = PathBuf::from(c);
             }
+            self.files.set_cwd(Path::new(c));
         }
     }
 
