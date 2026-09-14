@@ -285,3 +285,60 @@ hooks are off or before its module is accepted.
     it did before US-009.
     Claude Code version:
     Result: pending
+
+21. **`/diff` hides the pane and says so.** With the cctop pane docked, `/diff`
+    takes the dock: the pane disappears and, within a few seconds (the next
+    redraw the module asks for), the status line under the prompt reads
+    `cctop pane hidden behind the /diff panel: run /diff to show it`.
+    Setup: `/tui fullscreen`, ≥ 110 columns, `/cctop-pane` docked.
+    Keys: `/diff`; wait up to 12 s.
+    Expected: the diff panel shows where the pane was; the status line
+    appears; `/diff` again removes the diff panel, the cctop pane is back on
+    its previous view and the status line is gone.
+    Claude Code version:
+    Result: pending
+
+22. **An open while hidden answers "not shown".** With the diff panel showing,
+    `/cctop-pane tools` answers `cctop pane on Tools is open but not shown:
+    the /diff panel holds the side dock. Run /diff …`, and `/diff` then shows
+    the pane on the Tools view.
+    Setup: as item 21, diff panel showing.
+    Keys: `/cctop-pane tools`, then `/diff`.
+    Claude Code version:
+    Result: pending
+
+23. **`cctop pane status` inside the session.** `!cctop pane status` (the
+    shell prefix) prints every line `✓` and `pane open, docked (N columns)`
+    while the pane is docked; without the flag, in a fresh shell, it prints
+    the `✗` lines with their actions and exits 2.
+    Setup: as item 21.
+    Keys: `!cctop pane status`.
+    Claude Code version:
+    Result: pending
+
+### Run notes (automated, 2026-09-14)
+
+An agent drove Claude Code 2.1.270 in a 162×45 tmux window
+(`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugin --debug`,
+`tui: "fullscreen"` in settings) with `tmux send-keys` / `capture-pane`.
+Observed, verbatim from the captures:
+
+- items 1, 2, 5: `/cctop-pane` docked the pane beside the transcript on the
+  first try; the reply was `cctop pane docked beside the transcript (71
+  columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.`
+  (72-column dock, 1 for the grip). The debug log had the load line, `/cctop-pane
+  listed`, and no `refused` or `hook failed` line.
+- item 21: `/diff` answered `Diff panel shown`, the cctop pane vanished, and
+  the status line `⚠ cctop: cctop pane hidden behind the /diff panel: run
+  /diff to show it` appeared under the prompt within the next poll (≤ 12 s).
+- item 22: `/cctop-pane tools` answered `cctop pane on Tools is open but not
+  shown: the /diff panel holds the side dock. …`; `/diff` answered `Diff
+  panel hidden` and the pane came back on the Tools view with the status
+  line cleared.
+- item 23: `!cctop pane status` printed seven `✓` lines including `terminal
+  162 columns` (read from the session's TTY) and `pane open, docked (71
+  columns)`; from a shell without the flag it printed the two `✗` lines with
+  their actions and exited 2.
+
+These are the agent's observations, not a person's `Result:` entries.
+

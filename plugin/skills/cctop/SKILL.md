@@ -26,20 +26,27 @@ pane; **never print dashboard output into the conversation**.
      dashboard works from the transcript alone.
    Skip the question when either marker file exists.
 
-3. Read `~/.cctop/pane/<session>.json` (`<session>` is `$CLAUDE_SESSION_ID`).
-   If it parses, `open` is `true` and `heartbeatAt` is within 30 s, the
-   function-hooks pane already has this session open: say "cctop is open in
-   the side pane" and stop — do not run `cctop split`.
+3. Ask where the pane stands: run `cctop pane status` (it finds this session
+   through `$CLAUDE_CODE_SESSION_ID`). Every line is written for the user:
+   one prerequisite each, `✓` in place, `✗` missing with the fix after `→`,
+   `!` a warning, `?` unknown. Relay them **verbatim**, never summarise or
+   reword them, and then act on the exit code:
 
-   Otherwise open the pane: `cctop split`. It resolves this session itself
-   (from `$CLAUDE_SESSION_ID`, the tmux pane, or the working directory).
-   - exit 0 → say "cctop is open in the right-hand pane; press ? there for keys."
-   - exit 3 → no tmux/zellij/WezTerm/Kitty/iTerm2 detected: relay the manual
-     command it printed (`cctop run --session <id>`) for a second terminal.
-     To get the dashboard inside Claude Code itself, start Claude Code with
-     `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and use `/tui fullscreen`; then
-     `/cctop` docks the pane without a multiplexer.
-   - other → relay the error text.
+   - exit 0: the function-hooks pane runs in this session. Say what the
+     `pane` line says — open and docked, open but hidden behind the `/diff`
+     panel (then tell the user to run `/diff`), or closed (then tell the
+     user to run `/cctop-pane`). Do **not** run `cctop split`. Stop.
+   - exit 2: the pane cannot dock in this session yet. After the status
+     lines, open the fallback: `cctop split`. It resolves this session
+     itself (from `$CLAUDE_CODE_SESSION_ID`, the tmux pane, or the working
+     directory).
+     - exit 0 → add "Meanwhile cctop is open in the right-hand terminal pane;
+       press ? there for keys."
+     - exit 3 → no tmux/zellij/WezTerm/Kitty/iTerm2 detected: relay the manual
+       command it printed (`cctop run --session <id>`) for a second terminal.
+     - other → relay the error text.
+     Close with the status report's last line (`→ …`): it names the one thing
+     to do next to get the pane inside Claude Code.
 
 Do not run `cctop run` in the foreground of this session's shell: it is a
 full-screen program and would block the tool call.

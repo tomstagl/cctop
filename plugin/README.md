@@ -43,25 +43,70 @@ as the standalone TUI's panels:
 | 5 | Events | Tool / hook / permission / compaction stream |
 | 6 | Advisor | Ranked, evidence-backed recommendations |
 
-`/cctop [view|close]` opens the pane (optionally straight to a view — one of
-`overview`, `tools`, `agents`, `files`, `events`, `advisor`), or closes it;
+`/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
+of `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or closes it;
 with no argument it toggles. Context, cost and rate limits come from the
 engine itself, so the pane is useful with nothing installed; once the `cctop`
 binary is found, the rest (tool timings, files, agents, the Advisor) is
 filled in from `cctop query`.
 
+Every open answers with where the pane went, so the state is never a guess:
+
+| reply | meaning |
+|---|---|
+| `cctop pane docked beside the transcript (71 columns): …` | in the side dock |
+| `cctop pane drawn above the prompt: the terminal is 100 columns wide, 110 or more dock it …` | inline, terminal too narrow |
+| `cctop pane drawn above the prompt: /tui fullscreen docks it …` | inline, classic renderer |
+| `cctop pane is open but not shown: the /diff panel holds the side dock. Run /diff …` | hidden behind the diff panel |
+
+### The `/diff` panel and the pane share one dock
+
+Claude Code's built-in `/diff` panel and a plugin pane occupy the same
+right-hand slot, and the diff panel wins: while it shows, an open cctop pane
+is drawn nowhere. The plugin notices (no render arrives) and pins a status
+line under the prompt — `cctop pane hidden behind the /diff panel: run /diff
+to show it` — until `/diff` hides the diff panel again, at which point the
+cctop pane reappears where it was. The engine gives a plugin no other signal
+for this; the mechanism is written up in
+[`docs/claude-code-panels.md`](../docs/claude-code-panels.md).
+
+### `cctop pane status`
+
+When the pane does not appear, `cctop pane status` (run from inside the
+session, or with `--session <id>`) prints one line per prerequisite with the
+fix after `→`, and exits 0 when the hooks module runs in that session, 2
+otherwise:
+
+```
+cctop pane status · session ab339470
+  ✓ Claude Code 2.1.270 (function hooks need 2.1.269 or newer)
+  ✗ function hooks off → add "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" to the "env" block of ~/.claude/settings.json (or export it in the shell), then restart Claude Code
+  ✗ installed cctop plugin 0.1.0 has no hooks module (skills only; 0.2.0 or newer ships it) → `claude plugin update cctop@cctop` (or start with `claude --plugin-dir <checkout>/plugin`), then restart Claude Code
+  ✓ fullscreen renderer (tui = "fullscreen" in ~/.claude/settings.json)
+  ✓ terminal 162 columns (110 or more dock the pane)
+  ! the /diff panel was open when last toggled (diffSidebarOpen in ~/.claude.json); while it shows, it holds the side dock → if it is showing, run /diff to hide it; cctop takes the dock
+→ not ready: fix the ✗ lines, restart Claude Code, then run /cctop-pane
+```
+
+The `/cctop` skill runs it first and relays the lines verbatim before it
+falls back to `cctop split`, so a session without the pane still tells you
+exactly why. `--json` prints the same report as data.
+
 ## Enabling function hooks
 
-Function hooks are early access: start Claude Code with the flag, then switch
-to the surface that draws a docked pane.
+Function hooks are early access. Put the flag where every session sees it —
+the `env` block of `~/.claude/settings.json` — and restart Claude Code:
 
-```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude
+```json
+{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }
 ```
 
+(`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude` does the same for one start.)
 Then `/tui fullscreen` (the classic renderer draws the pane's short form
-inline above the prompt instead of docking it). The first load asks you to
-accept the plugin's hooks module once, in `/plugin`.
+inline above the prompt instead of docking it) and a terminal of 110 columns
+or more. The first load asks you to accept the plugin's hooks module once, in
+`/plugin`. The plugin must be 0.2.0 or newer — `claude plugin update
+cctop@cctop` — since 0.1.0 shipped skills only.
 
 ## Fallback
 
@@ -73,9 +118,11 @@ manual command for a second terminal.
 ## Verification status
 
 Automated (typecheck, tests, `claude plugin validate --strict`, `cargo test`)
-runs on every change and is green. Nobody has yet run the checklist below at a
-real terminal, so every item is `Result: pending` in
-[`docs/verification/pane.md`](../docs/verification/pane.md):
+runs on every change and is green. On 2026-09-14 an agent drove a real
+Claude Code 2.1.270 in a 162×45 tmux window (see the run notes in
+[`docs/verification/pane.md`](../docs/verification/pane.md)): the pane docked,
+`/diff` hid it and the status line said so, `/diff` again brought it back.
+The `Result:` lines below are still for a person to fill in:
 
 1. `/cctop-pane` listed in the slash menu with its description
 2. pane docks at 144 columns in `/tui fullscreen`
@@ -99,6 +146,11 @@ real terminal, so every item is `Result: pending` in
 18. the marker file `~/.cctop/pane/<id>.json` toggles `open` on open/close
 19. `cctop split` short-circuits when the pane is already open
 20. `/cctop` falls back to `cctop split` when there is no fresh open marker
+21. `/diff` over a docked pane hides it and pins the status line; `/diff`
+    again restores the pane
+22. an open while the diff panel shows answers "open but not shown"
+23. `cctop pane status` from inside a session reports every line ✓ once the
+    pane is docked, and names the missing prerequisites otherwise
 
 See the checklist for the exact setup, keys and expected observation for each.
 

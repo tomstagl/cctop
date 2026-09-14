@@ -7,11 +7,20 @@ export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
 export type Placement = 'dock' | 'inline';
 export type Binary = 'unknown' | 'present' | 'missing';
+/** Whether the engine is drawing the pane: `hidden` once an open pane got
+ * no `ui.render` for a while (the /diff panel holds the dock), `unknown`
+ * while closed or before the first render after an open. */
+export type Visibility = 'unknown' | 'visible' | 'hidden';
 
 /** The Claude Code version this hooks module's `$` contract was checked
  * against (`plugin/.claude/types/claude-code.d.ts`'s own first line);
  * `scripts/check-plugin-types.sh` catches drift, the header badge shows it. */
-export const TESTED_WITH = '2.1.269';
+export const TESTED_WITH = '2.1.270';
+
+/** The narrowest terminal (whole screen, columns) at which the fullscreen
+ * renderer docks a pane beside the transcript; below it the pane is drawn
+ * inline above the prompt (docs/claude-code-panels.md §4). */
+export const MIN_DOCK_COLUMNS = 110;
 
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
 export const QUERY_VERBS = ['summary', 'tools', 'files', 'agents', 'advice', 'events'] as const;
@@ -78,6 +87,15 @@ export type Model = {
   version: string | null;
   /** The last tree `ui.render` built without throwing: drawn again beneath a render error. */
   lastTree: RenderElement | null;
+  /** When session.start ran (the marker's `loadedAt`); null before it. */
+  loadedAt: number | null;
+  visibility: Visibility;
+  /** When the engine last asked for the pane's tree; null before the first render. */
+  renderedAt: number | null;
+  /** `e.props.bodyColumns` of the last render: cells across the body. */
+  bodyColumns: number | null;
+  /** `e.viewport.columns` of the last render: the whole screen's width; null where unmeasured. */
+  viewportColumns: number | null;
 };
 
 export type Action =
@@ -97,7 +115,10 @@ export type Action =
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
   | { type: 'tick'; at: number; ok: boolean }
-  | { type: 'stale'; stale: boolean };
+  | { type: 'stale'; stale: boolean }
+  // The engine asked for the pane's tree: it is being drawn, here and this wide.
+  | { type: 'render'; at: number; placement: Placement; bodyColumns: number; viewportColumns: number | null }
+  | { type: 'visibility'; visibility: Visibility };
 
 export function initialModel(): Model {
   return {
@@ -127,6 +148,11 @@ export function initialModel(): Model {
     placement: 'dock',
     version: null,
     lastTree: null,
+    loadedAt: null,
+    visibility: 'unknown',
+    renderedAt: null,
+    bodyColumns: null,
+    viewportColumns: null,
   };
 }
 
@@ -135,7 +161,11 @@ const EMPTY_TOOL: ToolStats = { calls: 0, errors: 0, durationsMs: [], tokensToCt
 export function reduce(model: Model, action: Action): Model {
   switch (action.type) {
     case 'session.start':
-      return { ...model, turn: { ...model.turn, state: 'idle', startedAt: null, runningTool: null } };
+      return {
+        ...model,
+        loadedAt: action.at,
+        turn: { ...model.turn, state: 'idle', startedAt: null, runningTool: null },
+      };
     case 'turn.start':
       return {
         ...model,
@@ -191,7 +221,43 @@ export function reduce(model: Model, action: Action): Model {
       return action.ok ? { ...model, queryAt: action.at } : model;
     case 'stale':
       return model.stale === action.stale ? model : { ...model, stale: action.stale };
+    case 'render':
+      return {
+        ...model,
+        renderedAt: action.at,
+        placement: action.placement,
+        bodyColumns: action.bodyColumns,
+        viewportColumns: action.viewportColumns,
+        visibility: 'visible',
+      };
+    case 'visibility':
+      return model.visibility === action.visibility ? model : { ...model, visibility: action.visibility };
   }
+}
+
+/** The status line pinned under the prompt while an open pane is not drawn. */
+export const HIDDEN_STATUS = 'cctop pane hidden behind the /diff panel: run /diff to show it';
+
+// What the person is told after an open (the command's reply, the skill's
+// one-liner): where the engine put the pane and, when it is not beside the
+// transcript, the one thing that gets it there. The engine tells the module
+// about the renderer and the width through the first render's props; it
+// says nothing when the /diff panel holds the dock, so that case is read
+// off a missing render (docs/claude-code-panels.md §5.4).
+export function outcomeText(model: Model, viewLabel?: string): string {
+  const subject = viewLabel === undefined ? 'cctop pane' : `cctop pane on ${viewLabel}`;
+  if (model.visibility !== 'visible') {
+    return `${subject} is open but not shown: the /diff panel holds the side dock. Run /diff to hide it and cctop takes its place (needs /tui fullscreen and 110+ columns).`;
+  }
+  if (model.placement === 'dock') {
+    const width = model.bodyColumns === null ? '' : ` (${model.bodyColumns} columns)`;
+    return `${subject} docked beside the transcript${width}: ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.`;
+  }
+  const columns = model.viewportColumns;
+  if (columns !== null && columns < MIN_DOCK_COLUMNS) {
+    return `${subject} drawn above the prompt: the terminal is ${columns} columns wide, ${MIN_DOCK_COLUMNS} or more dock it beside the transcript.`;
+  }
+  return `${subject} drawn above the prompt: /tui fullscreen docks it beside the transcript.`;
 }
 
 /** Whether `verb` may be polled: unknown until `--help` is read, then as listed. */

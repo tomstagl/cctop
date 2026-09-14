@@ -34,6 +34,8 @@ enum Command {
     },
     /// Open cctop in a right-hand pane of the current multiplexer.
     Split(SplitArgs),
+    /// The pane inside Claude Code (function hooks): status and what to fix.
+    Pane(PaneArgs),
     /// Serve the query interface as MCP tools over stdio.
     Mcp,
     /// Print the current Advisor recommendations.
@@ -124,6 +126,25 @@ struct SplitArgs {
     /// Width of the new pane as a percentage.
     #[arg(long, default_value = "45", value_parser = clap::value_parser!(u8).range(10..=90))]
     size: u8,
+}
+
+#[derive(Args, Debug, Clone)]
+struct PaneArgs {
+    #[command(subcommand)]
+    what: PaneWhat,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum PaneWhat {
+    /// Why the pane is or is not docked in this session, one line per prerequisite.
+    Status {
+        /// The Claude Code session id (default: the one this shell runs in).
+        #[arg(long)]
+        session: Option<String>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -305,6 +326,11 @@ fn main() {
             };
             std::process::exit(cctop::split::run(&key, sp.size));
         }
+        Command::Pane(p) => match p.what {
+            PaneWhat::Status { session, json } => {
+                std::process::exit(cctop::pane::run_status(session.as_deref(), json))
+            }
+        },
         Command::Advise(a) => advise(a),
         Command::Report(r) => {
             let state = load_state(&r.attach);

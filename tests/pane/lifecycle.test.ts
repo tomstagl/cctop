@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProcessRunResult, RenderElement } from 'claude-code';
 import { fakeEngine, fakeElements, fakeOn, paneRender, type FakeEngine, type ProcessScript } from './harness';
+// The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
+const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { QUERY_FIXTURES, fixture } from './fixture';
 import { register } from '../../plugin/hooks/pane';
@@ -39,7 +41,7 @@ function boot(opts: { binary?: boolean; store?: Record<string, unknown>; isInter
     store: opts.store,
     files: { [MANIFEST]: manifest },
   });
-  const { on, dispatch, registrations } = fakeOn($);
+  const { on, dispatch, registrations } = fakeOn($, { surface: SURFACE });
   register(on, {});
   const start = () =>
     dispatch(
@@ -87,9 +89,12 @@ test('20 model changes in 1 s produce at most 4 invalidates plus one trailing', 
   const burst = invalidates() - base;
   assert.ok(burst <= 4, `${burst} invalidates inside one second`);
   assert.ok(burst >= 3, `${burst} invalidates: the throttle starves the pane`);
+  // The surface draws on its frame, which also stands the hidden watch down.
+  await settle();
   assert.equal($.clock.pending(), 1, 'one trailing call waits');
   $.clock.tick(250);
   assert.equal(invalidates() - base, burst + 1, 'the trailing call lands once the gap has passed');
+  await settle();
   assert.equal($.clock.pending(), 0);
   $.clock.tick(5000);
   assert.equal(invalidates() - base, burst + 1, 'nothing more without a change');
@@ -191,21 +196,51 @@ test('store round-trip: no reopen for a closed pane, a -p run or an empty store'
   assert.deepEqual(stored($), { open: true, view: 'overview' });
 });
 
-test('marker: written on open, refreshed by the tick, open:false on close, never removed', async () => {
+// The marker as the module writes it: the session and load facts are fixed
+// per boot, the rest changes with the pane.
+function expectedMarker(rest: Record<string, unknown>): Record<string, unknown> {
+  return {
+    version: PLUGIN_VERSION,
+    sessionId: SESSION,
+    loaded: true,
+    loadedAt: new Date(T0).toISOString(),
+    placement: 'dock',
+    ...rest,
+  };
+}
+
+test('marker: written at load, on open, refreshed by the tick, open:false on close, never removed', async () => {
   const { $, start, command, close, marker } = boot();
   await start();
   await settle();
-  assert.equal(marker(), null, 'nothing before the pane opens');
+  // Written as soon as the session id is known: `loaded` proves the module
+  // runs in this session before any pane opens (cctop pane status reads it).
+  assert.deepEqual(
+    marker(),
+    expectedMarker({
+      openedAt: null,
+      heartbeatAt: new Date(T0).toISOString(),
+      open: false,
+      visibility: 'unknown',
+      bodyColumns: null,
+      viewportColumns: null,
+    }),
+    'loaded, not open, before the pane opens',
+  );
 
   await command();
   await settle();
-  assert.deepEqual(marker(), {
-    version: PLUGIN_VERSION,
-    sessionId: SESSION,
-    openedAt: new Date(T0).toISOString(),
-    heartbeatAt: new Date(T0).toISOString(),
-    open: true,
-  });
+  assert.deepEqual(
+    marker(),
+    expectedMarker({
+      openedAt: new Date(T0).toISOString(),
+      heartbeatAt: new Date(T0).toISOString(),
+      open: true,
+      visibility: 'visible',
+      bodyColumns: 72,
+      viewportColumns: 160,
+    }),
+  );
 
   $.clock.tick(10000);
   await settle();
@@ -217,13 +252,17 @@ test('marker: written on open, refreshed by the tick, open:false on close, never
   $.clock.tick(500);
   await close('person');
   await settle();
-  assert.deepEqual(marker(), {
-    version: PLUGIN_VERSION,
-    sessionId: SESSION,
-    openedAt: new Date(T0).toISOString(),
-    heartbeatAt: new Date(T0 + 10500).toISOString(),
-    open: false,
-  });
+  assert.deepEqual(
+    marker(),
+    expectedMarker({
+      openedAt: new Date(T0).toISOString(),
+      heartbeatAt: new Date(T0 + 10500).toISOString(),
+      open: false,
+      visibility: 'unknown',
+      bodyColumns: 72,
+      viewportColumns: 160,
+    }),
+  );
   $.clock.tick(30000);
   await settle();
   assert.ok($.fs.files.has(MARKER), 'the file stays: $.fs cannot delete');

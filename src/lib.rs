@@ -21,6 +21,7 @@ pub mod load;
 pub mod mcp;
 pub mod metrics;
 pub mod otel;
+pub mod pane;
 pub mod prefix;
 pub mod procs;
 pub mod query;

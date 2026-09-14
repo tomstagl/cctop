@@ -57,10 +57,13 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
   return QUERY_VERBS.filter((verb) => found.has(verb));
 }
 
-// The marker other cctop processes read to learn that a pane is open for this
-// session (`cctop split` refuses a second one, US-009): written on open, on
-// every tick, and with `open: false` on ui.close. `$.fs` cannot delete, so a
-// reader treats `open: false` or a `heartbeatAt` older than 30 s as absent.
+// The marker other cctop processes read to learn what the pane is doing in
+// this session: `cctop split` refuses a second dashboard while it is open
+// (US-009) and `cctop pane status` reports it. Written once the module knows
+// its session id (so `loaded: true` alone proves the hooks module runs in
+// this session), on open, on every tick, and with `open: false` on ui.close.
+// `$.fs` cannot delete, so a reader treats `open: false` or a `heartbeatAt`
+// older than 30 s as "not open".
 export async function writeMarker($: PollerEngine, model: Model): Promise<void> {
   if (model.sessionId === null) return;
   const home = await $.home();
@@ -68,9 +71,17 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
   const marker = {
     version: model.version,
     sessionId: model.sessionId,
+    loaded: true,
+    loadedAt: model.loadedAt === null ? null : new Date(model.loadedAt).toISOString(),
     openedAt: model.openedAt === null ? null : new Date(model.openedAt).toISOString(),
     heartbeatAt: new Date($.clock.now()).toISOString(),
     open: model.open,
+    // Where the engine drew it last and whether it still does; `unknown`
+    // before the first render after an open (docs/claude-code-panels.md §5.4).
+    visibility: model.visibility,
+    placement: model.placement,
+    bodyColumns: model.bodyColumns,
+    viewportColumns: model.viewportColumns,
   };
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
 }

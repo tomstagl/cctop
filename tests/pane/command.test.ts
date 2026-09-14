@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CommandRunResult, RenderElement, RenderNode, SkillPromptResult } from 'claude-code';
 import { fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
+// The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
+const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { register } from '../../plugin/hooks/pane';
 
@@ -9,6 +11,8 @@ import { register } from '../../plugin/hooks/pane';
 // arguments open, toggle, switch and close the pane, a Button press switches
 // the view, and the inline placement draws the short form without the bar.
 const USAGE = 'usage: /cctop-pane [overview|tools|agents|files|events|advisor|close]';
+// What an open answers on the test surface (160 columns, a 72-wide dock).
+const DOCKED = 'docked beside the transcript (72 columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.';
 
 // Lets the promise chains a hook left behind (binary detection) settle.
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -17,7 +21,7 @@ async function boot(opts: { binary?: 'present' | 'missing' } = {}) {
   const $ = fakeEngine({
     process: opts.binary === 'present' ? { 'cctop --version': { exitCode: 0, stdout: 'cctop 0.2.0\n', stderr: '' } } : {},
   });
-  const { on, dispatch } = fakeOn($);
+  const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
   await dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({
     cwd: '/home/user/project',
@@ -52,7 +56,7 @@ test('no args toggles the pane and remembers it', async () => {
   assert.equal(stored($), undefined);
 
   const opened = await run('');
-  assert.equal(opened.text, 'cctop pane opened');
+  assert.equal(opened.text, `cctop pane ${DOCKED}`);
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
   assert.ok(!('focus' in $.ui.opens[0]), 'open asked for focus');
   assert.deepEqual($.ui.closes, []);
@@ -65,7 +69,7 @@ test('no args toggles the pane and remembers it', async () => {
   assert.deepEqual(stored($), { open: false, view: 'overview' });
 
   const again = await run('');
-  assert.equal(again.text, 'cctop pane opened');
+  assert.equal(again.text, `cctop pane ${DOCKED}`);
   assert.equal($.ui.opens.length, 2);
   assert.ok(!('focus' in $.ui.opens[1]), 'open asked for focus');
 });
@@ -73,7 +77,7 @@ test('no args toggles the pane and remembers it', async () => {
 test('a view name opens the pane on that view', async () => {
   const { $, run, render } = await boot({ binary: 'present' });
   const result = await run('tools');
-  assert.equal(result.text, 'cctop pane opened on Tools');
+  assert.equal(result.text, `cctop pane on Tools ${DOCKED}`);
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const { rows } = await render(80);
@@ -81,7 +85,7 @@ test('a view name opens the pane on that view', async () => {
 
   // A second view while open switches without a close; whitespace is ignored.
   const files = await run('  files ');
-  assert.equal(files.text, 'cctop pane opened on Files');
+  assert.equal(files.text, `cctop pane on Files ${DOCKED}`);
   assert.deepEqual($.ui.closes, []);
   assert.deepEqual(stored($), { open: true, view: 'files' });
   assert.match((await render(80)).rows[1], /^FILE\s+TOUCHES/);
@@ -168,14 +172,14 @@ test('inline placement draws the header, Context and Limits without the view bar
   assert.ok(buttons(dock.tree).length === 6);
 });
 
-test('the /cctop skill prompt opens the pane and answers a fixed one-liner', async () => {
+test('the /cctop skill prompt opens the pane and hands the model the outcome to relay', async () => {
   const { $, dispatch } = await boot();
   assert.deepEqual($.ui.opens, []);
   const result = await dispatch<SkillPromptResult>('skill.prompt', { skill: 'cctop', text: 'original skill text' });
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
   assert.equal(
     result.text,
-    'The cctop pane is already open beside the transcript. Reply with exactly one line: "cctop is open in the side pane." Do not run any tool.',
+    `The cctop pane was just opened by the plugin; its state is: "cctop pane ${DOCKED}" Reply with exactly that sentence and nothing else. Do not run any tool.`,
   );
 });
 

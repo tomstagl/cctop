@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CommandRunResult, RenderElement } from 'claude-code';
 import { fakeEngine, fakeOn, paneRender } from './harness';
+// The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
+const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { register } from '../../plugin/hooks/pane';
 
@@ -9,7 +11,7 @@ import { register } from '../../plugin/hooks/pane';
 // the command, /cctop-pane opens the pane, ui.render draws the header.
 async function boot() {
   const $ = fakeEngine();
-  const { on, dispatch } = fakeOn($);
+  const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
   await dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({
     cwd: '/home/user/project',
@@ -28,7 +30,7 @@ test('session.start registers /cctop-pane', async () => {
 test('/cctop-pane opens the pane', async () => {
   const { $, dispatch } = await boot();
   const result = await dispatch<CommandRunResult>('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
-  assert.equal(result.text, 'cctop pane opened');
+  assert.match(result.text ?? "", /^cctop pane docked beside the transcript/);
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
 });
 

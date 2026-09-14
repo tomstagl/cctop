@@ -2,7 +2,8 @@
 //!
 //! 1. `--session <id|name|pid>`
 //! 2. `--cwd <path>`
-//! 3. `$CLAUDE_SESSION_ID`
+//! 3. `$CLAUDE_CODE_SESSION_ID` (what Claude Code exports to its child
+//!    processes; `$CLAUDE_SESSION_ID` is accepted too)
 //! 4. a tmux pane in the current window whose TTY belongs to a session pid
 //! 5. inside zellij: the newest busy session whose cwd is `$PWD`
 //! 6. the newest busy session whose cwd is `$PWD`
@@ -32,9 +33,9 @@ impl Query {
         Self {
             session,
             cwd,
-            claude_session_id: std::env::var("CLAUDE_SESSION_ID")
-                .ok()
-                .filter(|s| !s.is_empty()),
+            claude_session_id: ["CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID"]
+                .iter()
+                .find_map(|k| std::env::var(k).ok().filter(|s| !s.is_empty())),
             in_tmux: std::env::var_os("TMUX").is_some(),
             in_zellij: std::env::var_os("ZELLIJ").is_some(),
             pwd: std::env::current_dir().unwrap_or_default(),

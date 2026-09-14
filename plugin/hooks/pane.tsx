@@ -5,7 +5,19 @@
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
 import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
-import { initialModel, reduce, unsupportedVerbs, UNSUPPORTED, TESTED_WITH, type Action, type Binary, type Model, type View } from './model';
+import {
+  HIDDEN_STATUS,
+  initialModel,
+  outcomeText,
+  reduce,
+  unsupportedVerbs,
+  UNSUPPORTED,
+  TESTED_WITH,
+  type Action,
+  type Binary,
+  type Model,
+  type View,
+} from './model';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { renderView } from './views/index';
 
@@ -25,6 +37,14 @@ const VERSION_TIMEOUT_MS = 3000;
 // The least gap between two `$.ui.invalidate("ui.render")` calls: at most
 // four a second, the engine folds further (ten a second).
 const RENDER_MIN_MS = 250;
+// How long an open waits for the engine's first `ui.render` before the pane
+// is reported as not shown: the dock mounts and asks for the tree within a
+// few frames; nothing arrives at all while the /diff panel holds the dock.
+export const OPEN_SETTLE_MS = 800;
+// After an invalidate, how long without a render before an open pane counts
+// as hidden (the /diff panel took the dock after the open) and the status
+// line under the prompt says so.
+export const HIDDEN_AFTER_MS = 2000;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 // The views in view-bar order; the hotkey is the 1-based position.
 const VIEWS: { view: View; label: string }[] = [
@@ -56,10 +76,88 @@ let poller: Poller | null = null;
 // the trailing one back while changes come faster than RENDER_MIN_MS.
 let invalidatedAt: number | null = null;
 let renderTimer: Timer | null = null;
+// Visibility watch: the timer that calls the pane hidden when an invalidate
+// draws no render, and the resolvers of opens waiting for their first render.
+let hiddenTimer: Timer | null = null;
+let renderWaiters: (() => void)[] = [];
+// Whether HIDDEN_STATUS is pinned under the prompt right now.
+let statusPinned = false;
 
 function invalidateNow($: EngineInterface): void {
   invalidatedAt = $.clock.now();
   $.ui.invalidate('ui.render');
+  watchForRender($);
+}
+
+// Arms (or re-arms) the hidden watch: if the engine asks for no tree within
+// HIDDEN_AFTER_MS of this invalidate, the open pane is not being drawn.
+function watchForRender($: EngineInterface): void {
+  if (!model.open) return;
+  hiddenTimer?.cancel();
+  hiddenTimer = $.clock.after(HIDDEN_AFTER_MS, () => {
+    hiddenTimer = null;
+    markHidden($);
+  });
+}
+
+function stopHiddenTimer(): void {
+  hiddenTimer?.cancel();
+  hiddenTimer = null;
+}
+
+// The pane is open but the engine draws it nowhere: pin the status line
+// (once per transition) and tell the marker.
+function markHidden($: EngineInterface): void {
+  if (!model.open || model.visibility === 'hidden') return;
+  model = reduce(model, { type: 'visibility', visibility: 'hidden' });
+  $.ui.status(HIDDEN_STATUS);
+  statusPinned = true;
+  updateMarker($);
+}
+
+function unpinStatus($: EngineInterface): void {
+  if (!statusPinned) return;
+  $.ui.status(undefined);
+  statusPinned = false;
+}
+
+// A render arrived: the pane is drawn, here and this wide. Settles every
+// open waiting on it and lifts the hidden status if it was pinned.
+function noteRender($: EngineInterface, e: RenderInput<'Pane'>): void {
+  const wasHidden = model.visibility === 'hidden';
+  model = reduce(model, {
+    type: 'render',
+    at: $.clock.now(),
+    placement: e.props.placement,
+    bodyColumns: e.props.bodyColumns,
+    viewportColumns: e.viewport?.columns ?? null,
+  });
+  stopHiddenTimer();
+  unpinStatus($);
+  const waiters = renderWaiters;
+  renderWaiters = [];
+  for (const resolve of waiters) resolve();
+  if (wasHidden) updateMarker($);
+}
+
+// Resolves on the next render of the pane, or after OPEN_SETTLE_MS without
+// one (then the pane is marked hidden), so an open can answer with where the
+// pane actually went.
+function awaitRender($: EngineInterface): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const done = (): void => {
+      if (settled) return;
+      settled = true;
+      timer.cancel();
+      resolve();
+    };
+    const timer = $.clock.after(OPEN_SETTLE_MS, () => {
+      markHidden($);
+      done();
+    });
+    renderWaiters.push(done);
+  });
 }
 
 // Asks for a redraw at most every RENDER_MIN_MS: a change inside the gap
@@ -154,13 +252,28 @@ function restorePane($: EngineInterface, isInteractive: boolean): Promise<void> 
       const { open, view } = saved as { open?: unknown; view?: unknown };
       if (open !== true) return;
       const known = VIEWS.find((v) => v.view === view);
-      return openPane($, known?.view ?? 'overview');
+      // A restore has nobody to answer; the outcome reaches the person
+      // through the status line (hidden) or the pane itself.
+      return openPane($, known?.view ?? 'overview').then(() => undefined);
     })
     .catch((err: unknown) => $.ui.log(`cctop: restore failed: ${String(err)}`));
 }
 
 function updateMarker($: EngineInterface): void {
   writeMarker(pollerEngine($), model).catch((err: unknown) => $.ui.log(`cctop: marker write failed: ${String(err)}`));
+}
+
+// Learns the session id once after session.start and writes the marker with
+// `open: false`: from then on `cctop pane status` can tell that the hooks
+// module runs in this session, before any pane was opened.
+function noteSession($: EngineInterface): void {
+  $.session
+    .id()
+    .then((id) => {
+      apply($, { type: 'session.id', id });
+      updateMarker($);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
 }
 
 function readUsage($: EngineInterface): void {
@@ -204,21 +317,33 @@ function persistPane($: EngineInterface): void {
 
 // Opens the pane (an open id is merely retitled) on `view` when given. Never
 // asks for `focus`: the keyboard stays the person's. The timers and the
-// poller run only while the pane is open, so they start here.
-async function openPane($: EngineInterface, view?: View): Promise<void> {
+// poller run only while the pane is open, so they start here. Resolves to
+// the sentence for the person once the engine's first render (or its
+// absence, OPEN_SETTLE_MS later) says where the pane went.
+async function openPane($: EngineInterface, view?: View): Promise<string> {
   await $.ui.open({ id: PANE_ID, title: 'cctop' });
   const opened = model.open;
-  model = { ...model, open: true, view: view ?? model.view, openedAt: opened ? model.openedAt : $.clock.now() };
+  const label = view === undefined ? undefined : VIEWS.find((v) => v.view === view)?.label;
+  model = {
+    ...model,
+    open: true,
+    view: view ?? model.view,
+    openedAt: opened ? model.openedAt : $.clock.now(),
+    visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
+  };
   persistPane($);
-  if (opened) {
-    invalidateNow($);
-    return;
+  if (!opened) {
+    if (model.binary === 'present') poller?.start();
+    if (model.turn.state === 'busy') startUsageTimer($);
+    readUsage($);
+    if (model.sessionId === null) apply($, { type: 'session.id', id: await $.session.id() });
+    updateMarker($);
   }
-  if (model.binary === 'present') poller?.start();
-  if (model.turn.state === 'busy') startUsageTimer($);
-  readUsage($);
-  if (model.sessionId === null) apply($, { type: 'session.id', id: await $.session.id() });
+  const rendered = awaitRender($);
+  invalidateNow($);
+  await rendered;
   updateMarker($);
+  return outcomeText(model, label);
 }
 
 // What every close does, whoever closes: the timers and the poller stop,
@@ -227,10 +352,12 @@ async function openPane($: EngineInterface, view?: View): Promise<void> {
 // is a no-op the second time round.
 function paneClosed($: EngineInterface): void {
   if (!model.open) return;
-  model = { ...model, open: false };
+  model = { ...model, open: false, visibility: 'unknown' };
   poller?.stop();
   stopUsageTimer();
   stopRenderTimer();
+  stopHiddenTimer();
+  unpinStatus($);
   persistPane($);
   updateMarker($);
 }
@@ -321,6 +448,9 @@ export const register: Register = (on) => {
   model = initialModel();
   stopUsageTimer();
   stopRenderTimer();
+  stopHiddenTimer();
+  renderWaiters = [];
+  statusPinned = false;
   invalidatedAt = null;
   poller?.stop();
   poller = null;
@@ -341,6 +471,7 @@ export const register: Register = (on) => {
       .then((result) => {
         readModelName($);
         readVersion($);
+        noteSession($);
         void detectBinary($).then(() => restorePane($, e.isInteractive));
         return result;
       });
@@ -408,7 +539,10 @@ export const register: Register = (on) => {
   });
 
   // `/cctop-pane` toggles the pane, `/cctop-pane <view>` opens it on that
-  // view, `/cctop-pane close` closes it; anything else prints the usage.
+  // view, `/cctop-pane close` closes it; anything else prints the usage. An
+  // open answers with where the pane went (outcomeText), never a bare
+  // "opened": the person must be able to tell a docked pane from one the
+  // /diff panel is hiding.
   on('command.run', { command: COMMAND }, async ($, e) => {
     const arg = e.args.trim();
     if (arg === 'close') {
@@ -420,13 +554,11 @@ export const register: Register = (on) => {
         await closePane($);
         return { text: 'cctop pane closed' };
       }
-      await openPane($);
-      return { text: 'cctop pane opened' };
+      return { text: await openPane($) };
     }
     const view = VIEWS.find((v) => v.view === arg);
     if (view === undefined) return { text: USAGE };
-    await openPane($, view.view);
-    return { text: `cctop pane opened on ${view.label}` };
+    return { text: await openPane($, view.view) };
   }).catch(($, _e, next) => {
     $.ui.log(`cctop: /${COMMAND} failed: ${next.error.message ?? next.error.kind}`);
     return { text: 'cctop pane could not be opened' };
@@ -437,9 +569,9 @@ export const register: Register = (on) => {
   // thing the native command does — open the pane — instead of running
   // `cctop split`, and says nothing back into the transcript.
   on('skill.prompt', { skill: 'cctop' }, async ($) => {
-    await openPane($);
+    const outcome = await openPane($);
     return {
-      text: 'The cctop pane is already open beside the transcript. Reply with exactly one line: "cctop is open in the side pane." Do not run any tool.',
+      text: `The cctop pane was just opened by the plugin; its state is: "${outcome}" Reply with exactly that sentence and nothing else. Do not run any tool.`,
     };
   }).catch(($, e, next) => {
     $.ui.log(`cctop: skill.prompt failed: ${next.error.message ?? next.error.kind}`);
@@ -463,7 +595,7 @@ export const register: Register = (on) => {
   // one line above the last tree that built, kept in the model for that.
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID) return next(e);
-    if (model.placement !== e.props.placement) model = { ...model, placement: e.props.placement };
+    noteRender($, e);
     const { Box, Text } = $.ui.resolve(e);
     try {
       const tree = buildPane($, e);

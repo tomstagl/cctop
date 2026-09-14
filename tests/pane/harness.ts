@@ -145,6 +145,8 @@ export type FakeExtras = {
     /** `onPress` of every Button drawn, by key; `press(key)` runs one. */
     presses: Map<string, () => void>;
     press: (key: string) => void;
+    /** Run on every `$.ui.invalidate("ui.render")`: how `fakeOn`'s surface learns to draw. */
+    renderListeners: (() => void)[];
   };
   clock: {
     /** Advances the clock by `ms`, firing every due timer in due order. */
@@ -234,7 +236,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       notice: () => {},
       invalidate: (event: string) => {
         invalidates[event] = (invalidates[event] ?? 0) + 1;
+        if (event === 'ui.render') for (const fn of engine.ui.renderListeners) fn();
       },
+      renderListeners: [] as (() => void)[],
       resolve: () => elements,
       log: (text: string) => {
         engine.ui.logs.push(text);
@@ -390,8 +394,34 @@ function makeNext(inner: (e: unknown) => Promise<unknown>, caught?: { error: Hoo
   });
 }
 
-export function fakeOn($: FakeEngine = fakeEngine()) {
+// The surface `fakeOn` stands in for: after every `ui.render` invalidate it
+// asks each open pane for its tree at `columns`, the way the engine's dock
+// (or inline band) does — unless `hidden`, which is the engine with the
+// /diff panel holding the dock: the pane stays open, nothing draws it.
+export type FakeSurface = {
+  /** The whole screen's width (`e.viewport.columns`). */
+  columns: number;
+  rows?: number;
+  placement?: 'dock' | 'inline';
+  /** The pane body's width; defaults to `columns`. */
+  bodyColumns?: number;
+  hidden?: boolean;
+};
+
+export function fakeOn($: FakeEngine = fakeEngine(), opts: { surface?: FakeSurface } = {}) {
   const registrations: Registration[] = [];
+  const surface = opts.surface;
+  if (surface !== undefined) {
+    $.ui.renderListeners.push(() => {
+      if (surface.hidden) return;
+      // The engine draws on its next frame, after the invalidating hook ran.
+      setTimeout(() => {
+        for (const id of $.ui.openIds) {
+          void dispatch('ui.render', paneRender(id, surface.columns, surface)).catch(() => undefined);
+        }
+      }, 0);
+    });
+  }
   const on = ((event: string, a: unknown, b?: unknown) => {
     const reg: Registration =
       typeof a === 'function'
@@ -449,7 +479,14 @@ export function fakeOn($: FakeEngine = fakeEngine()) {
 export function paneRender(
   id: string,
   columns: number,
-  extra: { rows?: number; placement?: 'dock' | 'inline'; isFocused?: boolean; title?: string } = {},
+  extra: {
+    rows?: number;
+    placement?: 'dock' | 'inline';
+    isFocused?: boolean;
+    title?: string;
+    /** Cells across the pane body; defaults to `columns` (the whole screen). */
+    bodyColumns?: number;
+  } = {},
 ): RenderInput<'Pane', 'terminal'> {
   const rows = extra.rows ?? 40;
   return {
@@ -460,7 +497,7 @@ export function paneRender(
     props: {
       title: extra.title ?? id,
       isFocused: extra.isFocused ?? false,
-      bodyColumns: columns,
+      bodyColumns: extra.bodyColumns ?? columns,
       placement: extra.placement ?? 'dock',
       scroll: { offset: 0, bodyRows: rows },
     },

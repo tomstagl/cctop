@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { RenderElement, SessionUsage, ToolCallResult } from 'claude-code';
 import { fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
+// The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
+const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { fixture } from './fixture';
 import { initialModel, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
@@ -107,7 +109,7 @@ function boot(usage?: SessionUsage) {
     reads.count += 1;
     return real();
   };
-  const { on, dispatch } = fakeOn($);
+  const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
   const start = () =>
     dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({
@@ -136,12 +138,15 @@ test('usage is read once on open and once after turn.complete, and every second 
   await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
   await settle();
   assert.equal(reads.count, 1, 'one read on open');
-  // A second of quiet lets the trailing redraw of the open land.
+  // A second of quiet lets the trailing redraw of the open land, and the
+  // surface's frame answers it (which stands the hidden watch down).
   $.clock.tick(1000);
+  await settle();
   assert.equal($.clock.pending(), 0, 'no timer armed while idle and open');
 
   await turnStart();
   assert.equal(reads.count, 1, 'turn.start reads nothing itself');
+  await settle();
   assert.equal($.clock.pending(), 1, 'the usage timer is armed for the turn');
   $.clock.tick(3000);
   await settle();

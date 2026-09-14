@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ProcessRunResult, RenderElement } from 'claude-code';
 import { fakeEngine, fakeOn, paneRender, type FakeEngine, type ProcessScript } from './harness';
+// The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
+const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { QUERY_FIXTURES, fixture } from './fixture';
 import { initialModel, reduce, QUERY_VERBS, type Model } from '../../plugin/hooks/model';
@@ -237,7 +239,7 @@ test('every tick refreshes the marker file', async () => {
 // poller runs while the pane is open and follows the turn state.
 function bootHooks(process: Record<string, ProcessScript>) {
   const $ = fakeEngine({ now: T0, process, env: { HOME: '/home/user' } });
-  const { on, dispatch } = fakeOn($);
+  const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
   const start = () =>
     dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({
