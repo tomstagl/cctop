@@ -1,0 +1,28 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 40, 24)"
+---
+╭cctop ─ session-b ── claude-sonnet-5 ·╮
+│ ■ ENDED 23:28  turn 6  8h 40m  /home/│
+│ default · medium · — · $18.7 · cpu — │
+╰──────────────────────────────────────╯
+─1 Context ─ 14 % est ──────────────────
+─2 Tokens & Cost ─ 28.88M ──────────────
+─3 Limits ──────────────────────────────
+─4 Turn ─ 8h 40m ───────────────────────
+─5 Tools ─ 140 calls ───────────────────
+─6 Agents & MCP ─ — ────────────────────
+─7 Files ─ 44 touched ──────────────────
+─9 Advisor ─ 1 of 3 ────────────────────
+╭8 Events ─ 299 ───────────────────────╮
+│ 23:25:36 tool   AskUserQuestion ✓ 83 │
+│ 23:27:06 tool   Bash git commit -m "…│
+│ 23:27:08 tool   Bash ✓ 32            │
+│ 23:27:53 tool   Bash git push lorem_…│
+│ 23:27:56 tool   Bash ✓ 16            │
+│ 23:28:41 tool   Bash git commit -m "…│
+│ 23:28:45 tool   Bash ✓ 49            │
+│ 23:29:30 note   /clear · continued i…│
+│ 23:29:30 api    cost-state $18.75 · …│
+╰──────────────────────────────────────╯
+ ?help 1-9 panels ⇥focus a ask t theme L

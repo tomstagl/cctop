@@ -116,6 +116,26 @@ impl Panel for Header {
                 l1.push(Span::styled("*", state.theme.warn()));
             }
         }
+        if let Some(pr) = state.status_facts.pr_number.or(state.agg.pr_number) {
+            let review = state
+                .status_facts
+                .pr_review_state
+                .as_deref()
+                .map(|r| format!(" {r}"))
+                .unwrap_or_default();
+            l1.push(Span::styled(format!("  PR #{pr}{review}"), accent));
+        }
+        // The session's title (custom, else Claude Code's own), when it says
+        // more than the name; clipped by the frame on narrow screens.
+        if let Some(t) = state
+            .status_facts
+            .session_name
+            .clone()
+            .or_else(|| state.agg.title.clone())
+            .filter(|t| !t.is_empty() && *t != s.name)
+        {
+            l1.push(Span::styled(format!("  “{}”", fmt::clip(&t, 40)), dim));
+        }
 
         // Line 2: permission mode · effort · plan · uptime · cost · cpu/rss
         let mut parts: Vec<Span> = Vec::new();
@@ -128,7 +148,16 @@ impl Panel for Header {
             .iter()
             .rev()
             .find_map(|t| t.effort.clone())
+            .or_else(|| state.status_facts.effort_level.clone())
             .unwrap_or_else(|| "—".into());
+        // Effective effort, with thinking and fast mode from the status line.
+        let mut effort = effort;
+        if state.status_facts.thinking_enabled == Some(false) {
+            effort.push_str(" no-think");
+        }
+        if state.status_facts.fast_mode {
+            effort.push_str(" fast");
+        }
         parts.push(Span::raw(effort));
         parts.push(Span::raw(s.tier.clone().unwrap_or_else(|| "—".into())));
         if let Some(st) = s.started_at_ms {
@@ -146,6 +175,14 @@ impl Panel for Header {
                 parts.push(Span::raw(format!("{cpu:.0}% {}", fmt::bytes(rss))))
             }
             _ => parts.push(Span::styled("cpu —", dim)),
+        }
+        if let Some(prev) = &state.previous_session {
+            if let (Some(c), Some(d)) = (prev.cost_usd, prev.duration_ms) {
+                parts.push(Span::styled(
+                    format!("prev {} {}", fmt::usd(c), fmt::duration_ms(d as i64)),
+                    dim,
+                ));
+            }
         }
         let mut l2: Vec<Span> = vec![Span::raw(" ")];
         for (i, p) in parts.into_iter().enumerate() {
@@ -198,6 +235,25 @@ mod tests {
         assert!(l1.contains("/home/user/project"), "{out}");
         let l2 = out.lines().nth(2).unwrap();
         assert!(l2.contains("auto · medium · — · $9.90 · cpu —"), "{out}");
+        // Title, PR, effort facts and the previous session, when known.
+        let mut app = app;
+        app.state.agg.pr_number = Some(142);
+        app.state.status_facts.pr_review_state = Some("approved".into());
+        app.state.status_facts.thinking_enabled = Some(false);
+        app.state.status_facts.fast_mode = true;
+        app.state.previous_session = Some(crate::claude_home::PreviousSession {
+            cost_usd: Some(0.16),
+            duration_ms: Some(75_000),
+            ..Default::default()
+        });
+        let out = render_to_string(&app, 100, 51);
+        assert!(out.contains("PR #142 approved"), "{out}");
+        assert!(out.contains("medium no-think fast"), "{out}");
+        assert!(out.contains("prev $0.16 1:15"), "{out}");
+        assert!(
+            out.contains("“lorem ipsum dolor sit a”"),
+            "the fixture's (anonymised) ai-title: {out}"
+        );
     }
 
     #[test]

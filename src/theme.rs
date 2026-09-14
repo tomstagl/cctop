@@ -537,3 +537,31 @@ mod render_tests {
         assert_eq!(app.mode_override, Some(crate::ui::layout::Mode::Wide));
     }
 }
+
+#[cfg(test)]
+mod fixture_b_snapshots {
+    //! Every panel on fixture B at the two sizes the coach PRD names
+    //! (US-004): the numbers here are the ones the coach's lights read.
+    use crate::app::{render_to_string, App};
+    use crate::ui::state::{SessionInfo, State};
+    use std::path::Path;
+
+    fn app() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.caps = crate::theme::Caps::full();
+        crate::attach::attach_headless(&mut app, &path, SessionInfo::from_fixture(&path));
+        app.set_theme("default-dark");
+        app
+    }
+
+    #[test]
+    fn panels_at_60x51_and_40x24() {
+        let app = app();
+        insta::assert_snapshot!("fixture_b_60x51", render_to_string(&app, 60, 51));
+        insta::assert_snapshot!("fixture_b_40x24", render_to_string(&app, 40, 24));
+    }
+}

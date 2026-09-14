@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn agents_panel_on_fixture() {
         let app = fixture_app();
-        let out = render_to_string(&app, 60, 70);
+        let out = render_to_string(&app, 72, 70);
         assert!(out.contains("6 Agents & MCP ─ 0/1 agents"), "{out}");
         assert!(
             out.contains("✓ fork     Check whether a setup step …"),

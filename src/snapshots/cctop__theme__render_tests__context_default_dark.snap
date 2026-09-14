@@ -3,7 +3,7 @@ source: src/theme.rs
 expression: text
 ---
 ╭cctop ─ session-a ── claude-sonnet-5 · v2.1.247 ──────────╮
-│ ■ ENDED 10:17  turn 14  19:54  /home/user/project        │
+│ ■ ENDED 10:17  turn 14  19:54  /home/user/project  “lorem│
 │ auto · medium · — · $9.90 · cpu —                        │
 ╰──────────────────────────────────────────────────────────╯
 ╭1 Context ─ 40 % est ─────────────────────────────────────╮
