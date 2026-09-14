@@ -244,7 +244,7 @@ impl Aggregate {
                         at: s.timestamp.clone(),
                         content: s.content.clone().unwrap_or_default(),
                     }),
-                    SystemKind::Other => {}
+                    _ => {}
                 }
             }
             Line::QueueOperation(q) => match q.operation.as_str() {

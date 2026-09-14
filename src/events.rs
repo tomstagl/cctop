@@ -202,7 +202,7 @@ impl Log {
                         kind: Kind::Away,
                         text: crate::ui::fmt::clip(s.content.as_deref().unwrap_or("away"), 80),
                     }),
-                    SystemKind::Other => {}
+                    _ => {}
                 }
             }
             Line::CostState(c) => {

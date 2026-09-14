@@ -14,6 +14,7 @@ pub mod discover;
 pub mod events;
 pub mod files;
 pub mod git;
+pub mod harness_facts;
 pub mod hooks;
 pub mod install;
 pub mod ledger;
