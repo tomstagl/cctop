@@ -103,6 +103,24 @@ impl SessionInfo {
         }
     }
 
+    /// A real transcript whose session the registry no longer lists (the id
+    /// was rotated by `/clear`, or the process exited): ended, but keeping
+    /// its id so the status and hook spools written under it still join,
+    /// and named by the id's first eight characters. `cwd` and `version`
+    /// come from the lines as they are applied.
+    pub fn from_transcript(path: &std::path::Path) -> SessionInfo {
+        let session_id = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        SessionInfo {
+            name: session_id.chars().take(8).collect(),
+            session_id,
+            alive: false,
+            ..Default::default()
+        }
+    }
+
     /// Re-check liveness; on the first miss, freeze the clock at `now_ms`.
     pub fn refresh_alive(&mut self, now_ms: i64) {
         let Some(pid) = self.pid else {

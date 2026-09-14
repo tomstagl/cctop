@@ -196,7 +196,8 @@ struct MetricsArgs {
 /// How to pick the Claude Code session to attach to.
 #[derive(Args, Debug, Default, Clone)]
 struct Attach {
-    /// Session id (or ≥ 8-char prefix), name, pid, or a fixture .jsonl path.
+    /// Session id (or ≥ 8-char prefix), name, pid, or a fixture .jsonl path;
+    /// an id no longer running is read from its transcript, ended.
     #[arg(long, global = true)]
     session: Option<String>,
     /// Attach to the newest session running in this directory.

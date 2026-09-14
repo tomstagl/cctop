@@ -9,6 +9,13 @@ cctop query <what> [--session <id|name|pid|fixture.jsonl>] [--cwd <dir>] [--wait
 
 Exit codes: `0` ok · `2` no session found (message on stderr) · `1` bad argument.
 
+`--session` takes a session id (or a prefix of at least 8 characters), the
+session's name, its pid, or a path to a `.jsonl` fixture. An id the registry
+no longer lists — the process exited, or `/clear` gave it a new id — still
+answers from its transcript under `~/.claude/projects/`, as an ended session
+(`session.alive: false`, `pid: null`); only an id with no transcript on disk
+exits 2.
+
 ## Value shape
 
 Every measured number is an object:
