@@ -210,6 +210,25 @@ pub struct StatusFacts {
     pub spend_limit_pct: Option<f64>,
 }
 
+/// What the model waits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitingKind {
+    /// A permission dialog is open.
+    Permission,
+    /// An `AskUserQuestion` / `ExitPlanMode` call has no answer yet.
+    Question,
+    /// Claude Code notified (`idle_prompt`, `agent_needs_input`).
+    Notification,
+    /// The turn ended with a question mark and nothing came back.
+    Asked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Waiting {
+    pub kind: WaitingKind,
+    pub since_ms: i64,
+}
+
 /// A cache countdown, clock-driven.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheClock {
@@ -239,6 +258,9 @@ pub struct State {
     pub limits_series_5h: Vec<(i64, f64)>,
     /// Other busy sessions in the registry (they share the rate limit).
     pub other_live_sessions: usize,
+    /// Every other live session: `(name, busy, epoch ms its status last
+    /// changed)`, for "idle since" on the Limits panel.
+    pub other_sessions: Vec<(String, bool, i64)>,
     /// The registry entry of this session's pid once it carries another
     /// session id (`/clear` rewrites it under the running process); the
     /// loop re-attaches to it.
@@ -893,6 +915,29 @@ impl State {
             .collect();
     }
 
+    /// The rate-limit hit the transcript recorded, if the last API error was
+    /// a 429: `(kind, resets_at epoch ms, low-priority retry seconds)`.
+    pub fn rate_limit_hit(&self) -> Option<(String, Option<i64>, Option<u64>)> {
+        let e = self.agg.api_errors.last()?;
+        if e.error.as_deref() != Some("rate_limit") && e.status != Some(429) {
+            return None;
+        }
+        // Only the newest error counts, and only while nothing succeeded since.
+        let err_at =
+            e.at.as_deref()
+                .and_then(crate::metrics::cost::parse_ts_ms)?;
+        if self.last_api_call_ms().is_some_and(|c| c > err_at) {
+            return None;
+        }
+        Some((
+            e.rate_limit_type
+                .clone()
+                .unwrap_or_else(|| "rate limit".into()),
+            e.resets_at.map(|s| (s * 1000.0) as i64),
+            e.low_priority_retry_after_s,
+        ))
+    }
+
     /// Take what `~/.claude.json` says about the account and this directory.
     pub fn apply_claude_home(&mut self, v: &serde_json::Value) {
         if let Some(t) = crate::claude_home::rate_limit_tier(v) {
@@ -1065,6 +1110,95 @@ impl State {
         let total: u64 = turns.iter().map(|t| t.harness_tokens).sum();
         let approx = turns.iter().any(|t| t.harness_approx);
         Some((total / turns.len() as u64, approx))
+    }
+
+    /// The last confirmed test run: `(command summary, passed, epoch ms)`.
+    pub fn last_check(&self) -> Option<(String, bool, i64)> {
+        self.tools
+            .calls
+            .iter()
+            .rev()
+            .find(|c| c.is_confirmed_test() && c.finished_at.is_some())
+            .map(|c| {
+                (
+                    crate::ui::fmt::clip(&c.input_summary, 24),
+                    c.test_marker == crate::transcript::TestMarker::Passed,
+                    c.finished_at.unwrap_or(0),
+                )
+            })
+    }
+
+    /// Source edits (Edit / Write / MultiEdit / NotebookEdit) in the current
+    /// turn.
+    pub fn edits_this_turn(&self) -> usize {
+        self.files.files.values().map(|f| f.edits_this_turn).sum()
+    }
+
+    /// Edits since the last confirmed test run (or since the start).
+    pub fn edits_since_check(&self) -> usize {
+        let since = self.last_check().map(|(_, _, at)| at).unwrap_or(i64::MIN);
+        self.tools
+            .calls
+            .iter()
+            .filter(|c| {
+                c.class == crate::phase::ToolClass::Implement
+                    && c.started_at.is_some_and(|s| s > since)
+            })
+            .count()
+    }
+
+    /// What the model is waiting on, if anything.
+    pub fn waiting(&self) -> Option<Waiting> {
+        if self.session.permission_pending {
+            return Some(Waiting {
+                kind: WaitingKind::Permission,
+                since_ms: self
+                    .session
+                    .permission_waiting_since_ms
+                    .unwrap_or(self.clock_ms()),
+            });
+        }
+        if let Some(c) = self.tools.running() {
+            if matches!(c.name.as_str(), "AskUserQuestion" | "ExitPlanMode") {
+                return Some(Waiting {
+                    kind: WaitingKind::Question,
+                    since_ms: c.started_at.unwrap_or(self.clock_ms()),
+                });
+            }
+        }
+        if let Some((kind, at)) = &self.session.notification {
+            if matches!(kind.as_str(), "agent_needs_input" | "idle_prompt") {
+                return Some(Waiting {
+                    kind: WaitingKind::Notification,
+                    since_ms: *at,
+                });
+            }
+        }
+        let t = self.agg.current_turn()?;
+        if t.ended_with_question && t.duration_ms.is_some() {
+            let at = t
+                .last_at
+                .as_deref()
+                .and_then(crate::metrics::cost::parse_ts_ms)?;
+            return Some(Waiting {
+                kind: WaitingKind::Asked,
+                since_ms: at,
+            });
+        }
+        None
+    }
+
+    /// Interrupts this session and the output tokens the cut turns had
+    /// produced.
+    pub fn interrupts_summary(&self) -> (usize, u64) {
+        let cut: u64 = self
+            .agg
+            .turns
+            .iter()
+            .filter(|t| t.interrupted_after_calls.is_some())
+            .map(|t| t.usage.output)
+            .sum();
+        (self.agg.interrupts.len(), cut)
     }
 
     /// The cost gradient at the current context, priced cold when the cache

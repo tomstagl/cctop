@@ -148,6 +148,13 @@ pub struct Turn {
     pub harness_approx: bool,
     /// Characters of prose the model wrote this turn (text blocks).
     pub prose_chars: usize,
+    /// Human steers Claude Code folded into this turn (`queued_command`
+    /// attachments with a human origin).
+    pub steers: usize,
+    /// `turn_duration.pendingBackgroundAgentCount` at turn end.
+    pub pending_background_agents: Option<u64>,
+    /// A Stop hook prevented the turn from ending (`preventedContinuation`).
+    pub hook_blocked: bool,
 }
 
 impl Turn {
@@ -290,6 +297,19 @@ pub struct Aggregate {
     pub agent_setting: Option<String>,
     /// A `bridge-session` line: the session is reachable remotely.
     pub bridged: bool,
+    /// Hook wall time by command, over the session (`stop_hook_summary`).
+    pub hook_ms_by_command: std::collections::BTreeMap<String, u64>,
+    /// The last `goal_status` attachment (`/goal`): met, tokens, iterations.
+    pub goal: Option<GoalStatus>,
+}
+
+/// `/goal` progress as Claude Code reports it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GoalStatus {
+    pub met: bool,
+    pub tokens: Option<u64>,
+    pub iterations: Option<u64>,
+    pub duration_ms: Option<u64>,
 }
 
 impl Aggregate {
@@ -413,6 +433,37 @@ impl Aggregate {
             }
             Line::Assistant(a) => self.push_assistant(a),
             Line::Attachment(att) => {
+                use crate::transcript::AttachmentKind;
+                match att.kind() {
+                    AttachmentKind::QueuedCommand { origin_kind, .. }
+                        if origin_kind.as_deref() != Some("task-notification") =>
+                    {
+                        if let Some(t) = self.turns.last_mut() {
+                            t.steers += 1;
+                        }
+                    }
+                    AttachmentKind::GoalStatus {
+                        met,
+                        tokens,
+                        iterations,
+                        duration_ms,
+                    } => {
+                        self.goal = Some(GoalStatus {
+                            met,
+                            tokens,
+                            iterations,
+                            duration_ms,
+                        });
+                    }
+                    AttachmentKind::HookSuccess {
+                        command,
+                        duration_ms,
+                        ..
+                    } => {
+                        *self.hook_ms_by_command.entry(command).or_default() += duration_ms;
+                    }
+                    _ => {}
+                }
                 if let Some(t) = self.turns.last_mut() {
                     let (tokens, approx) = att.tokens_est();
                     t.harness_tokens += tokens;
@@ -426,13 +477,23 @@ impl Aggregate {
                         if let (Some(ms), Some(t)) = (s.duration_ms, self.turns.last_mut()) {
                             t.duration_ms = Some(ms);
                             t.last_at = s.timestamp.clone().or(t.last_at.take());
+                            t.pending_background_agents = s.pending_background_agent_count;
                         }
                     }
                     SystemKind::StopHookSummary => {
+                        for h in &s.hook_infos {
+                            let cmd = if h.command.is_empty() {
+                                "hook".to_string()
+                            } else {
+                                h.command.clone()
+                            };
+                            *self.hook_ms_by_command.entry(cmd).or_default() += h.duration_ms;
+                        }
                         if let Some(t) = self.turns.last_mut() {
                             t.hook_runs += s.hook_infos.len();
                             t.hook_ms += s.hook_infos.iter().map(|h| h.duration_ms).sum::<u64>();
                             t.hook_errors += s.hook_errors.len();
+                            t.hook_blocked |= s.prevented_continuation;
                         }
                     }
                     SystemKind::AwaySummary => self.away.push(Away {

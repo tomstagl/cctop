@@ -27,7 +27,7 @@ impl Panel for TurnPanel {
             .map(fmt::duration_ms)
     }
     fn min_rows(&self) -> u16 {
-        3
+        4
     }
     fn priority(&self) -> u8 {
         60
@@ -43,8 +43,19 @@ impl Panel for TurnPanel {
         let now = state.clock_ms();
         let turn = state.agg.current_turn();
 
-        // Line 1: elapsed · api calls · api vs tool time · retries
+        // Line 1: phase · elapsed · api calls · api vs tool time · retries
         let mut l1 = vec![Span::raw(" ")];
+        if let Some((phase, run)) = state.tools.phase_now() {
+            if turn.is_some_and(|t| t.duration_ms.is_none()) || state.tools.running().is_some() {
+                let word = match state.waiting() {
+                    Some(w) if w.kind != crate::ui::state::WaitingKind::Asked => {
+                        "WAITING".to_string()
+                    }
+                    _ => phase.word().to_string(),
+                };
+                l1.push(Span::styled(format!("{word} ×{run}  "), accent));
+            }
+        }
         match turn {
             Some(t) => {
                 let el = t
@@ -86,18 +97,18 @@ impl Panel for TurnPanel {
             }
         }
 
-        // Line 2: what is running
+        // Line 2: what is running, or what the model waits on
         let mut l2 = vec![Span::raw(" ")];
-        if state.session.permission_pending {
-            let since = state
-                .session
-                .permission_waiting_since_ms
-                .map(|s| format!(" for {}", fmt::duration_ms(now - s)))
-                .unwrap_or_default();
-            l2.push(Span::styled(
-                format!("◆ waiting for permission{since}"),
-                amber,
-            ));
+        use crate::ui::state::WaitingKind;
+        if let Some(w) = state.waiting() {
+            let since = fmt::duration_ms(now - w.since_ms);
+            let text = match w.kind {
+                WaitingKind::Permission => format!("◆ waiting for permission for {since}"),
+                WaitingKind::Question => format!("◆ waiting {since} · Claude asked a question"),
+                WaitingKind::Notification => format!("◆ waiting {since} · needs your input"),
+                WaitingKind::Asked => format!("◆ asked a question {since} ago · no reply yet"),
+            };
+            l2.push(Span::styled(text, amber));
         } else if let Some(c) = state.tools.running() {
             let el = c.started_at.map(|st| now - st).unwrap_or(0);
             let pid = state
@@ -119,7 +130,47 @@ impl Panel for TurnPanel {
             l2.push(Span::styled("idle", dim));
         }
 
-        // Line 3: hooks · permission waits · queued
+        // Line 3: edits ✓ last check · steers · interrupts
+        let mut l2b = vec![Span::raw(" ")];
+        let edits = state.edits_this_turn();
+        l2b.push(Span::raw(format!("edits {edits}")));
+        match state.last_check() {
+            Some((cmd, passed, at)) => {
+                let mark = if passed { "✓" } else { "✗" };
+                let style = if passed {
+                    state.theme.ok()
+                } else {
+                    state.theme.crit()
+                };
+                l2b.push(Span::styled(format!(" {mark} {cmd}"), style));
+                l2b.push(Span::styled(
+                    format!(" {} ago", fmt::duration_ms(now - at)),
+                    dim,
+                ));
+                let unchecked = state.edits_since_check();
+                if unchecked > 0 {
+                    l2b.push(Span::styled(format!(" · {unchecked} unchecked"), amber));
+                }
+            }
+            None => l2b.push(Span::styled(" ✓ none", if edits > 0 { amber } else { dim })),
+        }
+        if let Some(t) = turn {
+            if t.steers > 0 {
+                l2b.push(Span::styled(format!(" · steers {}", t.steers), dim));
+            }
+            if !t.human {
+                l2b.push(Span::styled(" · machine turn", dim));
+            }
+        }
+        let (interrupts, cut) = state.interrupts_summary();
+        if interrupts > 0 {
+            l2b.push(Span::styled(
+                format!(" · interrupts {interrupts} ({} out cut)", fmt::tokens(cut)),
+                dim,
+            ));
+        }
+
+        // Line 4: hooks by command · permission waits · queued · background · goal
         let mut l3 = vec![Span::raw(" ")];
         match turn {
             Some(t) if t.hook_runs > 0 => {
@@ -127,11 +178,25 @@ impl Panel for TurnPanel {
                     "hooks {} runs · {}ms",
                     t.hook_runs, t.hook_ms
                 )));
+                if let Some((cmd, ms)) = state
+                    .agg
+                    .hook_ms_by_command
+                    .iter()
+                    .max_by_key(|(_, ms)| **ms)
+                {
+                    l3.push(Span::styled(
+                        format!(" ({} {}ms)", fmt::clip(cmd, 14), ms),
+                        dim,
+                    ));
+                }
                 if t.hook_errors > 0 {
                     l3.push(Span::styled(
                         format!(" ({} failed)", t.hook_errors),
                         state.theme.crit(),
                     ));
+                }
+                if t.hook_blocked {
+                    l3.push(Span::styled(" · a hook blocked the stop", amber));
                 }
             }
             _ => l3.push(Span::styled("hooks —", dim)),
@@ -152,9 +217,35 @@ impl Panel for TurnPanel {
                 amber,
             ));
         }
+        if !state.session.background_tasks.is_empty() {
+            l3.push(Span::styled(
+                format!("   background {}", state.session.background_tasks.len()),
+                accent,
+            ));
+        } else if let Some(n) = turn
+            .and_then(|t| t.pending_background_agents)
+            .filter(|n| *n > 0)
+        {
+            l3.push(Span::styled(format!("   background agents {n}"), accent));
+        }
+        if let Some(g) = &state.agg.goal {
+            let mut s = format!("   goal {}", if g.met { "met" } else { "open" });
+            if let (Some(i), Some(t)) = (g.iterations, g.tokens) {
+                s.push_str(&format!(" · {i} it · {}", fmt::tokens(t)));
+            }
+            l3.push(Span::styled(
+                s,
+                if g.met { state.theme.ok() } else { amber },
+            ));
+        }
 
         frame.render_widget(
-            Paragraph::new(vec![Line::from(l1), Line::from(l2), Line::from(l3)]),
+            Paragraph::new(vec![
+                Line::from(l1),
+                Line::from(l2),
+                Line::from(l2b),
+                Line::from(l3),
+            ]),
             inner,
         );
     }
@@ -181,6 +272,66 @@ mod tests {
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         app
+    }
+
+    fn fixture_b_app() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        app
+    }
+
+    #[test]
+    fn turn_panel_on_fixture_b_shows_phase_check_and_interrupt() {
+        let app = fixture_b_app();
+        let out = render_to_string(&app, 120, 70);
+        // The spliced tail: two gitOperation commits end the call list.
+        assert!(out.contains("COMMITTING ×"), "{out}");
+        assert!(out.contains("edits 0 ✓ "), "{out}");
+        assert!(out.contains("unchecked"), "{out}");
+        assert!(out.contains("interrupts 1 ("), "{out}");
+        assert!(out.contains("out cut)"), "{out}");
+    }
+
+    #[test]
+    fn waiting_states_and_goal() {
+        use crate::ui::state::WaitingKind;
+        let mut app = fixture_b_app();
+        assert!(app.state.waiting().is_none());
+        // A pending AskUserQuestion is the strongest signal.
+        app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-09-15T00:00:00Z","message":{"id":"q1","model":"claude-opus-5","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"q":"which?"}]}}],"usage":{"input_tokens":1}}}"#).unwrap());
+        app.state.session.ended_at_ms = app.state.last_line_at_ms.map(|t| t + 240_000);
+        let w = app.state.waiting().unwrap();
+        assert_eq!(w.kind, WaitingKind::Question);
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains("◆ waiting 4:00 · Claude asked a question"),
+            "{out}"
+        );
+        assert!(out.contains("WAITING ×"), "{out}");
+        // Answered: nothing pending; a turn that ended asking is "asked".
+        app.feed(Line::parse(r#"{"type":"user","timestamp":"2026-09-15T00:01:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"b"}]},"toolUseResult":{"questions":[{}],"answers":{"q":"b"}}}"#).unwrap());
+        app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-09-15T00:01:05Z","message":{"id":"a2","model":"claude-opus-5","content":[{"type":"text","text":"Shall I continue?"}],"stop_reason":"end_turn","usage":{"input_tokens":1}}}"#).unwrap());
+        app.feed(Line::parse(r#"{"type":"system","subtype":"turn_duration","durationMs":65000,"timestamp":"2026-09-15T00:01:05Z"}"#).unwrap());
+        app.state.session.ended_at_ms = app.state.last_line_at_ms.map(|t| t + 30_000);
+        assert_eq!(app.state.waiting().unwrap().kind, WaitingKind::Asked);
+        // A goal_status attachment shows on the last row.
+        app.feed(Line::parse(r#"{"type":"attachment","timestamp":"2026-09-15T00:01:06Z","attachment":{"type":"goal_status","met":false,"condition":"c","iterations":3,"durationMs":1000,"tokens":60858}}"#).unwrap());
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains("◆ asked a question 0:30 ago · no reply yet"),
+            "{out}"
+        );
+        assert!(out.contains("goal open · 3 it · 60k"), "{out}");
     }
 
     #[test]

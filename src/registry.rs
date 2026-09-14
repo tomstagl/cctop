@@ -32,6 +32,10 @@ pub struct Session {
     /// Unix epoch milliseconds.
     #[serde(default)]
     pub updated_at: u64,
+    /// Unix epoch milliseconds when `status` last changed: how long the
+    /// session has been idle or busy.
+    #[serde(default)]
+    pub status_updated_at: u64,
     #[serde(default)]
     pub version: String,
     #[serde(default)]

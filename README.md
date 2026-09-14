@@ -232,6 +232,9 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **5-hour usage** <a id="limit_5h"></a> `limit_5h` | % | `rate_limits.five_hour.used_percentage` from the status line | D3 | Account-wide: other live sessions contribute | never |
 | **7-day usage** <a id="limit_7d"></a> `limit_7d` | % | `rate_limits.seven_day.used_percentage` from the status line | D3 | Account-wide | never |
 | **Resets in** <a id="limit_reset"></a> `limit_reset` | duration | `resets_at` − now | D3 | — | never |
+| **Rate limited** <a id="limit_hit"></a> `limit_hit` | enum | The newest API-error line with `error: rate_limit` (or status 429): `quotaLimits.rateLimitType`, `resetsAt`, `lowPriorityRetryAfterSeconds` — cleared by the next successful call | D2 | Exact without the shim: Claude Code writes the 429 into the transcript | never |
+| **Spend limit** <a id="spend_limit"></a> `spend_limit` | % | `rate_limits.spend_limit.used_percentage` from the status line, for accounts with a monthly limit | D3 | — | never |
+| **Other sessions** <a id="other_sessions"></a> `other_sessions` | list | Live registry entries other than this one: busy/idle and how long (`statusUpdatedAt`) | D1 | They share the rate limit | never |
 | **Projected exhaustion** <a id="limit_exhaustion"></a> `limit_exhaustion` | duration | Least-squares slope of used_percentage samples over the last 30 min, extrapolated to 100 % | D3 | Needs ≥ 3 samples; rate-limit units are plan-specific, so tokens are not used | ≈ always |
 
 ### Turn
@@ -242,6 +245,13 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **API calls** <a id="api_calls"></a> `api_calls` | count | Distinct `message.id`s in the turn | D2 | — | never |
 | **API time** <a id="api_time"></a> `api_time` | ms | `cost-state.totalAPIDuration` for the session; per turn, gaps between a user/tool_result line and the next assistant line | D11 D2 | — | ≈ per turn |
 | **Retry time** <a id="retry_time"></a> `retry_time` | ms | `totalAPIDuration − totalAPIDurationWithoutRetries` | D11 | — | never |
+| **Phase** <a id="phase"></a> `phase` | enum | The last call's phase over the last seven calls (`phase.rs`: EXPLORING / IMPLEMENTING / VERIFYING / COMMITTING / PLANNING / DELEGATING / BROWSING / OPS / WAITING) and its run length; WAITING when a permission dialog, an `AskUserQuestion` or a Notification is pending | D2 D4 | A test-class command is VERIFYING only once its output confirmed a run | never |
+| **Last check** <a id="last_check"></a> `last_check` | enum | The newest test-class Bash call whose output confirmed a run (`test result:`, `N passed`, `# pass`…), its verdict and age; `edits since` counts Edit/Write calls after it | D2 | — | never |
+| **Waiting on you** <a id="waiting"></a> `waiting` | enum | A pending permission dialog (hook), a running `AskUserQuestion` / `ExitPlanMode`, an `idle_prompt` / `agent_needs_input` notification, or a finished turn whose last text ended with `?`; with the wait's duration | D2 D4 | — | never |
+| **Steers** <a id="steers"></a> `steers` | count | Human `queued_command` attachments folded into the turn (absorbed mid-turn); task notifications are machine turns, not steers | D2 | — | never |
+| **Interrupts** <a id="interrupts"></a> `interrupts` | count | `[Request interrupted by user…]` lines with `interruptedMessageId`, and the output tokens the cut turns had produced | D2 | — | never |
+| **Hook time by command** <a id="hook_by_command"></a> `hook_by_command` | ms | `stop_hook_summary.hookInfos[].command` and `hook_success` attachments summed per command over the session; `preventedContinuation` marks a blocked stop | D2 | — | never |
+| **Goal** <a id="goal"></a> `goal` | enum | The last `goal_status` attachment (`/goal`): met, iterations, tokens | D2 | — | never |
 | **Hook runs** <a id="hook_runs"></a> `hook_runs` | count | Number of `hookInfos` entries in the turn's `stop_hook_summary` | D2 | Only Stop hooks are summarised by Claude Code; other hook events need `cctop install` | never |
 | **Hook time** <a id="hook_ms"></a> `hook_ms` | ms | Σ `hookInfos[].durationMs` for the turn | D2 D4 | — | never |
 | **Permission wait** <a id="permission_wait"></a> `permission_wait` | ms | PermissionRequest → PostToolUse for the same tool_use_id, minus the tool's median duration | D4 | PreToolUse fires before the prompt, so it cannot bound the wait | ≈ always |

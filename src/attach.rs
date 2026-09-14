@@ -107,11 +107,24 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             last_reg = Instant::now();
             if let Some(dir) = crate::registry::default_dir() {
                 let sessions = crate::registry::list(&dir);
-                state.other_live_sessions = sessions
+                let others: Vec<&crate::registry::Session> = sessions
                     .iter()
                     .filter(|s| Some(s.pid) != my_pid && s.is_alive())
+                    .collect();
+                state.other_live_sessions = others
+                    .iter()
                     .filter(|s| s.status() == crate::registry::Status::Busy)
                     .count();
+                state.other_sessions = others
+                    .iter()
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            s.status() == crate::registry::Status::Busy,
+                            s.status_updated_at as i64,
+                        )
+                    })
+                    .collect();
                 if state.rotated_to.is_none() {
                     state.rotated_to = rotated_entry(&sessions, my_pid, &state.session.session_id);
                 }

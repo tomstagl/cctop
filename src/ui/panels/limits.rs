@@ -33,7 +33,7 @@ impl Panel for LimitsPanel {
         })
     }
     fn min_rows(&self) -> u16 {
-        3
+        4
     }
     fn priority(&self) -> u8 {
         70
@@ -44,14 +44,36 @@ impl Panel for LimitsPanel {
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
         let dim = state.theme.dim();
+        let now = state.clock_ms();
+        // A 429 in the transcript is exact, shim or not.
+        let hit_line = state.rate_limit_hit().map(|(kind, resets, retry)| {
+            let mut spans = vec![Span::styled(
+                format!(" ● rate limited ({})", kind.replace('_', " ")),
+                state.theme.crit(),
+            )];
+            if let Some(r) = resets {
+                spans.push(Span::styled(
+                    format!(
+                        " · resets {} (in {})",
+                        fmt::clock_hhmm(r),
+                        fmt::duration_ms(r - now)
+                    ),
+                    dim,
+                ));
+            }
+            if let Some(s) = retry {
+                spans.push(Span::styled(format!(" · low-priority retry {s} s"), dim));
+            }
+            Line::from(spans)
+        });
         let Some(l) = &state.limits else {
-            frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(" — run cctop install", dim))),
-                inner,
-            );
+            let mut lines = vec![Line::from(Span::styled(" — run cctop install", dim))];
+            if let Some(h) = hit_line {
+                lines.insert(0, h);
+            }
+            frame.render_widget(Paragraph::new(lines), inner);
             return;
         };
-        let now = state.clock_ms();
         let gauge_w = inner.width.saturating_sub(24) as usize;
         let row = |label: &str, pct: f64, resets: Option<i64>| {
             let mut spans = vec![Span::raw(format!(" {label}  "))];
@@ -108,6 +130,54 @@ impl Panel for LimitsPanel {
         }
         lines.push(Line::from(l2));
         lines.push(row("7 d", l.seven_day_pct, l.seven_day_resets_at_ms));
+        // The 429 state when hit; else the spend limit and the other sessions.
+        if let Some(h) = hit_line {
+            lines.push(h);
+            frame.render_widget(Paragraph::new(lines), inner);
+            return;
+        }
+        let mut l4: Vec<Span> = Vec::new();
+        if let Some(p) = state.status_facts.spend_limit_pct {
+            l4.push(Span::raw(" spend limit "));
+            l4.push(Span::styled(
+                format!("{p:.0} %"),
+                band_style(&state.theme, p / 100.0, 0.6, 0.85),
+            ));
+        }
+        if !state.other_sessions.is_empty() {
+            let mut parts: Vec<String> = state
+                .other_sessions
+                .iter()
+                .take(3)
+                .map(|(name, busy, since)| {
+                    let name = if name.is_empty() {
+                        "session"
+                    } else {
+                        name.as_str()
+                    };
+                    let since = if *since > 0 {
+                        format!(" {}", fmt::duration_ms(now - since))
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        "{} {}{since}",
+                        fmt::clip(name, 12),
+                        if *busy { "busy" } else { "idle" }
+                    )
+                })
+                .collect();
+            if state.other_sessions.len() > 3 {
+                parts.push(format!("+{}", state.other_sessions.len() - 3));
+            }
+            l4.push(Span::styled(
+                format!("  others: {}", parts.join(" · ")),
+                dim,
+            ));
+        }
+        if !l4.is_empty() {
+            lines.push(Line::from(l4));
+        }
         frame.render_widget(Paragraph::new(lines), inner);
     }
 }
@@ -116,8 +186,55 @@ impl Panel for LimitsPanel {
 mod tests {
     use crate::app::{render_to_string, App};
     use crate::metrics::Pricing;
-    use crate::transcript::parse_file;
+    use crate::transcript::{parse_file, Line};
     use crate::ui::state::{Limits, SessionInfo, State};
+
+    #[test]
+    fn a_429_line_shows_the_reset_without_the_shim() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-08-27T10:30:00Z","message":{"id":"e1","model":"<synthetic>","content":[{"type":"text","text":"limit"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1787830200,"lowPriorityRetryAfterSeconds":20}}"#).unwrap());
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        let hit = app.state.rate_limit_hit().unwrap();
+        assert_eq!(hit.0, "five_hour");
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains(
+                "● rate limited (five hour) · resets 11:30 (in 1h 00m) · low-priority retry 20 s"
+            ),
+            "{out}"
+        );
+        // A later successful call clears it.
+        app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-08-27T10:40:00Z","message":{"id":"ok1","model":"claude-sonnet-5","content":[{"type":"text","text":"back"}],"usage":{"input_tokens":5}}}"#).unwrap());
+        assert!(app.state.rate_limit_hit().is_none());
+        app.state.other_sessions = vec![(
+            "pane-work".into(),
+            false,
+            app.state.last_line_at_ms.unwrap() - 600_000,
+        )];
+        app.state.status_facts.spend_limit_pct = Some(40.0);
+        app.state.limits = Some(Limits {
+            five_hour_pct: 42.0,
+            seven_day_pct: 17.0,
+            ..Default::default()
+        });
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains("spend limit 40 %  others: pane-work idle 10:00"),
+            "{out}"
+        );
+    }
     use std::path::Path;
 
     fn fixture_app() -> App {

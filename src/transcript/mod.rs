@@ -718,6 +718,9 @@ pub struct SystemLine {
     pub hook_infos: Vec<HookInfo>,
     #[serde(default)]
     pub hook_errors: Vec<Value>,
+    /// `stop_hook_summary`: a hook blocked the turn from ending.
+    #[serde(default)]
+    pub prevented_continuation: bool,
     /// `away_summary`, `local_command`, `informational` and free-form text.
     pub content: Option<String>,
     pub level: Option<String>,
