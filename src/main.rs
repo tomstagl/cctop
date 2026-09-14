@@ -126,9 +126,6 @@ struct RunArgs {
     /// Also send critical alerts as desktop notifications.
     #[arg(long)]
     notify: bool,
-    /// Force a layout: auto, narrow or wide (overrides config).
-    #[arg(long, value_parser = ["auto", "narrow", "wide"])]
-    layout: Option<String>,
     /// Open this view: dashboard or coach (overrides config).
     #[arg(long, value_parser = ["dashboard", "coach"])]
     view: Option<String>,
@@ -405,7 +402,6 @@ fn run(args: RunArgs) {
         attach,
         headless,
         notify,
-        layout,
         view,
         theme,
         refresh_ms,
@@ -427,9 +423,6 @@ fn run(args: RunArgs) {
     app.state.now_ms = app::now_ms();
     // Preferences and terminal capabilities.
     let mut config = cctop::config::Config::load();
-    if let Some(l) = layout {
-        config.layout = l;
-    }
     if let Some(v) = view {
         config.view = v;
     }

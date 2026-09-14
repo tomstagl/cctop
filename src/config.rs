@@ -9,10 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
-    /// `auto`, `narrow` or `wide`.
+    /// The grid's `auto` / `narrow` / `wide` of older versions: read and ignored.
     pub layout: String,
     pub theme: String,
     pub refresh_ms: u64,
+    /// Panels older versions hid: read and ignored (nothing is hidden now).
     pub hidden_panels: Vec<u8>,
     pub notify: bool,
     /// Extra pricing TOML merged over the bundled table.
@@ -71,14 +72,6 @@ impl Config {
             let _ = self.save_to(&p);
         }
     }
-
-    pub fn layout_mode(&self) -> Option<crate::ui::layout::Mode> {
-        match self.layout.as_str() {
-            "narrow" => Some(crate::ui::layout::Mode::Narrow),
-            "wide" => Some(crate::ui::layout::Mode::Wide),
-            _ => None,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -102,8 +95,6 @@ mod tests {
         };
         c.save_to(&path).unwrap();
         assert_eq!(Config::load_from(&path), c);
-        assert_eq!(c.layout_mode(), Some(crate::ui::layout::Mode::Wide));
-        assert_eq!(Config::default().layout_mode(), None);
         // Partial files fill from defaults.
         std::fs::write(&path, "theme = \"btop\"\n").unwrap();
         let p = Config::load_from(&path);

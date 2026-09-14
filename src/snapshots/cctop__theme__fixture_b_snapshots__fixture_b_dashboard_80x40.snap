@@ -1,0 +1,44 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, w, h)"
+---
+ cctop  claude-sonnet-5 · tur…  ● COMMITTING · 4c +180 · silent 3:09 · ▸ steer …
+
+  ▄█ █ █   ○ context                    █▀▀ █▀█   ○ cache
+   █ ▀▀█   142k of 1.00M                ▀▀█ ▀▀█   warm · 59m (1h) TTL
+   ▀   ▀ % ≈$.03/call                   ▀▀▀ ▀▀▀ m misses 0
+
+       ○ limits                          ▄█   ● rework
+ ▀▀▀   no status line                     █   1 · correction
+     %                                    ▀   edits 3 ✓ none 9h00
+
+ ▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE… LATER · turn 6
+
+ 1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 …
+             +146k/turn · autocompact 567k · 425k left · compactions 1 · since …
+ 2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
+             $18.7 · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · s…
+ 3 Limits    no status line · weight ×3 (sonnet) · long_context 89 %
+             89% of your usage was at >150k context
+ 4 Turn      COMMITTING · 4c +180 · silent 3:09 · ▸ steer window · api ≈3:48 · …
+             elapsed 8h 40m · 4 api calls · 4 tool calls
+ 5 Tools     140 calls · 6 err · explore 39 (3 ✗) · commit 8 · test 8 · Read 30…
+             Denied 4 · Other 2
+ 6 Agents    —
+
+ 7 Files     44 touched · 40cde3.md E×1 · c1c889.rs E×2 IDE edit · commit 0:00 …
+
+ 8 Events    23:29 api cost-state $18.75 · api 22:14 · retries… · 23:29 note /c…
+             23:28 tool Bash ✓ 49 · 23:28 tool Bash git commit -m "$(cat lorem_…
+ 9 Advisor   LATER A17 · next long-foreground → when the slot frees · `c… · sno…
+             LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…
+
+
+
+
+
+
+
+
+
+ ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q

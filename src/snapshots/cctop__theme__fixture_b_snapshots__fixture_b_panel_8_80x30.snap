@@ -1,0 +1,34 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 80, 30)"
+---
+┌ Events 303  (j/k scroll, / search, Esc back) ────────────────────────────────┐
+│ 14:34:12 cost   model opus-5 → sonnet-5                                      │
+│ 14:34:30 perm   Bash ✗ automode-blocked                                      │
+│ 14:35:15 tool   Bash cd lore && rm -rf lorem_ && git lorem --quiet --depth l…│
+│ 14:35:15 perm   Bash ✗ permission-rule                                       │
+│ 14:36:00 tool   Bash cd lorem_ipsum_dolor_sit_amet_consect git lorem lorem_ …│
+│ 14:45:09 perm   Bash ✗ automode-unavailable                                  │
+│ 14:45:54 tool   Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lo…│
+│ 14:45:54 cost   model sonnet-5 → opus-5                                      │
+│ 14:45:57 perm   Bash ✗ user-rejected                                         │
+│ 14:46:42 tool   TaskUpdate completed ▶                                       │
+│ 14:46:42 tool   TaskUpdate ✓ 5                                               │
+│ 14:47:27 api    API error: request failed                                    │
+│ 14:48:12 note   interrupted after 6 calls                                    │
+│ 14:49:01 compactcompacted auto 567k → 230k in 1:20                           │
+│ 14:49:02 api    API error: invalid_request 400                               │
+│ 14:49:47 tool   AskUserQuestion ▶                                            │
+│ 23:25:36 tool   AskUserQuestion ✓ 83                                         │
+│ 23:27:06 tool   Bash git commit -m "$(cat lorem_i lorem_ipsu lorem_i lore cc…│
+│ 23:27:06 cost   model opus-5 → sonnet-5                                      │
+│ 23:27:08 tool   Bash ✓ 32                                                    │
+│ 23:27:53 tool   Bash git push lorem_ lore 2>&1 ▶                             │
+│ 23:27:56 tool   Bash ✓ 16                                                    │
+│ 23:28:41 tool   Bash git commit -m "$(cat lorem_i lorem lore lor lorem_i lor…│
+│ 23:28:45 tool   Bash ✓ 49                                                    │
+│ 23:28:45 coach  LATER A17 fired · Fixed prefix 49k tokens ≈$0.15/turn at 15 …│
+│ 23:29:30 note   /clear · continued in a new session                          │
+│ 23:29:30 api    cost-state $18.75 · api 22:14 · retries 0:00                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+ ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q

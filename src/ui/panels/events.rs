@@ -9,7 +9,6 @@ use ratatui::Frame;
 
 use crate::events::{Event, Kind};
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 
@@ -71,18 +70,6 @@ impl Panel for Events {
             Some(q) => Some(format!("/{q}{}", if ui.editing { "▏" } else { "" })),
             None => Some(format!("{}", state.events.len())),
         }
-    }
-    fn min_rows(&self) -> u16 {
-        4
-    }
-    fn priority(&self) -> u8 {
-        95
-    }
-    fn placement(&self) -> Placement {
-        Placement::Bottom
-    }
-    fn flexible(&self) -> bool {
-        true
     }
     fn captures_input(&self, state: &State) -> bool {
         state.events_ui.editing || state.events_ui.search.is_some()
@@ -150,6 +137,10 @@ impl Panel for Events {
         frame.render_widget(Paragraph::new(lines), inner);
     }
 
+    fn has_overlay(&self) -> bool {
+        true
+    }
+
     fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
         let ui = &state.events_ui;
         let total = state.events.len();
@@ -208,7 +199,8 @@ mod tests {
 
     #[test]
     fn events_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(8);
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains("8 Events ─ "), "{out}");
         // Newest at the bottom: the fixture's last line is the cost-state.
@@ -231,7 +223,7 @@ mod tests {
     #[test]
     fn overlay_scroll_and_search() {
         let mut app = fixture_app();
-        app.state.focused = Some(8);
+        app.state.open = Some(8);
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.state.overlay, Some(8));
         let out = render_to_string(&app, 80, 24);

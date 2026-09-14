@@ -8,7 +8,6 @@ use ratatui::Frame;
 
 use crate::agents::State as AgentState;
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Panel, PanelId};
 use crate::ui::state::State;
 
@@ -55,15 +54,6 @@ impl Panel for Agents {
         } else {
             parts.join(" · ")
         })
-    }
-    fn min_rows(&self) -> u16 {
-        6
-    }
-    fn priority(&self) -> u8 {
-        50
-    }
-    fn placement(&self) -> Placement {
-        Placement::Right
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
@@ -280,7 +270,8 @@ mod tests {
 
     #[test]
     fn agents_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(6);
         let out = render_to_string(&app, 72, 70);
         assert!(out.contains("6 Agents & MCP ─ 0/1 agents"), "{out}");
         assert!(
@@ -293,6 +284,7 @@ mod tests {
     #[test]
     fn mcp_rows_show_calls_idle_and_exit() {
         let mut app = fixture_app();
+        app.state.open = Some(6);
         let now = app.state.clock_ms();
         app.state.procs = Snapshot {
             mcp: vec![

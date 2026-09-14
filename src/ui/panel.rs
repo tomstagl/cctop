@@ -7,7 +7,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use super::layout::PanelSpec;
 use super::state::State;
 
 /// Hotkey digit; 0 is the header (not toggleable), 1–9 are panels.
@@ -19,22 +18,13 @@ pub enum Handled {
     No,
 }
 
-/// One bordered box on the dashboard.
+/// One panel: a ledger row on the dashboard, a full-screen view behind
+/// its digit.
 pub trait Panel {
     fn id(&self) -> PanelId;
     fn title(&self) -> String;
-    /// Right-aligned figure in the top border; shown even when collapsed.
+    /// The figure in the frame's top border.
     fn summary(&self, state: &State) -> Option<String>;
-    /// Content rows needed to show everything (excluding the border).
-    fn min_rows(&self) -> u16;
-    /// Higher survives longer when rows are scarce.
-    fn priority(&self) -> u8;
-    /// Where the panel goes in the wide layout.
-    fn placement(&self) -> super::layout::Placement;
-    /// Soaks up leftover rows (tables, logs).
-    fn flexible(&self) -> bool {
-        false
-    }
     /// Draw the content inside `inner` (the frame is drawn by the caller).
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State);
     fn handle_key(&mut self, _key: KeyEvent, _state: &mut State) -> Handled {
@@ -45,19 +35,14 @@ pub trait Panel {
     fn captures_input(&self, _state: &State) -> bool {
         false
     }
-    /// Full-screen view when `state.overlay == Some(self.id())`.
-    fn render_overlay(&self, _frame: &mut Frame, _area: Rect, _state: &State) {}
-
-    /// Layout description derived from the trait methods.
-    fn spec(&self) -> PanelSpec {
-        PanelSpec {
-            id: self.id(),
-            min_rows: self.min_rows(),
-            priority: self.priority(),
-            placement: self.placement(),
-            flexible: self.flexible(),
-        }
+    /// The panel owns a full-screen view of its own (a ledger, a table, a
+    /// log); otherwise its digit draws `render` under the frame.
+    fn has_overlay(&self) -> bool {
+        false
     }
+    /// Full-screen view when `state.overlay == Some(self.id())` and
+    /// `has_overlay()`.
+    fn render_overlay(&self, _frame: &mut Frame, _area: Rect, _state: &State) {}
 }
 
 /// Styles the frame derives from the theme.
@@ -96,12 +81,7 @@ pub fn draw_frame(frame: &mut Frame, area: Rect, panel: &dyn Panel, state: &Stat
     }
     let t = &state.theme;
     let style = FrameStyle::from_theme(t);
-    let focused = state.focused == Some(panel.id());
-    let border = if focused {
-        style.border_focused
-    } else {
-        style.border
-    };
+    let border = style.border;
     let summary = panel.summary(state);
     let title = title_line(panel, summary.as_deref(), &style, border, t.hline());
 

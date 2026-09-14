@@ -1,0 +1,34 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 80, 30)"
+---
+┌ Bash·explore — last 20 calls  (Esc back) ────────────────────────────────────┐
+│ AGO      INPUT                                 DUR   TOKENS  ERR             │
+│ 8h 54m   lorem_i lor lore lorem_ lorem_i…   17.4s≈      234  ✗               │
+│ 8h 59m   ls -la lorem_ipsum_dolor_sit_am…    1.8s≈      398                  │
+│ 9h 00m   which lore && lore -V && ls -la…    1.8s≈       35                  │
+│ 9h 00m   grep -n lore lorem_ l lorem_.md…    1.5s≈      100                  │
+│ 9h 02m   grep -n lorem_ipsum lorem_i.rs …    1.7s≈      126                  │
+│ 9h 02m   ls lorem_ipsum_dolor && python3…    1.5s≈      282  ✗               │
+│ 9h 02m   grep -n lor lorem_ipsum_d lo lo…    1.4s≈      279                  │
+│ 9h 02m   sed -n lorem_ lorem_ipsum_.rs &…   163ms≈      212                  │
+│ 9h 03m   grep -n lore lo lorem_ipsu -A l…   227ms≈      226                  │
+│ 9h 04m   grep -n lore lo lorem_ipsum_dol…    1.6s≈      500                  │
+│ 9h 05m   grep -n lore lo lorem lorem_ lo…   114ms≈      380                  │
+│ 9h 05m   sed -n lorem_ lorem_ips.rs         118ms≈      287                  │
+│ 9h 05m   grep -n lorem_ipsum_dolor_sit l…   128ms≈       24                  │
+│ 9h 06m   grep -n lorem_ipsum_d lorem_ips…   126ms≈      148                  │
+│ 9h 07m   grep -n lorem_ipsum_dolo lorem_…   132ms≈       22                  │
+│ 9h 07m   grep -n lor lorem_ipsum_dolor_s…   148ms≈      458                  │
+│ 9h 07m   grep -n lorem_ipsum_dolor_sit_a…   147ms≈      199                  │
+│ 9h 08m   grep -n lorem_ipsum_dolor_sit_a…   191ms≈      415                  │
+│ 9h 08m   grep -n lore lorem_ lorem_ipsum…   226ms≈      500                  │
+│ 9h 08m   sed -n lorem_ip lorem_ip.rs && …   147ms≈      500                  │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q

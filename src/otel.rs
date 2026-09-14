@@ -454,6 +454,7 @@ mod state_tests {
         );
         app.state = state;
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.state.open = Some(4);
         let out = crate::app::render_to_string(&app, 96, 70);
         assert!(out.contains("ttft 1.2s"), "{out}");
     }

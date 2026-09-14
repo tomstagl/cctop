@@ -8,7 +8,6 @@ use ratatui::Frame;
 
 use crate::metrics::{cost, Usage};
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 use crate::ui::widgets::{band_style, sparkline};
@@ -34,15 +33,6 @@ impl Panel for Tokens {
     }
     fn summary(&self, state: &State) -> Option<String> {
         Some(fmt::tokens(Self::usage(state).total()))
-    }
-    fn min_rows(&self) -> u16 {
-        10
-    }
-    fn priority(&self) -> u8 {
-        80
-    }
-    fn placement(&self) -> Placement {
-        Placement::Left
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
@@ -300,7 +290,8 @@ mod tests {
 
     #[test]
     fn tokens_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(2);
         let out = render_to_string(&app, 60, 51);
         // Main + the fork subagent's usage.
         assert!(out.contains("2 Tokens & Cost ─ 3"), "{out}");
@@ -318,7 +309,7 @@ mod tests {
     #[test]
     fn gradient_cache_and_attribution_rows() {
         let mut app = fixture_app();
-        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        app.state.open = Some(2);
         let out = render_to_string(&app, 140, 70);
         assert!(out.contains("/call · ≈$"), "{out}");
         assert!(out.contains("at 100k) · next 30c ≈$"), "{out}");
@@ -331,6 +322,7 @@ mod tests {
     #[test]
     fn baseline_multipliers_render() {
         let mut app = fixture_app();
+        app.state.open = Some(2);
         app.state.baseline = Some(crate::baseline::Baseline {
             sessions: 3,
             cost_per_turn: Some(0.33),
@@ -345,6 +337,7 @@ mod tests {
     #[test]
     fn a_toggles_subagent_inclusion_when_focused() {
         let mut app = fixture_app();
+        app.state.open = Some(2);
         let with = app.state.agg.total.total() + app.state.agents_usage().total();
         assert!(
             app.state.agents_usage().total() > 0,
@@ -352,7 +345,7 @@ mod tests {
         );
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains(&crate::ui::fmt::tokens(with)), "{out}");
-        app.state.focused = Some(2);
+        app.state.open = Some(2);
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert!(!app.state.tokens_include_agents);
         let out = render_to_string(&app, 60, 51);

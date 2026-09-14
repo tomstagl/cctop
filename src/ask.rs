@@ -273,7 +273,7 @@ mod app_tests {
             app.feed(l);
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
-        app.state.focused = Some(5);
+        app.state.open = Some(5);
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert!(app.state.ask.is_some());
         let out = render_to_string(&app, 100, 30);
@@ -283,10 +283,15 @@ mod app_tests {
         assert!(out.contains("(no messaging socket)"), "{out}");
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(app.state.ask.is_none());
-        // Tokens panel keeps `a` for its own toggle; ask is reachable from the others.
-        app.state.focused = Some(2);
+        // The Tokens panel keeps `a` for its own toggle while it is open.
+        app.state.open = Some(2);
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert!(app.state.ask.is_none());
         assert!(!app.state.tokens_include_agents);
+        // On the dashboard `a` asks about the nudge (panel 9).
+        app.state.open = None;
+        app.tick();
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert_eq!(app.state.ask.as_ref().map(|(p, _)| *p), Some(9));
     }
 }

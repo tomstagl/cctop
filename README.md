@@ -31,66 +31,45 @@ Claude Code as a panel when the build supports it, otherwise attached as a
 ## What it looks like
 
 ```
-┌─cctop ── cctop-46 ──────────────────── Opus 5 · v2.1.269 ┐
-│ ● BUSY  turn 14  02:31  ▶ Bash 0:48  ~/code/cctop main*  │
-│ auto · medium · Max · 1h 12m · ≈ API $4.37 · 3% 412 MB   │
-├─1 Context ───────────────────────────────────────── 67 % ┤
-│ ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ │
-│ 134k / 200k   sys+tools 28k · msgs 106k · free 66k       │
-│ ▁▂▂▃▃▄▄▅▅▆▆▇  +9.4k/turn → autocompact in ~3 turns est   │
-│ compactions 1 (turn 9, −71k)                             │
-├─2 Tokens & Cost ───────────────────────────────── 1.91 M ┤
-│ cache read  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇      1.62 M     │
-│ cache write ▇▇▇                                 148k     │
-│ fresh in    ▇                                    24k     │
-│ output      ▇▇                                  118k     │
-│  └ thinking ▇                                    61k     │
-│ cache hit 90 %  ·  ≈ $4.37 ($3.61/h)  ·  in 12.4k/min    │
-│ per turn ▂▁▃▂▄▂▂▆▁▃▂▅▃█   last turn 31k · $0.42          │
-├─3 Limits ────────────────────────────────────────────────┤
-│ 5 h  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁  62 %  ↺ 1h 48m │
-│      at this rate: exhausted in 2h 05m, after reset ✓    │
-│ 7 d  ▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  23 %  ↺ 4d 03h │
-├─4 Turn ──────────────────────────────────────────────────┤
-│ elapsed 2:31   api 3 calls · ttft 1.2 s · out 41 tok/s   │
-│ ● Bash  0:48  cargo test --workspace          pid 8812   │
-│ hooks 6 runs · 84 ms   permission waits 1 · 12 s         │
-├─5 Tools ────────────────────────────────────── 212 calls ┤
-│ TOOL         N  ERR    p50    p95   LAST  TOKENS→CTX     │
-│ Read        71    0   38ms   90ms   0:02      41.2k      │
-│ Bash        58    3   1.4s   9.8s   ▶now      22.9k      │
-│ Edit        44    1   22ms   55ms   0:09       2.1k      │
-│ Grep        23    0   61ms  140ms   1:10      11.6k      │
-│ mcp:github   9    1  620ms   2.1s   4:02       8.8k      │
-│ top ctx: Read src/render.rs 6.1k · Bash ls -R 4.4k       │
-├─6 Agents & MCP ──────────────────────────────────────────┤
-│ ◐ Explore  find render call sites    0:41   18k  sonnet  │
-│ ✓ fork     review                    3:12   92k  opus    │
-│ mcp github      pid 8231   41 MB   9 calls  p95 2.1s     │
-│ mcp playwright  pid 8244  188 MB   0 calls  idle 12m     │
-│ bg  cargo build --release          1:58   task #3        │
-├─7 Files ─────────────────────────── 9 touched · +412 −87 ┤
-│ src/render.rs      R×6  E×5  +210 −31   re-read ⚠        │
-│ src/collect.rs     R×2  E×3  +98  −40                    │
-│ tasks/prd-cctop.md W×1                                   │
-├─9 Advisor ─────────────────────────────────────── 1 of 3 ┤
-│ ▸ Bash ls -R pushed 4.4k tokens into context, twice.     │
-│   Pipe through head -50 or use Glob.   ~4k/turn · n next │
-├─8 Events ────────────────────────────────────────────────┤
-│ 20:41:02 hook   PostToolUse Edit src/render.rs   12ms    │
-│ 20:41:03 tool   Bash cargo test --workspace  ▶           │
-│ 20:41:17 perm   Bash allowed (auto)                      │
-│ 20:41:39 note   rate-limit 5h crossed 60 %               │
-└ ?help 1-9 panels ⇥focus s sort f filter p pause q quit   ┘
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED…  ● COMMITTING · 4c +180 · silent 3:09 · ▸ steer …
+  ▄█ █ █   ○ context                              █▀▀ █▀█   ○ cache
+   █ ▀▀█   142k of 1.00M                          ▀▀█ ▀▀█   warm · 59m (1h) TTL
+   ▀   ▀ % ≈$.03/call                             ▀▀▀ ▀▀▀ m misses 0
+
+       ○ limits                                    ▄█   ● rework
+ ▀▀▀   no status line                               █   1 · correction
+     %                                              ▀   edits 3 ✓ none 9h00
+ ▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE.md, move rarely-use… LATER · turn 6
+ 1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 · results ≈180 · thi…
+             +146k/turn · autocompact 567k · 425k left · compactions 1 · since clear 23:29 · re-rea…
+ 2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
+             $18.7 · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · skill:admit 1 %
+ 3 Limits    no status line · weight ×3 (sonnet) · long_context 89 %
+             89% of your usage was at >150k context
+ 4 Turn      COMMITTING · 4c +180 · silent 3:09 · ▸ steer window · api ≈3:48 · tools 8h 35m
+             elapsed 8h 40m · 4 api calls · 4 tool calls
+ 5 Tools     140 calls · 6 err · explore 39 (3 ✗) · commit 8 · test 8 · Read 30 · Edit 29 · AskUser…
+             Denied 4 · Other 2
+ 6 Agents    —
+
+ 7 Files     44 touched · 40cde3.md E×1 · c1c889.rs E×2 IDE edit · commit 0:00 ago
+
+ 8 Events    23:29 api cost-state $18.75 · api 22:14 · retries… · 23:29 note /clear · continued in …
+             23:28 tool Bash ✓ 49 · 23:28 tool Bash git commit -m "$(cat lorem_i lorem… · 23:27 too…
+ 9 Advisor   LATER A17 · next long-foreground → when the slot frees · `c… · snoozed —
+             LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…
+
+
+ ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q
 ```
 
-Claude Code keeps running in the left pane; `cctop` attaches to it from the right. Rendered version with the wide layout: see the PRD.
+Claude Code keeps running in the left pane; `cctop` attaches to it from the right. Four levels of type: the header line, four tiles (the coach's lights — context, cache, limits, rework — as block digits), the one nudge, and a nine-row ledger whose digit opens that panel full-screen (`Esc` back). Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
 
 ## Two ways to see it
 
 `/cctop` picks one automatically — it never asks you to choose.
 
-**Terminal view.** The full nine-panel dashboard above, running as its own
+**Terminal view.** The dashboard above, running as its own
 process (`cctop run`) in a split of your terminal multiplexer (tmux, zellij,
 WezTerm, Kitty, iTerm2). This is what `/cctop` falls back to, and what you get
 from `cctop split` directly. See [Install & attach](#install--attach).

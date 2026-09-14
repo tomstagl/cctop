@@ -6,7 +6,6 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Panel, PanelId};
 use crate::ui::state::State;
 use crate::ui::widgets::{band_style, gauge};
@@ -31,15 +30,6 @@ impl Panel for LimitsPanel {
                 l.five_hour_pct, l.seven_day_pct
             )
         })
-    }
-    fn min_rows(&self) -> u16 {
-        4
-    }
-    fn priority(&self) -> u8 {
-        70
-    }
-    fn placement(&self) -> Placement {
-        Placement::Left
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
@@ -204,7 +194,7 @@ mod tests {
         }
         app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-08-27T10:30:00Z","message":{"id":"e1","model":"<synthetic>","content":[{"type":"text","text":"limit"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1787830200,"lowPriorityRetryAfterSeconds":20}}"#).unwrap());
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
-        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        app.state.open = Some(3);
         let hit = app.state.rate_limit_hit().unwrap();
         assert_eq!(hit.0, "five_hour");
         let out = render_to_string(&app, 120, 70);
@@ -254,7 +244,9 @@ mod tests {
 
     #[test]
     fn without_shim_shows_install_hint() {
-        let out = render_to_string(&fixture_app(), 60, 60);
+        let mut app = fixture_app();
+        app.state.open = Some(3);
+        let out = render_to_string(&app, 60, 60);
         assert!(out.contains("3 Limits ─"), "{out}");
         assert!(out.contains("— run cctop install"), "{out}");
     }
@@ -262,6 +254,7 @@ mod tests {
     #[test]
     fn gauges_countdown_projection_and_other_sessions() {
         let mut app = fixture_app();
+        app.state.open = Some(3);
         let now = app.state.clock_ms();
         app.state.limits = Some(Limits {
             five_hour_pct: 62.0,

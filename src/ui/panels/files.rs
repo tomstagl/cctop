@@ -8,7 +8,6 @@ use ratatui::Frame;
 
 use crate::files::FileStats;
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::{FileSort, State};
 
@@ -71,15 +70,6 @@ impl Panel for FilesPanel {
         } else {
             format!("{n} touched{sort}")
         })
-    }
-    fn min_rows(&self) -> u16 {
-        4
-    }
-    fn priority(&self) -> u8 {
-        40
-    }
-    fn placement(&self) -> Placement {
-        Placement::Right
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
@@ -231,7 +221,8 @@ mod tests {
 
     #[test]
     fn files_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(7);
         let out = render_to_string(&app, 60, 70);
         assert!(out.contains("7 Files ─ 4 touched"), "{out}");
         assert!(out.contains("src/ad450c.rs"), "{out}");
@@ -254,7 +245,7 @@ mod tests {
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         app.state.uncommitted = Some((412, 87, 9));
-        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        app.state.open = Some(7);
         let out = render_to_string(&app, 140, 80);
         assert!(out.contains("uncommitted +412 −87 across 9 files"), "{out}");
         assert!(out.contains("· last commit 1d70205 "), "{out}");
@@ -265,6 +256,7 @@ mod tests {
     #[test]
     fn reread_warning_git_lines_and_sort() {
         let mut app = fixture_app();
+        app.state.open = Some(7);
         for i in 0..3 {
             app.feed(Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-08-27T10:2{i}:00Z","message":{{"id":"rr{i}","model":"m","content":[{{"type":"tool_use","id":"rr{i}","name":"Read","input":{{"file_path":"/home/user/project/src/render.rs"}}}}],"usage":{{}}}}}}"#)).unwrap());
             // A read counts once its result shows the whole file came back.
@@ -280,7 +272,7 @@ mod tests {
         assert!(out.contains("R×3"), "{out}");
         assert!(out.contains("+210 −31"), "{out}");
         assert!(out.contains("re-read ⚠"), "{out}");
-        app.state.focused = Some(7);
+        app.state.open = Some(7);
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
         assert_eq!(app.state.files_sort, FileSort::Touches);
         assert!(render_to_string(&app, 64, 70).contains("↕touches"));

@@ -14,7 +14,6 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::{Frame, Terminal};
 
 use crate::transcript::Line;
-use crate::ui::layout::{self, Mode};
 use crate::ui::panel::{draw_frame, Handled, Panel, PanelId};
 use crate::ui::State;
 
@@ -40,27 +39,23 @@ pub const BINDINGS: &[Binding] = &[
     },
     Binding {
         keys: "1-9",
-        action: "toggle panel",
-    },
-    Binding {
-        keys: "Tab / Shift-Tab",
-        action: "focus next / previous panel",
+        action: "open a panel full-screen",
     },
     Binding {
         keys: "Esc",
-        action: "clear focus / close overlay",
+        action: "back to the dashboard",
+    },
+    Binding {
+        keys: "Enter",
+        action: "act on the nudge",
     },
     Binding {
         keys: "p",
         action: "pause updates",
     },
     Binding {
-        keys: "w",
-        action: "narrow / wide layout",
-    },
-    Binding {
         keys: "c",
-        action: "coach view · Enter act · x snooze",
+        action: "coach view · x snooze · e why",
     },
     Binding {
         keys: "+ / -",
@@ -75,7 +70,6 @@ pub const BINDINGS: &[Binding] = &[
 pub struct App {
     pub panels: Vec<Box<dyn Panel>>,
     pub state: State,
-    pub mode_override: Option<Mode>,
     pub refresh_ms: u64,
     pub help: bool,
     pub quit: bool,
@@ -112,7 +106,6 @@ impl App {
         App {
             panels,
             state: State::default(),
-            mode_override: None,
             refresh_ms: REFRESH_DEFAULT_MS,
             help: false,
             quit: false,
@@ -148,12 +141,11 @@ impl App {
         self.state.theme = t;
     }
 
-    /// Apply the config: layout, theme, refresh, hidden panels, notify.
+    /// Apply the config: view, theme, refresh, notify (`layout` and
+    /// `hidden_panels` of older files are read and ignored).
     pub fn apply_config(&mut self, config: crate::config::Config) {
-        self.mode_override = config.layout_mode();
         self.state.view = crate::ui::state::View::parse(&config.view).unwrap_or_default();
         self.refresh_ms = config.refresh_ms.clamp(REFRESH_MIN_MS, REFRESH_MAX_MS);
-        self.state.hidden = config.hidden_panels.clone();
         self.desktop_notify = self.desktop_notify || config.notify;
         let theme = config.theme.clone();
         self.config = config;
@@ -162,14 +154,8 @@ impl App {
 
     /// Persist the current panel/theme choices.
     pub fn save_config(&mut self) {
-        self.config.hidden_panels = self.state.hidden.clone();
         self.config.theme = self.theme_name.clone();
         self.config.refresh_ms = self.refresh_ms;
-        self.config.layout = match self.mode_override {
-            Some(Mode::Narrow) => "narrow".into(),
-            Some(Mode::Wide) => "wide".into(),
-            None => "auto".into(),
-        };
         self.config.view = self.state.view.label().into();
         if self.persist_config {
             self.config.save();
@@ -337,33 +323,6 @@ impl App {
         }
     }
 
-    fn visible_ids(&self) -> Vec<PanelId> {
-        layout::NARROW_ORDER
-            .iter()
-            .copied()
-            .filter(|id| *id > 0 && !self.state.is_hidden(*id))
-            .filter(|id| self.panels.iter().any(|p| p.id() == *id))
-            .collect()
-    }
-
-    fn cycle_focus(&mut self, forward: bool) {
-        let ids = self.visible_ids();
-        if ids.is_empty() {
-            return;
-        }
-        let cur = self
-            .state
-            .focused
-            .and_then(|f| ids.iter().position(|&i| i == f));
-        let next = match (cur, forward) {
-            (None, true) => 0,
-            (None, false) => ids.len() - 1,
-            (Some(i), true) => (i + 1) % ids.len(),
-            (Some(i), false) => (i + ids.len() - 1) % ids.len(),
-        };
-        self.state.focused = Some(ids[next]);
-    }
-
     fn route_to(&mut self, id: PanelId, key: KeyEvent) -> Handled {
         let mut state = std::mem::take(&mut self.state);
         let handled = self
@@ -443,13 +402,14 @@ impl App {
         if self.state.view == crate::ui::state::View::Coach && self.coach_key(key) {
             return;
         }
-        if let Some(id) = self.state.focused {
-            let captures = self
-                .panels
-                .iter()
-                .find(|p| p.id() == id)
-                .is_some_and(|p| p.captures_input(&self.state));
-            if captures && self.route_to(id, key) == Handled::Yes {
+        if let Some(id) = self.state.open {
+            // The open panel's own keys (sort, filter, Enter) come first;
+            // Esc closes it; anything else is global.
+            if self.route_to(id, key) == Handled::Yes {
+                return;
+            }
+            if key.code == KeyCode::Esc {
+                self.state.open = None;
                 return;
             }
         }
@@ -458,9 +418,17 @@ impl App {
                 self.quit = true
             }
             KeyCode::Char('?') => self.help = true,
-            KeyCode::Tab => self.cycle_focus(true),
-            KeyCode::BackTab => self.cycle_focus(false),
-            KeyCode::Esc => self.state.focused = None,
+            KeyCode::Enter => {
+                // Act on the nudge from the dashboard: the coach view's Enter.
+                self.state.view = crate::ui::state::View::Coach;
+                self.state.coach_ui = Default::default();
+                if !self.coach_key(key) {
+                    self.state.view = crate::ui::state::View::Dashboard;
+                }
+                if self.state.ask.is_none() {
+                    self.state.view = crate::ui::state::View::Dashboard;
+                }
+            }
             KeyCode::Char('p') => {
                 self.toggle_pause();
                 let msg = if self.state.paused {
@@ -470,10 +438,9 @@ impl App {
                 };
                 self.state.set_toast(msg);
             }
-            KeyCode::Char('a')
-                if self.state.focused.is_some_and(|f| f != 2) || self.state.focused.is_none() =>
-            {
-                let panel = self.state.focused.unwrap_or(0);
+            KeyCode::Char('a') => {
+                // The open panel, else the nudge.
+                let panel = self.state.open.unwrap_or(9);
                 match crate::ask::compose(&self.state, panel) {
                     Some(text) => {
                         self.state.ask_send_ok = true;
@@ -504,16 +471,6 @@ impl App {
                 self.state.coach_ui = Default::default();
                 self.save_config();
             }
-            KeyCode::Char('w') => {
-                self.mode_override = Some(match self.mode_override {
-                    Some(Mode::Wide) => Mode::Narrow,
-                    Some(Mode::Narrow) => Mode::Wide,
-                    None => Mode::Wide,
-                });
-                self.state
-                    .set_toast(format!("layout: {:?}", self.mode_override.unwrap()));
-                self.save_config();
-            }
             KeyCode::Char('+') | KeyCode::Char('=') => {
                 self.refresh_ms = (self.refresh_ms + 100).min(REFRESH_MAX_MS);
                 self.state
@@ -526,17 +483,12 @@ impl App {
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let id = c as u8 - b'0';
-                self.state.toggle_hidden(id);
-                if self.state.focused == Some(id) {
-                    self.state.focused = None;
-                }
-                self.save_config();
-            }
-            _ => {
-                if let Some(id) = self.state.focused {
-                    self.route_to(id, key);
+                if self.panels.iter().any(|p| p.id() == id) {
+                    self.state.open = Some(id);
+                    self.state.overlay = None;
                 }
             }
+            _ => {}
         }
     }
 
@@ -656,24 +608,43 @@ impl App {
             }
             return;
         }
-        let specs: Vec<_> = self.panels.iter().map(|p| p.spec()).collect();
-        let lay = layout::solve(area, &specs, &self.state.hidden, self.mode_override);
-        for (id, rect) in &lay.rects {
-            let Some(panel) = self.panels.iter().find(|p| p.id() == *id) else {
-                continue;
-            };
-            if let Some(inner) = draw_frame(frame, *rect, panel.as_ref(), &self.state) {
-                panel.render(frame, inner, &self.state);
+        let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+        let footer = Rect::new(
+            area.x,
+            area.y + area.height.saturating_sub(1),
+            area.width,
+            1,
+        );
+        match self
+            .state
+            .open
+            .and_then(|id| self.panels.iter().find(|p| p.id() == id))
+        {
+            // A panel full-screen: its content under the frame the grid
+            // used to draw, and its own view (a ledger, a call's detail)
+            // over that when it opened one.
+            Some(panel) => {
+                if let Some(inner) = draw_frame(frame, body, panel.as_ref(), &self.state) {
+                    panel.render(frame, inner, &self.state);
+                }
+            }
+            None => {
+                let d = crate::dashboard::snapshot(&self.state, &self.advisor);
+                crate::ui::dashboard::render(frame, body, &d, &self.state.theme);
             }
         }
-        self.draw_footer(frame, lay.footer);
-        if let Some(id) = self.state.overlay {
-            if let Some(panel) = self.panels.iter().find(|p| p.id() == id) {
-                let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
-                frame.render_widget(Clear, body);
-                panel.render_overlay(frame, body, &self.state);
-            }
+        // A view a panel opened (the Tokens digit's Enter opens the Context
+        // ledger) draws over whatever is beneath it.
+        if let Some(panel) = self
+            .state
+            .overlay
+            .and_then(|id| self.panels.iter().find(|p| p.id() == id))
+            .filter(|p| p.has_overlay())
+        {
+            frame.render_widget(Clear, body);
+            panel.render_overlay(frame, body, &self.state);
         }
+        self.draw_footer(frame, footer);
         if let Some((panel, text)) = &self.state.ask {
             self.draw_ask(frame, area, *panel, text);
         }
@@ -747,8 +718,10 @@ impl App {
                         .coach_text(crate::ui::coach_view::FOOTER)
                         .trim_start()
                         .to_string()
+                } else if self.state.open.is_some() {
+                    "Esc back  a ask  c coach  t theme  L sessions  q".to_string()
                 } else {
-                    "?help 1-9 panels ⇥focus c coach a ask t theme L sessions q quit".to_string()
+                    crate::ui::dashboard::FOOTER.trim_start().to_string()
                 },
                 dim,
             ));
@@ -1004,7 +977,6 @@ pub fn draw_once<B: Backend>(term: &mut Terminal<B>, app: &App) -> std::io::Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::layout::Placement;
 
     struct Stub {
         id: PanelId,
@@ -1020,23 +992,13 @@ mod tests {
         fn summary(&self, s: &State) -> Option<String> {
             Some(format!("{} lines", s.lines_seen))
         }
-        fn min_rows(&self) -> u16 {
-            2
-        }
-        fn priority(&self) -> u8 {
-            50 + self.id
-        }
-        fn placement(&self) -> Placement {
-            if self.id == 8 {
-                Placement::Bottom
-            } else {
-                Placement::Left
-            }
-        }
         fn render(&self, frame: &mut Frame, inner: Rect, _s: &State) {
             frame.render_widget(Paragraph::new(format!("content {}", self.id)), inner);
         }
-        fn handle_key(&mut self, _k: KeyEvent, _s: &mut State) -> Handled {
+        fn handle_key(&mut self, k: KeyEvent, _s: &mut State) -> Handled {
+            if k.code == KeyCode::Esc {
+                return Handled::No;
+            }
             self.keys.set(self.keys.get() + 1);
             Handled::Yes
         }
@@ -1092,23 +1054,28 @@ mod tests {
     }
 
     #[test]
-    fn headless_render_shows_panels_and_footer() {
-        let out = render_to_string(&app(), 40, 16);
-        assert!(out.contains("Stub1"), "{out}");
-        assert!(out.contains("content 1"));
-        assert!(out.contains("0 lines"));
-        assert!(out.contains("?help 1-9 panels"), "{out}");
-        assert_eq!(out.lines().count(), 16);
+    fn headless_render_shows_the_dashboard_and_footer() {
+        let out = render_to_string(&app(), 60, 24);
+        assert!(out.contains("1 Context"), "{out}");
+        assert!(out.contains("9 Advisor"), "{out}");
+        assert!(out.contains("?help  1-9 open a panel"), "{out}");
+        assert_eq!(out.lines().count(), 24);
     }
 
     #[test]
-    fn toggle_hides_panel_and_help_overlay_lists_bindings() {
+    fn digits_open_a_panel_full_screen_and_help_lists_bindings() {
         let mut a = app();
         a.handle_key(key('2'));
+        assert_eq!(a.state.open, Some(2));
         let out = render_to_string(&a, 40, 16);
-        assert!(!out.contains("Stub2"));
-        a.handle_key(key('2'));
-        assert!(render_to_string(&a, 40, 16).contains("Stub2"));
+        assert!(out.contains("Stub2") && out.contains("content 2"), "{out}");
+        assert!(out.contains("0 lines"), "the summary in the frame: {out}");
+        assert!(out.contains("Esc back"), "{out}");
+        // A digit without a panel behind it does nothing.
+        a.handle_key(key('5'));
+        assert_eq!(a.state.open, Some(2));
+        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(a.state.open, None);
         a.handle_key(key('?'));
         let out = render_to_string(&a, 60, 20);
         assert!(out.contains("cctop keys"));
@@ -1120,18 +1087,16 @@ mod tests {
     }
 
     #[test]
-    fn focus_cycles_and_routes_keys_to_panel() {
+    fn keys_route_to_the_open_panel() {
         let mut a = app();
-        assert_eq!(a.state.focused, None);
-        a.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(a.state.focused, Some(1));
-        a.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(a.state.focused, Some(2));
-        a.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
-        assert_eq!(a.state.focused, Some(1));
+        a.handle_key(key('1'));
+        assert_eq!(a.state.open, Some(1));
         a.handle_key(key('j'));
+        a.handle_key(key('j'));
+        // The stub swallows every key but Esc.
+        assert!(a.state.open.is_some());
         a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert_eq!(a.state.focused, None);
+        assert_eq!(a.state.open, None);
     }
 
     #[test]
@@ -1157,7 +1122,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_bounds_layout_toggle_and_quit() {
+    fn refresh_bounds_toast_and_quit() {
         let mut a = app();
         for _ in 0..30 {
             a.handle_key(key('+'));
@@ -1167,10 +1132,6 @@ mod tests {
             a.handle_key(key('-'));
         }
         assert_eq!(a.refresh_ms, REFRESH_MIN_MS);
-        a.handle_key(key('w'));
-        assert_eq!(a.mode_override, Some(Mode::Wide));
-        a.handle_key(key('w'));
-        assert_eq!(a.mode_override, Some(Mode::Narrow));
         a.state.now_ms = 0;
         a.state.set_toast("hello");
         assert!(render_to_string(&a, 40, 6).contains("hello"));

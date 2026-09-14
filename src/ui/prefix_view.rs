@@ -130,7 +130,7 @@ mod tests {
         // On top of the fixture's own (anonymised) listings, add known-size ones.
         app.feed(Line::from_value(serde_json::json!({"type":"attachment","attachment":{"type":"skill_listing","content":"s".repeat(13_897),"skillCount":47}})));
         app.feed(Line::from_value(serde_json::json!({"type":"attachment","attachment":{"type":"deferred_tools_delta","addedNames":["Read","mcp__github__get_me"],"addedLines":["r".repeat(4000),"g".repeat(2000)]}})));
-        app.state.focused = Some(1);
+        app.state.open = Some(1);
         app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
         assert_eq!(app.state.overlay, Some(1));
         let out = render_to_string(&app, 100, 20);

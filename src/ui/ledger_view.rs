@@ -240,7 +240,7 @@ mod tests {
     fn enter_on_context_or_tokens_opens_ledger_with_fixture_rows() {
         for panel in [1u8, 2] {
             let mut app = fixture_app();
-            app.state.focused = Some(panel);
+            app.state.open = Some(panel);
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
             assert_eq!(app.state.overlay, Some(1), "panel {panel}");
             let out = render_to_string(&app, 120, 30);
@@ -262,7 +262,7 @@ mod tests {
     #[test]
     fn sort_select_detail_and_close() {
         let mut app = fixture_app();
-        app.state.focused = Some(1);
+        app.state.open = Some(1);
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         // Sort by cost desc: the most expensive turn first.
         for _ in 0..7 {

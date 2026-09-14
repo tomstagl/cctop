@@ -336,10 +336,6 @@ pub struct State {
     /// ids): the coach does not repeat what its host just said.
     pub tips_recent: std::collections::BTreeSet<String>,
     // -- ui
-    /// Panel that receives keys; `None` = global.
-    pub focused: Option<PanelId>,
-    /// Panels the user toggled off with their hotkey digit.
-    pub hidden: Vec<PanelId>,
     /// Wall clock for the frame being rendered (epoch ms).
     pub now_ms: i64,
     /// `now_ms` is the clock even for a dead session (`CCTOP_FAKE_NOW`):
@@ -357,7 +353,10 @@ pub struct State {
     pub last_line_at_ms: Option<i64>,
     /// Tokens panel: include subagent usage (toggled with `a`).
     pub tokens_include_agents: bool,
-    /// Full-screen view owned by a panel (`Enter`), closed with Esc.
+    /// The panel open full-screen (its digit), closed with Esc.
+    pub open: Option<PanelId>,
+    /// A view the open panel owns on top of itself (`Enter`: a ledger, a
+    /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,
     pub tools_ui: ToolsUi,
     pub events: crate::events::Log,
@@ -1598,10 +1597,6 @@ impl State {
         v
     }
 
-    pub fn is_hidden(&self, id: PanelId) -> bool {
-        self.hidden.contains(&id)
-    }
-
     /// Show `msg` in the footer for [`TOAST_MS`].
     pub fn set_toast(&mut self, msg: impl Into<String>) {
         self.toast = Some((msg.into(), self.now_ms + TOAST_MS));
@@ -1612,14 +1607,6 @@ impl State {
         match &self.toast {
             Some((m, until)) if *until > self.now_ms => Some(m.as_str()),
             _ => None,
-        }
-    }
-
-    pub fn toggle_hidden(&mut self, id: PanelId) {
-        if let Some(i) = self.hidden.iter().position(|&h| h == id) {
-            self.hidden.remove(i);
-        } else {
-            self.hidden.push(id);
         }
     }
 }

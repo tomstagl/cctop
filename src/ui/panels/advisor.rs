@@ -10,7 +10,6 @@ use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 
@@ -36,15 +35,6 @@ impl Panel for AdvisorPanel {
         } else {
             format!("{} of {n}{tail}", state.advice_index.min(n - 1) + 1)
         })
-    }
-    fn min_rows(&self) -> u16 {
-        2
-    }
-    fn priority(&self) -> u8 {
-        75
-    }
-    fn placement(&self) -> Placement {
-        Placement::Bottom
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
@@ -120,6 +110,10 @@ impl Panel for AdvisorPanel {
             Span::styled(tail, dim),
         ]);
         frame.render_widget(Paragraph::new(vec![l1, l2]), inner);
+    }
+
+    fn has_overlay(&self) -> bool {
+        true
     }
 
     fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
@@ -232,6 +226,7 @@ mod tests {
     #[test]
     fn advisor_panel_on_fixture_cycles_dismisses_and_explains() {
         let mut app = fixture_app();
+        app.state.open = Some(9);
         let out = render_to_string(&app, 60, 60);
         // The fixture has a 214-call chrome session: A03 (runaway result) or A05 may fire.
         assert!(out.contains("9 Advisor ─ "), "{out}");
@@ -242,7 +237,7 @@ mod tests {
         assert!(out.contains("▸ "), "{out}");
         assert!(out.contains("n next"), "{out}");
         let n = app.state.advice.len();
-        app.state.focused = Some(9);
+        app.state.open = Some(9);
         app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
         assert_eq!(app.state.advice_index, 1 % n);
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));

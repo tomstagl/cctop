@@ -10,7 +10,6 @@ use ratatui::Frame;
 
 use crate::tools::{Call, ToolStats};
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::{State, ToolSort};
 
@@ -82,18 +81,6 @@ impl Panel for Tools {
         };
         Some(format!("{} calls{tail}", state.tools.calls.len()))
     }
-    fn min_rows(&self) -> u16 {
-        7
-    }
-    fn priority(&self) -> u8 {
-        85
-    }
-    fn placement(&self) -> Placement {
-        Placement::Right
-    }
-    fn flexible(&self) -> bool {
-        true
-    }
     fn captures_input(&self, state: &State) -> bool {
         // While a filter exists, Esc must reach the panel (to clear it)
         // before the global Esc drops focus.
@@ -151,7 +138,7 @@ impl Panel for Tools {
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
         let dim = state.theme.dim();
         let accent = state.theme.accent();
-        let focused = state.focused == Some(self.id());
+        let focused = state.overlay == Some(self.id());
         let ui = &state.tools_ui;
         let now = state.clock_ms();
         let rows = Self::rows(state);
@@ -273,6 +260,10 @@ impl Panel for Tools {
         frame.render_widget(Paragraph::new(lines), inner);
     }
 
+    fn has_overlay(&self) -> bool {
+        true
+    }
+
     fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
         let Some(name) = Self::selected_name(state) else {
             return;
@@ -371,7 +362,8 @@ mod tests {
 
     #[test]
     fn tools_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(5);
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains("5 Tools ─ 257 calls"), "{out}");
         assert!(
@@ -392,8 +384,6 @@ mod tests {
         assert!(chrome < bash, "{out}");
         assert!(out.contains("≈"), "durations are approximate: {out}");
         assert!(out.contains("top ctx: "), "{out}");
-        let mut app = app;
-        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
         let wide = render_to_string(&app, 120, 70);
         assert!(wide.contains("IN→CTX"), "{wide}");
         assert!(
@@ -406,7 +396,7 @@ mod tests {
     #[test]
     fn sort_filter_and_detail_overlay() {
         let mut app = fixture_app();
-        app.state.focused = Some(5);
+        app.state.open = Some(5);
         app.handle_key(key('s'));
         assert_eq!(app.state.tools_ui.sort, ToolSort::Errors);
         app.handle_key(key('S'));
@@ -440,6 +430,7 @@ mod tests {
     #[test]
     fn running_tool_shows_now() {
         let mut app = fixture_app();
+        app.state.open = Some(5);
         app.feed(crate::transcript::Line::parse(r#"{"type":"assistant","timestamp":"2026-08-27T10:20:00Z","message":{"id":"mrun","model":"claude-sonnet-5","content":[{"type":"tool_use","id":"trun","name":"Bash","input":{"command":"sleep 99"}}],"usage":{"output_tokens":1}}}"#).unwrap());
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         let out = render_to_string(&app, 60, 51);

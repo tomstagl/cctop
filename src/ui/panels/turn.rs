@@ -6,7 +6,6 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Panel, PanelId};
 use crate::ui::state::State;
 
@@ -25,15 +24,6 @@ impl Panel for TurnPanel {
             .current_turn()
             .and_then(|t| t.elapsed_ms(state.clock_ms()))
             .map(fmt::duration_ms)
-    }
-    fn min_rows(&self) -> u16 {
-        4
-    }
-    fn priority(&self) -> u8 {
-        60
-    }
-    fn placement(&self) -> Placement {
-        Placement::Left
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
@@ -286,13 +276,13 @@ mod tests {
             app.feed(l);
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
-        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
         app
     }
 
     #[test]
     fn turn_panel_on_fixture_b_shows_phase_check_and_interrupt() {
-        let app = fixture_b_app();
+        let mut app = fixture_b_app();
+        app.state.open = Some(4);
         let out = render_to_string(&app, 120, 70);
         // The spliced tail: two gitOperation commits end the call list.
         assert!(out.contains("COMMITTING ×"), "{out}");
@@ -306,6 +296,7 @@ mod tests {
     fn waiting_states_and_goal() {
         use crate::ui::state::WaitingKind;
         let mut app = fixture_b_app();
+        app.state.open = Some(4);
         assert!(app.state.waiting().is_none());
         // A pending AskUserQuestion is the strongest signal.
         app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-09-15T00:00:00Z","message":{"id":"q1","model":"claude-opus-5","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"q":"which?"}]}}],"usage":{"input_tokens":1}}}"#).unwrap());
@@ -336,8 +327,9 @@ mod tests {
 
     #[test]
     fn turn_panel_on_fixture() {
-        let app = fixture_app();
-        let out = render_to_string(&app, 80, 60);
+        let mut app = fixture_app();
+        app.state.open = Some(4);
+        let out = render_to_string(&app, 100, 60);
         // The session ended with an interrupt, which is not a turn: the
         // panel shows the last real turn (52 API calls, cut after 19:54).
         assert!(out.contains("4 Turn ─ 19:54"), "{out}");
@@ -351,6 +343,7 @@ mod tests {
     #[test]
     fn running_tool_hooks_and_permission_wait() {
         let mut app = fixture_app();
+        app.state.open = Some(4);
         app.feed(Line::parse(r#"{"type":"user","timestamp":"2026-08-27T10:20:00Z","message":{"role":"user","content":"go"}}"#).unwrap());
         app.feed(Line::parse(r#"{"type":"assistant","timestamp":"2026-08-27T10:20:02Z","message":{"id":"mrun","model":"claude-sonnet-5","content":[{"type":"tool_use","id":"trun","name":"Bash","input":{"command":"cargo test --workspace"}}],"usage":{"output_tokens":1}}}"#).unwrap());
         app.state.session.ended_at_ms = app.state.last_line_at_ms.map(|t| t + 48_000);
@@ -397,6 +390,7 @@ mod tests {
             }
         }
         early.state.session.ended_at_ms = early.state.last_line_at_ms;
+        early.state.open = Some(4);
         let out = render_to_string(&early, 64, 60);
         assert!(out.contains("hooks 1 runs · 60ms"), "{out}");
     }

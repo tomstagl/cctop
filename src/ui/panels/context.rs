@@ -9,7 +9,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::metrics::context::Band;
 use crate::ui::fmt;
-use crate::ui::layout::Placement;
 use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 use crate::ui::widgets::{band_style, sparkline, stacked_bar};
@@ -27,15 +26,6 @@ impl Panel for Context {
         let v = state.context();
         let est = if v.window_exact { "" } else { " est" };
         Some(format!("{:.0} %{est}", v.ratio() * 100.0))
-    }
-    fn min_rows(&self) -> u16 {
-        5
-    }
-    fn priority(&self) -> u8 {
-        90
-    }
-    fn placement(&self) -> Placement {
-        Placement::Left
     }
 
     fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
@@ -59,6 +49,10 @@ impl Panel for Context {
             }
             _ => Handled::No,
         }
+    }
+
+    fn has_overlay(&self) -> bool {
+        true
     }
 
     fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
@@ -227,7 +221,8 @@ mod tests {
 
     #[test]
     fn context_panel_on_fixture() {
-        let app = fixture_app();
+        let mut app = fixture_app();
+        app.state.open = Some(1);
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains("1 Context ─ 40 % est"), "{out}");
         assert!(out.contains("396k / 1.00M est"), "{out}");
@@ -241,6 +236,7 @@ mod tests {
     #[test]
     fn exact_window_drops_est_and_bands_colour() {
         let mut app = fixture_app();
+        app.state.open = Some(1);
         app.state.context_window_exact = Some(500_000);
         app.state.context_size_exact = Some(420_000);
         let out = render_to_string(&app, 60, 51);

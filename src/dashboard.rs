@@ -228,14 +228,24 @@ fn header(state: &State, c: &Coach) -> Header {
     };
     let cwd = fmt::shorten_home(&s.cwd);
     let pr = state.status_facts.pr_number.or(state.agg.pr_number);
-    let mut parts = vec![
-        c.model.clone(),
-        format!("turn {}", c.turn),
-        elapsed.clone(),
-        cwd.clone(),
-    ];
+    let mut parts = vec![c.model.clone(), format!("turn {}", c.turn), elapsed.clone()];
+    if !s.alive {
+        // A dead session: when it ended, beside the elapsed time.
+        parts.push(
+            format!(
+                "ENDED {}",
+                s.ended_at_ms.map(fmt::clock_hhmm).unwrap_or_default()
+            )
+            .trim_end()
+            .to_string(),
+        );
+    }
+    parts.push(cwd.clone());
     if let Some(n) = pr {
         parts.push(format!("PR #{n}"));
+    }
+    if !s.version.is_empty() {
+        parts.push(format!("v{}", s.version));
     }
     Header {
         session: s.name.clone(),
@@ -516,7 +526,7 @@ fn row_limits(state: &State) -> Row {
     if flags.long_context_count > 0 {
         parts.push(vec![fg(format!(
             "long_context {:.0} %",
-            flags.long_context_pct * 100.0
+            flags.long_context_pct
         ))]);
     }
     if state.other_live_sessions > 0 {

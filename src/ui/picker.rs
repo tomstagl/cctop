@@ -231,7 +231,7 @@ mod tests {
         let attached = crate::tail::live_count();
         assert!(attached > baseline, "transcript tailer alive");
         let hooks_a = app.tick_hooks.len();
-        app.state.hidden = vec![7];
+        app.state.view = crate::ui::state::View::Coach;
         let start = std::time::Instant::now();
         crate::attach::attach(&mut app, &path, SessionInfo::from_fixture(&path), true);
         assert!(
@@ -245,7 +245,11 @@ mod tests {
             "old tailers dropped, new ones alive"
         );
         assert_eq!(app.tick_hooks.len(), hooks_a, "same collector set");
-        assert_eq!(app.state.hidden, vec![7], "UI preferences survive");
+        assert_eq!(
+            app.state.view,
+            crate::ui::state::View::Coach,
+            "UI preferences survive"
+        );
         assert_eq!(app.state.lines_seen, 0, "session state is fresh");
         drop(app);
         assert_eq!(crate::tail::live_count(), baseline);

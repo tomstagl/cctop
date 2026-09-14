@@ -6,7 +6,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
   "header": {
     "cwd": "/home/user/project",
     "elapsed": "9h 25m",
-    "line": "cctop  claude-sonnet-5 · turn 6 · 9h 25m · /home/user/project · PR #121",
+    "line": "cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · PR #121 · v2.1.270",
     "model": "claude-sonnet-5",
     "phase": {
       "glyph": "●",
@@ -206,7 +206,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
           "tone": "dim"
         },
         {
-          "text": "long_context 8860 %",
+          "text": "long_context 89 %",
           "tone": "fg"
         }
       ]

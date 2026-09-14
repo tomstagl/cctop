@@ -5,7 +5,6 @@ pub mod agents;
 pub mod context;
 pub mod events;
 pub mod files;
-pub mod header;
 pub mod limits;
 pub mod tokens;
 pub mod tools;
@@ -13,10 +12,9 @@ pub mod turn;
 
 use super::Panel;
 
-/// Every panel in hotkey order. Panels that later stories add slot in here.
+/// Every panel in digit order (the header is the dashboard's own line).
 pub fn all() -> Vec<Box<dyn Panel>> {
     vec![
-        Box::new(header::Header),
         Box::new(context::Context),
         Box::new(tokens::Tokens),
         Box::new(limits::LimitsPanel),

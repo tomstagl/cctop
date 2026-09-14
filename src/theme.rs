@@ -507,9 +507,9 @@ mod render_tests {
     }
 
     #[test]
-    fn context_panel_default_dark_snapshot() {
+    fn dashboard_default_dark_snapshot() {
         let (text, buf) = render(&app_with(Caps::full()));
-        insta::assert_snapshot!("context_default_dark", text);
+        insta::assert_snapshot!("dashboard_default_dark", text);
         assert!(
             colours_used(&buf) >= 4,
             "truecolour theme uses several fg colours"
@@ -517,7 +517,7 @@ mod render_tests {
     }
 
     #[test]
-    fn context_panel_no_color_is_monochrome() {
+    fn dashboard_no_color_is_monochrome() {
         let caps = Caps {
             truecolor: true,
             colors256: true,
@@ -534,7 +534,7 @@ mod render_tests {
     }
 
     #[test]
-    fn context_panel_ascii_snapshot() {
+    fn dashboard_ascii_snapshot() {
         let caps = Caps {
             truecolor: false,
             colors256: false,
@@ -542,10 +542,12 @@ mod render_tests {
             ascii: true,
         };
         let (text, _) = render(&app_with(caps));
-        insta::assert_snapshot!("context_ascii", text);
-        assert!(text.contains("+-"), "ASCII corners: {text}");
+        insta::assert_snapshot!("dashboard_ascii", text);
         assert!(text.contains("###"), "ASCII gauge: {text}");
-        assert!(!text.contains('▇') && !text.contains('╭'), "{text}");
+        assert!(
+            !text.contains('▇') && !text.contains('╭') && !text.contains('█'),
+            "{text}"
+        );
     }
 
     #[test]
@@ -563,9 +565,10 @@ mod render_tests {
             ..Default::default()
         };
         app.apply_config(c);
-        assert_eq!(app.theme_name, "nord");
-        assert_eq!(app.state.hidden, vec![7]);
-        assert_eq!(app.mode_override, Some(crate::ui::layout::Mode::Wide));
+        assert_eq!(
+            app.theme_name, "nord",
+            "layout and hidden_panels are read and ignored"
+        );
     }
 }
 
@@ -589,10 +592,23 @@ mod fixture_b_snapshots {
         app
     }
 
+    /// The dashboard at the sizes plan B names, and every panel full-screen.
     #[test]
-    fn panels_at_60x51_and_40x24() {
+    fn dashboard_sizes_and_full_screen_panels() {
         let app = app();
-        insta::assert_snapshot!("fixture_b_60x51", render_to_string(&app, 60, 51));
-        insta::assert_snapshot!("fixture_b_40x24", render_to_string(&app, 40, 24));
+        for (w, h) in [(122, 24), (100, 30), (80, 40), (60, 51), (40, 24)] {
+            insta::assert_snapshot!(
+                format!("fixture_b_dashboard_{w}x{h}"),
+                render_to_string(&app, w, h)
+            );
+        }
+        let mut app = app;
+        for id in 1..=9u8 {
+            app.state.overlay = Some(id);
+            insta::assert_snapshot!(
+                format!("fixture_b_panel_{id}_80x30"),
+                render_to_string(&app, 80, 30)
+            );
+        }
     }
 }
