@@ -163,6 +163,11 @@ Read-only. No changes to Claude Code. Data comes from what Claude Code already w
 - hooks (optional) — exact tool timings, permission prompts, compactions
 - the process tree — running commands, MCP servers, memory
 
+`/clear` starts a new transcript under a new session id in the same Claude
+Code process; the dashboard notices within 2 s and re-attaches to the new
+session (a toast says so), and `cctop query --session <old id>` still answers
+from the old transcript as an ended session.
+
 Everything on screen is defined once in a metrics registry (`src/metrics/registry.rs`) that generates [`docs/metrics.md`](docs/metrics.md) and the reference below; CI fails if either drifts.
 
 <!-- metrics:start -->

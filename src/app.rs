@@ -198,6 +198,31 @@ impl App {
         self.evaluate_alerts();
     }
 
+    /// The switch the loop owes, with the toast that explains it: the
+    /// picker's choice first, else the new session id the registry shows
+    /// for this session's pid (`/clear` rewrote the entry under the running
+    /// process, and the old transcript never grows again).
+    pub fn take_switch(&mut self) -> Option<(crate::registry::Session, String)> {
+        if let Some(chosen) = self.pending_switch.take() {
+            let toast = format!("attached to {}", chosen.name);
+            return Some((chosen, toast));
+        }
+        let next = self.state.rotated_to.take()?;
+        let short: String = next.session_id.chars().take(8).collect();
+        Some((
+            next,
+            format!("session id changed (/clear): attached to {short}"),
+        ))
+    }
+
+    /// Re-attach to `session`, keeping the UI preferences, and show `toast`.
+    pub fn switch_to(&mut self, session: &crate::registry::Session, toast: String) {
+        let info = crate::ui::state::SessionInfo::from_registry(session);
+        let transcript = crate::transcript_path(session);
+        crate::attach::attach(self, &transcript, info, true);
+        self.state.set_toast(toast);
+    }
+
     /// Fire any alert whose threshold was just crossed, and refresh the advice.
     pub fn evaluate_alerts(&mut self) {
         let fired = self.alerts.evaluate(&self.state);
@@ -720,11 +745,8 @@ pub fn run_tui(mut app: App) -> std::io::Result<()> {
                 _ => {}
             }
         }
-        if let Some(chosen) = app.pending_switch.take() {
-            let info = crate::ui::state::SessionInfo::from_registry(&chosen);
-            let transcript = crate::transcript_path(&chosen);
-            crate::attach::attach(&mut app, &transcript, info, true);
-            app.state.set_toast(format!("attached to {}", chosen.name));
+        if let Some((session, toast)) = app.take_switch() {
+            app.switch_to(&session, toast);
             dirty = true;
         }
         // Clock-driven values (elapsed, toasts) change every tick.
@@ -799,6 +821,38 @@ mod tests {
             self.keys.set(self.keys.get() + 1);
             Handled::Yes
         }
+    }
+
+    #[test]
+    fn take_switch_prefers_the_picker_and_names_a_rotation() {
+        let registry = crate::registry::list(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/sessions"),
+        );
+        let chosen = registry
+            .iter()
+            .find(|s| s.name == "cctop-46")
+            .unwrap()
+            .clone();
+        let mut rotated = registry
+            .iter()
+            .find(|s| s.name == "finsight-3")
+            .unwrap()
+            .clone();
+        rotated.session_id = "9d337130-79ad-4df0-8bd5-1365210208b1".into();
+
+        let mut a = app();
+        assert!(a.take_switch().is_none());
+
+        // Both pending: the picker's choice first, the rotation on the next pass.
+        a.pending_switch = Some(chosen.clone());
+        a.state.rotated_to = Some(rotated.clone());
+        let (first, toast) = a.take_switch().unwrap();
+        assert_eq!(first.session_id, chosen.session_id);
+        assert_eq!(toast, "attached to cctop-46");
+        let (second, toast) = a.take_switch().unwrap();
+        assert_eq!(second.session_id, rotated.session_id);
+        assert_eq!(toast, "session id changed (/clear): attached to 9d337130");
+        assert!(a.take_switch().is_none(), "both consumed");
     }
 
     fn app() -> App {

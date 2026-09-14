@@ -96,18 +96,25 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             state.procs = snap;
         }));
     }
-    // Other live sessions (shared rate limit), every 5 s.
+    // The registry every 2 s: other live sessions (they share the rate
+    // limit), and this pid's own entry, which `/clear` rewrites with a new
+    // session id while the process runs on (issue #2). The old transcript
+    // never grows again, so the loop re-attaches to the new id.
     let my_pid = app.state.session.pid;
     let mut last_reg = Instant::now() - Duration::from_secs(10);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if last_reg.elapsed() >= Duration::from_secs(5) {
+        if last_reg.elapsed() >= Duration::from_secs(2) {
             last_reg = Instant::now();
             if let Some(dir) = crate::registry::default_dir() {
-                state.other_live_sessions = crate::registry::list(&dir)
+                let sessions = crate::registry::list(&dir);
+                state.other_live_sessions = sessions
                     .iter()
                     .filter(|s| Some(s.pid) != my_pid && s.is_alive())
                     .filter(|s| s.status() == crate::registry::Status::Busy)
                     .count();
+                if state.rotated_to.is_none() {
+                    state.rotated_to = rotated_entry(&sessions, my_pid, &state.session.session_id);
+                }
             }
         }
     }));
@@ -151,6 +158,23 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     }
 }
 
+/// The live registry entry that carries `pid` under a session id other than
+/// `session_id`: `/clear` starts a new transcript and rewrites
+/// `sessions/<pid>.json` in place, and nothing else announces it. None for
+/// a fixture (no pid), an unchanged id, a gone entry or a dead process.
+pub fn rotated_entry(
+    sessions: &[crate::registry::Session],
+    pid: Option<u32>,
+    session_id: &str,
+) -> Option<crate::registry::Session> {
+    let pid = pid?;
+    sessions
+        .iter()
+        .find(|s| s.pid == pid && !s.session_id.is_empty() && s.session_id != session_id)
+        .filter(|s| s.is_alive())
+        .cloned()
+}
+
 /// Load a fixture fully into `app` (headless): attach without followers,
 /// then feed every line.
 pub fn attach_headless(app: &mut App, transcript: &Path, info: SessionInfo) {
@@ -172,4 +196,50 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
     app.tick();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::registry::Session;
+
+    // The registry fixtures: `86143.json` is cctop-46; the pid is replaced by
+    // this test process's own, so `is_alive` holds.
+    fn registry() -> Vec<Session> {
+        crate::registry::list(&Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/sessions"))
+    }
+
+    fn mine(session_id: &str) -> Session {
+        let mut s = registry()
+            .into_iter()
+            .find(|s| s.name == "cctop-46")
+            .unwrap();
+        s.pid = std::process::id();
+        s.session_id = session_id.into();
+        s
+    }
+
+    const OLD: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
+    const NEW: &str = "9d337130-79ad-4df0-8bd5-1365210208b1";
+
+    #[test]
+    fn rotated_entry_is_this_pid_under_another_live_id() {
+        let pid = Some(std::process::id());
+        let mut sessions = registry();
+        sessions.push(mine(NEW));
+        // /clear: the entry for our pid now names the new id.
+        let next = rotated_entry(&sessions, pid, OLD).unwrap();
+        assert_eq!(next.session_id, NEW);
+        assert_eq!(next.name, "cctop-46");
+        // Unchanged id, unknown pid (a fixture), another pid's entry: nothing.
+        assert!(rotated_entry(&sessions, pid, NEW).is_none());
+        assert!(rotated_entry(&sessions, None, OLD).is_none());
+        assert!(rotated_entry(&sessions, Some(86143), OLD).is_none());
+        // A dead process's entry is not followed, whatever id it carries.
+        let mut dead = mine(NEW);
+        dead.pid = 4_194_000;
+        assert!(rotated_entry(&[dead], Some(4_194_000), OLD).is_none());
+        // An entry with no id (a broken file) is not a rotation either.
+        assert!(rotated_entry(&[mine("")], pid, OLD).is_none());
+    }
 }

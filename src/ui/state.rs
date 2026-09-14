@@ -149,6 +149,10 @@ pub struct State {
     pub limits_series_5h: Vec<(i64, f64)>,
     /// Other busy sessions in the registry (they share the rate limit).
     pub other_live_sessions: usize,
+    /// The registry entry of this session's pid once it carries another
+    /// session id (`/clear` rewrites it under the running process); the
+    /// loop re-attaches to it.
+    pub rotated_to: Option<crate::registry::Session>,
     /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
     hook_pre: std::collections::HashMap<String, i64>,
     hook_perm: std::collections::HashMap<String, i64>,
