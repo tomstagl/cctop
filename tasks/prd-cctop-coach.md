@@ -1,6 +1,6 @@
 # PRD: cctop coach — actionable signals and a real-time coach view
 
-**Status:** Draft v1.1 · 2026-09-13 (v1 reviewed by 64 adversarial verdicts, a four-design judge panel and a completeness critic; see §14)
+**Status:** Draft v1.2 · 2026-09-14 (v1 reviewed by 64 adversarial verdicts, a four-design judge panel and a completeness critic; see §14)
 **Target:** cctop ≥ 0.1.1 attached to Claude Code CLI 2.1.269 on macOS/Linux; TUI first, then the function-hooks pane (`tasks/prd-cctop-pane.md`) and `cctop query` / MCP.
 **Depends on:** `tasks/prd-cctop.md` v1.1 (the nine panels, rules A01–A18, metrics registry, query interface); the pane PRD for the second front-end.
 
@@ -11,6 +11,8 @@
 > D. Numbers in this document come from 81–113 real sessions on this machine (2026-08-12 → 2026-09-13, 7 projects, ~6 300 main-thread API calls) unless marked otherwise; they are this user's habits, not population statistics.
 >
 > **v1.1 changes:** 31 of 64 candidates were refuted as *nudges* (never on data availability) and survive as metrics, indicators or Events rows; the coach view is the judged "Lights" design (§6); the autocompact threshold is *effective window* − 13 000 (967 k on native-1M models, from the debug log's `effectiveWindow=980000`), not window − 13 000; baselines in §12 use the verdict denominators; §13 closes the TTL question and adds the critic's gaps.
+>
+> **v1.2 changes (alignment with the implementation plans, 2026-09-14):** the dashboard is direction B of the design canvas (`tasks/plan-dashboard-big-figures.md`): the framed nine-panel grid and `layout::solve` are removed on both surfaces and replaced by four block-digit tiles (the coach's four lights), the nudge line and a borderless nine-row ledger whose digits open a panel full-screen. Consequences folded in below: every §4 panel addition lands in that panel's two-line ledger row and its full-screen view; US-009's view switch is a `State.view` flag checked before the dashboard draw (no `layout::solve` to skip); US-010's pane Overview draws the dashboard object (`cctop query dashboard`), whose tiles *are* the coach's lights, so the two views cannot disagree; §11's view note is superseded. Evidence re-checked on 2.1.270 while planning: `/clear` writes a `continued-in {continuedInSessionId}` line into the old transcript (a boundary marker, added to US-001); the hook spool must never store `UserPromptSubmit.prompt` or `Stop.last_assistant_message` verbatim (FR-12) — `cctop hook` keeps their lengths and a "ends with `?`" flag instead (US-003); the transcript's `cache_miss_reason` carries `type` only on this machine, so `cache_missed_input_tokens` is optional; the local corpus' first-seen map starts at 2.1.231 (the research trail's T38 map covers 2.1.220 →).
 
 ---
 
@@ -146,7 +148,7 @@ Anthropic's docs and engineering posts and Boris Cherny's published workflow con
 
 ## 4. What to add to the main dashboard
 
-Every item below is a pure function of data in §3.3 or §3.4; the metric registry gets one row per item.
+Every item below is a pure function of data in §3.3 or §3.4; the metric registry gets one row per item. With the direction-B dashboard (v1.2) each panel has two homes — its two-line ledger row on the dashboard and its full-screen view behind the digit — and the additions below land in both; the framed-block layouts of the base PRD are gone.
 
 | Panel | Addition | Data | Replaces / fixes |
 |---|---|---|---|
@@ -370,7 +372,7 @@ In `session_mode = loop` (Ralph, workflows) the state line reads `LOOP · stop h
 **Description:** As a user, I want cctop to read the exact fields Claude Code writes, so that every downstream metric and rule works from evidence instead of heuristics.
 
 **Acceptance Criteria:**
-- [ ] `transcript.rs` models: `promptId`, `promptSource`, `origin.kind`, `toolDenialKind`, `userFeedback` (length only), `interruptedMessageId`, `isCompactSummary`, `turnCompanion`, `sourceToolAssistantUUID` on user lines; `perTurnEffort`, `attribution{Skill,Plugin,Agent,McpServer}`, `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `gitBranch`, `message.diagnostics.cache_miss_reason` on assistant lines; `system/compact_boundary.compactMetadata`, `system/local_command` (with `/context` stdout ANSI-stripped and parsed into category rows), `system/scheduled_task_fire`, `pr-link`, `custom-title`, `file-history-delta`
+- [ ] `transcript.rs` models: `promptId`, `promptSource`, `origin.kind`, `toolDenialKind`, `userFeedback` (length only), `interruptedMessageId`, `isCompactSummary`, `turnCompanion`, `sourceToolAssistantUUID` on user lines; `perTurnEffort`, `attribution{Skill,Plugin,Agent,McpServer}`, `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `gitBranch`, `message.diagnostics.cache_miss_reason` on assistant lines; `system/compact_boundary.compactMetadata`, `system/local_command` (with `/context` stdout ANSI-stripped and parsed into category rows), `system/scheduled_task_fire`, `pr-link`, `custom-title`, `file-history-delta`, `continued-in` (the `/clear` boundary on 2.1.270)
 - [ ] `toolUseResult` is consumed per tool: Bash (`interrupted`, `timedOutAfterMs`, `backgroundTaskId`, `persistedOutputPath/Size`, `returnCodeInterpretation`, `staleReadFileStateHint`, `gitOperation`, `bashEditDiff`), Edit/Write (`structuredPatch` line counts, `staleRecovered`, `userModified`, `originalFile == null`), Read (`type`, `truncatedByTokenCap`, `numLines/totalLines`, `file.dimensions`), Agent (`usage`, `toolStats`, `resolvedModel`, `totalToolUseCount`), AskUserQuestion, TaskCreate/TaskUpdate (`statusChange`)
 - [ ] All 45 attachment subtypes are counted with `rendered[].content` length (2.1.266+) and per-subtype fallbacks (`task_reminder` ≈ 0.28 × json/4); parsed structures for `task_reminder`, `edited_text_file`, `hook_success`, `hook_blocking_error`, `plan_mode(_exit)`, `goal_status`, `queued_command`, `batching_reminder_sent`, `silent_turn_reminder`, `read_truncation_notice`, `auto_mode(_exit)`, `prompt_snapshot`, `instructions`, `nested_memory`, `invoked_skills`
 - [ ] Turns are grouped by `promptId`; a human turn requires `promptSource ∈ {typed, suggestion_accepted, queued}` or `origin.kind == human`; interrupts, slash commands, `<local-command-stdout>`, task notifications, teammate messages and the compaction summary are not turns (fixture asserts the 13 % over-count is gone)
@@ -395,7 +397,7 @@ In `session_mode = loop` (Ralph, workflows) the state line reads `LOOP · stop h
 
 **Acceptance Criteria:**
 - [ ] `apply_hook` reads `duration_ms` (exact durations, `approx` cleared), `is_interrupt`, `error`, `Stop.{background_tasks, session_crons, last_assistant_message}`, `SessionStart.{source, seconds_since_last_response, context_tokens, prompt_cache_likely_expired, estimated_cache_write_usd}`, `Notification.notification_type`, `permission_mode`, `effort.level`, `prompt_id`, `agent_id/agent_type` (subagent events routed to the agent's stats instead of dropped)
-- [ ] `cctop hook` keeps `permission_suggestions` on `PermissionRequest` and `tool_response` for `tool_name == Agent`; `tool_input` stays stripped except a bounded 200-char `command` summary
+- [ ] `cctop hook` keeps `permission_suggestions` on `PermissionRequest` and `tool_response` for `tool_name == Agent`; `tool_input` stays stripped except a bounded 200-char `command` summary; `UserPromptSubmit.prompt` and `Stop.last_assistant_message` are reduced to a length and an "ends with `?`" flag before spooling (FR-12 — the spool held prompt text verbatim before v1.2)
 - [ ] `cctop install` registers `PostCompact`, `PreModelSwitch`, `PostModelSwitch`, `StopFailure`, `PermissionDenied`, `InstructionsLoaded`, `PostToolBatch`, `UserPromptExpansion`, `TaskCreated`, `TaskCompleted` (all observe-only; merged with existing hooks; diff shown; uninstall restores)
 - [ ] `tasks.rs` no longer lists dotfiles; background tasks come from `Stop.background_tasks` and `turn_duration.pendingBackgroundAgentCount`
 - [ ] Unit tests per event with real payload shapes (anonymised)
@@ -456,13 +458,13 @@ In `session_mode = loop` (Ralph, workflows) the state line reads `LOOP · stop h
 **Description:** As a user, I want a second top-level view with the state line, four lights, one nudge slot and the next/snoozed rows, so that I can glance and act without reading nine panels.
 
 **Acceptance Criteria:**
-- [ ] `State.view: View::{Dashboard, Coach}` checked at the top of `App::draw` (skips `layout::solve`); global key `c` toggles; persisted in `~/.config/cctop/config.toml`; `--view coach` flag; added to `BINDINGS` and the help overlay
+- [ ] `State.view: View::{Dashboard, Coach}` checked at the top of `App::draw`, before the direction-B dashboard draws (`layout::solve` no longer exists); global key `c` toggles; persisted in `~/.config/cctop/config.toml`; `--view coach` flag; added to `BINDINGS` and the help overlay
 - [ ] Renders the §6.2 layout at 56 × 20 and 60 × 51; at ≤ 40 columns the lights collapse to 2 × 2 pairs and next/snoozed drop; at height < 20 empty rows go first, then `snoozed`, then `next`; the slot never drops below 2 lines; glyph levels carry the state monochrome, colour from the theme roles only, ASCII fallback for ○ ◐ ● ◆ ▸ ↻ ✓ ▇ ▁
 - [ ] Keys per §6.5: `Enter` act (ask popup pre-filled; `S` socket send only for prompt-class actions, opt-in per press), `x`/`X` snooze, `e` why, `n`/`N` peek, `1`–`4` light detail, `l` lifecycle log, `$` units, `Esc` back
 - [ ] State line per §6.3: phase word from tool names only, a literal check quote, churn token, run size and silence, `nudged N×`, `▸ steer window`; ◆ WAITING / IDLE / LOOP variants
 - [ ] Lights compute their levels every tick from `State` and are never rate-limited; the slot changes only at a human-turn boundary, on a NOW event or on retirement
 - [ ] Headless: `cctop run --once --view coach --keys … --size 56x20` renders for snapshots; snapshot tests on fixture B in six moments (exploring run, unverified edits, failure cascade, waiting on a question, cold resume, idle checkpoint) plus the loop-mode line
-- [ ] Dogfood: opened for a working week; every rule in §5.2 marked P0 has fired at least once correctly; false positives logged with `x` and counted (§12)
+- [ ] Dogfood: opened for a working week; every rule in §5.2 marked P0 has fired at least once correctly; false positives logged with `x` and counted (§12). The view ships with A01–A18 first (plan Phase 4); this criterion closes once the P0 rules of US-007/US-008 exist
 
 ### US-010: `cctop query coach`, MCP tool and pane wiring
 **Description:** As a user of the pane, the skill or another agent, I want the same coach object everywhere, so that there is one implementation.
@@ -472,7 +474,7 @@ In `session_mode = loop` (Ralph, workflows) the state line reads `LOOP · stop h
 - [ ] Single-writer rule for `~/.cctop/<session>.advisor.json`: the TUI owns it while running (lock file); CLI/MCP/pane write only when no lock exists
 - [ ] MCP tool `cctop_coach` added (schema ≤ 120 tokens; total still under the documented cap); `docs/mcp.md` updated
 - [ ] `cctop-insights` skill maps "what should I do now / next" to `cctop query coach`
-- [ ] Pane PRD amendment: Overview renders the coach object's state line, six numbers and nudge as rows; `$.ui.status` shows the one-line form; NOW-class events go to `$.ui.toast`; no injection into the model
+- [ ] Pane PRD amendment: Overview renders the dashboard object (`cctop query dashboard`, direction B): the state line, the four lights as tiles, the nudge and the nine ledger rows as Buttons; the Coach view renders the coach object; `$.ui.status` shows the one-line form; NOW-class events go to `$.ui.toast`; no injection into the model
 - [ ] Marker `~/.cctop/pane/<session>.json` unchanged; the pane polls `coach` instead of `advice` every 2 s while a turn runs
 
 ### US-011: Cross-session sources and the session-start line
@@ -550,7 +552,7 @@ In `session_mode = loop` (Ralph, workflows) the state line reads `LOOP · stop h
 - **Collectors.** New: history.jsonl tailer (filtered by `sessionId`), optional `human_idle_ms` (ioreg / xprintidle / tmux `client_activity`), optional debug-log tail, `usage-data/*` reader, `~/.claude.json` reader (keys only), plugin catalog cache reader, claude-pid environment reader (`ps eww` / procfs), recursive `subagents/**` scan, workflow journal reader. Extended: transcript, status, hooks, tasks (removed), files, agents, prefix.
 - **Phase classifier.** Port `classify_bash`/`assign_phases` from the research scratchpad (`phases.py`) into `src/phase.rs` as pure functions with the regression CSVs as fixtures; expose `Call.phase` and a `Phase::current(&[Call]) -> (Word, run_len)` over the last five calls.
 - **Engine.** `src/advisor/{mod.rs, rules.rs}` split into `rules/token.rs`, `rules/outcome.rs`, `rules/events.rs`; `Engine` gains the class scheduler, persistence and the nudge log; `query::coach` and `mcp` share `coach::snapshot(&State)`.
-- **View.** `src/ui/coach_view.rs` as `Mode::Coach` through `layout::solve`'s existing `force: Option<Mode>` (or a `State.view` flag checked before solve); no panel ownership; `BINDINGS` updated for the help test; the ask popup (`src/ask.rs`) reused for `Enter`.
+- **View.** `src/ui/coach_view.rs` drawn when `State.view == View::Coach`, checked before the direction-B dashboard (`src/ui/dashboard.rs`; `layout::solve` and its modes are deleted with the framed grid); no panel ownership; `BINDINGS` updated for the help test; the ask popup (`src/ask.rs`) reused for `Enter`.
 - **Performance.** The attachment ledger, phase classification and per-call pricing are O(1) per line; the recursive agent scan is throttled to the existing 2 s tick; history.jsonl is read from the last offset. Budget unchanged: ≤ 2 % CPU idle, ≤ 5 % during a turn, ≤ 50 MB RSS.
 - **Version drift.** Field parsers gate on `version`; the binary constants (effective-window table 967 k / 187 k, 13 000 / 20 000 / 3 000 / 0.8, tier weights, `effort_cost_index`, `/context` thresholds) live in one `harness_facts.rs` with the Claude Code version they were read from; `scripts/check-plugin-types.sh` already compares versions — extend it to warn when `claude --version` is newer than the facts table.
 - **Pane.** No new engine calls; the poller swaps `advice` for `coach`; `$.ui.status`/`$.ui.toast` are one-liners in the existing module.
