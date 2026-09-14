@@ -1067,6 +1067,89 @@ impl State {
         Some((total / turns.len() as u64, approx))
     }
 
+    /// The cost gradient at the current context, priced cold when the cache
+    /// is (or the shim says the next call re-writes).
+    pub fn gradient(&self) -> Option<crate::metrics::cost::Gradient> {
+        let model = self.model()?;
+        let cold = self.cache_warm().is_some_and(|(warm, _)| !warm);
+        let ttl = match self.cache_ttl_ms() {
+            3_600_000 => crate::transcript::CacheTtl::OneHour,
+            _ => crate::transcript::CacheTtl::FiveMinutes,
+        };
+        crate::metrics::cost::gradient(
+            self.cost.pricing(),
+            model,
+            self.context().size,
+            crate::metrics::cost::median_output(&self.agg),
+            crate::metrics::cost::p50_calls_per_turn(&self.agg),
+            cold,
+            ttl,
+        )
+    }
+
+    /// Where the tokens went: the top `n` owners (skills, plugins, agents,
+    /// MCP servers, idle turns) by share of all input tokens, including the
+    /// subagents' own usage under `agents`.
+    pub fn attribution_top(&self, n: usize) -> Vec<(String, f64)> {
+        let agents = self.agents_usage().total_input();
+        let main = self.agg.total.total_input();
+        let total = (main + agents) as f64;
+        if total == 0.0 {
+            return Vec::new();
+        }
+        let mut v: Vec<(String, f64)> = self
+            .agg
+            .attribution
+            .iter()
+            .map(|(k, u)| (k.clone(), u.total_input() as f64 / total))
+            .collect();
+        if agents > 0 {
+            v.push(("agents".to_string(), agents as f64 / total));
+        }
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        v.truncate(n);
+        v
+    }
+
+    /// Subagent spend: `(usd, share of the session)` when priceable.
+    pub fn agents_cost(&self) -> Option<(f64, f64)> {
+        let pricing = self.cost.pricing();
+        let mut usd = 0.0;
+        let mut any = false;
+        for a in self.agents.values() {
+            if let Some(c) = pricing.estimate(&a.usage, &a.model) {
+                usd += c;
+                any = true;
+            }
+        }
+        if !any {
+            return None;
+        }
+        let main = self.cost.current().map(|c| c.usd).unwrap_or(0.0);
+        let total = main + usd;
+        Some((usd, if total > 0.0 { usd / total } else { 0.0 }))
+    }
+
+    /// `/usage`'s behaviour flags for this session.
+    pub fn behaviour_flags(&self) -> crate::metrics::cost::BehaviourFlags {
+        let agent_weight: f64 = self
+            .agents
+            .values()
+            .map(|a| crate::metrics::cost::limit_weight(&a.usage, &a.model))
+            .sum();
+        let active_ms = self
+            .session
+            .started_at_ms
+            .map(|s| self.clock_ms() - s)
+            .unwrap_or(0);
+        crate::metrics::cost::BehaviourFlags::compute(
+            &self.agg,
+            agent_weight,
+            self.other_live_sessions + 1,
+            active_ms,
+        )
+    }
+
     /// Read the autocompact overrides for a live session: settings.json and
     /// the claude process environment.
     pub fn load_autocompact(&mut self) {

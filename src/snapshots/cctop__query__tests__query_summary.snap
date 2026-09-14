@@ -10,11 +10,88 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "unit": "count",
     "value": 1
   },
+  "agents_cost": {
+    "share": {
+      "approx": true,
+      "metric_id": "agents_cost",
+      "unit": "ratio",
+      "value": 0.015007504334002386
+    },
+    "usd": {
+      "approx": true,
+      "metric_id": "agents_cost",
+      "unit": "USD",
+      "value": 0.15089129999999998
+    }
+  },
   "api_calls": {
     "approx": false,
     "metric_id": "api_calls",
     "unit": "count",
     "value": 143
+  },
+  "attribution": [
+    {
+      "owner": "mcp:lorem ipsum dolo",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.7984581048413432
+      }
+    },
+    {
+      "owner": "skill:lorem ipsum",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.03624022006989923
+      }
+    },
+    {
+      "owner": "agents",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.01604819006437544
+      }
+    },
+    {
+      "owner": "mcp:lorem ips",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.004084158140122785
+      }
+    }
+  ],
+  "behaviour_flags": {
+    "cache_miss_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 0.0
+    },
+    "cron": false,
+    "high_parallel": false,
+    "long_context_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 82.67876070704885
+    },
+    "subagent_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 1.692973925508824
+    },
+    "tips": [
+      "83% of your usage was at >150k context"
+    ]
   },
   "burn_rate": {
     "approx": true,
@@ -116,6 +193,34 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "claude-haiku-4-5-20251001": 0.001946,
     "claude-sonnet-5": 9.901552600000011
   },
+  "cost_gradient": {
+    "calls_per_turn": 8.0,
+    "cold": false,
+    "next_30_calls": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 2.4693899999999998
+    },
+    "per_call": {
+      "approx": true,
+      "metric_id": "cost_per_call",
+      "unit": "USD",
+      "value": 0.082313
+    },
+    "per_turn": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.658504
+    },
+    "per_turn_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.18432
+    }
+  },
   "current_turn_elapsed": {
     "approx": false,
     "metric_id": "turn_elapsed",
@@ -129,6 +234,7 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "unit": "tokens/min",
     "value": 1147568.4
   },
+  "limit_weight_tier": 3.0,
   "limits": {
     "hint": "run cctop install",
     "source": "missing"

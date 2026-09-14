@@ -84,6 +84,18 @@ pub fn summary(state: &State) -> Value {
         },
         "cost": cost_v,
         "cost_by_model": state.cost.by_model(),
+        "cost_gradient": state.gradient().map(|g| json!({
+            "per_call": m(g.per_call, "USD", "cost_per_call", true),
+            "per_turn": m(g.per_turn, "USD", "cost_per_turn", true),
+            "per_turn_at_100k": m(g.per_turn_at_100k, "USD", "cost_per_turn", true),
+            "next_30_calls": m(g.next_30_calls, "USD", "cost_per_turn", true),
+            "calls_per_turn": g.calls_per_turn,
+            "cold": g.cold,
+        })),
+        "attribution": state.attribution_top(5).iter().map(|(k, s)| json!({"owner": k, "share": m(*s, "ratio", "attribution", false)})).collect::<Vec<_>>(),
+        "agents_cost": state.agents_cost().map(|(usd, share)| json!({"usd": m(usd, "USD", "agents_cost", true), "share": m(share, "ratio", "agents_cost", true)})),
+        "limit_weight_tier": state.model().map(crate::harness_facts::usage_weight::tier),
+        "behaviour_flags": behaviour_flags(state),
         "burn_rate": rates.usd_per_hour.map(|h| m(h, "USD/h", "burn_rate", true)),
         "input_rate": m(rates.input_tokens_per_min, "tokens/min", "input_rate", false),
         "limits": limits,
@@ -112,6 +124,19 @@ pub fn summary(state: &State) -> Value {
             }),
             None => missing("run cctop with --otlp and export telemetry (cctop install --otel)"),
         },
+    })
+}
+
+/// `/usage`'s behaviour flags for the session.
+fn behaviour_flags(state: &State) -> Value {
+    let f = state.behaviour_flags();
+    json!({
+        "cache_miss_pct": m(f.cache_miss_pct, "%", "behaviour_flags", false),
+        "long_context_pct": m(f.long_context_pct, "%", "behaviour_flags", false),
+        "subagent_pct": m(f.subagent_pct, "%", "behaviour_flags", false),
+        "high_parallel": f.high_parallel,
+        "cron": f.cron,
+        "tips": f.tips(),
     })
 }
 

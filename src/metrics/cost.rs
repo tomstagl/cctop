@@ -287,6 +287,172 @@ pub fn parse_ts_ms(s: &str) -> Option<i64> {
     Some((((days * 24 + h) * 60 + mi) * 60 + se) * 1000 + ms)
 }
 
+/// What continuing costs at the current context: the price of one call and
+/// of one turn, now and at 100 k.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Gradient {
+    /// One call at the current context, warm: `ctx × cache read + median
+    /// output × output price`; cold: the context at the cache-write price.
+    pub per_call: f64,
+    /// `per_call × p50 calls per turn`.
+    pub per_turn: f64,
+    /// The same turn at 100 k of context.
+    pub per_turn_at_100k: f64,
+    pub next_30_calls: f64,
+    /// The session's own p50 calls per turn (turns with ≥ 1 call), floor 1.
+    pub calls_per_turn: f64,
+    /// Priced at the cache-write price: the cache is cold (or was flipped).
+    pub cold: bool,
+}
+
+/// The cost gradient for `model` at `ctx` tokens of context.
+pub fn gradient(
+    pricing: &Pricing,
+    model: &str,
+    ctx: u64,
+    median_output: u64,
+    calls_per_turn: f64,
+    cold: bool,
+    ttl: CacheTtl,
+) -> Option<Gradient> {
+    let p = pricing.price(model)?;
+    let read = if cold {
+        cache_write_price(p, ttl)
+    } else {
+        p.cache_read()
+    };
+    let per_call = |c: u64| (c as f64 * read + median_output as f64 * p.output) / 1e6;
+    let cpt = calls_per_turn.max(1.0);
+    Some(Gradient {
+        per_call: per_call(ctx),
+        per_turn: per_call(ctx) * cpt,
+        per_turn_at_100k: per_call(100_000) * cpt,
+        next_30_calls: per_call(ctx) * 30.0,
+        calls_per_turn: cpt,
+        cold,
+    })
+}
+
+/// Median of the API calls per turn over turns that made a call.
+pub fn p50_calls_per_turn(agg: &Aggregate) -> f64 {
+    let mut v: Vec<usize> = agg
+        .turns
+        .iter()
+        .filter(|t| t.api_calls > 0)
+        .map(|t| t.api_calls)
+        .collect();
+    if v.is_empty() {
+        return 1.0;
+    }
+    v.sort_unstable();
+    v[v.len() / 2] as f64
+}
+
+/// Median output tokens per API call.
+pub fn median_output(agg: &Aggregate) -> u64 {
+    let mut v: Vec<u64> = agg.calls.iter().map(|c| c.usage.output).collect();
+    if v.is_empty() {
+        return 0;
+    }
+    v.sort_unstable();
+    v[v.len() / 2]
+}
+
+/// `/usage`'s limit weight of one call: `(cached + uncached×10 +
+/// cacheCreate×12.5 + output×50) × tier`.
+pub fn limit_weight(u: &Usage, model: &str) -> f64 {
+    use crate::harness_facts::usage_weight as w;
+    (u.cache_read as f64
+        + u.input as f64 * w::UNCACHED
+        + u.cache_write() as f64 * w::CACHE_CREATE
+        + u.output as f64 * w::OUTPUT)
+        * w::tier(model)
+}
+
+/// `/usage`'s five behaviour flags over this session's calls, as shares
+/// of the weighted usage; Claude Code shows a flag at ≥ 10 %.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BehaviourFlags {
+    /// Share of weight in requests with > 100 k uncached tokens.
+    pub cache_miss_pct: f64,
+    pub cache_miss_count: usize,
+    /// Share of weight in requests at > 150 k context.
+    pub long_context_pct: f64,
+    pub long_context_count: usize,
+    /// Share of weight spent by subagents.
+    pub subagent_pct: f64,
+    /// ≥ 4 sessions were live at once.
+    pub high_parallel: bool,
+    /// The session has been active for ≥ 8 h.
+    pub cron: bool,
+    pub total_weight: f64,
+}
+
+impl BehaviourFlags {
+    pub fn compute(
+        agg: &Aggregate,
+        agent_weight: f64,
+        live_sessions: usize,
+        active_ms: i64,
+    ) -> BehaviourFlags {
+        let mut f = BehaviourFlags::default();
+        let mut miss = 0.0;
+        let mut long = 0.0;
+        for c in &agg.calls {
+            let w = limit_weight(&c.usage, &c.model);
+            f.total_weight += w;
+            if c.usage.input > 100_000 {
+                miss += w;
+                f.cache_miss_count += 1;
+            }
+            if c.context() > 150_000 {
+                long += w;
+                f.long_context_count += 1;
+            }
+        }
+        let total = f.total_weight + agent_weight;
+        if total > 0.0 {
+            f.cache_miss_pct = miss / total * 100.0;
+            f.long_context_pct = long / total * 100.0;
+            f.subagent_pct = agent_weight / total * 100.0;
+        }
+        f.high_parallel = live_sessions >= 4;
+        f.cron = active_ms >= 8 * 3_600_000;
+        f
+    }
+
+    /// Claude Code's own tip lines, for the flags at ≥ 10 %.
+    pub fn tips(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let pct = |p: f64| p.round() as u64;
+        if self.cache_miss_pct >= 10.0 {
+            out.push(format!(
+                "{}% of your usage hit a >100k-token cache miss",
+                pct(self.cache_miss_pct)
+            ));
+        }
+        if self.long_context_pct >= 10.0 {
+            out.push(format!(
+                "{}% of your usage was at >150k context",
+                pct(self.long_context_pct)
+            ));
+        }
+        if self.subagent_pct >= 10.0 {
+            out.push(format!(
+                "{}% of your usage came from subagent-heavy sessions",
+                pct(self.subagent_pct)
+            ));
+        }
+        if self.high_parallel {
+            out.push("usage while 4+ sessions ran in parallel".to_string());
+        }
+        if self.cron {
+            out.push("usage from a session active for 8+ hours".to_string());
+        }
+        out
+    }
+}
+
 /// Epoch milliseconds → the ISO-8601 UTC form Claude Code writes
 /// (`2026-08-27T09:25:06.911Z`); the inverse of [`parse_ts_ms`].
 pub fn format_ts_ms(ms: i64) -> String {
@@ -444,6 +610,73 @@ mod tests {
         }
         let c = fresh.current().unwrap();
         assert!(c.approx && c.usd > 1.0);
+    }
+
+    #[test]
+    fn gradient_weight_and_flags() {
+        let p = Pricing::bundled();
+        // Opus 5: cache read $0.50/M, output $25/M (pricing.toml).
+        let g = gradient(
+            &p,
+            "claude-opus-5",
+            412_000,
+            1_000,
+            19.0,
+            false,
+            CacheTtl::OneHour,
+        )
+        .unwrap();
+        let read = p.price("claude-opus-5").unwrap().cache_read();
+        assert!((g.per_call - (412_000.0 * read + 1_000.0 * 25.0) / 1e6).abs() < 1e-9);
+        assert!((g.per_turn - g.per_call * 19.0).abs() < 1e-9);
+        assert!(g.per_turn_at_100k < g.per_turn);
+        assert!((g.next_30_calls - g.per_call * 30.0).abs() < 1e-9);
+        let cold = gradient(
+            &p,
+            "claude-opus-5",
+            412_000,
+            1_000,
+            19.0,
+            true,
+            CacheTtl::OneHour,
+        )
+        .unwrap();
+        assert!(
+            cold.cold && cold.per_call > g.per_call * 5.0,
+            "cold write ≫ warm read"
+        );
+        assert!(gradient(&p, "mystery", 1, 1, 1.0, false, CacheTtl::OneHour).is_none());
+        let u = Usage {
+            input: 100,
+            cache_write_1h: 200,
+            cache_read: 1000,
+            output: 10,
+            ..Default::default()
+        };
+        assert_eq!(
+            limit_weight(&u, "claude-opus-5"),
+            (1000.0 + 1000.0 + 2500.0 + 500.0) * 5.0
+        );
+        assert_eq!(limit_weight(&u, "claude-sonnet-5"), 5000.0 * 3.0);
+        let agg = Aggregate::from_lines(&fixture());
+        assert_eq!(agg.calls.len(), 143);
+        assert!(p50_calls_per_turn(&agg) >= 1.0);
+        assert!(median_output(&agg) > 0);
+        let f = BehaviourFlags::compute(&agg, 0.0, 1, 3_600_000);
+        assert!(
+            f.long_context_pct > 50.0,
+            "{f:?}: most of fixture A ran above 150k"
+        );
+        assert_eq!(f.cache_miss_count, 0);
+        assert!(!f.high_parallel && !f.cron);
+        assert!(f
+            .tips()
+            .iter()
+            .any(|t| t.ends_with("of your usage was at >150k context")));
+        let f = BehaviourFlags::compute(&agg, f.total_weight, 5, 9 * 3_600_000);
+        assert!((f.subagent_pct - 50.0).abs() < 1e-6);
+        assert!(f.high_parallel && f.cron);
+        assert_eq!(f.tips().len(), 4);
     }
 
     #[test]

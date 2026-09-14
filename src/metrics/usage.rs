@@ -224,11 +224,35 @@ pub struct Boundary {
     pub kind: BoundaryKind,
 }
 
+/// One API response, for the per-request arithmetic (`/usage` weight,
+/// the behaviour flags, the cost gradient).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallRecord {
+    pub turn: usize,
+    pub model: String,
+    pub usage: Usage,
+    /// The turn is machine-originated (a task notification, an SDK prompt).
+    pub machine: bool,
+}
+
+impl CallRecord {
+    /// Context the call saw.
+    pub fn context(&self) -> u64 {
+        self.usage.total_input()
+    }
+}
+
 /// Running aggregate over a transcript. Feed lines in order.
 #[derive(Debug, Clone, Default)]
 pub struct Aggregate {
     pub turns: Vec<Turn>,
     pub total: Usage,
+    /// One record per API response, in order.
+    pub calls: Vec<CallRecord>,
+    /// Usage by the skill / plugin / agent / MCP server that owned the
+    /// response (`attribution*` keys), keyed `skill:code-review`,
+    /// `plugin:x`, `agent:y`, `mcp:server`; machine turns under `idle`.
+    pub attribution: std::collections::BTreeMap<String, Usage>,
     /// Distinct API responses seen (for dedupe).
     seen_ids: HashSet<String>,
     /// Most recent cache TTL observed on any call.
@@ -576,6 +600,29 @@ impl Aggregate {
         self.total.add(&u);
         self.model = Some(a.message.model.clone());
         self.last_api_at = a.timestamp.clone().or(self.last_api_at.take());
+        let machine = !t.human;
+        self.calls.push(CallRecord {
+            turn: t.number,
+            model: a.message.model.clone(),
+            usage: u,
+            machine,
+        });
+        let owner = if machine {
+            Some("idle".to_string())
+        } else if let Some(s) = &a.attribution_skill {
+            Some(format!("skill:{s}"))
+        } else if let Some(p) = &a.attribution_plugin {
+            Some(format!("plugin:{p}"))
+        } else if let Some(g) = &a.attribution_agent {
+            Some(format!("agent:{g}"))
+        } else {
+            a.attribution_mcp_server
+                .as_ref()
+                .map(|m| format!("mcp:{m}"))
+        };
+        if let Some(k) = owner {
+            self.attribution.entry(k).or_default().add(&u);
+        }
     }
 }
 

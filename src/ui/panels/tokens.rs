@@ -36,7 +36,7 @@ impl Panel for Tokens {
         Some(fmt::tokens(Self::usage(state).total()))
     }
     fn min_rows(&self) -> u16 {
-        7
+        10
     }
     fn priority(&self) -> u8 {
         80
@@ -169,6 +169,106 @@ impl Panel for Tokens {
         }
         lines.push(Line::from(l7));
 
+        // The cost gradient: what continuing costs at this context.
+        let mut l8 = vec![Span::raw(" ")];
+        match state.gradient() {
+            Some(g) => {
+                if g.cold {
+                    l8.push(Span::styled("cold: ", state.theme.warn()));
+                }
+                l8.push(Span::raw(format!(
+                    "≈{}/call · ≈{}/turn",
+                    fmt::usd(g.per_call),
+                    fmt::usd(g.per_turn)
+                )));
+                l8.push(Span::styled(
+                    format!(" (≈{} at 100k)", fmt::usd(g.per_turn_at_100k)),
+                    dim,
+                ));
+                l8.push(Span::raw(format!(
+                    " · next 30c ≈{}",
+                    fmt::usd(g.next_30_calls)
+                )));
+            }
+            None => l8.push(Span::styled("$/call —", dim)),
+        }
+        lines.push(Line::from(l8));
+
+        // The cache line: Claude Code's own diagnosis when the shim is there.
+        let mut l9 = vec![Span::raw(" cache ")];
+        match state.cache_clock() {
+            Some(k) => {
+                let mark = if k.approx { "≈" } else { "" };
+                if k.remaining_ms > 0 {
+                    l9.push(Span::styled(
+                        format!("{mark}warm {}", fmt::duration_ms(k.remaining_ms)),
+                        state.theme.ok(),
+                    ));
+                } else {
+                    l9.push(Span::styled(format!("{mark}cold"), state.theme.warn()));
+                    if state.cache.recache_tokens_if_cold > 0 {
+                        l9.push(Span::styled(
+                            format!(
+                                " · {} re-write",
+                                fmt::tokens(state.cache.recache_tokens_if_cold)
+                            ),
+                            dim,
+                        ));
+                    }
+                }
+                let ttl = if state.cache_ttl_ms() == 3_600_000 {
+                    "1h"
+                } else {
+                    "5m"
+                };
+                l9.push(Span::styled(format!(" · TTL {ttl}"), dim));
+                if state.cache.from_shim {
+                    let mut s = format!(" · misses {}", state.cache.misses);
+                    if let Some(c) = &state.cache.last_miss_cause {
+                        s.push_str(&format!(" ({c})"));
+                    }
+                    if state.cache.expected_rebuilds > 0 {
+                        s.push_str(&format!(" · rebuilds {}", state.cache.expected_rebuilds));
+                    }
+                    l9.push(Span::styled(s, dim));
+                }
+            }
+            None => l9.push(Span::styled("—", dim)),
+        }
+        lines.push(Line::from(l9));
+
+        // Where the tokens went, the agents' share, the limit weight.
+        let mut l10 = vec![Span::raw(" ")];
+        let top = state.attribution_top(3);
+        if !top.is_empty() {
+            let parts: Vec<String> = top
+                .iter()
+                .map(|(k, share)| format!("{k} {:.0} %", share * 100.0))
+                .collect();
+            l10.push(Span::styled(format!("where: {}", parts.join(" · ")), dim));
+        }
+        if let Some((usd, share)) = state.agents_cost() {
+            l10.push(Span::raw(format!(
+                "  agents {} ({:.0} %)",
+                fmt::usd(usd),
+                share * 100.0
+            )));
+        }
+        let flags = state.behaviour_flags();
+        if let Some(m) = state.model() {
+            l10.push(Span::styled(
+                format!(
+                    "  weight ×{:.0}",
+                    crate::harness_facts::usage_weight::tier(m)
+                ),
+                dim,
+            ));
+        }
+        if let Some(tip) = flags.tips().first() {
+            l10.push(Span::styled(format!("  {tip}"), state.theme.warn()));
+        }
+        lines.push(Line::from(l10));
+
         frame.render_widget(Paragraph::new(lines), inner);
     }
 }
@@ -213,6 +313,19 @@ mod tests {
         assert!(out.contains("in ") && out.contains("/min"), "{out}");
         assert!(out.contains("per turn ▁"), "{out}");
         assert!(out.contains("last turn "), "{out}");
+    }
+
+    #[test]
+    fn gradient_cache_and_attribution_rows() {
+        let mut app = fixture_app();
+        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        let out = render_to_string(&app, 140, 70);
+        assert!(out.contains("/call · ≈$"), "{out}");
+        assert!(out.contains("at 100k) · next 30c ≈$"), "{out}");
+        // No shim on a fixture: the clock is the last call + TTL, marked ≈.
+        assert!(out.contains("cache ≈warm 50:33 · TTL 1h"), "{out}");
+        assert!(out.contains("weight ×3"), "{out}");
+        assert!(out.contains("of your usage was at >150k"), "{out}");
     }
 
     #[test]

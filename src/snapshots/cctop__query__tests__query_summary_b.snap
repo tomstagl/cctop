@@ -10,11 +10,48 @@ expression: "serde_json::to_string_pretty(&sum).unwrap()"
     "unit": "count",
     "value": 0
   },
+  "agents_cost": null,
   "api_calls": {
     "approx": false,
     "metric_id": "api_calls",
     "unit": "count",
     "value": 113
+  },
+  "attribution": [
+    {
+      "owner": "skill:admit",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.013422746725186742
+      }
+    }
+  ],
+  "behaviour_flags": {
+    "cache_miss_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 0.0
+    },
+    "cron": false,
+    "high_parallel": false,
+    "long_context_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 88.59617407516033
+    },
+    "subagent_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": -0.0
+    },
+    "tips": [
+      "89% of your usage was at >150k context"
+    ]
   },
   "burn_rate": {
     "approx": true,
@@ -116,6 +153,34 @@ expression: "serde_json::to_string_pretty(&sum).unwrap()"
     "claude-haiku-4-5-20251001": 0.001305,
     "claude-opus-5": 18.7446
   },
+  "cost_gradient": {
+    "calls_per_turn": 15.0,
+    "cold": false,
+    "next_30_calls": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 1.009692
+    },
+    "per_call": {
+      "approx": true,
+      "metric_id": "cost_per_call",
+      "unit": "USD",
+      "value": 0.0336564
+    },
+    "per_turn": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.504846
+    },
+    "per_turn_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.37739999999999996
+    }
+  },
   "current_turn_elapsed": {
     "approx": false,
     "metric_id": "turn_elapsed",
@@ -129,6 +194,7 @@ expression: "serde_json::to_string_pretty(&sum).unwrap()"
     "unit": "tokens/min",
     "value": 40334.86666666667
   },
+  "limit_weight_tier": 3.0,
   "limits": {
     "hint": "run cctop install",
     "source": "missing"

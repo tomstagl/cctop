@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn agents_panel_on_fixture() {
         let app = fixture_app();
-        let out = render_to_string(&app, 60, 60);
+        let out = render_to_string(&app, 60, 70);
         assert!(out.contains("6 Agents & MCP ─ 0/1 agents"), "{out}");
         assert!(
             out.contains("✓ fork     Check whether a setup step …"),
@@ -241,7 +241,7 @@ mod tests {
             started_at_ms: now - 118_000,
             status: Some("running".into()),
         }];
-        let out = render_to_string(&app, 72, 60);
+        let out = render_to_string(&app, 72, 70);
         assert!(
             out.contains("mcp claude-in-c… pid 8231     41 MB  214 calls  idle 9:25"),
             "{out}"
@@ -259,7 +259,7 @@ mod tests {
         app.state.session.ended_at_ms = app.state.tools.by_name()["mcp:claude-in-chrome"]
             .last_call_at
             .map(|t| t + 1000);
-        let out = render_to_string(&app, 72, 60);
+        let out = render_to_string(&app, 72, 70);
         assert!(out.contains("214 calls  p95"), "{out}");
     }
 }

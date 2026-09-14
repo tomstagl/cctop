@@ -21,6 +21,9 @@ expression: text
 |  └ thinking                                          30k |
 | cache hit 98 %  ·  $9.90 ($16.3/h)  ·  in 1.15M/min      |
 | per turn _._____-:#   last turn 17.23M · $4.07  main only|
+| ≈$0.08/call · ≈$0.66/turn (≈$0.18 at 100k) · next 30c ≈$2|
+| cache ≈warm 50:33 · TTL 1h                               |
+| where: mcp:lorem ipsum dolo 80 % · skill:lorem ipsum 4 % |
 +----------------------------------------------------------+
 -3 Limits --------------------------------------------------
 -4 Turn - 19:54 --------------------------------------------
@@ -35,10 +38,7 @@ expression: text
 +----------------------------------------------------------+
 -6 Agents & MCP - 0/1 agents -------------------------------
 -7 Files - 4 touched ---------------------------------------
-+9 Advisor - 1 of 1 ---------------------------------------+
-| ▸ `Bash make check` failed 3× with the same input        |
-|   Interrupt and give the fix or the…  ~481/turn · n next |
-+----------------------------------------------------------+
+-9 Advisor - 1 of 1 ----------------------------------------
 +8 Events - 539 -------------------------------------------+
 | 10:08:02 tool   mcp:claude-in-chrome ✓ 118               |
 | 10:08:04 tool   mcp:claude-in-chrome ✓ 68                |
