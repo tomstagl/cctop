@@ -2,7 +2,7 @@
 source: src/theme.rs
 expression: "render_to_string(&app, 80, 30)"
 ---
-┌ Events 303  (j/k scroll, / search, Esc back) ────────────────────────────────┐
+┌ Events 307  (j/k scroll, / search, Esc back) ────────────────────────────────┐
 │ 14:34:12 cost   model opus-5 → sonnet-5                                      │
 │ 14:34:30 perm   Bash ✗ automode-blocked                                      │
 │ 14:35:15 tool   Bash cd lore && rm -rf lorem_ && git lorem --quiet --depth l…│

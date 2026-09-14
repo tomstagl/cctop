@@ -1,6 +1,38 @@
 {
   "items": [
     {
+      "action": "queue: 'run make check, fix failures' or /goal",
+      "action_kind": "prompt",
+      "action_text": "Run make check and fix any failures before continuing.",
+      "class": "NEXT",
+      "doc_key": "A32",
+      "evidence": "1 edits since the last check · 20:41 · 126 calls",
+      "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
+      "family": "verify-gap",
+      "headline": "Edited 1 src file, no test/build run yet",
+      "retires_on": "a test run or a read of an edited file",
+      "rule": "A32",
+      "saving": "avoids a hard stop",
+      "since_turn": 14,
+      "window_turns": 1
+    },
+    {
+      "action": "at the next clean stop: /compact <focus>, or hand-off + /clear",
+      "action_kind": "slash",
+      "action_text": "/compact ",
+      "class": "NEXT",
+      "doc_key": "A23",
+      "evidence": "8 calls per turn on this session · next 30 calls ≈$2.5",
+      "explain": "Every API call re-reads the whole context at the cache-read price, and a turn is many calls. Past 300 k on a 1M window each call costs several times what it did at 100 k, so a clean stop (end_turn, nothing in the background) is the moment to /compact with a focus or to write a hand-off note and /clear. The projection uses this session's own calls per turn, never a constant.",
+      "family": "context-reset",
+      "headline": "ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
+      "retires_on": "a /compact or /clear",
+      "rule": "A23",
+      "saving": "~2.37M/turn",
+      "since_turn": 14,
+      "window_turns": 1
+    },
+    {
       "action": "pipe through head/grep or Glob, or ask a subagent for a summary — every later call re-reads it",
       "action_kind": "advice",
       "action_text": "",
@@ -17,33 +49,33 @@
       "window_turns": 13
     }
   ],
-  "next": null,
+  "next": {
+    "class": "NEXT",
+    "headline": "ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
+    "promotes": "next-row only",
+    "rule": "A23"
+  },
   "primary": {
     "acting": false,
-    "action": "pipe through head/grep or Glob, or ask a subagent for a summary — every later call re-reads it",
-    "action_kind": "advice",
-    "action_text": "",
-    "class": "LATER",
-    "doc_key": "A03",
-    "evidence": "biggest: `mcp:claude-in-chrome lorem` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
-    "explain": "Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request; `/context` flags a tool once its results pass 15 % of the window. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary. A result Claude Code spilled to disk (`<persisted-output>`) kept only its head; the rest cost the run, not the context.",
-    "family": "runaway-result",
+    "action": "queue: 'run make check, fix failures' or /goal",
+    "action_kind": "prompt",
+    "action_text": "Run make check and fix any failures before continuing.",
+    "class": "NEXT",
+    "doc_key": "A32",
+    "evidence": "1 edits since the last check · 20:41 · 126 calls",
+    "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
+    "family": "verify-gap",
     "fired_at_ms": 1787825847564,
-    "headline": "mcp:claude-in-chrome results: 152k since the last boundary (15 % of the window)",
-    "retires_on": "the next boundary",
-    "rule": "A03",
-    "saving": "~152k/turn",
+    "headline": "Edited 1 src file, no test/build run yet",
+    "retires_on": "a test run or a read of an edited file",
+    "rule": "A32",
+    "saving": "avoids a hard stop",
     "since_turn": 14,
-    "window_turns": 13
+    "window_turns": 1
   },
   "recent": [],
   "schema": 2,
-  "session_mode": "team",
+  "session_mode": "interactive",
   "snoozed": [],
-  "suppressed": [
-    {
-      "rule": "A23",
-      "why": "team session"
-    }
-  ]
+  "suppressed": []
 }

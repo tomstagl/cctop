@@ -68,37 +68,44 @@
     }
   ],
   "lines": {
-    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ pipe through head/grep or Glob, or ask a subagent…",
+    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ queue: 'run make check, fix failures' or /goal",
     "l1": "◐40% ○— ○50m ◐1 ▸",
     "l2": "◐○○◐"
   },
   "model": "claude-sonnet-5",
-  "next": null,
-  "next_row": "next     —",
+  "next": {
+    "class": "NEXT",
+    "family": "context-reset",
+    "headline": "ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
+    "id": "A23",
+    "promotes": "next-row only",
+    "row": "next     context-reset → next-row only · ctx 396k →…"
+  },
+  "next_row": "next     context-reset → next-row only · ctx 396k →…",
   "nudge": {
     "acting": false,
-    "action_kind": "advice",
-    "action_text": "",
-    "class": "LATER",
-    "evidence": "  LATER · since turn 14 · +0 queued",
-    "explain": "Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request; `/context` flags a tool once its results pass 15 % of the window. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary. A result Claude Code spilled to disk (`<persisted-output>`) kept only its head; the rest cost the run, not the context.",
-    "family": "runaway-result",
+    "action_kind": "prompt",
+    "action_text": "Run make check and fix any failures before continuing.",
+    "class": "NEXT",
+    "evidence": "  NEXT · since turn 14 · +2 queued (n)",
+    "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
+    "family": "verify-gap",
     "fired_at_ms": 1787825847564,
-    "id": "A03",
-    "line1": "▸ mcp:claude-in-chrome results: 152k since the last…",
-    "line2": "  pipe through head/grep or Glob, or ask a subagent…",
-    "queued": 0,
-    "retires_on": "the next boundary",
-    "saving": "~152k/turn",
+    "id": "A32",
+    "line1": "▸ Edited 1 src file, no test/build run yet",
+    "line2": "  queue: 'run make check, fix failures' or /goal",
+    "queued": 2,
+    "retires_on": "a test run or a read of an edited file",
+    "saving": "avoids a hard stop",
     "since_turn": 14
   },
   "nudges_this_hour": 1,
-  "queued": 0,
+  "queued": 2,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
   "schema": 1,
   "session": "session-a",
-  "session_mode": "team",
+  "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
   "state": {
@@ -108,11 +115,6 @@
       "0s"
     ]
   },
-  "suppressed": [
-    [
-      "A23",
-      "team session"
-    ]
-  ],
+  "suppressed": [],
   "turn": 14
 }

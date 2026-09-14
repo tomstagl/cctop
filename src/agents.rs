@@ -332,6 +332,10 @@ pub struct Teammate {
 
 /// Members of the team this session leads (or belongs to), if any.
 pub fn teammates(teams_dir: &Path, session_id: &str) -> Vec<Teammate> {
+    // A fixture has no id; an empty suffix would match every team.
+    if session_id.len() < 8 {
+        return Vec::new();
+    }
     let Ok(entries) = std::fs::read_dir(teams_dir) else {
         return Vec::new();
     };
@@ -560,6 +564,10 @@ mod workflow_tests {
         assert_eq!(t.len(), 2);
         assert_eq!(t[1].name, "researcher");
         assert!(teammates(&teams, "other-session").is_empty());
+        assert!(
+            teammates(&teams, "").is_empty(),
+            "a fixture's empty id matches no team"
+        );
         assert!(teammates(Path::new("/nonexistent"), "x").is_empty());
     }
 }

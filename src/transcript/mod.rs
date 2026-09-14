@@ -306,6 +306,77 @@ impl UserLine {
         self.prompt_kind() == PromptKind::Human
     }
 
+    /// The shape of a prompt as booleans and counts, computed here so no
+    /// rule ever reads the text: its length, how many path-like tokens it
+    /// names, whether it opens with an implementation verb, whether it is
+    /// Markdown-structured or reads like a spec, whether it says it is done.
+    pub fn prompt_shape(&self) -> PromptShape {
+        let text = self.message.content.text();
+        let lower = text.to_lowercase();
+        let first_word = lower
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .trim_matches(|c: char| !c.is_alphanumeric())
+            .to_string();
+        let path_tokens = text
+            .split_whitespace()
+            .filter(|w| {
+                let w = w.trim_matches(|c: char| {
+                    matches!(c, '`' | '\'' | '"' | ',' | '.' | ':' | ';' | ')' | '(')
+                });
+                (w.contains('/') || w.starts_with('@'))
+                    && w.rsplit('/').next().is_some_and(|f| f.contains('.'))
+            })
+            .count();
+        const VERBS: &[&str] = &[
+            "implement",
+            "add",
+            "build",
+            "create",
+            "write",
+            "refactor",
+            "migrate",
+            "wire",
+            "rewrite",
+            "make",
+            "fix",
+            "change",
+            "update",
+            "convert",
+            "port",
+            "extend",
+        ];
+        let markdown = lower
+            .lines()
+            .filter(|l| {
+                l.starts_with('#')
+                    || l.starts_with("- ")
+                    || l.starts_with("* ")
+                    || l.starts_with("1.")
+            })
+            .count()
+            >= 3;
+        let spec_like = lower.contains("prd")
+            || lower.contains("spec")
+            || lower.contains("acceptance criteria")
+            || lower.contains("user stor");
+        let done = matches!(
+            first_word.as_str(),
+            "done" | "thanks" | "ok" | "next" | "good" | "great" | "perfect"
+        ) || lower.starts_with("that's it")
+            || lower.starts_with("thats it")
+            || lower.contains("next task");
+        PromptShape {
+            chars: text.chars().count(),
+            path_tokens,
+            implementation_verb: VERBS.contains(&first_word.as_str()),
+            markdown_structured: markdown,
+            spec_like,
+            done_or_next: done,
+        }
+    }
+
     /// The slash command of a `<command-name>` line (`/clear`, `/model`…).
     pub fn slash_command(&self) -> Option<String> {
         let text = self.message.content.text();
@@ -328,6 +399,22 @@ impl UserLine {
     pub fn tool_use_detail(&self) -> Option<ToolUseDetail> {
         self.tool_use_result.as_ref().map(ToolUseDetail::parse)
     }
+}
+
+/// The shape of a prompt, computed at parse time (never the text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PromptShape {
+    pub chars: usize,
+    /// Tokens that look like file paths (`src/x.rs`, `@tasks/prd.md`).
+    pub path_tokens: usize,
+    /// Opens with `implement`, `add`, `build`, `refactor`…
+    pub implementation_verb: bool,
+    /// Three or more heading / list lines.
+    pub markdown_structured: bool,
+    /// Mentions a PRD, a spec or acceptance criteria.
+    pub spec_like: bool,
+    /// Opens with `done`, `thanks`, `ok`, `next`… or names the next task.
+    pub done_or_next: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -120,6 +120,9 @@ pub enum Ttl {
     /// When the next human prompt arrives (NEXT default; NOW rules that
     /// fire at turn end).
     NextPrompt,
+    /// When the turn after the next prompt ends: for a turn-end nudge whose
+    /// act is the next turn's first calls (verify-gap).
+    NextTurnEnd,
     /// Three human turns later (LATER default).
     ThreeTurns,
 }
@@ -404,6 +407,18 @@ struct Snooze {
     count: u8,
 }
 
+/// The slot as the writer left it, so a reader (`query`, the pane) shows
+/// the same nudge instead of ranking afresh.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PersistedOccupant {
+    pub rule: String,
+    pub fired_at_ms: i64,
+    pub promoted_turn: usize,
+    pub turn_index: usize,
+    pub acting: bool,
+    pub record: usize,
+}
+
 /// What `~/.cctop/<session>.advisor.json` holds.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Persisted {
@@ -414,6 +429,13 @@ pub struct Persisted {
     first_fired: HashMap<String, usize>,
     #[serde(default)]
     pub records: Vec<FireRecord>,
+    #[serde(default)]
+    pub occupant: Option<PersistedOccupant>,
+    /// `(human turn, class)` of the last promotions, for the budget.
+    #[serde(default)]
+    promotions: Vec<(usize, Urgency)>,
+    #[serde(default)]
+    cooldown_until: HashMap<String, usize>,
 }
 
 /// One Events row the engine wants written (`kind=coach`).
@@ -444,6 +466,9 @@ pub struct Engine {
     pub session_mode: SessionMode,
     /// Events rows produced since the last `drain_events`.
     pending_events: Vec<CoachEvent>,
+    /// The writer's occupant, adopted on the next evaluation while its rule
+    /// still fires.
+    adopt: Option<PersistedOccupant>,
     /// Where the state persists, when it does.
     pub path: Option<PathBuf>,
     /// This process holds the single-writer lock (the TUI); others read,
@@ -494,6 +519,7 @@ impl Engine {
             suppressed: Vec::new(),
             session_mode: SessionMode::Interactive,
             pending_events: Vec::new(),
+            adopt: None,
             path: None,
             writer: false,
             dirty: false,
@@ -540,7 +566,14 @@ impl Engine {
                 self.first_fired.insert(id, t);
             }
         }
+        for (rule, t) in p.cooldown_until {
+            if let Some(id) = ids.iter().find(|id| **id == rule) {
+                self.cooldown_until.insert(id, t);
+            }
+        }
+        self.promotions = p.promotions.into_iter().collect();
         self.records = p.records;
+        self.adopt = p.occupant.filter(|o| o.record < self.records.len());
     }
 
     fn persisted(&self) -> Persisted {
@@ -557,6 +590,20 @@ impl Engine {
                 .map(|(k, v)| (k.to_string(), *v))
                 .collect(),
             records: self.records.clone(),
+            occupant: self.occupant.as_ref().map(|o| PersistedOccupant {
+                rule: o.advice.rule.to_string(),
+                fired_at_ms: o.fired_at_ms,
+                promoted_turn: o.promoted_turn,
+                turn_index: o.turn_index,
+                acting: o.acting,
+                record: o.record,
+            }),
+            promotions: self.promotions.iter().copied().collect(),
+            cooldown_until: self
+                .cooldown_until
+                .iter()
+                .map(|(k, v)| (k.to_string(), *v))
+                .collect(),
         }
     }
 
@@ -609,6 +656,25 @@ impl Engine {
         self.snoozed
             .retain(|_, s| s.until_turn.is_none_or(|u| u > turn));
         self.cooldown_until.retain(|_, u| *u > turn);
+
+        // A reader takes over the writer's slot while its rule still fires.
+        if let (None, Some(p)) = (&self.occupant, self.adopt.take()) {
+            if let Some(a) = self
+                .rules
+                .iter()
+                .find(|r| r.id() == p.rule)
+                .and_then(|r| r.evaluate(state))
+            {
+                self.occupant = Some(Occupant {
+                    advice: a,
+                    fired_at_ms: p.fired_at_ms,
+                    promoted_turn: p.promoted_turn,
+                    turn_index: p.turn_index,
+                    acting: p.acting,
+                    record: p.record,
+                });
+            }
+        }
 
         // Every rule that fires, with its first-fired turn.
         let mut fired: Vec<Advice> = Vec::new();
@@ -698,6 +764,14 @@ impl Engine {
             let expired = match rule.map(|r| r.ttl()).unwrap_or(Ttl::NextPrompt) {
                 Ttl::TurnEnd => turn > occ.promoted_turn || turn_ended,
                 Ttl::NextPrompt => turn > occ.promoted_turn,
+                Ttl::NextTurnEnd => {
+                    turn > occ.promoted_turn + 1
+                        || (turn == occ.promoted_turn + 1
+                            && state
+                                .agg
+                                .current_turn()
+                                .is_some_and(|t| t.duration_ms.is_some()))
+                }
                 Ttl::ThreeTurns => turn >= occ.promoted_turn + 3,
             };
             let strikes = !acted && turn >= occ.promoted_turn + 3;
@@ -1178,9 +1252,17 @@ mod tests {
         assert!(e.current.is_empty());
         assert!(e.occupant.is_none());
         let ids = e.rule_ids();
-        assert_eq!(ids.len(), 22, "{ids:?}");
+        assert_eq!(ids.len(), 35, "{ids:?}");
         assert!(!ids.contains(&"A15"), "A15 retired for A38");
         assert!(!ids.contains(&"A18"), "A18 retired for A42");
+        for id in [
+            "A32", "A33", "A36", "A38", "A40", "A41", "A42", "A45", "A47",
+        ] {
+            assert!(ids.contains(&id), "{id} is a slot rule");
+        }
+        for id in ["A34", "A46"] {
+            assert!(ids.contains(&id), "{id} is next-row only");
+        }
         assert!(
             !ids.contains(&"A05") && ids.contains(&"A25"),
             "A05 became A25"
@@ -1488,6 +1570,77 @@ mod tests {
             .suppressed
             .iter()
             .any(|(_, w)| w.contains("`permissions` tip")));
+    }
+
+    /// Two NOW rules fire; the writer promoted the lower-ranked one first
+    /// and keeps it (a same-class newcomer waits). A reader ranking afresh
+    /// would show the other: it adopts the writer's slot instead.
+    #[test]
+    fn a_reader_adopts_the_writers_occupant() {
+        let home = std::env::temp_dir().join(format!("cctop-adopt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let waiting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        struct Switch(std::sync::Arc<std::sync::atomic::AtomicBool>);
+        impl Rule for Switch {
+            fn id(&self) -> &'static str {
+                "W"
+            }
+            fn family(&self) -> &'static str {
+                "waiting"
+            }
+            fn urgency(&self) -> Urgency {
+                Urgency::Now
+            }
+            fn evaluate(&self, _: &State) -> Option<Advice> {
+                self.0
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    .then(|| Advice::new("W", "waiting", Urgency::Now))
+            }
+        }
+        let mk = |w: &std::sync::Arc<std::sync::atomic::AtomicBool>| {
+            Engine::new(vec![
+                Box::new(Fixed(
+                    "C",
+                    "correction-streak",
+                    Urgency::Now,
+                    Saving::Avoids,
+                )) as Box<dyn Rule>,
+                Box::new(Switch(w.clone())),
+            ])
+        };
+        let mut writer = mk(&waiting);
+        writer.attach(&home, "s2", true);
+        let s = state_with_turns(4);
+        writer.evaluate(&s);
+        assert_eq!(writer.occupant.as_ref().unwrap().advice.rule, "C");
+        waiting.store(true, std::sync::atomic::Ordering::SeqCst);
+        writer.evaluate(&s);
+        assert_eq!(
+            writer.occupant.as_ref().unwrap().advice.rule,
+            "C",
+            "a same-class newcomer waits in next"
+        );
+        assert_eq!(writer.current[1].rule, "W");
+        writer.save();
+        let mut reader = mk(&waiting);
+        reader.attach(&home, "s2", false);
+        reader.evaluate(&s);
+        assert_eq!(
+            reader.occupant.as_ref().unwrap().advice.rule,
+            "C",
+            "the reader shows the writer's slot"
+        );
+        assert_eq!(
+            reader.current.iter().map(|a| a.rule).collect::<Vec<_>>(),
+            ["C", "W"]
+        );
+        assert_eq!(reader.records.len(), 1, "no second fire record");
+        // Without a file the same reader ranks afresh: waiting first.
+        let mut fresh = mk(&waiting);
+        fresh.evaluate(&s);
+        assert_eq!(fresh.occupant.as_ref().unwrap().advice.rule, "W");
+        writer.release();
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

@@ -290,6 +290,11 @@ impl App {
         self.advisor = engine;
     }
 
+    /// The live engine (the coach object the views draw).
+    pub fn advisor(&self) -> &crate::advisor::Engine {
+        &self.advisor
+    }
+
     /// The SessionEnd tally: `(fired, acted, snoozed)`.
     pub fn advisor_tally(&self) -> (usize, usize, usize) {
         self.advisor.tally()

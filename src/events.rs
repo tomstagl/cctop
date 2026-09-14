@@ -78,6 +78,10 @@ pub struct Log {
     last_ttl: Option<crate::transcript::CacheTtl>,
     /// Tool calls issued in the current turn, for the interrupt event.
     turn_calls: usize,
+    /// Source edits and test-class calls of the current turn, for the
+    /// unattended-run line (A39) at the turn's end.
+    turn_edits: usize,
+    turn_tests: usize,
     /// The transcript's version (first seen), for the compaction fallback.
     version: Option<String>,
 }
@@ -182,6 +186,11 @@ impl Log {
                             kind: Kind::Tool,
                             text: format!("{} ▶", shown.trim_end()),
                         });
+                        match crate::phase::classify_tool(name, input) {
+                            crate::phase::ToolClass::Implement => self.turn_edits += 1,
+                            crate::phase::ToolClass::Test => self.turn_tests += 1,
+                            _ => {}
+                        }
                     }
                 }
                 if let Some(miss) = a.cache_miss_reason() {
@@ -281,7 +290,11 @@ impl Log {
                     PromptKind::Human
                     | PromptKind::Machine
                     | PromptKind::TaskNotification
-                    | PromptKind::TeammateMessage => self.turn_calls = 0,
+                    | PromptKind::TeammateMessage => {
+                        self.turn_calls = 0;
+                        self.turn_edits = 0;
+                        self.turn_tests = 0;
+                    }
                     PromptKind::ToolResult => {
                         for r in u.message.content.tool_results() {
                             if let Some(name) = self.pending.remove(&r.tool_use_id) {
@@ -347,6 +360,19 @@ impl Log {
                                 text: format!(
                                     "turn done in {}",
                                     crate::ui::fmt::duration_ms(ms as i64)
+                                ),
+                            });
+                        }
+                        // A39: a long run that edited and never checked.
+                        if self.turn_calls >= 20 && self.turn_edits >= 1 && self.turn_tests == 0 {
+                            self.push(Event {
+                                at,
+                                kind: Kind::Coach,
+                                text: format!(
+                                    "last run: {} calls, {} edit{}, nothing tested · ask for a test run, or /goal <end state>",
+                                    self.turn_calls,
+                                    self.turn_edits,
+                                    if self.turn_edits == 1 { "" } else { "s" }
                                 ),
                             });
                         }
@@ -427,6 +453,22 @@ impl Log {
                         kind: Kind::Note,
                         text: "/clear · continued in a new session".into(),
                     });
+                }
+            }
+            Line::Attachment(att) => {
+                // A44: a plain IDE edit is a row; the collision (the same
+                // file edited by Claude this turn) is the coach's.
+                if let crate::transcript::AttachmentKind::EditedTextFile { filename, .. } =
+                    att.kind()
+                {
+                    if let Some(at) = att.timestamp.as_deref().and_then(parse_ts_ms) {
+                        let name = filename.rsplit('/').next().unwrap_or(&filename);
+                        self.push(Event {
+                            at,
+                            kind: Kind::Note,
+                            text: format!("IDE edited {}", crate::ui::fmt::clip(name, 40)),
+                        });
+                    }
                 }
             }
             _ => {}

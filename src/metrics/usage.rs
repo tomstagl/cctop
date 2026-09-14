@@ -141,6 +141,8 @@ pub struct Turn {
     pub hook_errors: usize,
     /// The person interrupted the turn after this many tool calls.
     pub interrupted_after_calls: Option<usize>,
+    /// When the `turn_duration` line landed (the turn's end).
+    pub ended_at: Option<String>,
     /// The last response's text ended with a question mark.
     pub ended_with_question: bool,
     /// `stop_reason` of the last response.
@@ -169,6 +171,16 @@ pub struct Turn {
     /// The person's last input in this turn: the prompt, or an answer to
     /// `AskUserQuestion` / `ExitPlanMode`.
     pub last_human_input_at: Option<String>,
+    /// The prompt's shape (booleans computed at parse time; never the text).
+    pub prompt_shape: crate::transcript::PromptShape,
+    /// Calls the person refused at the prompt (`user-rejected`) or answered
+    /// with feedback (`userFeedback`).
+    pub rejections: usize,
+    /// An `instructions` / `nested_memory` attachment landed this turn
+    /// (CLAUDE.md or a memory file re-injected).
+    pub instructions_seen: bool,
+    /// Distinct source files edited this turn (basenames).
+    pub files_edited: Vec<String>,
 }
 
 impl Turn {
@@ -202,6 +214,9 @@ pub struct Away {
 pub struct ApiError {
     pub at: Option<String>,
     pub turn: usize,
+    /// `isApiErrorMessage` was set: a real API failure. A `<synthetic>`
+    /// line without it is Claude Code's own text (an interrupt notice).
+    pub confirmed: bool,
     /// `rate_limit`, `invalid_request`, `authentication_failed`…
     pub error: Option<String>,
     pub status: Option<u16>,
@@ -420,6 +435,7 @@ impl Aggregate {
                         started_at: u.timestamp.clone(),
                         last_at: u.timestamp.clone(),
                         last_human_input_at: u.timestamp.clone(),
+                        prompt_shape: u.prompt_shape(),
                         prompt_chars: u.message.content.text().chars().count(),
                         prompt_images: u.message.content.images(),
                         ..Default::default()
@@ -440,6 +456,11 @@ impl Aggregate {
                             }
                             if u.tool_denial_kind.is_some() {
                                 t.denials += 1;
+                            }
+                            if u.tool_denial_kind.as_deref() == Some("user-rejected")
+                                || u.user_feedback_len.is_some_and(|n| n > 0)
+                            {
+                                t.rejections += 1;
                             }
                             if matches!(
                                 u.tool_use_detail(),
@@ -509,6 +530,11 @@ impl Aggregate {
                             t.silent_reminders += 1;
                         }
                     }
+                    AttachmentKind::Instructions { .. } | AttachmentKind::NestedMemory { .. } => {
+                        if let Some(t) = self.turns.last_mut() {
+                            t.instructions_seen = true;
+                        }
+                    }
                     _ => {}
                 }
                 if let Some(t) = self.turns.last_mut() {
@@ -523,6 +549,7 @@ impl Aggregate {
                     SystemKind::TurnDuration => {
                         if let (Some(ms), Some(t)) = (s.duration_ms, self.turns.last_mut()) {
                             t.duration_ms = Some(ms);
+                            t.ended_at = s.timestamp.clone();
                             t.last_at = s.timestamp.clone().or(t.last_at.take());
                             t.pending_background_agents = s.pending_background_agent_count;
                         }
@@ -655,6 +682,7 @@ impl Aggregate {
             self.api_errors.push(ApiError {
                 at: a.timestamp.clone(),
                 turn,
+                confirmed: a.is_api_error_message,
                 error: a.error.clone(),
                 status: a.api_error_status,
                 rate_limit_type: q.and_then(|q| q.rate_limit_type.clone()),
@@ -678,12 +706,22 @@ impl Aggregate {
             self.last_ts = Some((ts, LastKind::Assistant));
         }
         let t = self.turns.last_mut().expect("turn exists");
-        let uses = a
-            .message
-            .content
-            .iter()
-            .filter(|b| matches!(b, crate::transcript::AssistantBlock::ToolUse { .. }))
-            .count();
+        let mut uses = 0;
+        for b in &a.message.content {
+            if let crate::transcript::AssistantBlock::ToolUse { name, input, .. } = b {
+                uses += 1;
+                if matches!(
+                    name.as_str(),
+                    "Edit" | "Write" | "MultiEdit" | "NotebookEdit"
+                ) {
+                    for p in crate::phase::paths_of(name, input) {
+                        if !t.files_edited.contains(&p) {
+                            t.files_edited.push(p);
+                        }
+                    }
+                }
+            }
+        }
         t.tool_calls += uses;
         t.calls_since_text += uses;
         t.last_at = a.timestamp.clone().or(t.last_at.take());

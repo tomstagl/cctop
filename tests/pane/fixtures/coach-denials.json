@@ -68,59 +68,55 @@
     }
   ],
   "lines": {
-    "l0": "◐720k ≈$.37 · ○cache 1h00 · ○5h — · ●blocked 4 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l0": "◐720k ≈$.37 · ○cache 1h00 · ○5h — · ●blocked 4 · ▸ tell Claude the alternative — it cannot run this",
     "l1": "◐72% ○— ○1h00 ●4 ▸",
     "l2": "◐○○●"
   },
   "model": "claude-opus-5",
   "next": {
-    "class": "LATER",
-    "family": "reread",
-    "headline": "lorem_ipsum_.rs was read 3× with no edit in between",
-    "id": "A04",
-    "promotes": "when the slot frees",
-    "row": "next     reread → when the slot frees · lorem_ipsum…"
+    "class": "NEXT",
+    "family": "context-reset",
+    "headline": "ctx 720k → ≈$.37/call, ≈$5.6/turn (was ≈$.96)",
+    "id": "A23",
+    "promotes": "next-row only",
+    "row": "next     context-reset → next-row only · ctx 720k →…"
   },
-  "next_row": "next     reread → when the slot frees · lorem_ipsum…",
+  "next_row": "next     context-reset → next-row only · ctx 720k →…",
   "nudge": {
     "acting": false,
-    "action_kind": "setting",
-    "action_text": "",
-    "class": "LATER",
-    "evidence": "  LATER · since turn 5 · +2 queued (n)",
-    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project.",
-    "family": "prefix-tip",
+    "action_kind": "prompt",
+    "action_text": "You can't run `rm` here (it's denied by my settings). Use another way or tell me what you need.",
+    "class": "NOW",
+    "evidence": "  NOW · fired at call 6 · +4 queued (n)",
+    "explain": "Auto mode blocks a command shape by a classifier; a second block of the same shape within a turn (or three turns) means the model will keep trying variants, and three blocks in a row pause auto mode. An allow rule — Claude Code's own suggestion when it made one, else Tool(argv0 subcommand:*) — lets the shape through; a bare Bash rule allows everything and is never suggested. A settings deny rule is different: the model cannot run it, tell it the alternative.",
+    "family": "denial-streak",
     "fired_at_ms": 1789397202074,
-    "id": "A17",
-    "line1": "▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls",
-    "line2": "  trim CLAUDE.md, move rarely-used rules to skills,…",
-    "queued": 2,
-    "retires_on": "3 turns",
-    "saving": "~147k/turn",
+    "id": "A45",
+    "line1": "▸ rm is denied by your rules",
+    "line2": "  tell Claude the alternative — it cannot run this",
+    "queued": 4,
+    "retires_on": "turn end",
+    "saving": "avoids a hard stop",
     "since_turn": 5
   },
   "nudges_this_hour": 1,
-  "queued": 2,
+  "queued": 4,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
   "schema": 1,
   "session": "session-b",
-  "session_mode": "team",
+  "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
   "state": {
-    "kind": "IDLE",
-    "line": "IDLE 0s · python3 - lor… ok 19m ago",
+    "kind": "PLANNING",
+    "line": "PLANNING · 5c +490 · silent 13m · ▸ steer window",
     "tokens": [
-      "0s",
-      "python3 - lor… ok 19m ago"
+      "5c +490",
+      "silent 13m",
+      "▸ steer window"
     ]
   },
-  "suppressed": [
-    [
-      "A23",
-      "team session"
-    ]
-  ],
+  "suppressed": [],
   "turn": 5
 }

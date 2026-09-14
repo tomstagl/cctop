@@ -63,6 +63,8 @@ pub struct Call {
     /// moved it to the background itself (`backgroundTaskId`,
     /// `timedOutAfterMs`).
     pub background: bool,
+    /// The typed refusal, when the call was denied.
+    pub denial: Option<crate::transcript::DenialKind>,
 }
 
 /// What an `Agent` call reported back (`toolUseResult`), without its text.
@@ -289,6 +291,8 @@ pub struct Stats {
     pub git_events: Vec<(i64, String)>,
     /// Every `Agent` result, in order.
     pub agent_spawns: Vec<AgentSpawn>,
+    /// `TaskUpdate` results that completed a task: `(epoch ms, turn)`.
+    pub task_completions: Vec<(i64, usize)>,
 }
 
 impl Stats {
@@ -326,6 +330,7 @@ impl Stats {
                     };
                     c.is_error = r.is_error;
                     c.cleared = r.is_cleared();
+                    c.denial = u.denial();
                     let text = r.text();
                     if r.is_error {
                         c.error_class =
@@ -362,6 +367,9 @@ impl Stats {
                                 tokens += rd.image_tokens().unwrap_or(1_500);
                                 images = images.saturating_sub(1);
                             }
+                        }
+                        Some(ToolUseDetail::TaskUpdate(tu)) if tu.completed() => {
+                            self.task_completions.push((at.unwrap_or(0), c.turn));
                         }
                         Some(ToolUseDetail::Agent(ag)) => {
                             self.agent_spawns.push(AgentSpawn {
@@ -444,6 +452,7 @@ impl Stats {
                                 .get("run_in_background")
                                 .and_then(Value::as_bool)
                                 .unwrap_or(false),
+                            denial: None,
                         });
                     }
                 }

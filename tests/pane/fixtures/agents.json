@@ -31,12 +31,7 @@
   "mcp_failed": [],
   "mcp_needs_auth": [],
   "tasks": [],
-  "teammates": [
-    {
-      "name": "team-lead",
-      "type": "team-lead"
-    }
-  ],
+  "teammates": [],
   "tool_search_loads": {
     "builtin": 25
   },

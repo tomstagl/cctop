@@ -17,16 +17,16 @@
     "version": "2.1.247"
   },
   "lines": {
-    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ pipe through head/grep or Glob, or ask a subagent…",
+    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ queue: 'run make check, fix failures' or /goal",
     "l1": "◐40% ○— ○50m ◐1 ▸",
     "l2": "◐○○◐"
   },
   "nudge": {
     "acting": false,
-    "class": "LATER",
-    "id": "A03",
-    "line": "mcp:claude-in-chrome results: 152k since the last… — pipe through head/grep or Glob, or ask a subagent…",
-    "tag": "LATER · turn 14"
+    "class": "NEXT",
+    "id": "A32",
+    "line": "Edited 1 src file, no test/build run yet — queue: 'run make check, fix failures' or /goal",
+    "tag": "NEXT · turn 14"
   },
   "rows": [
     {
@@ -468,20 +468,33 @@
       ]
     },
     {
-      "detail": [],
-      "digit": 9,
-      "name": "Advisor",
-      "values": [
+      "detail": [
         {
-          "text": "LATER A03",
-          "tone": "fg"
+          "text": "NEXT A23 ctx 396k → ≈$.08/call, ≈$.66/turn (was …",
+          "tone": "dim"
         },
         {
           "text": " · ",
           "tone": "dim"
         },
         {
-          "text": "next —",
+          "text": "LATER A03 mcp:claude-in-chrome results: 152k sinc…",
+          "tone": "dim"
+        }
+      ],
+      "digit": 9,
+      "name": "Advisor",
+      "values": [
+        {
+          "text": "NEXT A32",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "next context-reset → next-row only · ctx 396k →…",
           "tone": "dim"
         },
         {
@@ -496,7 +509,7 @@
     }
   ],
   "schema": 1,
-  "session_mode": "team",
+  "session_mode": "interactive",
   "tiles": [
     {
       "approx": true,

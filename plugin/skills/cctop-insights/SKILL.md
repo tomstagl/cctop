@@ -46,6 +46,9 @@ If `cctop` is not on PATH, say so and give the install line (`brew install <tap>
 **"Why is my cache hit ratio low?"**
 `cctop query advice` (A01 names a cache miss — model switch, tool list change, rewritten message — and A02 a cache that expired between prompts, when either happened in the last three turns) and `cctop query ledger --last 10 | jq '.[] | [.turn, .cache_read.value, .cache_write.value, .miss_cause]'` to show which turns wrote cache instead of reading it. Name the cause cctop found and the fix.
 
+**"Did the last run leave anything unchecked?"**
+`cctop query coach | jq '{light: .lights[3], nudge: .nudge}'`. The rework light counts the turn's open issues (fails in a row, corrections, blocked calls, source edits since the last confirmed test); the outcome-axis nudges name the next step: A32 (edits with no test run — offer to run the session's test command), A33 (a commit without a check — offer to run it and amend), A38 (a failure cascade — ask for the missing fact rather than retrying), A45 (auto mode blocked a shape twice — the `permissions.allow` rule to add), A36 (two corrections in a row — suggest Esc Esc / `/rewind` before restating), A42 (a natural boundary on a large context — a hand-off note and `/clear`).
+
 **"What is filling my context?"**
 `cctop query prefix | jq '.rows[:5]'` and `cctop query tools | jq '.top_ctx'`. Answer: prefix size and its biggest parts; the largest individual tool results; turns until autocompact.
 

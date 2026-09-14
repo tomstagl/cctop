@@ -222,8 +222,8 @@ fn background_calls(state: &State) -> u64 {
         .count() as u64
 }
 
-/// A13 — the 5 h limit is projected to run out before it resets, or a
-/// rate-limit error already landed.
+/// A13 — the 5 h limit is projected to run out before it resets. A limit
+/// already hit is A47's (turn died), not a pacing matter.
 pub struct RateLimitPacing;
 impl Rule for RateLimitPacing {
     fn id(&self) -> &'static str {
@@ -246,38 +246,27 @@ impl Rule for RateLimitPacing {
                 "/model sonnet ≈ 2× the runway, /effort medium trims output",
             )
         };
-        if let Some((kind, resets_at, retry_s)) = state.rate_limit_hit() {
-            a.headline = format!("Rate limited ({})", kind.replace('_', " "));
-            a.evidence = match (resets_at, retry_s) {
-                (Some(r), _) => format!(
-                    "resets {} (in {})",
-                    fmt::clock_hhmm(r),
-                    fmt::duration_ms(r - state.clock_ms())
-                ),
-                (None, Some(s)) => format!("low-priority retry in {s} s"),
-                _ => "the API refused the last call".into(),
-            };
-            a.action = format!("wait for the reset, or {} to keep working", lever.1);
-        } else {
-            let l = state.limits.as_ref()?;
-            let (ex, reset) = (l.exhaustion_ms?, l.five_hour_resets_at_ms?);
-            if ex >= reset {
-                return None;
-            }
-            a.headline = format!(
-                "At this burn you hit the 5 h limit {} before it resets",
-                fmt::duration_ms(reset - ex)
-            );
-            a.evidence = format!(
-                "{:.0} % used, exhausted in {}",
-                l.five_hour_pct,
-                fmt::duration_ms(ex - state.clock_ms())
-            );
-            a.action = format!(
-                "{}; or move exploration to subagents and pause the heavy work until the reset",
-                lever.1
-            );
+        if state.rate_limit_hit().is_some() {
+            return None; // A47 owns the hit itself
         }
+        let l = state.limits.as_ref()?;
+        let (ex, reset) = (l.exhaustion_ms?, l.five_hour_resets_at_ms?);
+        if ex >= reset {
+            return None;
+        }
+        a.headline = format!(
+            "At this burn you hit the 5 h limit {} before it resets",
+            fmt::duration_ms(reset - ex)
+        );
+        a.evidence = format!(
+            "{:.0} % used, exhausted in {}",
+            l.five_hour_pct,
+            fmt::duration_ms(ex - state.clock_ms())
+        );
+        a.action = format!(
+            "{}; or move exploration to subagents and pause the heavy work until the reset",
+            lever.1
+        );
         a.action_text = lever.0.into();
         a.action_kind = ActionKind::Slash;
         a.saving = Saving::Avoids;
@@ -490,7 +479,7 @@ mod tests {
     }
 
     #[test]
-    fn a13_rate_limit_pacing_and_a_429() {
+    fn a13_rate_limit_pacing_leaves_the_429_to_a47() {
         let mut s = State::new(Pricing::bundled());
         s.session.alive = true;
         s.now_ms = 1_000_000;
@@ -515,17 +504,22 @@ mod tests {
             a.action
         );
         assert_eq!(a.urgency, Urgency::Next);
-        s.limits.as_mut().unwrap().exhaustion_ms = Some(2_500_000);
-        assert!(RateLimitPacing.evaluate(&s).is_none());
-        // A 429 with quotaLimits fires regardless of the fit.
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"id":"e","model":"<synthetic>","content":[{"type":"text","text":"x"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1789244400}}"#).unwrap());
-        let a = RateLimitPacing.evaluate(&s).expect("fires");
-        assert_eq!(a.headline, "Rate limited (five hour)");
-        assert!(a.evidence.starts_with("resets "), "{}", a.evidence);
         // Acted: a cheaper model family took over.
         assert!(!RateLimitPacing.acted(&s, &a));
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"n","model":"claude-sonnet-5","content":[],"usage":{"input_tokens":10}}}"#).unwrap());
         assert!(RateLimitPacing.acted(&s, &a));
+        s.limits.as_mut().unwrap().exhaustion_ms = Some(2_500_000);
+        assert!(
+            RateLimitPacing.evaluate(&s).is_none(),
+            "fits before the reset"
+        );
+        // A 429 that landed is A47's: the pacing rule stays quiet.
+        s.limits.as_mut().unwrap().exhaustion_ms = Some(1_500_000);
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:04Z","message":{"id":"e","model":"<synthetic>","content":[{"type":"text","text":"x"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1789244400}}"#).unwrap());
+        assert!(RateLimitPacing.evaluate(&s).is_none());
+        assert!(crate::advisor::rules::outcome::TurnDied
+            .evaluate(&s)
+            .is_some());
     }
 
     #[test]

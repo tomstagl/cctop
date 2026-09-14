@@ -2,21 +2,21 @@
 source: src/ui/coach_view.rs
 expression: "render_to_string(&app, 110, 18)"
 ---
-╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  LATER A17 · prefix-tip
-│ IDLE 0s · python3 - lor… ok 19m ago                  │  Fixed prefix 49k tokens ≈$0.37/turn at 15 calls
+╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  NOW A45 · denial-streak
+│ PLANNING · 5c +490 · silent 13m · ▸ steer window     │  rm is denied by your rules
 ├──────────────────────────────────────────────────────┤
-│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │  evidence  LATER · since turn 5 · +3 queued (n)
-│ ○ cache    warm 1h00 (1h) ≈                          │  retires   on 3 turns · since turn 5
-│ ○ limits   — no status line                          │  saving    ~147k/turn (an estimate)
-│ ● rework   4 blocked · edits 3 ✓ none 18m            │
-├──────────────────────────────────────────────────────┤  The fixed prefix (system prompt, CLAUDE.md, tool
-│ ▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls    │  schemas, skills, plugins) is sent on every request.
-│   trim CLAUDE.md, move rarely-used rules to skills,… │  Even as a cache read it is billed on every call, so
-│   LATER · since turn 5 · +3 queued (n)               │  its cost per turn is prefix × cache-read price ×
-│                                                      │  calls per turn. Trim CLAUDE.md, move rarely used
-│ next     context-reset → next-row only · ctx 720k →… │  rules into skills, and disable MCP servers and
-│ snoozed  —                                           │  plugins you do not use in this project.
-╰──────────────────────────────────────────────────────╯
-
-
- c dashboard  Enter act  x snooze  e why  1-4 light  q
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │  evidence  NOW · fired at call 6 · +4 queued (n)
+│ ○ cache    warm 1h00 (1h) ≈                          │  retires   on turn end · since turn 5
+│ ○ limits   — no status line                          │  saving    avoids a hard stop (an estimate)
+│ ● rework   4 blocked · edits 3 ✓ none 18m            │  prompt    You can't run `rm` here (it's denied by my
+├──────────────────────────────────────────────────────┤  settings). Use another way or tell me what you need.
+│ ▸ rm is denied by your rules                         │
+│   tell Claude the alternative — it cannot run this   │  Auto mode blocks a command shape by a classifier; a
+│   NOW · fired at call 6 · +4 queued (n)              │  second block of the same shape within a turn (or
+│                                                      │  three turns) means the model will keep trying
+│ next     context-reset → next-row only · ctx 720k →… │  variants, and three blocks in a row pause auto mode.
+│ snoozed  —                                           │  An allow rule — Claude Code's own suggestion when it
+╰──────────────────────────────────────────────────────╯  made one, else Tool(argv0 subcommand:*) — lets the
+                                                          shape through; a bare Bash rule allows everything
+                                                          and is never suggested. A settings deny rule is
+ ▸ rm is denied by your rules

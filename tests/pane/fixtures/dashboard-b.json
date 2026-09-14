@@ -490,7 +490,7 @@
     }
   ],
   "schema": 1,
-  "session_mode": "team",
+  "session_mode": "interactive",
   "tiles": [
     {
       "approx": true,

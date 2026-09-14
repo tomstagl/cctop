@@ -10,11 +10,11 @@ expression: "render_to_string(&app, 56, 20)"
 │ ○ limits   — no status line                          │
 │ ◐ rework   1 correction · edits 3 ✓ none 25m         │
 ├──────────────────────────────────────────────────────┤
-│ ▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls    │
-│   trim CLAUDE.md, move rarely-used rules to skills,… │
-│   LATER · since turn 6 · +1 queued (n)               │
+│ ▸ 2 corrections in a row (refusal, then Esc)         │
+│   Esc Esc → restore turn 5, restate with the constr… │
+│   NOW · fired at call 1 · +3 queued (n)              │
 │                                                      │
-│ next     long-foreground → when the slot frees · `c… │
+│ next     waiting → when the slot frees · ◆ WAITING … │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
 

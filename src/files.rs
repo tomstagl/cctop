@@ -36,6 +36,8 @@ pub struct FileStats {
     pub stale: bool,
     /// Times the person edited it in the IDE (`edited_text_file`).
     pub ide_edits: usize,
+    /// When the IDE last edited it (epoch ms), 0 = never.
+    pub ide_edited_at_ms: i64,
     /// Checkpoint version from `file-history-delta` (rewind points).
     pub checkpoint_version: Option<u64>,
     /// Edits in the current turn.
@@ -177,9 +179,11 @@ impl Files {
             Line::Attachment(att) => {
                 if let AttachmentKind::EditedTextFile { filename, .. } = att.kind() {
                     let key = self.resolve(&filename);
+                    let at = att.timestamp.as_deref().and_then(parse_ts_ms).unwrap_or(0);
                     if let Some(f) = self.files.get_mut(&key) {
                         f.reset(true);
                         f.ide_edits += 1;
+                        f.ide_edited_at_ms = f.ide_edited_at_ms.max(at);
                     }
                 }
             }

@@ -618,7 +618,7 @@ mod tests {
         let shorter = render_to_string(&app, 56, 12);
         assert!(!shorter.contains("next     "), "{shorter}");
         assert!(
-            shorter.contains("▸ Fixed prefix"),
+            shorter.contains("▸ rm is denied"),
             "the slot stays: {shorter}"
         );
         let mut ascii = app_at(761, 0);
@@ -637,8 +637,7 @@ mod tests {
     #[test]
     fn card_text_is_the_coach_object() {
         let app = app_at(788, 240);
-        let engine = crate::advisor::Engine::for_state(&app.state);
-        let c = crate::coach::snapshot(&app.state, &engine);
+        let c = crate::coach::snapshot(&app.state, app.advisor());
         let out = render_to_string(&app, 56, 20);
         let rows: Vec<&str> = out.lines().collect();
         let cell = |r: usize| rows[r].trim_start_matches('│').trim_end_matches('│').trim();
@@ -656,13 +655,14 @@ mod tests {
     fn keys_peek_detail_why_lifecycle_units_snooze_and_act() {
         let mut app = app_at(788, 240);
         let base = render_to_string(&app, 56, 20);
-        assert!(base.contains("▸ Fixed prefix"), "{base}");
-        // n peeks at the queued nudge without promoting it.
+        assert!(base.contains("▸ 2 corrections in a row"), "{base}");
+        // n peeks at the queued nudge (the question, a same-class newcomer
+        // waiting in next) without promoting it.
         for k in parse_keys("n") {
             app.handle_key(k);
         }
         let out = render_to_string(&app, 56, 20);
-        assert!(out.contains("blocked the turn"), "{out}");
+        assert!(out.contains("WAITING 4:00"), "{out}");
         assert!(out.contains("queued #1"), "{out}");
         assert_eq!(app.state.coach_ui.peek, 1);
         // 1 opens the context light's detail in the slot area; 1 again closes it.
@@ -702,14 +702,15 @@ mod tests {
             app.handle_key(k);
         }
         assert_eq!(app.state.view, View::Coach, "Esc closed the overlay only");
-        // Enter opens the act popup pre-filled; a settings-class action is
-        // not sendable.
+        // Enter opens the act popup pre-filled; a key-class action is not
+        // sendable.
         for k in parse_keys("Enter") {
             app.handle_key(k);
         }
         let (panel, text) = app.state.ask.clone().expect("act popup");
         assert_eq!(panel, 9);
-        assert!(text.starts_with("cctop advises: Fixed prefix"), "{text}");
+        assert_eq!(text, "Esc Esc", "the key to press, shown, not sent");
+        assert!(!app.state.ask_send_ok);
         assert!(app.state.advice_acting || app.state.advice_view.acting);
         for k in parse_keys("Esc") {
             app.handle_key(k);
@@ -721,7 +722,10 @@ mod tests {
         app.tick();
         assert_eq!(app.state.advice_view.snoozed.len(), 1);
         let out = render_to_string(&app, 56, 20);
-        assert!(out.contains("snoozed  prefix-tip (5 turns)"), "{out}");
+        assert!(
+            out.contains("snoozed  correction-streak (5 turns)"),
+            "{out}"
+        );
         // c returns to the dashboard; c again opens the coach.
         for k in parse_keys("c") {
             app.handle_key(k);

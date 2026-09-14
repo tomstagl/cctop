@@ -95,7 +95,7 @@ test('a light row keeps two figures below 50 columns, the detail frame follows t
   assert.ok(!narrow.some((r) => r.includes('≈$.37/call')), 'the third figure is dropped');
   const why = rows(build(raw, { coachWhy: true }), 72);
   assert.ok(why.some((r) => r.startsWith('╭why')), JSON.stringify(why));
-  assert.ok(why.some((r) => r.includes('retires') && r.includes('3 turns')), JSON.stringify(why));
+  assert.ok(why.some((r) => r.includes('retires') && r.includes('turn end')), JSON.stringify(why));
   const cache = rows(build(raw, { coachLight: 'cache' }), 72);
   assert.ok(cache.some((r) => r.startsWith('╭○ cache')), JSON.stringify(cache));
 });
@@ -107,12 +107,16 @@ test('the status line follows the width, the fill button exists for prompt-class
   assert.equal(statusLine(c, 30), c.lines.l2);
   assert.ok(c.lines.l0.startsWith('●333k'), c.lines.l0);
   assert.equal(c.lines.l2.length, 4);
-  // A17 is a settings-class nudge: no fill.
-  assert.equal(fillable(c.nudge), false);
-  const tree = renderCoach(build(moment('idle')), el, 72, noActions);
+  // A23 is a slash-class nudge (`/compact `): fillable. A17 at the cold
+  // moment is settings-class: no fill.
+  assert.equal(fillable(c.nudge), true);
+  const cold = coachOf(moment('cold'))!;
+  assert.equal(cold.nudge?.id, 'A17');
+  assert.equal(fillable(cold.nudge), false);
+  const tree = renderCoach(build(moment('cold')), el, 72, noActions);
   assert.deepEqual(
     buttons(tree).map((b) => b.props?.label),
-    ['snooze', 'why', '○ cache', '○ limits', '○ rework'],
+    ['snooze', 'why', '◐ cache', '○ limits', '◐ rework'],
   );
   // A prompt-class nudge gets `[1 fill]` with the exact action text.
   const raw = moment('idle') as { nudge: Record<string, unknown> };
@@ -172,12 +176,12 @@ test('the Coach tab draws the card, sets the status line once per change and fil
   await settle();
   assert.deepEqual($.prompt.fills, ['Use an Explore subagent for the rest.']);
   // `[2 snooze]` asks the binary and takes its answer as the new object.
-  $.process.script[`cctop query coach --snooze A17 --session ${SESSION}`] = ok(JSON.stringify({ ...prompt, nudge: null, snooze: 'A17 snoozed for 5 turns' }));
+  $.process.script[`cctop query coach --snooze A23 --session ${SESSION}`] = ok(JSON.stringify({ ...prompt, nudge: null, snooze: 'A23 snoozed for 5 turns' }));
   $.ui.press('coach-snooze');
   await settle();
   await settle();
-  assert.ok($.process.calls.some((argv) => argv.includes('--snooze') && argv.includes('A17')), JSON.stringify($.process.calls));
-  assert.ok($.ui.toasts.includes('cctop: A17 snoozed for 5 turns'), JSON.stringify($.ui.toasts));
+  assert.ok($.process.calls.some((argv) => argv.includes('--snooze') && argv.includes('A23')), JSON.stringify($.process.calls));
+  assert.ok($.ui.toasts.includes('cctop: A23 snoozed for 5 turns'), JSON.stringify($.ui.toasts));
   const after = await render(72);
   assert.ok(after.rows.some((r) => r.includes('quiet · nothing to act on')), JSON.stringify(after.rows));
   // `[3 why]` needs a nudge; the light pickers switch the detail frame.

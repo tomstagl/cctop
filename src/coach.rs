@@ -452,11 +452,22 @@ fn agents_cell(state: &State) -> Option<String> {
 
 /// Whether a turn is running as of the clock: no `turn_duration` yet, not
 /// interrupted, and the model has not stopped with `end_turn` while nothing
-/// runs. A dead session is read as of its last line.
-fn turn_running(state: &State) -> bool {
+/// runs — or a call started after the turn's end line (the turn resumed).
+/// A dead session is read as of its last line.
+pub fn turn_running(state: &State) -> bool {
     let Some(t) = state.agg.current_turn() else {
         return false;
     };
+    if let (Some(c), Some(ended)) = (
+        state.tools.running(),
+        t.ended_at
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms),
+    ) {
+        if c.started_at.is_some_and(|s| s > ended) {
+            return true;
+        }
+    }
     t.duration_ms.is_none()
         && t.interrupted_after_calls.is_none()
         && !(t.last_stop_reason.as_deref() == Some("end_turn") && state.tools.running().is_none())
