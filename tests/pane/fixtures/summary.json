@@ -18,6 +18,46 @@
     "unit": "USD/h",
     "value": 16.2667304
   },
+  "cache": {
+    "expected_rebuilds": null,
+    "expires_in": {
+      "approx": true,
+      "metric_id": "cache_expires_in",
+      "unit": "ms",
+      "value": 3033530
+    },
+    "hit_ratio": {
+      "approx": true,
+      "metric_id": "cache_hit_ratio",
+      "unit": "ratio",
+      "value": 0.9822053232392264
+    },
+    "last_miss_cause": null,
+    "miss_causes": {},
+    "misses": {
+      "hint": "run cctop install",
+      "source": "missing"
+    },
+    "recache_tokens_if_cold": {
+      "approx": true,
+      "metric_id": "cache_recache_if_cold",
+      "unit": "tokens",
+      "value": 396365
+    },
+    "source": "transcript",
+    "ttl": {
+      "approx": true,
+      "metric_id": "cache_ttl",
+      "unit": "enum",
+      "value": "1h"
+    },
+    "warm": {
+      "approx": true,
+      "metric_id": "cache_warm",
+      "unit": "bool",
+      "value": true
+    }
+  },
   "context": {
     "compactions": {
       "approx": false,
@@ -113,15 +153,20 @@
     "alive": false,
     "cwd": "/home/user/project",
     "effort": "medium",
+    "fast_mode": false,
     "model": "claude-sonnet-5",
     "name": "session-a",
     "permission_mode": "auto",
     "pid": null,
     "plan": {
-      "hint": "run cctop install",
+      "hint": "no ~/.claude.json tier",
       "source": "missing"
     },
+    "pr": null,
     "session_id": "",
+    "session_name": null,
+    "thinking": null,
+    "title": "lorem ipsum dolor sit a",
     "version": "2.1.247"
   },
   "tokens": {

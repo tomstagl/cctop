@@ -27,8 +27,26 @@ pub struct ContextWindow {
     #[serde(default)]
     pub total_input_tokens: u64,
     #[serde(default)]
+    pub total_output_tokens: u64,
+    #[serde(default)]
     pub context_window_size: u64,
     pub used_percentage: Option<f64>,
+    pub remaining_percentage: Option<f64>,
+    /// The last call's usage, as the API reported it.
+    #[serde(default)]
+    pub current_usage: Option<CurrentUsage>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct CurrentUsage {
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: u64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -45,6 +63,80 @@ pub struct RateLimits {
     pub five_hour: Limit,
     #[serde(default)]
     pub seven_day: Limit,
+    /// The monthly spend limit, for accounts that have one.
+    #[serde(default)]
+    pub spend_limit: Option<Limit>,
+}
+
+/// Claude Code's own prompt-cache diagnosis (2.1.251+; causes 2.1.260+).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct PromptCache {
+    #[serde(default)]
+    pub warm: bool,
+    #[serde(default)]
+    pub caching_observed: bool,
+    /// `1h` or `5m`.
+    pub ttl: Option<String>,
+    /// Unix seconds when the entry expires, while warm.
+    pub expires_at: Option<f64>,
+    #[serde(default)]
+    pub requests: u64,
+    #[serde(default)]
+    pub misses: u64,
+    #[serde(default)]
+    pub expected_rebuilds: u64,
+    pub hit_ratio: Option<f64>,
+    #[serde(default)]
+    pub cache_write_tokens: u64,
+    /// Tokens re-written by the misses so far.
+    #[serde(default)]
+    pub miss_recache_tokens: u64,
+    pub last_miss_at: Option<f64>,
+    #[serde(default)]
+    pub last_miss_cause: Option<MissCause>,
+    /// Cause → count over the session (`model_changed`, `tools_changed`,
+    /// `ttl_expired_1h`, `messages_rewritten`, `likely_server_side`…).
+    #[serde(default)]
+    pub miss_causes: std::collections::BTreeMap<String, u64>,
+    /// What the next call would re-write if the cache went cold now.
+    #[serde(default)]
+    pub recache_tokens_if_cold: u64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct MissCause {
+    #[serde(default)]
+    pub causes: Vec<String>,
+}
+
+impl PromptCache {
+    /// The named cause of the last miss (the first one Claude Code lists).
+    pub fn last_cause(&self) -> Option<&str> {
+        self.last_miss_cause
+            .as_ref()
+            .and_then(|c| c.causes.first())
+            .map(String::as_str)
+    }
+
+    /// TTL as a duration in milliseconds.
+    pub fn ttl_ms(&self) -> Option<i64> {
+        match self.ttl.as_deref() {
+            Some("1h") => Some(3_600_000),
+            Some("5m") => Some(300_000),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Effort {
+    pub level: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Thinking {
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -74,9 +166,26 @@ pub struct Sample {
     pub rate_limits: Option<RateLimits>,
     #[serde(default)]
     pub cost: Option<CostInfo>,
-    /// Plan name, whichever key Claude Code uses.
-    #[serde(alias = "subscription_type", alias = "plan_type")]
-    pub plan: Option<String>,
+    #[serde(default)]
+    pub prompt_cache: Option<PromptCache>,
+    #[serde(default)]
+    pub effort: Option<Effort>,
+    #[serde(default)]
+    pub thinking: Option<Thinking>,
+    #[serde(default)]
+    pub fast_mode: bool,
+    #[serde(default)]
+    pub exceeds_200k_tokens: bool,
+    pub session_name: Option<String>,
+    pub prompt_id: Option<String>,
+    /// The Claude Code version that wrote the payload.
+    pub version: Option<String>,
+    /// Pull-request facts (`number`, `url`, `review_state`…), kept raw.
+    #[serde(default)]
+    pub pr: Option<serde_json::Value>,
+    /// Worktree facts (`name`, `path`, `branch`…), kept raw.
+    #[serde(default)]
+    pub worktree: Option<serde_json::Value>,
     /// Filled by the watcher: epoch ms the file was written.
     #[serde(skip)]
     pub at_ms: i64,
@@ -85,6 +194,23 @@ pub struct Sample {
 impl Sample {
     pub fn parse(text: &str) -> Option<Sample> {
         serde_json::from_str(text).ok()
+    }
+
+    pub fn effort_level(&self) -> Option<&str> {
+        self.effort.as_ref().and_then(|e| e.level.as_deref())
+    }
+
+    pub fn thinking_enabled(&self) -> Option<bool> {
+        self.thinking.as_ref().map(|t| t.enabled)
+    }
+
+    /// `pr.number`, when the payload carries a PR.
+    pub fn pr_number(&self) -> Option<u64> {
+        self.pr.as_ref()?.get("number")?.as_u64()
+    }
+
+    pub fn pr_review_state(&self) -> Option<&str> {
+        self.pr.as_ref()?.get("review_state")?.as_str()
     }
 }
 
@@ -205,6 +331,57 @@ mod tests {
     use super::*;
 
     const PAYLOAD: &str = r#"{"session_id":"abc-123","model":{"id":"claude-opus-5","display_name":"Opus 5"},"workspace":{"current_dir":"/x"},"context_window":{"total_input_tokens":134000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":62,"resets_at":1789158000},"seven_day":{"used_percentage":23,"resets_at":1789500000}},"cost":{"total_cost_usd":4.37}}"#;
+
+    const FULL: &str = r#"{"session_id":"50658b8f","prompt_id":"9434b2e9","effort":{"level":"max"},"session_name":"coach","model":{"id":"claude-opus-5","display_name":"Opus 5"},"version":"2.1.270","cost":{"total_cost_usd":7.99,"total_duration_ms":565680,"total_api_duration_ms":363788,"total_lines_added":196,"total_lines_removed":0},"context_window":{"total_input_tokens":291664,"total_output_tokens":633,"context_window_size":1000000,"current_usage":{"input_tokens":2,"output_tokens":633,"cache_creation_input_tokens":4595,"cache_read_input_tokens":287067},"used_percentage":29,"remaining_percentage":71},"exceeds_200k_tokens":true,"prompt_cache":{"warm":true,"caching_observed":true,"ttl":"1h","expires_at":1789405956,"requests":49,"misses":2,"expected_rebuilds":0,"hit_ratio":0.9735,"cache_write_tokens":257729,"miss_recache_tokens":95700,"last_miss_at":1789223965,"last_miss_cause":{"causes":["model_changed","betas_changed"]},"miss_causes":{"model_changed":1,"ttl_expired_1h":1},"recache_tokens_if_cold":291664},"fast_mode":false,"thinking":{"enabled":true},"rate_limits":{"five_hour":{"used_percentage":11,"resets_at":1789411800},"seven_day":{"used_percentage":13,"resets_at":1789812000},"spend_limit":{"used_percentage":40}},"pr":{"number":142,"review_state":"approved"},"worktree":{"name":"feat"}}"#;
+
+    #[test]
+    fn full_payload_of_2_1_270() {
+        let s = Sample::parse(FULL).unwrap();
+        let pc = s.prompt_cache.as_ref().unwrap();
+        assert!(pc.warm);
+        assert_eq!(pc.ttl.as_deref(), Some("1h"));
+        assert_eq!(pc.ttl_ms(), Some(3_600_000));
+        assert_eq!(pc.expires_at, Some(1_789_405_956.0));
+        assert_eq!(pc.misses, 2);
+        assert_eq!(pc.recache_tokens_if_cold, 291_664);
+        assert_eq!(pc.last_cause(), Some("model_changed"));
+        assert_eq!(pc.miss_causes["ttl_expired_1h"], 1);
+        assert_eq!(pc.miss_recache_tokens, 95_700);
+        assert_eq!(s.effort_level(), Some("max"));
+        assert_eq!(s.thinking_enabled(), Some(true));
+        assert!(!s.fast_mode);
+        assert!(s.exceeds_200k_tokens);
+        assert_eq!(s.context_window.total_output_tokens, 633);
+        assert_eq!(s.context_window.remaining_percentage, Some(71.0));
+        assert_eq!(
+            s.context_window
+                .current_usage
+                .as_ref()
+                .unwrap()
+                .cache_read_input_tokens,
+            287_067
+        );
+        assert_eq!(
+            s.rate_limits
+                .as_ref()
+                .unwrap()
+                .spend_limit
+                .as_ref()
+                .unwrap()
+                .used_percentage,
+            40.0
+        );
+        assert_eq!(s.session_name.as_deref(), Some("coach"));
+        assert_eq!(s.prompt_id.as_deref(), Some("9434b2e9"));
+        assert_eq!(s.version.as_deref(), Some("2.1.270"));
+        assert_eq!(s.pr_number(), Some(142));
+        assert_eq!(s.pr_review_state(), Some("approved"));
+        // The old, smaller payload still parses; nothing new is required.
+        let old = Sample::parse(PAYLOAD).unwrap();
+        assert!(old.prompt_cache.is_none());
+        assert_eq!(old.effort_level(), None);
+        assert_eq!(old.pr_number(), None);
+    }
 
     #[test]
     fn parse_sample() {

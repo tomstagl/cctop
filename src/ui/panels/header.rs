@@ -130,7 +130,7 @@ impl Panel for Header {
             .find_map(|t| t.effort.clone())
             .unwrap_or_else(|| "—".into());
         parts.push(Span::raw(effort));
-        parts.push(Span::raw(s.plan.clone().unwrap_or_else(|| "—".into())));
+        parts.push(Span::raw(s.tier.clone().unwrap_or_else(|| "—".into())));
         if let Some(st) = s.started_at_ms {
             parts.push(Span::raw(format!("up {}", fmt::duration_ms(now - st))));
         }
@@ -208,7 +208,7 @@ mod tests {
         app.state.session.started_at_ms = app.state.last_line_at_ms.map(|t| t - 4_320_000);
         app.state.session.git_branch = Some("main".into());
         app.state.session.git_dirty = true;
-        app.state.session.plan = Some("Max".into());
+        app.state.session.tier = Some("Max".into());
         app.state.session.cpu_pct = Some(3.1);
         app.state.session.rss_bytes = Some(412 << 20);
         app.state.now_ms = app.state.last_line_at_ms.unwrap();

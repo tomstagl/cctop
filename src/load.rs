@@ -117,6 +117,13 @@ pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
     if let Some(s) = status.latest.as_ref() {
         state.apply_status(s, &status.series_5h);
     }
+    // Account facts only for a session of this machine, never for a fixture
+    // file (the pane fixtures are generated from one).
+    if state.session.pid.is_some() {
+        if let Some(v) = crate::claude_home::read() {
+            state.apply_claude_home(&v);
+        }
+    }
     let mut hooks =
         crate::hooks::Watcher::new(&crate::status::cctop_dir(), &state.session.session_id);
     for ev in hooks.poll() {

@@ -233,6 +233,8 @@ pub struct Aggregate {
     pub observed_ttl: Option<CacheTtl>,
     /// Last model used (never `<synthetic>`).
     pub model: Option<String>,
+    /// Timestamp of the last API response (never an error line).
+    pub last_api_at: Option<String>,
     /// Prompts waiting in Claude Code's input queue (`queue-operation`).
     pub queued_prompts: usize,
     /// Queued prompts Claude Code folded into the running turn.
@@ -569,6 +571,7 @@ impl Aggregate {
         }
         self.total.add(&u);
         self.model = Some(a.message.model.clone());
+        self.last_api_at = a.timestamp.clone().or(self.last_api_at.take());
     }
 }
 

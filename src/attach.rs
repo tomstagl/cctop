@@ -126,6 +126,9 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             state.apply_hook(&ev);
         }
     }));
+    if let Some(v) = crate::claude_home::read() {
+        app.state.apply_claude_home(&v);
+    }
     // Status-line samples.
     let mut status = crate::status::Watcher::new(&app.state.session.session_id);
     app.tick_hooks.push(Box::new(move |state: &mut State| {

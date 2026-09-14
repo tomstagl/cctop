@@ -27,3 +27,13 @@ if [ "$dts_version" != "$claude_version" ]; then
 fi
 
 echo "check-plugin-types: $dts matches claude $claude_version"
+
+# The binary's constants (src/harness_facts.rs) carry the Claude Code
+# version they were read from; a newer claude means they are unverified.
+facts=src/harness_facts.rs
+facts_version=$(grep -oE 'READ_FROM: &str = "[0-9]+\.[0-9]+\.[0-9]+"' "$facts" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+if [ -n "$facts_version" ] && [ "$(printf '%s\n%s\n' "$facts_version" "$claude_version" | sort -V | tail -1)" != "$facts_version" ]; then
+  echo "check-plugin-types: warning: $facts was read from Claude Code $facts_version, this machine has $claude_version — re-verify the constants (autocompact buffer, /usage weights, /context thresholds, the first-seen map)" >&2
+else
+  echo "check-plugin-types: $facts read from claude $facts_version (installed $claude_version)"
+fi

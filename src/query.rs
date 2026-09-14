@@ -52,8 +52,14 @@ pub fn summary(state: &State) -> Value {
             "alive": state.session.alive,
             "permission_mode": state.session.permission_mode,
             "effort": state.agg.turns.iter().rev().find_map(|t| t.effort.clone()),
-            "plan": state.session.plan.clone().map(Value::from).unwrap_or_else(|| missing(INSTALL_HINT)),
+            "plan": state.session.tier.clone().map(|t| m(t, "enum", "plan_tier", false)).unwrap_or_else(|| missing("no ~/.claude.json tier")),
+            "session_name": state.status_facts.session_name,
+            "thinking": state.status_facts.thinking_enabled,
+            "fast_mode": state.status_facts.fast_mode,
+            "pr": state.status_facts.pr_number.or(state.agg.pr_number),
+            "title": state.agg.title,
         },
+        "cache": cache_object(state),
         "turns": m(state.agg.human_turns(), "count", "turn_number", false),
         "machine_turns": m(state.agg.turns.len() - state.agg.human_turns(), "count", "turn_number", false),
         "api_calls": m(state.agg.api_calls(), "count", "api_calls", false),
@@ -106,6 +112,30 @@ pub fn summary(state: &State) -> Value {
             }),
             None => missing("run cctop with --otlp and export telemetry (cctop install --otel)"),
         },
+    })
+}
+
+/// The cache block of `summary`: Claude Code's own diagnosis when the shim
+/// is installed, the transcript's observation otherwise.
+pub fn cache_object(state: &State) -> Value {
+    let c = &state.cache;
+    let clock = state.cache_clock();
+    let approx = clock.is_none_or(|k| k.approx);
+    let ttl = match state.cache_ttl_ms() {
+        3_600_000 => "1h",
+        _ => "5m",
+    };
+    json!({
+        "source": if c.from_shim { "status_line" } else { "transcript" },
+        "warm": state.cache_warm().map(|(w, a)| m(w, "bool", "cache_warm", a)),
+        "ttl": m(ttl, "enum", "cache_ttl", !c.from_shim),
+        "expires_in": clock.map(|k| m(k.remaining_ms, "ms", "cache_expires_in", k.approx)),
+        "recache_tokens_if_cold": if c.from_shim { m(c.recache_tokens_if_cold, "tokens", "cache_recache_if_cold", false) } else { m(state.context().size, "tokens", "cache_recache_if_cold", true) },
+        "misses": if c.from_shim { m(c.misses, "count", "cache_misses", false) } else { missing(INSTALL_HINT) },
+        "expected_rebuilds": c.from_shim.then_some(c.expected_rebuilds),
+        "last_miss_cause": c.last_miss_cause,
+        "miss_causes": c.miss_causes,
+        "hit_ratio": c.hit_ratio.or_else(|| state.agg.total.cache_hit_ratio()).map(|r| m(r, "ratio", "cache_hit_ratio", approx)),
     })
 }
 

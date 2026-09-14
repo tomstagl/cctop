@@ -35,8 +35,8 @@ pub struct SessionInfo {
     pub alive: bool,
     /// When the session was seen ended (epoch ms).
     pub ended_at_ms: Option<i64>,
-    /// Subscription plan from the status line, when the shim is installed.
-    pub plan: Option<String>,
+    /// Rate-limit tier from `~/.claude.json` (`oauthAccount.userRateLimitTier`).
+    pub tier: Option<String>,
     pub git_branch: Option<String>,
     pub git_dirty: bool,
     pub cpu_pct: Option<f32>,
@@ -134,10 +134,59 @@ impl SessionInfo {
     }
 }
 
+/// Claude Code's own prompt-cache diagnosis, from the status line.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CacheState {
+    /// A `prompt_cache` block has been seen (the shim is installed and the
+    /// Claude Code version writes it).
+    pub from_shim: bool,
+    pub warm: bool,
+    pub ttl_ms: Option<i64>,
+    /// Epoch ms when the entry expires, while warm.
+    pub expires_at_ms: Option<i64>,
+    pub recache_tokens_if_cold: u64,
+    pub misses: u64,
+    pub expected_rebuilds: u64,
+    pub last_miss_cause: Option<String>,
+    pub miss_causes: std::collections::BTreeMap<String, u64>,
+    pub hit_ratio: Option<f64>,
+    /// When the status file that carried this was written (epoch ms).
+    pub sample_at_ms: i64,
+}
+
+/// Facts the status line carries beyond the numbers.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StatusFacts {
+    pub effort_level: Option<String>,
+    pub thinking_enabled: Option<bool>,
+    pub fast_mode: bool,
+    pub exceeds_200k_tokens: bool,
+    pub session_name: Option<String>,
+    pub prompt_id: Option<String>,
+    pub version: Option<String>,
+    pub pr_number: Option<u64>,
+    pub pr_review_state: Option<String>,
+    pub spend_limit_pct: Option<f64>,
+}
+
+/// A cache countdown, clock-driven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CacheClock {
+    /// Milliseconds until the entry expires (0 when it already has).
+    pub remaining_ms: i64,
+    /// From the last API call + observed TTL rather than the shim.
+    pub approx: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct State {
     // -- collectors
     pub session: SessionInfo,
+    /// Claude Code's prompt-cache diagnosis (shim).
+    pub cache: CacheState,
+    pub status_facts: StatusFacts,
+    /// The previous session in this directory, from `~/.claude.json`.
+    pub previous_session: Option<crate::claude_home::PreviousSession>,
     pub agg: Aggregate,
     pub cost: CostTracker,
     pub tools: tools::Stats,
@@ -464,15 +513,57 @@ impl State {
         self.otel = Some(data.clone());
     }
 
-    /// Take a status-line sample: exact context, plan, rate limits.
+    /// Take a status-line sample: exact context, rate limits, the cache
+    /// diagnosis and the facts the payload carries.
     pub fn apply_status(&mut self, s: &crate::status::Sample, series_5h: &[(i64, f64)]) {
         if s.context_window.context_window_size > 0 {
             self.context_window_exact = Some(s.context_window.context_window_size);
             self.context_size_exact = Some(s.context_window.total_input_tokens);
         }
-        if s.plan.is_some() {
-            self.session.plan = s.plan.clone();
+        if let Some(pc) = &s.prompt_cache {
+            self.cache = CacheState {
+                from_shim: true,
+                warm: pc.warm,
+                ttl_ms: pc.ttl_ms(),
+                expires_at_ms: pc.expires_at.map(|e| (e * 1000.0) as i64),
+                recache_tokens_if_cold: pc.recache_tokens_if_cold,
+                misses: pc.misses,
+                expected_rebuilds: pc.expected_rebuilds,
+                last_miss_cause: pc.last_cause().map(str::to_string),
+                miss_causes: pc.miss_causes.clone(),
+                hit_ratio: pc.hit_ratio,
+                sample_at_ms: s.at_ms,
+            };
         }
+        let facts = &mut self.status_facts;
+        if let Some(e) = s.effort_level() {
+            facts.effort_level = Some(e.to_string());
+        }
+        if let Some(t) = s.thinking_enabled() {
+            facts.thinking_enabled = Some(t);
+        }
+        facts.fast_mode = s.fast_mode;
+        facts.exceeds_200k_tokens = s.exceeds_200k_tokens;
+        if s.session_name.is_some() {
+            facts.session_name = s.session_name.clone();
+        }
+        if s.prompt_id.is_some() {
+            facts.prompt_id = s.prompt_id.clone();
+        }
+        if s.version.is_some() {
+            facts.version = s.version.clone();
+        }
+        if let Some(n) = s.pr_number() {
+            facts.pr_number = Some(n);
+        }
+        if let Some(r) = s.pr_review_state() {
+            facts.pr_review_state = Some(r.to_string());
+        }
+        facts.spend_limit_pct = s
+            .rate_limits
+            .as_ref()
+            .and_then(|rl| rl.spend_limit.as_ref())
+            .map(|l| l.used_percentage);
         if let Some(rl) = &s.rate_limits {
             let to_ms = |secs: Option<f64>| secs.map(|x| (x * 1000.0) as i64);
             self.limits = Some(Limits {
@@ -491,6 +582,66 @@ impl State {
                 l.exhaustion_ms = ex;
             }
         }
+    }
+
+    /// Take what `~/.claude.json` says about the account and this directory.
+    pub fn apply_claude_home(&mut self, v: &serde_json::Value) {
+        if let Some(t) = crate::claude_home::rate_limit_tier(v) {
+            self.session.tier = Some(t);
+        }
+        self.previous_session = crate::claude_home::previous_session(v, &self.session.cwd);
+    }
+
+    /// The observed cache TTL in milliseconds: the shim's, else the last
+    /// call's `ephemeral_*` split, else 5 minutes.
+    pub fn cache_ttl_ms(&self) -> i64 {
+        self.cache.ttl_ms.unwrap_or(match self.agg.observed_ttl {
+            Some(crate::transcript::CacheTtl::OneHour) => 3_600_000,
+            _ => 300_000,
+        })
+    }
+
+    /// Epoch ms of the last API response, if any.
+    pub fn last_api_call_ms(&self) -> Option<i64> {
+        self.agg
+            .last_api_at
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms)
+    }
+
+    /// The cache countdown at `clock_ms()`: from `prompt_cache.expires_at`
+    /// when the status file is at least as new as the last assistant line;
+    /// otherwise from the last API call plus the observed TTL, marked `≈`.
+    /// `None` before the first call.
+    pub fn cache_clock(&self) -> Option<CacheClock> {
+        let now = self.clock_ms();
+        let last_call = self.last_api_call_ms();
+        let fresh =
+            self.cache.from_shim && last_call.is_none_or(|c| self.cache.sample_at_ms + 2_000 >= c);
+        if fresh {
+            if !self.cache.warm {
+                return Some(CacheClock {
+                    remaining_ms: 0,
+                    approx: false,
+                });
+            }
+            if let Some(exp) = self.cache.expires_at_ms {
+                return Some(CacheClock {
+                    remaining_ms: (exp - now).max(0),
+                    approx: false,
+                });
+            }
+        }
+        let last = last_call?;
+        Some(CacheClock {
+            remaining_ms: (last + self.cache_ttl_ms() - now).max(0),
+            approx: true,
+        })
+    }
+
+    /// Whether the prompt cache is warm right now, with the `≈` flag.
+    pub fn cache_warm(&self) -> Option<(bool, bool)> {
+        self.cache_clock().map(|c| (c.remaining_ms > 0, c.approx))
     }
 
     /// "Now" for elapsed-time arithmetic: frozen at the end for dead sessions.
@@ -613,5 +764,86 @@ pub mod tests_support {
             s.apply(&l);
         }
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::Pricing;
+    use crate::transcript::Line;
+
+    fn response(at: &str, cache_write_1h: u64) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"{at}","message":{{"id":"m-{at}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":2,"cache_read_input_tokens":100000,"cache_creation_input_tokens":{cache_write_1h},"cache_creation":{{"ephemeral_1h_input_tokens":{cache_write_1h},"ephemeral_5m_input_tokens":0}}}}}}}}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn cache_clock_prefers_a_fresh_shim_sample_and_falls_back_marked_approx() {
+        let mut s = State::new(Pricing::bundled());
+        let t0 = crate::metrics::cost::parse_ts_ms("2026-01-01T10:00:00Z").unwrap();
+        assert_eq!(s.cache_clock(), None, "before the first call");
+        s.apply(&response("2026-01-01T10:00:00Z", 5000));
+        s.now_ms = t0 + 10 * 60_000;
+        // No shim: last call + observed TTL (1 h), marked ≈.
+        assert_eq!(
+            s.cache_clock(),
+            Some(CacheClock {
+                remaining_ms: 50 * 60_000,
+                approx: true
+            })
+        );
+        assert_eq!(s.cache_warm(), Some((true, true)));
+        // A shim sample newer than the last call: its expires_at, exact,
+        // and the countdown runs on the clock between rewrites.
+        let mut sample = crate::status::Sample::parse(&format!(
+            r#"{{"session_id":"s","prompt_cache":{{"warm":true,"ttl":"1h","expires_at":{},"misses":2,"expected_rebuilds":1,"recache_tokens_if_cold":291664,"last_miss_cause":{{"causes":["model_changed"]}},"miss_causes":{{"model_changed":1,"ttl_expired_1h":1}}}},"effort":{{"level":"max"}},"thinking":{{"enabled":true}},"fast_mode":true,"pr":{{"number":7}}}}"#,
+            (t0 + 3_600_000) / 1000
+        ))
+        .unwrap();
+        sample.at_ms = t0 + 1_000;
+        s.apply_status(&sample, &[]);
+        assert!(s.cache.from_shim);
+        assert_eq!(s.cache.last_miss_cause.as_deref(), Some("model_changed"));
+        assert_eq!(s.cache.misses, 2);
+        assert_eq!(s.status_facts.effort_level.as_deref(), Some("max"));
+        assert_eq!(s.status_facts.thinking_enabled, Some(true));
+        assert!(s.status_facts.fast_mode);
+        assert_eq!(s.status_facts.pr_number, Some(7));
+        assert_eq!(
+            s.cache_clock(),
+            Some(CacheClock {
+                remaining_ms: 50 * 60_000,
+                approx: false
+            })
+        );
+        s.now_ms = t0 + 20 * 60_000;
+        assert_eq!(s.cache_clock().unwrap().remaining_ms, 40 * 60_000);
+        // A later API call the sample predates: the shim's figure is stale,
+        // fall back to the observed TTL, marked ≈.
+        s.apply(&response("2026-01-01T10:30:00Z", 0));
+        s.now_ms = t0 + 31 * 60_000;
+        assert_eq!(
+            s.cache_clock(),
+            Some(CacheClock {
+                remaining_ms: 59 * 60_000,
+                approx: true
+            })
+        );
+        // A cold shim sample newer than the last call: cold, exact.
+        let mut cold = crate::status::Sample::parse(r#"{"session_id":"s","prompt_cache":{"warm":false,"ttl":"1h","expires_at":null,"recache_tokens_if_cold":300000}}"#).unwrap();
+        cold.at_ms = t0 + 31 * 60_000;
+        s.apply_status(&cold, &[]);
+        assert_eq!(
+            s.cache_clock(),
+            Some(CacheClock {
+                remaining_ms: 0,
+                approx: false
+            })
+        );
+        assert_eq!(s.cache_warm(), Some((false, false)));
+        assert_eq!(s.cache.recache_tokens_if_cold, 300_000);
     }
 }
