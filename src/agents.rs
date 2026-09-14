@@ -54,6 +54,8 @@ pub struct Agent {
     pub is_fork: bool,
     /// Context inherited from the parent (`fork-context-ref.contextLength`).
     pub inherited_context_len: Option<u64>,
+    /// The workflow run this agent belongs to (`subagents/workflows/<run>/`).
+    pub workflow: Option<String>,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub last_line_at: Option<i64>,
@@ -83,6 +85,7 @@ impl Agent {
             spawn_depth: meta.spawn_depth,
             is_fork: meta.is_fork,
             inherited_context_len: None,
+            workflow: None,
             started_at: None,
             finished_at: None,
             last_line_at: None,
@@ -218,6 +221,139 @@ impl Agent {
     }
 }
 
+/// Every `agent-<id>.jsonl` under `dir`, one level and deeper
+/// (`workflows/wf_*/agent-*.jsonl`): `(path, id, workflow run)`.
+pub fn agent_files(dir: &Path) -> Vec<(PathBuf, String, Option<String>)> {
+    let mut out = Vec::new();
+    let mut stack = vec![(dir.to_path_buf(), None::<String>)];
+    while let Some((d, run)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for p in entries.flatten().map(|e| e.path()) {
+            if p.is_dir() {
+                // `workflows/<run>/…`: the run directory names the workflow.
+                let name = p.file_name().map(|n| n.to_string_lossy().into_owned());
+                let run = if d.file_name().is_some_and(|n| n == "workflows") {
+                    name
+                } else {
+                    run.clone()
+                };
+                stack.push((p, run));
+            } else if let Some(id) = id_from_path(&p) {
+                out.push((p, id, run.clone()));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// A workflow run's journal (`journal.jsonl`): how many agents it launched,
+/// finished and failed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkflowJournal {
+    pub run: String,
+    pub launched: usize,
+    pub started: usize,
+    pub results: usize,
+    pub failed: usize,
+}
+
+/// Read every `workflows/<run>/journal.jsonl` under `subagents`.
+pub fn workflow_journals(subagents: &Path) -> Vec<WorkflowJournal> {
+    let mut out = Vec::new();
+    let Ok(runs) = std::fs::read_dir(subagents.join("workflows")) else {
+        return out;
+    };
+    for run in runs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+        let Ok(text) = std::fs::read_to_string(run.join("journal.jsonl")) else {
+            continue;
+        };
+        let mut j = WorkflowJournal {
+            run: run
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            ..Default::default()
+        };
+        for line in text.lines() {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                continue;
+            };
+            match v.get("type").and_then(|t| t.as_str()) {
+                Some("launched") => j.launched += 1,
+                Some("started") => j.started += 1,
+                Some("result") => j.results += 1,
+                Some("failed") => j.failed += 1,
+                _ => {}
+            }
+        }
+        out.push(j);
+    }
+    out.sort_by(|a, b| a.run.cmp(&b.run));
+    out
+}
+
+/// `~/.claude/teams`.
+pub fn teams_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude/teams"))
+}
+
+/// A teammate from `~/.claude/teams/<team>/config.json`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Teammate {
+    pub name: String,
+    pub agent_type: String,
+}
+
+/// Members of the team this session leads (or belongs to), if any.
+pub fn teammates(teams_dir: &Path, session_id: &str) -> Vec<Teammate> {
+    let Ok(entries) = std::fs::read_dir(teams_dir) else {
+        return Vec::new();
+    };
+    for team in entries.flatten().map(|e| e.path()) {
+        let Ok(text) = std::fs::read_to_string(team.join("config.json")) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        let lead = v
+            .get("leadSessionId")
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        let named = team.file_name().is_some_and(|n| {
+            n.to_string_lossy()
+                .ends_with(&session_id[..session_id.len().min(8)])
+        });
+        if lead != session_id && !named {
+            continue;
+        }
+        return v
+            .get("members")
+            .and_then(|m| m.as_array())
+            .map(|m| {
+                m.iter()
+                    .map(|x| Teammate {
+                        name: x
+                            .get("name")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        agent_type: x
+                            .get("agentType")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    Vec::new()
+}
+
 /// Agent id from `agent-<id>.jsonl`.
 pub fn id_from_path(p: &Path) -> Option<String> {
     let stem = p.file_stem()?.to_str()?;
@@ -232,22 +368,17 @@ fn read_meta(dir: &Path, id: &str) -> Meta {
         .unwrap_or_default()
 }
 
-/// Read all agents under `session_dir/subagents` once (no following).
+/// Read all agents under `session_dir/subagents` once (no following),
+/// workflow agents included.
 pub fn load(session_dir: &Path) -> BTreeMap<String, Agent> {
     let dir = session_dir.join("subagents");
     let mut out = BTreeMap::new();
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return out;
-    };
-    for p in entries.flatten().map(|e| e.path()) {
-        let Some(id) = id_from_path(&p) else {
-            continue;
-        };
+    for (p, id, run) in agent_files(&dir) {
         let lines = parse_file(&p).unwrap_or_default();
-        out.insert(
-            id.clone(),
-            Agent::from_lines(&id, read_meta(&dir, &id), &lines),
-        );
+        let meta_dir = p.parent().unwrap_or(&dir);
+        let mut a = Agent::from_lines(&id, read_meta(meta_dir, &id), &lines);
+        a.workflow = run;
+        out.insert(id, a);
     }
     out
 }
@@ -292,22 +423,18 @@ impl AgentWatcher {
         aw
     }
 
-    /// Pick up new agent files.
+    /// Pick up new agent files, workflow agents included.
     fn scan(&mut self) {
-        let Ok(entries) = std::fs::read_dir(&self.dir) else {
-            return;
-        };
-        for p in entries.flatten().map(|e| e.path()) {
-            let Some(id) = id_from_path(&p) else {
-                continue;
-            };
+        for (p, id, run) in agent_files(&self.dir) {
             if self.tailers.contains_key(&id) {
                 continue;
             }
             if let Ok(t) = Tailer::open(&p) {
                 self.tailers.insert(id.clone(), t);
-                self.agents
-                    .insert(id.clone(), Agent::new(&id, read_meta(&self.dir, &id)));
+                let meta_dir = p.parent().unwrap_or(&self.dir).to_path_buf();
+                let mut a = Agent::new(&id, read_meta(&meta_dir, &id));
+                a.workflow = run;
+                self.agents.insert(id.clone(), a);
             }
         }
     }
@@ -331,7 +458,11 @@ impl AgentWatcher {
         // Meta files can land after the transcript; refresh empty ones.
         for (id, a) in self.agents.iter_mut() {
             if a.agent_type.is_empty() {
-                let m = read_meta(&self.dir, id);
+                let meta_dir = match &a.workflow {
+                    Some(run) => self.dir.join("workflows").join(run),
+                    None => self.dir.clone(),
+                };
+                let m = read_meta(&meta_dir, id);
                 if !m.agent_type.is_empty() {
                     a.agent_type = m.agent_type;
                     a.description = m.description;
@@ -352,6 +483,61 @@ impl AgentWatcher {
             .values()
             .filter(|a| a.state(now_ms) == State::Running)
             .count()
+    }
+}
+
+#[cfg(test)]
+mod workflow_tests {
+    use super::*;
+
+    #[test]
+    fn workflow_agents_journals_and_teammates_are_found() {
+        let dir = std::env::temp_dir().join(format!("cctop-wf-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sub = dir.join("subagents");
+        let run = sub.join("workflows").join("wf_abc-123");
+        std::fs::create_dir_all(&run).unwrap();
+        std::fs::write(sub.join("agent-top1.jsonl"), "").unwrap();
+        std::fs::write(run.join("agent-deep1.jsonl"), "").unwrap();
+        std::fs::write(
+            run.join("agent-deep1.meta.json"),
+            r#"{"agentType":"workflow-subagent","model":"claude-haiku-4-5-20251001"}"#,
+        )
+        .unwrap();
+        std::fs::write(run.join("journal.jsonl"), "{\"type\":\"launched\"}\n{\"type\":\"started\"}\n{\"type\":\"failed\",\"agentId\":\"deep1\"}\n{\"type\":\"result\"}\nnot json\n").unwrap();
+        let files = agent_files(&sub);
+        assert_eq!(files.len(), 2);
+        let deep = files.iter().find(|f| f.1 == "deep1").unwrap();
+        assert_eq!(deep.2.as_deref(), Some("wf_abc-123"));
+        let top = files.iter().find(|f| f.1 == "top1").unwrap();
+        assert_eq!(top.2, None);
+        let agents = load(&dir);
+        assert_eq!(agents["deep1"].agent_type, "workflow-subagent");
+        assert_eq!(agents["deep1"].workflow.as_deref(), Some("wf_abc-123"));
+        assert!(agents["top1"].workflow.is_none());
+        let j = workflow_journals(&sub);
+        assert_eq!(
+            j,
+            vec![WorkflowJournal {
+                run: "wf_abc-123".into(),
+                launched: 1,
+                started: 1,
+                results: 1,
+                failed: 1
+            }]
+        );
+        let teams = dir.join("teams");
+        std::fs::create_dir_all(teams.join("session-deadbeef")).unwrap();
+        std::fs::write(
+            teams.join("session-deadbeef/config.json"),
+            r#"{"name":"t","leadSessionId":"deadbeef-1111","members":[{"agentId":"a","name":"lead","agentType":"team-lead"},{"agentId":"b","name":"researcher","agentType":"claude-code-guide"}]}"#,
+        )
+        .unwrap();
+        let t = teammates(&teams, "deadbeef-1111");
+        assert_eq!(t.len(), 2);
+        assert_eq!(t[1].name, "researcher");
+        assert!(teammates(&teams, "other-session").is_empty());
+        assert!(teammates(Path::new("/nonexistent"), "x").is_empty());
     }
 }
 

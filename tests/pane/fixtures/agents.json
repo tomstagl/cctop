@@ -1,6 +1,7 @@
 {
   "agents": [
     {
+      "depth": 1,
       "description": "Check whether a setup step needs the user personally",
       "elapsed": {
         "approx": false,
@@ -9,6 +10,7 @@
         "value": 42499
       },
       "id": "a9a92645226d3a561",
+      "inherited_context": 32,
       "model": "claude-sonnet-5",
       "state": "done",
       "tokens": {
@@ -17,12 +19,26 @@
         "unit": "tokens",
         "value": 548887
       },
-      "type": "fork"
+      "type": "fork",
+      "workflow": null
     }
   ],
+  "depth": 1,
   "mcp": {
     "hint": "no live process (fixture)",
     "source": "missing"
   },
-  "tasks": []
+  "mcp_failed": [],
+  "mcp_needs_auth": [],
+  "tasks": [],
+  "teammates": [
+    {
+      "name": "team-lead",
+      "type": "team-lead"
+    }
+  ],
+  "tool_search_loads": {
+    "builtin": 25
+  },
+  "workflows": []
 }

@@ -139,14 +139,49 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let dim = state.theme.dim();
-    let mut lines = vec![Line::from(Span::styled(
+    let mut lines = Vec::new();
+    // The turn's own row of facts, above its calls.
+    if let Some(r) = ledger::rows(state).into_iter().find(|r| r.turn == turn) {
+        let mut facts = vec![
+            format!("{}", if r.human { "human" } else { "machine" }),
+            format!("prompt {} chars", r.prompt_chars),
+            format!("{} calls · {} errors", r.tool_calls, r.tool_errors),
+            format!("harness {}", fmt::tokens(r.harness_tokens)),
+        ];
+        if !r.phase_mix.is_empty() {
+            facts.push(r.phase_mix.clone());
+        }
+        if let Some(m) = &r.miss_cause {
+            facts.push(format!("cache miss: {m}"));
+        }
+        if let (Some(c), Some(at)) = (r.cost_usd, r.cost_at_100k_usd) {
+            facts.push(format!("{} ({} at 100k)", fmt::usd(c), fmt::usd(at)));
+        }
+        if r.steers > 0 {
+            facts.push(format!("steers {}", r.steers));
+        }
+        if r.interrupted {
+            facts.push("interrupted".into());
+        }
+        if r.api_errors > 0 {
+            facts.push(format!("api errors {}", r.api_errors));
+        }
+        lines.push(Line::from(Span::styled(
+            format!(
+                " {}",
+                fmt::clip(&facts.join(" · "), inner.width.saturating_sub(2) as usize)
+            ),
+            dim,
+        )));
+    }
+    lines.push(Line::from(Span::styled(
         format!(
             " {:<16} {:<34} {:>8} {:>10}  ERR",
             "TOOL", "INPUT", "DUR", "TOKENS→CTX"
         ),
         dim,
-    ))];
-    for c in calls.iter().take(inner.height.saturating_sub(1) as usize) {
+    )));
+    for c in calls.iter().take(inner.height.saturating_sub(2) as usize) {
         let dur = c
             .duration_ms
             .map(|d| {

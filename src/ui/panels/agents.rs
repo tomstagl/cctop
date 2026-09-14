@@ -33,7 +33,16 @@ impl Panel for Agents {
             .count();
         let mut parts = Vec::new();
         if !state.agents.is_empty() {
-            parts.push(format!("{running}/{} agents", state.agents.len()));
+            let depth = state.agent_depth();
+            parts.push(format!(
+                "{running}/{} agents{}",
+                state.agents.len(),
+                if depth > 1 {
+                    format!(" · depth {depth}/3")
+                } else {
+                    String::new()
+                }
+            ));
         }
         if !state.procs.mcp.is_empty() {
             parts.push(format!("{} mcp", state.procs.mcp.len()));
@@ -48,7 +57,7 @@ impl Panel for Agents {
         })
     }
     fn min_rows(&self) -> u16 {
-        5
+        6
     }
     fn priority(&self) -> u8 {
         50
@@ -63,8 +72,44 @@ impl Panel for Agents {
         let now = state.clock_ms();
         let mut lines: Vec<Line> = Vec::new();
 
-        // Subagents, newest first.
-        let mut agents: Vec<_> = state.agents.values().collect();
+        // Workflow runs and their failures, the team, first.
+        for j in &state.workflow_journals {
+            let style = if j.failed > 0 {
+                state.theme.crit()
+            } else {
+                dim
+            };
+            lines.push(Line::from(vec![
+                Span::raw(format!(" wf  {:<14} ", fmt::clip(&j.run, 14))),
+                Span::styled(
+                    format!(
+                        "{} launched · {} done · {} failed",
+                        j.launched, j.results, j.failed
+                    ),
+                    style,
+                ),
+            ]));
+        }
+        if !state.teammates.is_empty() {
+            let names: Vec<String> = state
+                .teammates
+                .iter()
+                .map(|t| format!("{} ({})", t.name, fmt::clip(&t.agent_type, 12)))
+                .collect();
+            lines.push(Line::from(vec![
+                Span::raw(format!(" team {} ", state.teammates.len())),
+                Span::styled(
+                    fmt::clip(&names.join(" · "), inner.width.saturating_sub(10) as usize),
+                    dim,
+                ),
+            ]));
+        }
+        // Subagents, newest first (workflow agents folded into their run).
+        let mut agents: Vec<_> = state
+            .agents
+            .values()
+            .filter(|a| a.workflow.is_none() || state.workflow_journals.is_empty())
+            .collect();
         agents.sort_by_key(|a| std::cmp::Reverse(a.started_at));
         for a in agents {
             let (glyph, style) = match a.state(now) {
@@ -80,19 +125,22 @@ impl Panel for Agents {
                 .next()
                 .unwrap_or("")
                 .to_string();
+            let inherited = a
+                .inherited_context_len
+                .map(|n| format!(" ↰{}", fmt::tokens(n)))
+                .unwrap_or_default();
             lines.push(Line::from(vec![
                 Span::styled(format!(" {glyph} "), style),
                 Span::raw(format!("{:<8} ", fmt::clip(&a.agent_type, 8))),
                 Span::styled(format!("{:<28} ", fmt::clip(&a.description, 28)), dim),
                 Span::raw(format!(
-                    "{:>5} {:>5} {}",
+                    "{:>5} {:>5} {}{inherited}",
                     elapsed,
                     fmt::tokens(a.usage.total()),
                     model
                 )),
             ]));
         }
-
         // MCP servers.
         let stats = state.tools.by_name();
         for m in &state.procs.mcp {
@@ -138,6 +186,41 @@ impl Panel for Agents {
                     state.theme.crit(),
                 )));
             }
+        }
+
+        // MCP servers Claude Code flagged, and the prefix rewrites ToolSearch caused.
+        if !state.mcp_needs_auth.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled(" ! auth ", state.theme.warn()),
+                Span::raw(fmt::clip(
+                    &state.mcp_needs_auth.join(", "),
+                    inner.width.saturating_sub(10) as usize,
+                )),
+            ]));
+        }
+        if !state.mcp_failed.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled(" ✗ mcp  ", state.theme.crit()),
+                Span::raw(fmt::clip(
+                    &state.mcp_failed.join(", "),
+                    inner.width.saturating_sub(10) as usize,
+                )),
+            ]));
+        }
+        if !state.tools.tool_search_loads.is_empty() {
+            let parts: Vec<String> = state
+                .tools
+                .tool_search_loads
+                .iter()
+                .map(|(s, n)| format!("{s} ×{n}"))
+                .collect();
+            lines.push(Line::from(vec![
+                Span::styled(" ToolSearch loads ", dim),
+                Span::raw(fmt::clip(
+                    &parts.join(" · "),
+                    inner.width.saturating_sub(19) as usize,
+                )),
+            ]));
         }
 
         // Background tasks.

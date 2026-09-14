@@ -252,6 +252,14 @@ pub struct State {
     pub tools: tools::Stats,
     /// Subagents of this session, by id.
     pub agents: std::collections::BTreeMap<String, crate::agents::Agent>,
+    /// Workflow runs under `subagents/workflows/`, with their failures.
+    pub workflow_journals: Vec<crate::agents::WorkflowJournal>,
+    /// Members of this session's team, when it leads one.
+    pub teammates: Vec<crate::agents::Teammate>,
+    /// MCP servers Claude Code reported as needing auth, pending or failed
+    /// (`deferred_tools_delta`).
+    pub mcp_needs_auth: Vec<String>,
+    pub mcp_failed: Vec<String>,
     /// Rate limits, when the status-line shim is installed.
     pub limits: Option<Limits>,
     /// `(epoch ms, 5 h used %)` samples for the exhaustion projection.
@@ -276,6 +284,8 @@ pub struct State {
     pub tasks: Vec<crate::tasks::Task>,
     pub files: crate::files::Files,
     pub files_sort: FileSort,
+    /// `git diff --numstat HEAD`: `(added, removed, files)` not committed.
+    pub uncommitted: Option<(u64, u64, usize)>,
     /// Exact context figures from the status line (shim), when present.
     pub context_window_exact: Option<u64>,
     pub context_size_exact: Option<u64>,
@@ -1023,6 +1033,43 @@ impl State {
         if self.agg.turns.len() > turns_before {
             self.files.new_turn();
         }
+        if let Line::Assistant(a) = line {
+            for b in &a.message.content {
+                if let crate::transcript::AssistantBlock::ToolUse { name, input, .. } = b {
+                    if name == "Bash" {
+                        let cmd = input.get("command").and_then(|v| v.as_str()).unwrap_or("");
+                        if let Some(form) = crate::phase::destructive_git(cmd) {
+                            if let Some(at) = a
+                                .timestamp
+                                .as_deref()
+                                .and_then(crate::metrics::cost::parse_ts_ms)
+                            {
+                                let dirty = self.session.git_dirty;
+                                self.events.push(crate::events::Event {
+                                    at,
+                                    kind: crate::events::Kind::Note,
+                                    text: format!(
+                                        "destructive git: {form}{}",
+                                        if dirty { " on a dirty tree" } else { "" }
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Line::Attachment(att) = line {
+            if let crate::transcript::AttachmentKind::DeferredToolsDelta {
+                needs_auth_mcp_servers,
+                failed_mcp_servers,
+                ..
+            } = att.kind()
+            {
+                self.mcp_needs_auth = needs_auth_mcp_servers;
+                self.mcp_failed = failed_mcp_servers;
+            }
+        }
         self.cost.push(line);
         self.tools.push(line);
         self.events.apply(line);
@@ -1110,6 +1157,84 @@ impl State {
         let total: u64 = turns.iter().map(|t| t.harness_tokens).sum();
         let approx = turns.iter().any(|t| t.harness_approx);
         Some((total / turns.len() as u64, approx))
+    }
+
+    /// Take the watcher's agents, keeping what the hook spool attributed to
+    /// agents whose transcript is not on disk (yet).
+    pub fn merge_agents(
+        &mut self,
+        fresh: &std::collections::BTreeMap<String, crate::agents::Agent>,
+    ) {
+        for (id, a) in fresh {
+            let mut a = a.clone();
+            if let Some(h) = self.agents.get(id) {
+                a.hook_tool_calls = h.hook_tool_calls;
+                a.hook_tool_ms = h.hook_tool_ms;
+                a.hook_tool_errors = h.hook_tool_errors;
+            }
+            self.agents.insert(id.clone(), a);
+        }
+    }
+
+    /// The last commit Claude Code summarised: `(epoch ms, sha)`, and the
+    /// edits since it.
+    pub fn last_commit(&self) -> Option<(i64, String, usize)> {
+        let (at, sha, _) = self.tools.commits.last()?;
+        let edits = self
+            .tools
+            .calls
+            .iter()
+            .filter(|c| {
+                c.class == crate::phase::ToolClass::Implement
+                    && c.started_at.is_some_and(|s| s > *at)
+            })
+            .count();
+        Some((*at, sha.clone(), edits))
+    }
+
+    /// Rewind points (file checkpoints) in the current turn, and the Bash
+    /// writes of the turn that no checkpoint covers.
+    pub fn rewind_points(&self) -> (usize, usize) {
+        let t = self.agg.current_turn();
+        let checkpoints = t.map(|t| t.checkpoints).unwrap_or(0);
+        let since = t.map(|t| t.number).unwrap_or(0);
+        let bash_writes = self
+            .tools
+            .calls
+            .iter()
+            .filter(|c| {
+                c.turn >= since
+                    && c.name == "Bash"
+                    && c.bash_class == Some(crate::phase::BashClass::Implement)
+            })
+            .count();
+        (checkpoints, bash_writes)
+    }
+
+    /// The re-read tax of a tool result: how many API calls have re-read it
+    /// since it landed, and what that cost at the cache-read price.
+    pub fn reread_tax(&self, call: &crate::tools::Call) -> Option<(usize, f64)> {
+        let at = call.finished_at?;
+        let rereads = self
+            .agg
+            .calls
+            .iter()
+            .filter(|c| c.at_ms.is_some_and(|t| t > at))
+            .count();
+        let price = self.cost.pricing().price(self.model()?)?.cache_read();
+        Some((
+            rereads,
+            call.result_tokens_est as f64 * rereads as f64 * price / 1e6,
+        ))
+    }
+
+    /// Deepest spawn depth among the agents (Claude Code caps it at 3).
+    pub fn agent_depth(&self) -> u32 {
+        self.agents
+            .values()
+            .map(|a| a.spawn_depth)
+            .max()
+            .unwrap_or(0)
     }
 
     /// The last confirmed test run: `(command summary, passed, epoch ms)`.
@@ -1285,9 +1410,19 @@ impl State {
     }
 
     /// Read the autocompact overrides for a live session: settings.json and
-    /// the claude process environment.
+    /// the claude process environment; price the enabled plugins with the
+    /// catalog cache.
     pub fn load_autocompact(&mut self) {
         let settings = crate::install::read_settings(&crate::install::settings_path());
+        let catalog = std::env::var_os("HOME").and_then(|h| {
+            crate::claude_home::read_at(
+                &std::path::PathBuf::from(h).join(".claude/plugins/plugin-catalog-cache.json"),
+            )
+        });
+        let claude_json = crate::claude_home::read();
+        let model = self.model().unwrap_or("claude-opus-5").to_string();
+        self.prefix
+            .scan_plugins(&settings, catalog.as_ref(), claude_json.as_ref(), &model);
         if let Some(pid) = self.session.pid {
             self.claude_env = crate::procenv::env_of(pid);
         }

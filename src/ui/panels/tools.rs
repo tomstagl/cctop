@@ -22,7 +22,7 @@ impl Tools {
         let ui = &state.tools_ui;
         let mut rows: Vec<ToolStats> = state
             .tools
-            .by_name()
+            .by_name_and_class()
             .into_values()
             .filter(|t| match &ui.filter {
                 Some(f) if !f.is_empty() => t.name.to_lowercase().contains(&f.to_lowercase()),
@@ -58,7 +58,7 @@ impl Tools {
     }
 }
 
-const HEADER: &str = " TOOL          N  ERR    p50    p95   LAST  TOKENS→CTX";
+const HEADER: &str = " TOOL          N  ERR    p50    p95   LAST  TOKENS→CTX  IN→CTX";
 
 impl Panel for Tools {
     fn id(&self) -> PanelId {
@@ -174,7 +174,7 @@ impl Panel for Tools {
         }
         lines.push(Line::from(hdr));
 
-        let body_rows = inner.height.saturating_sub(2) as usize; // header + top ctx
+        let body_rows = inner.height.saturating_sub(2) as usize; // header + pinned lines
         let first = ui.selected.saturating_sub(body_rows.saturating_sub(1));
         for (i, t) in rows.iter().enumerate().skip(first).take(body_rows) {
             let last = if t.running > 0 {
@@ -189,15 +189,17 @@ impl Panel for Tools {
                 1..=2 => state.theme.warn(),
                 _ => state.theme.crit(),
             };
+            let cut = if t.truncated > 0 { "⊘" } else { " " };
             let mut spans = vec![
                 Span::raw(format!(" {:<12}{:>3}  ", fmt::clip(&t.name, 12), t.calls)),
                 Span::styled(format!("{:>3}", t.errors), err_style),
                 Span::raw(format!(
-                    "  {:>6} {:>6}  {:>5}  {:>9}",
+                    "  {:>6} {:>6}  {:>5}  {:>8}{cut} {:>7}",
                     Self::dur(t.p50_ms, t.approx),
                     Self::dur(t.p95_ms, t.approx),
                     last,
-                    fmt::tokens(t.tokens_to_ctx)
+                    fmt::tokens(t.tokens_to_ctx),
+                    fmt::tokens(t.input_tokens)
                 )),
             ];
             if last == "▶now" {
@@ -214,13 +216,25 @@ impl Panel for Tools {
             .tools
             .top_ctx(3)
             .iter()
-            .map(|c| {
-                format!(
-                    "{} {} {}",
+            .enumerate()
+            .map(|(i, c)| {
+                let mut s = format!(
+                    "{} {} {}{}",
                     c.name,
-                    c.input_summary,
-                    fmt::tokens(c.result_tokens_est)
-                )
+                    fmt::clip(&c.input_summary, 30),
+                    fmt::tokens(c.result_tokens_est),
+                    if c.truncated { "⊘" } else { "" }
+                );
+                // The re-read tax on the largest result: every later call
+                // re-reads it.
+                if i == 0 {
+                    if let Some((n, usd)) = state.reread_tax(c) {
+                        if n > 0 {
+                            s.push_str(&format!(" (re-read ×{n} ≈{})", fmt::usd(usd)));
+                        }
+                    }
+                }
+                s
             })
             .collect();
         let top_line = Line::from(vec![
@@ -230,11 +244,31 @@ impl Panel for Tools {
                 inner.width.saturating_sub(11) as usize,
             )),
         ]);
-        // Pin the top-ctx line to the last row.
-        while lines.len() + 1 < inner.height as usize {
+        // Errors by Claude Code's class, when there are any.
+        let errors = state.tools.errors_by_class();
+        let err_line = (!errors.is_empty()).then(|| {
+            let parts: Vec<String> = errors
+                .iter()
+                .take(4)
+                .map(|(k, n)| format!("{} {n}", k.label()))
+                .collect();
+            Line::from(vec![
+                Span::styled(" errors: ", dim),
+                Span::styled(
+                    fmt::clip(&parts.join(" · "), inner.width.saturating_sub(10) as usize),
+                    state.theme.warn(),
+                ),
+            ])
+        });
+        // Pin the summary lines to the last rows.
+        let pinned = 1 + err_line.is_some() as usize;
+        while lines.len() + pinned < inner.height as usize {
             lines.push(Line::from(""));
         }
-        lines.truncate(inner.height.saturating_sub(1) as usize);
+        lines.truncate(inner.height.saturating_sub(pinned as u16) as usize);
+        if let Some(e) = err_line {
+            lines.push(e);
+        }
         lines.push(top_line);
         frame.render_widget(Paragraph::new(lines), inner);
     }
@@ -244,12 +278,22 @@ impl Panel for Tools {
             return;
         };
         let now = state.clock_ms();
+        // `Bash·test` rows select the Bash calls of that class.
+        let (tool, class) = match name.split_once('·') {
+            Some((t, c)) => (t.to_string(), Some(c.to_string())),
+            None => (name.clone(), None),
+        };
         let calls: Vec<&Call> = state
             .tools
             .calls
             .iter()
             .rev()
-            .filter(|c| c.name == name)
+            .filter(|c| c.name == tool)
+            .filter(|c| {
+                class
+                    .as_deref()
+                    .is_none_or(|k| c.bash_class.is_some_and(|b| b.label() == k))
+            })
             .take(20)
             .collect();
         let block = Block::default()
@@ -334,18 +378,29 @@ mod tests {
             out.contains("TOOL          N  ERR    p50    p95   LAST  TOKENS→CTX"),
             "{out}"
         );
-        // Sorted by calls desc: the chrome MCP server (214) first, RemoteTrigger (16), Bash (15).
+        // Sorted by calls desc: the chrome MCP server (214) first, RemoteTrigger
+        // (16), then Bash split by class — every fixture-A command is
+        // `make check`, a test.
         let chrome = out
             .lines()
             .position(|l| l.contains("mcp:claude-…214"))
             .expect("chrome row");
         let bash = out
             .lines()
-            .position(|l| l.contains("Bash         15"))
+            .position(|l| l.contains("Bash·test    15"))
             .expect("bash row");
         assert!(chrome < bash, "{out}");
         assert!(out.contains("≈"), "durations are approximate: {out}");
         assert!(out.contains("top ctx: "), "{out}");
+        let mut app = app;
+        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        let wide = render_to_string(&app, 120, 70);
+        assert!(wide.contains("IN→CTX"), "{wide}");
+        assert!(
+            wide.contains("errors: Other 4 · Denied 1"),
+            "anonymised texts: {wide}"
+        );
+        assert!(wide.contains("(re-read ×"), "{wide}");
     }
 
     #[test]
@@ -366,13 +421,13 @@ mod tests {
         assert!(!app.state.tools_ui.editing);
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains("f:bash"), "{out}");
-        assert!(out.contains("Bash         15"), "{out}");
+        assert!(out.contains("Bash·test    15"), "{out}");
         assert!(!out.contains("RemoteTrigg"), "{out}");
         // Enter opens the detail overlay for the selected (only) row.
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.state.overlay, Some(5));
         let out = render_to_string(&app, 80, 30);
-        assert!(out.contains("Bash — last 15 calls"), "{out}");
+        assert!(out.contains("Bash·test — last 15 calls"), "{out}");
         assert!(out.contains("make check"), "{out}");
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(app.state.overlay, None);

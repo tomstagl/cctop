@@ -73,7 +73,7 @@ impl Panel for FilesPanel {
         })
     }
     fn min_rows(&self) -> u16 {
-        3
+        4
     }
     fn priority(&self) -> u8 {
         40
@@ -101,9 +101,53 @@ impl Panel for FilesPanel {
             return;
         }
         let name_w = (inner.width as usize).saturating_sub(36).clamp(8, 40);
-        let lines: Vec<Line> = rows
+        // The commit line: what is not committed, and how long ago the last
+        // commit was.
+        let mut status: Vec<Span> = Vec::new();
+        if let Some((a, d, n)) = state.uncommitted {
+            if n > 0 {
+                status.push(Span::raw(format!(
+                    " uncommitted +{a} −{d} across {n} file{}",
+                    if n == 1 { "" } else { "s" }
+                )));
+            } else {
+                status.push(Span::styled(" clean", state.theme.ok()));
+            }
+        }
+        if let Some((at, sha, edits)) = state.last_commit() {
+            status.push(Span::styled(
+                format!(
+                    " · last commit {} {} ago / {edits} edit{} ago",
+                    fmt::clip(&sha, 7),
+                    fmt::duration_ms(state.clock_ms() - at),
+                    if edits == 1 { "" } else { "s" }
+                ),
+                dim,
+            ));
+        }
+        let (checkpoints, bash_writes) = state.rewind_points();
+        if checkpoints > 0 || bash_writes > 0 {
+            status.push(Span::styled(
+                format!(
+                    " · rewind {checkpoints} checkpoint{}{}",
+                    if checkpoints == 1 { "" } else { "s" },
+                    if bash_writes > 0 {
+                        format!(
+                            " ({bash_writes} bash write{} not covered)",
+                            if bash_writes == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        String::new()
+                    }
+                ),
+                dim,
+            ));
+        }
+        let status_line = (!status.is_empty()).then(|| Line::from(status));
+        let take = inner.height as usize - status_line.is_some() as usize;
+        let mut lines: Vec<Line> = rows
             .iter()
-            .take(inner.height as usize)
+            .take(take)
             .map(|f| {
                 let mut spans = vec![Span::raw(format!(
                     " {:<w$} ",
@@ -131,9 +175,32 @@ impl Panel for FilesPanel {
                 if f.reread_warning() {
                     spans.push(Span::styled(" re-read ⚠", state.theme.warn()));
                 }
+                if f.edits_this_turn > 0 {
+                    spans.push(Span::styled(
+                        format!(" ×{} this turn", f.edits_this_turn),
+                        dim,
+                    ));
+                }
+                if f.stale {
+                    spans.push(Span::styled(" stale", state.theme.warn()));
+                } else if f.ide_edits > 0 {
+                    spans.push(Span::styled(" IDE edit", dim));
+                }
+                if let Some(v) = f.checkpoint_version.filter(|v| *v >= 8) {
+                    spans.push(Span::styled(format!(" v{v}"), state.theme.warn()));
+                }
+                if f.edit_reread_edit > 0 {
+                    spans.push(Span::styled(
+                        format!(" churn ×{}", f.edit_reread_edit),
+                        state.theme.warn(),
+                    ));
+                }
                 Line::from(spans)
             })
             .collect();
+        if let Some(s) = status_line {
+            lines.push(s);
+        }
         frame.render_widget(Paragraph::new(lines), inner);
     }
 }
@@ -171,6 +238,28 @@ mod tests {
         assert!(out.contains("W×1"), "{out}");
         assert!(out.contains("R×1"), "{out}");
         assert!(out.contains("—"), "no git: dash");
+    }
+
+    #[test]
+    fn commit_line_and_markers_on_fixture_b() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.state.uncommitted = Some((412, 87, 9));
+        app.mode_override = Some(crate::ui::layout::Mode::Narrow);
+        let out = render_to_string(&app, 140, 80);
+        assert!(out.contains("uncommitted +412 −87 across 9 files"), "{out}");
+        assert!(out.contains("· last commit 1d70205 "), "{out}");
+        assert!(out.contains("edits ago"), "{out}");
+        assert!(out.contains("IDE edit") || out.contains("stale"), "{out}");
     }
 
     #[test]

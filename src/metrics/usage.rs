@@ -155,6 +155,8 @@ pub struct Turn {
     pub pending_background_agents: Option<u64>,
     /// A Stop hook prevented the turn from ending (`preventedContinuation`).
     pub hook_blocked: bool,
+    /// `file-history-snapshot` lines in this turn: rewind points.
+    pub checkpoints: usize,
 }
 
 impl Turn {
@@ -236,6 +238,8 @@ pub struct Boundary {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallRecord {
     pub turn: usize,
+    /// Epoch ms of the response line.
+    pub at_ms: Option<i64>,
     pub model: String,
     pub usage: Usage,
     /// The turn is machine-originated (a task notification, an SDK prompt).
@@ -299,6 +303,9 @@ pub struct Aggregate {
     pub bridged: bool,
     /// Hook wall time by command, over the session (`stop_hook_summary`).
     pub hook_ms_by_command: std::collections::BTreeMap<String, u64>,
+    /// Named cache misses (`diagnostics.cache_miss_reason`, actionable
+    /// kinds only): `(turn, cause)`, once per response.
+    pub miss_causes_by_turn: Vec<(usize, String)>,
     /// The last `goal_status` attachment (`/goal`): met, tokens, iterations.
     pub goal: Option<GoalStatus>,
 }
@@ -538,6 +545,11 @@ impl Aggregate {
                     self.queued_prompts = self.queued_prompts.saturating_sub(1)
                 }
             },
+            Line::FileHistorySnapshot(_) => {
+                if let Some(t) = self.turns.last_mut() {
+                    t.checkpoints += 1;
+                }
+            }
             Line::ContinuedIn(c) => {
                 let turn = self.turn_number();
                 self.boundaries.push(Boundary {
@@ -646,6 +658,9 @@ impl Aggregate {
             t.first_call_prefix = u.cache_read + u.cache_write();
             t.first_call_input = u.input;
         }
+        if let Some(miss) = a.cache_miss_reason().filter(|m| m.is_named()) {
+            self.miss_causes_by_turn.push((t.number, miss.kind.clone()));
+        }
         t.api_calls += 1;
         t.usage.add(&u);
         t.context_size = u.total_input();
@@ -664,6 +679,7 @@ impl Aggregate {
         let machine = !t.human;
         self.calls.push(CallRecord {
             turn: t.number,
+            at_ms: ts,
             model: a.message.model.clone(),
             usage: u,
             machine,

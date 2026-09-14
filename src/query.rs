@@ -186,6 +186,17 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
                     "compaction": r.compaction,
                     "effort": r.effort,
                     "model": r.model,
+                    "human": r.human,
+                    "tool_calls": m(r.tool_calls, "count", "tool_calls", false),
+                    "tool_errors": m(r.tool_errors, "count", "tool_errors", false),
+                    "prompt_chars": r.prompt_chars,
+                    "harness_tokens": m(r.harness_tokens, "tokens", "harness_tokens", true),
+                    "miss_cause": r.miss_cause,
+                    "phase_mix": r.phase_mix,
+                    "cost_at_100k": r.cost_at_100k_usd.map(|c| m(c, "USD", "cost_per_turn", true)),
+                    "api_errors": r.api_errors,
+                    "steers": r.steers,
+                    "interrupted": r.interrupted,
                 })
             })
             .collect(),
@@ -214,9 +225,29 @@ pub fn tools(state: &State) -> Value {
         .tools
         .top_ctx(5)
         .iter()
-        .map(|c| json!({"tool": c.name, "input": c.input_summary, "turn": c.turn, "tokens": m(c.result_tokens_est, "tokens", "top_ctx", true)}))
+        .map(|c| json!({"tool": c.name, "input": c.input_summary, "turn": c.turn, "tokens": m(c.result_tokens_est, "tokens", "top_ctx", true), "truncated": c.truncated, "persisted_bytes": c.persisted_output_size, "reread_tax": state.reread_tax(c).map(|(n, usd)| json!({"rereads": n, "usd": m(usd, "USD", "reread_tax", true)}))}))
         .collect();
-    json!({"tools": rows, "top_ctx": top})
+    let bash: Vec<Value> = state
+        .tools
+        .bash_by_class()
+        .iter()
+        .map(|(k, n, e)| json!({"class": k.label(), "calls": n, "errors": e}))
+        .collect();
+    let errors: Vec<Value> = state
+        .tools
+        .errors_by_class()
+        .iter()
+        .map(|(k, n)| json!({"class": k.label(), "count": n}))
+        .collect();
+    let input: Vec<Value> = state
+        .tools
+        .input_chars_by_name()
+        .iter()
+        .map(
+            |(n, c)| json!({"tool": n, "tokens": m(*c as u64 / 4, "tokens", "input_tokens", true)}),
+        )
+        .collect();
+    json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads})
 }
 
 pub fn files(state: &State) -> Value {
@@ -254,6 +285,9 @@ pub fn agents(state: &State) -> Value {
                 "state": format!("{:?}", a.state(now)).to_lowercase(),
                 "elapsed": a.elapsed_ms(now).map(|e| m(e, "ms", "agent_state", false)),
                 "tokens": m(a.usage.total(), "tokens", "agent_tokens", false),
+                "workflow": a.workflow,
+                "inherited_context": a.inherited_context_len,
+                "depth": a.spawn_depth,
             })
         })
         .collect();
@@ -271,7 +305,27 @@ pub fn agents(state: &State) -> Value {
         .iter()
         .map(|t| json!({"id": t.id, "kind": t.kind, "description": t.description, "started_at_ms": t.started_at_ms, "status": t.status}))
         .collect();
-    json!({"agents": agents, "mcp": if state.session.pid.is_some() { Value::Array(mcp) } else { missing("no live process (fixture)") }, "tasks": tasks})
+    let workflows: Vec<Value> = state
+        .workflow_journals
+        .iter()
+        .map(|j| json!({"run": j.run, "launched": j.launched, "done": j.results, "failed": j.failed}))
+        .collect();
+    let teammates: Vec<Value> = state
+        .teammates
+        .iter()
+        .map(|t| json!({"name": t.name, "type": t.agent_type}))
+        .collect();
+    json!({
+        "agents": agents,
+        "depth": state.agent_depth(),
+        "workflows": workflows,
+        "teammates": teammates,
+        "mcp": if state.session.pid.is_some() { Value::Array(mcp) } else { missing("no live process (fixture)") },
+        "mcp_needs_auth": state.mcp_needs_auth,
+        "mcp_failed": state.mcp_failed,
+        "tool_search_loads": state.tools.tool_search_loads,
+        "tasks": tasks,
+    })
 }
 
 pub fn advice(state: &State) -> Value {

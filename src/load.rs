@@ -107,6 +107,11 @@ pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
         state.apply(&line);
     }
     state.agents = crate::agents::load(&transcript.with_extension(""));
+    state.workflow_journals =
+        crate::agents::workflow_journals(&transcript.with_extension("").join("subagents"));
+    if let Some(teams) = crate::agents::teams_dir() {
+        state.teammates = crate::agents::teammates(&teams, &state.session.session_id);
+    }
     if !state.session.alive {
         state.session.ended_at_ms = state.last_line_at_ms;
     }

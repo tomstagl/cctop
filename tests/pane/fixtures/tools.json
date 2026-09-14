@@ -1,4 +1,116 @@
 {
+  "bash_by_class": [
+    {
+      "calls": 15,
+      "class": "test",
+      "errors": 3
+    }
+  ],
+  "errors_by_class": [
+    {
+      "class": "Other",
+      "count": 4
+    },
+    {
+      "class": "Denied",
+      "count": 1
+    }
+  ],
+  "input_to_ctx": [
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 37
+      },
+      "tool": "Bash"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 24
+      },
+      "tool": "Read"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 134
+      },
+      "tool": "RemoteTrigger"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 320
+      },
+      "tool": "SendFeedback"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 2
+      },
+      "tool": "Skill"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 118
+      },
+      "tool": "ToolSearch"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 74
+      },
+      "tool": "Write"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 771
+      },
+      "tool": "mcp:claude-in-chrome"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "mcp:claude_ai_Dynatrace"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "mcp:dynatrace"
+    }
+  ],
+  "tool_search_loads": {
+    "builtin": 25
+  },
   "tools": [
     {
       "calls": {
@@ -354,6 +466,16 @@
   "top_ctx": [
     {
       "input": "lorem",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 90,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.029088
+        }
+      },
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
@@ -361,10 +483,21 @@
         "value": 1616
       },
       "tool": "mcp:claude-in-chrome",
+      "truncated": false,
       "turn": 12
     },
     {
       "input": "lorem",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 89,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.028764800000000004
+        }
+      },
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
@@ -372,10 +505,21 @@
         "value": 1616
       },
       "tool": "mcp:claude-in-chrome",
+      "truncated": false,
       "turn": 12
     },
     {
       "input": "lorem",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 80,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.02576
+        }
+      },
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
@@ -383,10 +527,21 @@
         "value": 1610
       },
       "tool": "mcp:claude-in-chrome",
+      "truncated": false,
       "turn": 12
     },
     {
       "input": "lorem ipsu",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 11,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.0034562000000000004
+        }
+      },
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
@@ -394,10 +549,21 @@
         "value": 1571
       },
       "tool": "mcp:claude-in-chrome",
+      "truncated": false,
       "turn": 14
     },
     {
       "input": "lorem ipsu",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 10,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.003142
+        }
+      },
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
@@ -405,6 +571,7 @@
         "value": 1571
       },
       "tool": "mcp:claude-in-chrome",
+      "truncated": false,
       "turn": 14
     }
   ]

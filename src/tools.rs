@@ -51,8 +51,102 @@ pub struct Call {
     /// The result was replaced by `[Old tool result content cleared]`: it
     /// no longer occupies context.
     pub cleared: bool,
+    /// Claude Code's error class for a failed call (its `/insights`
+    /// taxonomy plus content-not-found / timeout / tool-not-found).
+    pub error_class: Option<ErrorClass>,
+    /// The result was cut at a cap (`truncatedByTokenCap`, a persisted
+    /// spill, an MCP cap).
+    pub truncated: bool,
     /// Turn number the call belongs to (1-based), if known.
     pub turn: usize,
+}
+
+/// Claude Code's own tool-error taxonomy (`tool_error_categories` in
+/// `usage-data/session-meta`, ordered substrings), plus three classes its
+/// `Other` bucket hides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorClass {
+    CommandFailed,
+    UserRejected,
+    EditFailed,
+    FileChanged,
+    FileTooLarge,
+    FileNotFound,
+    ContentNotFound,
+    Timeout,
+    ToolNotFound,
+    Denied,
+    Other,
+}
+
+impl ErrorClass {
+    /// Classify a failed result's text, in Claude Code's order.
+    pub fn classify(text: &str, denied: bool) -> ErrorClass {
+        let t = text.to_ascii_lowercase();
+        if denied {
+            return ErrorClass::Denied;
+        }
+        if t.contains("user rejected")
+            || t.contains("user doesn't want")
+            || t.contains("user declined")
+        {
+            ErrorClass::UserRejected
+        } else if t.contains("exit code")
+            || t.contains("command failed")
+            || t.contains("exit status")
+        {
+            ErrorClass::CommandFailed
+        } else if t.contains("string to replace not found")
+            || t.contains("edit failed")
+            || t.contains("old_string")
+        {
+            ErrorClass::EditFailed
+        } else if t.contains("has been modified since")
+            || t.contains("file has changed")
+            || t.contains("modified since read")
+        {
+            ErrorClass::FileChanged
+        } else if t.contains("too large") || t.contains("exceeds maximum") {
+            ErrorClass::FileTooLarge
+        } else if t.contains("no such file")
+            || t.contains("does not exist")
+            || t.contains("file not found")
+            || t.contains("enoent")
+        {
+            ErrorClass::FileNotFound
+        } else if t.contains("no matches found")
+            || t.contains("no files found")
+            || t.contains("not found in")
+        {
+            ErrorClass::ContentNotFound
+        } else if t.contains("timed out") || t.contains("timeout") {
+            ErrorClass::Timeout
+        } else if t.contains("unknown tool")
+            || t.contains("no such tool")
+            || t.contains("tool not found")
+        {
+            ErrorClass::ToolNotFound
+        } else {
+            ErrorClass::Other
+        }
+    }
+
+    /// Claude Code's own label where it has one.
+    pub fn label(self) -> &'static str {
+        match self {
+            ErrorClass::CommandFailed => "Command Failed",
+            ErrorClass::UserRejected => "User Rejected",
+            ErrorClass::EditFailed => "Edit Failed",
+            ErrorClass::FileChanged => "File Changed",
+            ErrorClass::FileTooLarge => "File Too Large",
+            ErrorClass::FileNotFound => "File Not Found",
+            ErrorClass::ContentNotFound => "Content Not Found",
+            ErrorClass::Timeout => "Timeout",
+            ErrorClass::ToolNotFound => "Tool Not Found",
+            ErrorClass::Denied => "Denied",
+            ErrorClass::Other => "Other",
+        }
+    }
 }
 
 impl Call {
@@ -150,6 +244,10 @@ pub struct ToolStats {
     pub p95_ms: Option<u64>,
     pub last_call_at: Option<i64>,
     pub tokens_to_ctx: u64,
+    /// Characters the model wrote as inputs, as tokens (`IN→CTX`).
+    pub input_tokens: u64,
+    /// Results cut at a cap (token cap, persisted spill).
+    pub truncated: usize,
     /// True when any duration in the sample is approximate.
     pub approx: bool,
 }
@@ -162,6 +260,14 @@ pub struct Stats {
     turn: usize,
     /// Exact per-tool durations from OpenTelemetry, keyed by display name.
     pub otel_durations: HashMap<String, Vec<u64>>,
+    /// Deferred tools loaded through `ToolSearch`, per MCP server (or
+    /// `builtin`): each load rewrites the cached prefix.
+    pub tool_search_loads: BTreeMap<String, usize>,
+    /// Commits Claude Code summarised (`gitOperation.commit`): `(epoch ms,
+    /// sha, turn)`.
+    pub commits: Vec<(i64, String, usize)>,
+    /// Pushes and PR actions: `(epoch ms, what)`.
+    pub git_events: Vec<(i64, String)>,
 }
 
 impl Stats {
@@ -199,20 +305,63 @@ impl Stats {
                     };
                     c.is_error = r.is_error;
                     c.cleared = r.is_cleared();
-                    let mut tokens = (r.text().len() / 4) as u64;
+                    let text = r.text();
+                    if r.is_error {
+                        c.error_class =
+                            Some(ErrorClass::classify(&text, u.tool_denial_kind.is_some()));
+                    }
+                    if text.contains("<persisted-output>") || text.contains("Output too large") {
+                        c.truncated = true;
+                    }
+                    let mut tokens = (text.len() / 4) as u64;
                     let mut images = r.images() as u64;
                     match &detail {
                         Some(ToolUseDetail::Bash(b)) => {
                             c.test_marker = b.test_marker;
                             c.persisted_output_size = b.persisted_output_size;
+                            c.truncated |= b.persisted_output_size.is_some();
+                            if let Some(g) = &b.git_operation {
+                                let when = at.unwrap_or(0);
+                                if let Some((sha, _)) = &g.commit {
+                                    self.commits.push((when, sha.clone(), c.turn));
+                                }
+                                if let Some(branch) = &g.push {
+                                    self.git_events.push((when, format!("push {branch}")));
+                                }
+                                if let Some((n, action)) = &g.pr {
+                                    self.git_events.push((when, format!("PR #{n} {action}")));
+                                }
+                            }
                         }
                         Some(ToolUseDetail::Read(rd)) => {
+                            c.truncated |= rd.truncated_by_token_cap;
                             if rd.kind == ReadKind::Image {
                                 tokens += rd.image_tokens().unwrap_or(1_500);
                                 images = images.saturating_sub(1);
                             }
                         }
                         _ => {}
+                    }
+                    if c.name == "ToolSearch" {
+                        if let Some(matches) = u
+                            .tool_use_result
+                            .as_ref()
+                            .and_then(|v| v.get("matches"))
+                            .and_then(Value::as_array)
+                        {
+                            for m in matches {
+                                let name = m
+                                    .as_str()
+                                    .or_else(|| m.get("name").and_then(Value::as_str))
+                                    .unwrap_or("");
+                                let server = name
+                                    .strip_prefix("mcp__")
+                                    .and_then(|r| r.split("__").next())
+                                    .unwrap_or("builtin")
+                                    .to_string();
+                                *self.tool_search_loads.entry(server).or_insert(0) += 1;
+                            }
+                        }
                     }
                     tokens += images * 1_500;
                     c.result_tokens_est = if c.cleared { 0 } else { tokens };
@@ -253,6 +402,8 @@ impl Stats {
                             result_tokens_est: 0,
                             persisted_output_size: None,
                             cleared: false,
+                            error_class: None,
+                            truncated: false,
                             turn: self.turn.max(1),
                         });
                     }
@@ -305,6 +456,34 @@ impl Stats {
         (n, tokens)
     }
 
+    /// Failed calls by error class, most frequent first.
+    pub fn errors_by_class(&self) -> Vec<(ErrorClass, usize)> {
+        let mut m: BTreeMap<&'static str, (ErrorClass, usize)> = BTreeMap::new();
+        for c in self.calls.iter().filter(|c| c.is_error) {
+            let k = c.error_class.unwrap_or(ErrorClass::Other);
+            m.entry(k.label()).or_insert((k, 0)).1 += 1;
+        }
+        let mut v: Vec<(ErrorClass, usize)> = m.into_values().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v
+    }
+
+    /// Bash calls by class, most frequent first: `(class, calls, errors)`.
+    pub fn bash_by_class(&self) -> Vec<(BashClass, usize, usize)> {
+        let mut m: BTreeMap<&'static str, (BashClass, usize, usize)> = BTreeMap::new();
+        for c in &self.calls {
+            let Some(k) = c.bash_class else { continue };
+            let e = m.entry(k.label()).or_insert((k, 0, 0));
+            e.1 += 1;
+            if c.is_error {
+                e.2 += 1;
+            }
+        }
+        let mut v: Vec<_> = m.into_values().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v
+    }
+
     /// Model-written input characters per tool, the `IN→CTX` column.
     pub fn input_chars_by_name(&self) -> BTreeMap<String, usize> {
         let mut m = BTreeMap::new();
@@ -316,14 +495,28 @@ impl Stats {
 
     /// Per-tool statistics, keyed by display name.
     pub fn by_name(&self) -> BTreeMap<String, ToolStats> {
+        self.grouped(|c| c.name.clone())
+    }
+
+    /// Per-tool statistics with Bash split by class (`Bash·test`,
+    /// `Bash·explore`…), for the table.
+    pub fn by_name_and_class(&self) -> BTreeMap<String, ToolStats> {
+        self.grouped(|c| match c.bash_class {
+            Some(k) => format!("Bash·{}", k.label()),
+            None => c.name.clone(),
+        })
+    }
+
+    fn grouped(&self, key: impl Fn(&Call) -> String) -> BTreeMap<String, ToolStats> {
         let mut groups: BTreeMap<String, Vec<&Call>> = BTreeMap::new();
         for c in &self.calls {
-            groups.entry(c.name.clone()).or_default().push(c);
+            groups.entry(key(c)).or_default().push(c);
         }
         groups
             .into_iter()
             .map(|(name, calls)| {
-                let otel = self.otel_durations.get(&name).filter(|v| !v.is_empty());
+                let otel_key = name.split('·').next().unwrap_or(&name).to_string();
+                let otel = self.otel_durations.get(&otel_key).filter(|v| !v.is_empty());
                 let mut durs: Vec<u64> = match otel {
                     Some(v) => v.clone(),
                     None => calls.iter().filter_map(|c| c.duration_ms).collect(),
@@ -340,6 +533,8 @@ impl Stats {
                         p95_ms: percentile(&durs, 0.95),
                         last_call_at: calls.iter().filter_map(|c| c.started_at).max(),
                         tokens_to_ctx: calls.iter().map(|c| c.result_tokens_est).sum(),
+                        input_tokens: calls.iter().map(|c| c.input_chars as u64 / 4).sum(),
+                        truncated: calls.iter().filter(|c| c.truncated).count(),
                         approx: otel.is_none()
                             && calls
                                 .iter()

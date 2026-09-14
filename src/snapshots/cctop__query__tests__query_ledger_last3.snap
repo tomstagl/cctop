@@ -10,6 +10,7 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "count",
       "value": 41
     },
+    "api_errors": 0,
     "cache_read": {
       "approx": false,
       "metric_id": "cache_read",
@@ -29,6 +30,12 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "USD",
       "value": 2.0875686
     },
+    "cost_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 1.00314
+    },
     "duration": {
       "approx": false,
       "metric_id": "turn_duration",
@@ -42,6 +49,15 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 82
     },
+    "harness_tokens": {
+      "approx": true,
+      "metric_id": "harness_tokens",
+      "unit": "tokens",
+      "value": 820
+    },
+    "human": true,
+    "interrupted": false,
+    "miss_cause": null,
     "model": "claude-sonnet-5",
     "output": {
       "approx": false,
@@ -49,12 +65,27 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 18314
     },
+    "phase_mix": "other 66",
+    "prompt_chars": 53,
     "started_at_ms": 1787823940869,
+    "steers": 0,
     "thinking": {
       "approx": false,
       "metric_id": "thinking",
       "unit": "tokens",
       "value": 9795
+    },
+    "tool_calls": {
+      "approx": false,
+      "metric_id": "tool_calls",
+      "unit": "count",
+      "value": 66
+    },
+    "tool_errors": {
+      "approx": false,
+      "metric_id": "tool_errors",
+      "unit": "count",
+      "value": 2
     },
     "tools": "mcp:claude-in-chrome×66",
     "turn": 12
@@ -66,6 +97,7 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "count",
       "value": 16
     },
+    "api_errors": 0,
     "cache_read": {
       "approx": false,
       "metric_id": "cache_read",
@@ -85,6 +117,12 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "USD",
       "value": 1.0167792
     },
+    "cost_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.37705
+    },
     "duration": {
       "approx": false,
       "metric_id": "turn_duration",
@@ -98,6 +136,15 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 32
     },
+    "harness_tokens": {
+      "approx": true,
+      "metric_id": "harness_tokens",
+      "unit": "tokens",
+      "value": 320
+    },
+    "human": true,
+    "interrupted": false,
+    "miss_cause": null,
     "model": "claude-sonnet-5",
     "output": {
       "approx": false,
@@ -105,12 +152,27 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 5705
     },
+    "phase_mix": "other 25 · verify 2 · implement 1",
+    "prompt_chars": 69,
     "started_at_ms": 1787824443286,
+    "steers": 0,
     "thinking": {
       "approx": false,
       "metric_id": "thinking",
       "unit": "tokens",
       "value": 2363
+    },
+    "tool_calls": {
+      "approx": false,
+      "metric_id": "tool_calls",
+      "unit": "count",
+      "value": 28
+    },
+    "tool_errors": {
+      "approx": false,
+      "metric_id": "tool_errors",
+      "unit": "count",
+      "value": 0
     },
     "tools": "mcp:claude-in-chrome×25 Bash×2 Write×1",
     "turn": 13
@@ -122,6 +184,7 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "count",
       "value": 52
     },
+    "api_errors": 0,
     "cache_read": {
       "approx": false,
       "metric_id": "cache_read",
@@ -141,6 +204,12 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "USD",
       "value": 4.0666826
     },
+    "cost_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 1.20046
+    },
     "duration": {
       "approx": false,
       "metric_id": "turn_duration",
@@ -154,6 +223,15 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 104
     },
+    "harness_tokens": {
+      "approx": true,
+      "metric_id": "harness_tokens",
+      "unit": "tokens",
+      "value": 1060
+    },
+    "human": true,
+    "interrupted": true,
+    "miss_cause": null,
     "model": "claude-sonnet-5",
     "output": {
       "approx": false,
@@ -161,12 +239,27 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "unit": "tokens",
       "value": 16046
     },
+    "phase_mix": "other 122 · verify 3",
+    "prompt_chars": 23,
     "started_at_ms": 1787824652608,
+    "steers": 0,
     "thinking": {
       "approx": false,
       "metric_id": "thinking",
       "unit": "tokens",
       "value": 2257
+    },
+    "tool_calls": {
+      "approx": false,
+      "metric_id": "tool_calls",
+      "unit": "count",
+      "value": 125
+    },
+    "tool_errors": {
+      "approx": false,
+      "metric_id": "tool_errors",
+      "unit": "count",
+      "value": 1
     },
     "tools": "mcp:claude-in-chrome×122 Bash×3",
     "turn": 14

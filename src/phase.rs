@@ -202,6 +202,13 @@ re!(
     RE_READ_ONLY,
     r"^\s*(cat|ls|rg|grep|egrep|find|head|tail|wc|tree|sed\s+-n|git\s+(-C\s+\S+\s+)?(log|show|diff|status|blame|ls-files))\b"
 );
+// Git commands that throw work away; `stash list/show/pop` and
+// `restore --staged` are not among them.
+re!(
+    RE_DESTRUCTIVE,
+    r"\bgit\s+(-C\s+\S+\s+)?(reset\s+--hard|checkout\s+(--\s+\S+|\.)|clean\s+-[a-zA-Z]*f|restore\s+(?:--source\s+\S+\s+)?[^-\s]\S*|branch\s+-[dD]\b|push\s+(-f|--force))"
+);
+re!(RE_STASH, r"\bgit\s+(-C\s+\S+\s+)?stash\b(\s+(\S+))?");
 re!(
     RE_PIPE_WRITE,
     r"[^0-9&]>{1,2}\s*[\w./~$-]|\btee\b|\bxargs\b.*\b(rm|mv|sed\s+-i)\b"
@@ -275,6 +282,22 @@ pub fn read_only_bash(cmd: &str) -> bool {
                 && !s.contains("sed -i")
                 && !s.contains("--delete")
         })
+}
+
+/// A git command that throws work away (`reset --hard`, `checkout -- <path>`,
+/// `checkout .`, `clean -f`, `stash`, `restore <path>`, a branch delete, a
+/// force push) — but not `stash list/show/pop` or `restore --staged`.
+/// Returns the matched form.
+pub fn destructive_git(cmd: &str) -> Option<String> {
+    if let Some(m) = RE_DESTRUCTIVE.find(cmd) {
+        return Some(m.as_str().trim().to_string());
+    }
+    let caps = RE_STASH.captures(cmd)?;
+    let sub = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+    if matches!(sub, "list" | "show" | "pop" | "apply" | "branch") {
+        return None;
+    }
+    Some("git stash".to_string())
 }
 
 /// Classify a tool call from its name and input.
@@ -506,6 +529,31 @@ mod tests {
         );
         assert_eq!(bash("cargo run -- query summary"), BashClass::Test);
         assert_eq!(bash("./target/debug/cctop --version"), BashClass::Test);
+    }
+
+    #[test]
+    fn destructive_git_forms() {
+        assert_eq!(
+            destructive_git("git reset --hard HEAD~1").as_deref(),
+            Some("git reset --hard")
+        );
+        assert_eq!(
+            destructive_git("git checkout -- src/x.rs").as_deref(),
+            Some("git checkout -- src/x.rs")
+        );
+        assert!(destructive_git("git checkout .").is_some());
+        assert!(destructive_git("git clean -fd").is_some());
+        assert!(destructive_git("git stash").is_some());
+        assert!(destructive_git("git stash push -m x && cargo test").is_some());
+        assert!(destructive_git("git stash list").is_none());
+        assert!(destructive_git("git stash pop").is_none());
+        assert!(destructive_git("git restore --staged src/x.rs").is_none());
+        assert!(destructive_git("git restore src/x.rs").is_some());
+        assert!(destructive_git("git branch -D feat").is_some());
+        assert!(destructive_git("git push --force origin main").is_some());
+        assert!(destructive_git("git checkout -b feat").is_none());
+        assert!(destructive_git("git status").is_none());
+        assert!(destructive_git("cargo test").is_none());
     }
 
     #[test]

@@ -97,8 +97,13 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D3 
 | **p50 duration** <a id="tool_p50"></a> `tool_p50` | ms | Median of tool_use → tool_result durations | D2 D4 | Transcript timings include any permission wait | ≈ until hook timings replace them |
 | **p95 duration** <a id="tool_p95"></a> `tool_p95` | ms | 95th percentile (nearest rank) of durations | D2 D4 | — | ≈ until hook timings replace them |
 | **Last call** <a id="tool_last_call"></a> `tool_last_call` | duration | now − the tool's most recent `tool_use` timestamp | D2 | — | never |
-| **Tokens → context** <a id="tokens_to_ctx"></a> `tokens_to_ctx` | tokens | Σ len(result text) / 4 per tool | D2 D10 | Heuristic; exact with OpenTelemetry. Uses the truncated text in the transcript, not offloaded `tool-results/` files | ≈ without OTel |
-| **Top context consumers** <a id="top_ctx"></a> `top_ctx` | tokens | The n single results with the largest `tokens_to_ctx` | D2 | — | ≈ without OTel |
+| **Tokens → context** <a id="tokens_to_ctx"></a> `tokens_to_ctx` | tokens | Σ len(result text) / 4 per tool, plus `w·h/750` per image (1 500 when the size is unknown); cleared results count 0 | D2 D10 | Heuristic; exact with OpenTelemetry. Uses the text in the transcript, not offloaded `tool-results/` files (their size is shown beside it) | ≈ without OTel |
+| **Input → context (IN→CTX)** <a id="input_tokens"></a> `input_tokens` | tokens | Characters the model wrote as tool inputs / 4, per tool — they stay in context like results do | D2 | Bash command text is the largest share | ≈ always |
+| **Bash by class** <a id="bash_class"></a> `bash_class` | count | Bash calls by the phase classifier's class: explore / implement / test / build-lint / commit / gitread / ops / wait (`Bash·test` rows) | D2 | — | never |
+| **Error class** <a id="error_class"></a> `error_class` | count | Failed calls by Claude Code's own taxonomy (Command Failed / User Rejected / Edit Failed / File Changed / File Too Large / File Not Found / Other) plus Content Not Found, Timeout, Tool Not Found and Denied (`toolDenialKind`) | D2 | Classified from the result text, in Claude Code's order | never |
+| **Top context consumers** <a id="top_ctx"></a> `top_ctx` | tokens | The n single results with the largest `tokens_to_ctx`; ⊘ marks a result cut at a cap (`truncatedByTokenCap`, a persisted spill) | D2 | — | ≈ without OTel |
+| **Re-read tax** <a id="reread_tax"></a> `reread_tax` | USD | API calls since the result landed × its tokens × the cache-read price: what re-reading it has cost so far | D2 D9 | — | ≈ always |
+| **ToolSearch loads** <a id="tool_search_loads"></a> `tool_search_loads` | count | Deferred tools loaded through `ToolSearch` per MCP server (`matches` of its result); each load rewrites the cached prefix | D2 | — | never |
 
 ## Agents & MCP
 
@@ -108,6 +113,10 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D3 
 | **Agent tokens** <a id="agent_tokens"></a> `agent_tokens` | tokens | Deduplicated usage of the agent's own transcript | D2a | — | never |
 | **MCP memory** <a id="mcp_rss"></a> `mcp_rss` | bytes | RSS of the MCP server process | D5 | — | never |
 | **MCP calls** <a id="mcp_calls"></a> `mcp_calls` | count | Calls of tools named `mcp__<server>__*` | D2 | — | never |
+| **Workflow runs** <a id="agent_workflows"></a> `agent_workflows` | count | `subagents/workflows/<run>/journal.jsonl`: agents launched, finished (`result`) and `failed` per run; the run's agents are scanned like the top-level ones | D2a | — | never |
+| **Spawn depth** <a id="agent_depth"></a> `agent_depth` | count | Deepest `spawnDepth` among the agents (Claude Code caps it at 3) | D2a | — | never |
+| **Teammates** <a id="teammates"></a> `teammates` | list | Members of `~/.claude/teams/<team>/config.json` when this session leads the team | D12 | — | never |
+| **MCP needs auth** <a id="mcp_auth"></a> `mcp_auth` | list | `deferred_tools_delta.needsAuthMcpServers` / `failedMcpServers` from the transcript | D2 | — | never |
 
 ## Files
 
@@ -115,6 +124,8 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D3 
 |---|---|---|---|---|---|
 | **Touches** <a id="file_touches"></a> `file_touches` | count | Read / Edit / Write / MultiEdit / NotebookEdit calls per file path, plus Bash `cat` / `sed -n` / `head` / `tail` reads of it | D8 | A read counts when its result arrives | never |
 | **Lines ±** <a id="file_lines"></a> `file_lines` | lines | `git diff --numstat` against HEAD at attach time | D7 | Outside a git repo the column is empty | never |
+| **Uncommitted** <a id="uncommitted"></a> `uncommitted` | lines | `git diff --numstat HEAD` (added, removed, files) and the last commit Claude Code summarised (`gitOperation.commit`) with the edits since it | D7 D2 | — | never |
+| **Rewind points** <a id="rewind_points"></a> `rewind_points` | count | `file-history-snapshot` lines in the current turn (checkpoints `/rewind` can restore) and the Bash writes of the turn no checkpoint covers; per file: the checkpoint version (`file-history-delta`, ⚠ at v8+), IDE edits (`edited_text_file`), stale markers (`staleRecovered`, `staleReadFileStateHint`), edit → re-read → edit churn | D2 | — | never |
 | **Re-reads** <a id="file_rereads"></a> `file_rereads` | count | Whole-file reads (Read or a Bash reader) with no Edit/Write in between; ⚠ at ≥ 3 | D8 | Ranged reads (offset/limit) and `file_unchanged` results do not count; the counter resets when the file changed under the model (an IDE edit, a stale-read recovery) and at every context boundary | never |
 
 ## Advisor

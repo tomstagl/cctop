@@ -18,6 +18,22 @@ pub struct Row {
     pub compaction: bool,
     pub effort: String,
     pub model: String,
+    // -- the coach PRD's columns (§4)
+    pub tool_calls: usize,
+    pub tool_errors: usize,
+    pub prompt_chars: usize,
+    /// Harness (attachment) tokens injected during the turn.
+    pub harness_tokens: u64,
+    /// The named cache-miss cause of a call in this turn, if any.
+    pub miss_cause: Option<String>,
+    /// `explore 6 · implement 3 · verify 1`: the turn's phase mix.
+    pub phase_mix: String,
+    pub human: bool,
+    /// What the turn would have cost at 100 k of context.
+    pub cost_at_100k_usd: Option<f64>,
+    pub api_errors: usize,
+    pub steers: usize,
+    pub interrupted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -65,15 +81,46 @@ impl Sort {
 /// Build the rows from the state, in turn order.
 pub fn rows(state: &State) -> Vec<Row> {
     let compacted: Vec<usize> = state.context().compactions.iter().map(|c| c.turn).collect();
+    // The first named miss of each turn.
+    let mut misses: std::collections::HashMap<usize, String> = Default::default();
+    for (turn, cause) in &state.agg.miss_causes_by_turn {
+        misses.entry(*turn).or_insert_with(|| cause.clone());
+    }
+    let price = state
+        .model()
+        .and_then(|m| state.cost.pricing().price(m).copied());
     state
         .agg
         .turns
         .iter()
         .map(|t| {
             let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+            let mut phases: std::collections::BTreeMap<&'static str, usize> = Default::default();
             for c in state.tools.calls.iter().filter(|c| c.turn == t.number) {
                 *counts.entry(c.name.as_str()).or_default() += 1;
+                let word = match c.class {
+                    crate::phase::ToolClass::Explore | crate::phase::ToolClass::GitRead => {
+                        "explore"
+                    }
+                    crate::phase::ToolClass::Implement => "implement",
+                    crate::phase::ToolClass::Test | crate::phase::ToolClass::BuildLint => "verify",
+                    crate::phase::ToolClass::Commit => "commit",
+                    _ => "other",
+                };
+                *phases.entry(word).or_default() += 1;
             }
+            let mut phase_v: Vec<(&str, usize)> = phases.into_iter().collect();
+            phase_v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let phase_mix = phase_v
+                .iter()
+                .map(|(p, n)| format!("{p} {n}"))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            // The same turn priced as if every call read 100 k of context.
+            let cost_at_100k_usd = price.map(|p| {
+                let calls = t.api_calls as f64;
+                (calls * 100_000.0 * p.cache_read() + t.usage.output as f64 * p.output) / 1e6
+            });
             let mut v: Vec<(&str, usize)> = counts.into_iter().collect();
             v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
             let tools = v
@@ -99,6 +146,17 @@ pub fn rows(state: &State) -> Vec<Row> {
                 compaction: compacted.contains(&t.number),
                 effort: t.effort.clone().unwrap_or_default(),
                 model: t.models.last().cloned().unwrap_or_default(),
+                tool_calls: t.tool_calls,
+                tool_errors: t.tool_errors,
+                prompt_chars: t.prompt_chars,
+                harness_tokens: t.harness_tokens,
+                miss_cause: misses.get(&t.number).cloned(),
+                phase_mix,
+                human: t.human,
+                cost_at_100k_usd,
+                api_errors: t.api_errors,
+                steers: t.steers,
+                interrupted: t.interrupted_after_calls.is_some(),
             }
         })
         .collect()

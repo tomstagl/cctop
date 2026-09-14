@@ -1,6 +1,12 @@
 //! Threshold alerts. Each rule is a predicate over the state; it fires once
 //! when the predicate turns true and re-arms when it turns false again, so a
 //! session that hovers around a threshold does not spam.
+//!
+//! One owner per warning (coach PRD, US-013): `ContextHigh` fires at Claude
+//! Code's own warn band, not a fixed 80 %; `CompactionSoon` is gone (Claude
+//! Code's footer owns the countdown); the cache-hit and permission-wait
+//! alerts were retired in favour of the coach's named cache miss (A20) and
+//! waiting-on-you (A41) rules.
 
 use std::collections::HashMap;
 
@@ -8,39 +14,40 @@ use crate::ui::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RuleId {
+    /// The context entered Claude Code's warn band (threshold − 20 000).
     ContextHigh,
-    CompactionSoon,
     Limit5h60,
     Limit5h80,
     Limit5h95,
     ExhaustionBeforeReset,
-    CacheHitLow,
     ToolRunningLong,
-    PermissionWaitLong,
     McpExited,
     ApiRetry,
+    /// A 429 landed in the transcript.
+    RateLimited,
 }
 
 impl RuleId {
-    pub const ALL: [RuleId; 11] = [
+    pub const ALL: [RuleId; 9] = [
         RuleId::ContextHigh,
-        RuleId::CompactionSoon,
         RuleId::Limit5h60,
         RuleId::Limit5h80,
         RuleId::Limit5h95,
         RuleId::ExhaustionBeforeReset,
-        RuleId::CacheHitLow,
         RuleId::ToolRunningLong,
-        RuleId::PermissionWaitLong,
         RuleId::McpExited,
         RuleId::ApiRetry,
+        RuleId::RateLimited,
     ];
 
     /// Worth a desktop notification.
     pub fn critical(self) -> bool {
         matches!(
             self,
-            RuleId::ContextHigh | RuleId::ExhaustionBeforeReset | RuleId::McpExited
+            RuleId::ContextHigh
+                | RuleId::ExhaustionBeforeReset
+                | RuleId::McpExited
+                | RuleId::RateLimited
         )
     }
 }
@@ -57,12 +64,10 @@ fn check(rule: RuleId, state: &State, prev_retry_ms: u64) -> Option<String> {
     let ctx = state.context();
     match rule {
         RuleId::ContextHigh => {
-            (ctx.ratio() > 0.80).then(|| format!("context {:.0} % of window", ctx.ratio() * 100.0))
+            let bands = state.bands();
+            (bands.band(ctx.size) != crate::metrics::context::Band::Ok)
+                .then(|| bands.footer(ctx.size))
         }
-        RuleId::CompactionSoon => ctx
-            .turns_until_compaction()
-            .filter(|n| *n <= 2.0)
-            .map(|n| format!("autocompact projected in ~{} turn(s)", n.ceil() as u64)),
         RuleId::Limit5h60 | RuleId::Limit5h80 | RuleId::Limit5h95 => {
             let threshold = match rule {
                 RuleId::Limit5h60 => 60.0,
@@ -91,26 +96,6 @@ fn check(rule: RuleId, state: &State, prev_retry_ms: u64) -> Option<String> {
                     crate::ui::fmt::duration_ms(ex - state.clock_ms())
                 )
             }),
-        RuleId::CacheHitLow => {
-            let recent: Vec<_> = state
-                .agg
-                .turns
-                .iter()
-                .filter(|t| t.api_calls > 0)
-                .rev()
-                .take(5)
-                .collect();
-            if recent.len() < 5 {
-                return None;
-            }
-            let mut u = crate::metrics::Usage::default();
-            for t in &recent {
-                u.add(&t.usage);
-            }
-            u.cache_hit_ratio()
-                .filter(|r| *r < 0.5)
-                .map(|r| format!("cache hit ratio {:.0} % over the last 5 turns", r * 100.0))
-        }
         RuleId::ToolRunningLong => state
             .tools
             .running()
@@ -124,16 +109,17 @@ fn check(rule: RuleId, state: &State, prev_retry_ms: u64) -> Option<String> {
                     crate::ui::fmt::duration_ms(state.clock_ms() - st)
                 )
             }),
-        RuleId::PermissionWaitLong => state
-            .session
-            .permission_waiting_since_ms
-            .filter(|since| state.clock_ms() - since > 30_000)
-            .map(|since| {
-                format!(
-                    "waiting for permission for {}",
-                    crate::ui::fmt::duration_ms(state.clock_ms() - since)
-                )
-            }),
+        RuleId::RateLimited => state.rate_limit_hit().map(|(kind, resets, _)| {
+            let when = resets
+                .map(|r| {
+                    format!(
+                        " · resets in {}",
+                        crate::ui::fmt::duration_ms(r - state.clock_ms())
+                    )
+                })
+                .unwrap_or_default();
+            format!("rate limited ({}){when}", kind.replace('_', " "))
+        }),
         RuleId::McpExited => (!state.mcp_exited.is_empty())
             .then(|| format!("MCP server exited: {}", state.mcp_exited.join(", "))),
         RuleId::ApiRetry => {
@@ -264,18 +250,30 @@ mod tests {
             Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}"#).unwrap()
         };
         s.apply(&prompt());
-        s.apply(&ctx("a", 170_000)); // 85 % of haiku's 200k
-        assert!(fires(&mut e, &s, RuleId::ContextHigh));
+        s.apply(&ctx("a", 170_000)); // 85 % of haiku's 200k: still below the warn band (167k)
+        assert!(
+            fires(&mut e, &s, RuleId::ContextHigh),
+            "170k ≥ warn at 167k"
+        );
         assert!(
             !fires(&mut e, &s, RuleId::ContextHigh),
             "no re-fire while high"
         );
-        s.context_size_exact = Some(50_000);
-        assert!(!fires(&mut e, &s, RuleId::ContextHigh));
-        s.context_size_exact = Some(190_000);
+        s.context_size_exact = Some(160_000);
         assert!(
-            fires(&mut e, &s, RuleId::ContextHigh),
-            "fires again after a reset"
+            !fires(&mut e, &s, RuleId::ContextHigh),
+            "160k is below Claude Code's warn band"
+        );
+        s.context_size_exact = Some(190_000);
+        let f = e.evaluate(&s);
+        let high = f
+            .iter()
+            .find(|x| x.rule == RuleId::ContextHigh)
+            .expect("fires again after a reset");
+        assert!(
+            high.message.starts_with("Context low ("),
+            "{}",
+            high.message
         );
 
         // Limits 60/80/95 and exhaustion.
@@ -306,13 +304,16 @@ mod tests {
         s.limits = Some(lim);
         assert!(fires(&mut e, &s, RuleId::Limit5h60));
 
-        // Permission wait > 30 s.
-        s.session.permission_waiting_since_ms = Some(s.now_ms - 31_000);
-        assert!(fires(&mut e, &s, RuleId::PermissionWaitLong));
-        s.session.permission_waiting_since_ms = None;
-        assert!(!fires(&mut e, &s, RuleId::PermissionWaitLong));
-        s.session.permission_waiting_since_ms = Some(s.now_ms - 31_000);
-        assert!(fires(&mut e, &s, RuleId::PermissionWaitLong));
+        // A 429 in the transcript.
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"id":"e1","model":"<synthetic>","content":[{"type":"text","text":"x"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1767229200}}"#).unwrap());
+        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:03Z").unwrap();
+        let f = e.evaluate(&s);
+        let hit = f
+            .iter()
+            .find(|x| x.rule == RuleId::RateLimited)
+            .expect("rate limited");
+        assert_eq!(hit.message, "rate limited (five hour) · resets in 59:57");
+        assert!(RuleId::RateLimited.critical());
 
         // MCP exited.
         s.mcp_exited = vec!["github".into()];
@@ -324,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_running_long_and_cache_hit_low() {
+    fn tool_running_long() {
         let mut e = Engine::default();
         let mut s = state();
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"m","model":"m","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"sleep 100"}}],"usage":{"output_tokens":1}}}"#).unwrap());
@@ -345,15 +346,6 @@ mod tests {
         // Completes → re-arms.
         s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:01:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#).unwrap());
         assert!(!fires(&mut e, &s, RuleId::ToolRunningLong));
-
-        // Cache-hit low over 5 turns: five turns of pure fresh input.
-        let mut s = state();
-        for i in 0..5 {
-            s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}"#).unwrap());
-            s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{{"id":"c{i}","model":"m","content":[],"usage":{{"input_tokens":1000,"output_tokens":1}}}}}}"#)).unwrap());
-        }
-        assert!(fires(&mut e, &s, RuleId::CacheHitLow));
-        assert!(!fires(&mut e, &s, RuleId::CacheHitLow));
     }
 
     #[test]

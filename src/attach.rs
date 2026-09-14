@@ -58,6 +58,12 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
                 let ns = crate::files::numstat(&state.session.cwd, base);
                 let cwd = state.session.cwd.clone();
                 state.files.apply_numstat(&cwd, &ns);
+                let head = crate::files::numstat(&state.session.cwd, "HEAD");
+                state.uncommitted = Some((
+                    head.iter().map(|(_, a, _)| a).sum(),
+                    head.iter().map(|(_, _, d)| d).sum(),
+                    head.len(),
+                ));
             }
         }
     }));
@@ -165,13 +171,22 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             }
         }));
     }
-    // Subagents.
+    // Subagents (workflow agents included), their journals, the team.
     let mut agents = crate::agents::AgentWatcher::watch(&session_dir);
+    let subagents_dir = session_dir.join("subagents");
+    let mut last_journal = Instant::now() - Duration::from_secs(10);
     app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if agents.poll() || state.agents.len() != agents.agents.len() {
-            state.agents = agents.agents.clone();
+        if agents.poll() || state.agents.len() < agents.agents.len() {
+            state.merge_agents(&agents.agents);
+        }
+        if last_journal.elapsed() >= Duration::from_secs(5) {
+            last_journal = Instant::now();
+            state.workflow_journals = crate::agents::workflow_journals(&subagents_dir);
         }
     }));
+    if let Some(teams) = crate::agents::teams_dir() {
+        app.state.teammates = crate::agents::teammates(&teams, &app.state.session.session_id);
+    }
     // The transcript itself.
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
         app.sources.push(Box::new(t) as Box<dyn LineSource>);

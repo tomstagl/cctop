@@ -39,6 +39,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             Kind::Skills => "skills",
             Kind::Agents => "agents",
             Kind::Memory => "memory",
+            Kind::SystemPrompt => "system",
+            Kind::Plugin => "plugin",
             Kind::Other => "other",
         };
         let note = match r.kind {
@@ -66,8 +68,39 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         }
         lines.push(line);
     }
+    // Claude Code's own table, when the person ran /context.
+    if let Some(cap) = &state.prefix.context_capture {
+        let parts: Vec<String> = cap
+            .categories
+            .iter()
+            .map(|(n, t)| format!("{n} {}", fmt::tokens(*t)))
+            .collect();
+        lines.push(Line::from(vec![
+            Span::styled(" /context said: ", dim),
+            Span::raw(fmt::clip(
+                &parts.join(" · "),
+                inner.width.saturating_sub(17) as usize,
+            )),
+        ]));
+    }
+    let (used, budget) = state.prefix.skills_budget(ctx.window);
+    if used > 0 {
+        let style = if used > budget {
+            state.theme.warn()
+        } else {
+            dim
+        };
+        lines.push(Line::from(Span::styled(
+            format!(
+                " skills listing {} of a {} budget (1 % of the window)",
+                fmt::bytes(used),
+                fmt::bytes(budget)
+            ),
+            style,
+        )));
+    }
     lines.push(Line::from(Span::styled(
-        " tokens ≈ bytes / 4 · sizes from the transcript's listing attachments and the files on disk",
+        " tokens ≈ bytes / 4 · sizes from prompt_snapshot when Claude Code wrote one, else the listing attachments and the files on disk",
         dim,
     )));
     frame.render_widget(Paragraph::new(lines), inner);
