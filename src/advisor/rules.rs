@@ -510,10 +510,11 @@ impl Rule for ChattyTurns {
             .turns
             .iter()
             .filter(|t| {
-                t.started_at
-                    .as_deref()
-                    .and_then(parse)
-                    .is_some_and(|s| now - s <= 3_600_000)
+                t.human
+                    && t.started_at
+                        .as_deref()
+                        .and_then(parse)
+                        .is_some_and(|s| now - s <= 3_600_000)
             })
             .collect();
         if recent.len() <= 20 {
@@ -1194,7 +1195,7 @@ mod tests {
         assert!(a.evidence.starts_with("2 compaction"), "{}", a.evidence);
         // Projected within 3 turns also fires.
         let mut soon = State::new(Pricing::bundled());
-        for (i, ctx) in [700_000u64, 740_000, 780_000].iter().enumerate() {
+        for (i, ctx) in [860_000u64, 900_000, 940_000].iter().enumerate() {
             soon.apply(&prompt("2026-01-01T00:00:00Z"));
             soon.apply(&response(
                 &format!("s{i}"),

@@ -84,7 +84,7 @@ impl Panel for Header {
 
         // Line 1: status · turn · elapsed · running tool · cwd · branch
         let mut l1: Vec<Span> = vec![Span::raw(" "), Self::status_pill(state), Span::raw("  ")];
-        let turn = state.agg.turns.len();
+        let turn = state.agg.human_turns();
         l1.push(Span::raw(format!("turn {turn}")));
         if let Some(t) = state.agg.current_turn() {
             if let Some(el) = t.elapsed_ms(now) {
@@ -194,7 +194,7 @@ mod tests {
         );
         let l1 = out.lines().nth(1).unwrap();
         assert!(l1.contains("■ ENDED 10:17"), "{out}");
-        assert!(l1.contains("turn 15"), "{out}");
+        assert!(l1.contains("turn 14"), "{out}");
         assert!(l1.contains("/home/user/project"), "{out}");
         let l2 = out.lines().nth(2).unwrap();
         assert!(l2.contains("auto · medium · — · $9.90 · cpu —"), "{out}");

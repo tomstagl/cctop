@@ -82,7 +82,7 @@ impl Engine {
 
     /// Re-run every rule against `state`.
     pub fn evaluate(&mut self, state: &State) {
-        let turn = state.agg.turns.len();
+        let turn = state.agg.human_turns();
         let mut out: Vec<Advice> = Vec::new();
         for r in &self.rules {
             if self.dismissed.contains(r.id()) {

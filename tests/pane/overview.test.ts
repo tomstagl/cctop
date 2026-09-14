@@ -71,7 +71,7 @@ function keyed(tree: RenderElement): Map<string, string> {
 const EXPECTED = [
   '396k / 1.0M (40 %)',
   '+50k/turn',
-  '≈9 turns',
+  '≈12 turns',
   '33.0M',
   '597k',
   '286',
@@ -80,7 +80,7 @@ const EXPECTED = [
   '98 %',
   '1h',
   '$9.90',
-  '≈$26.0/h',
+  '≈$16.3/h',
   '42 %',
   '17 %',
   '2h 29m',

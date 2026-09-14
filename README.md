@@ -152,6 +152,8 @@ terminal view automatically when function hooks are off.
 
 The Advisor is rule-based (18 rules, no model call): cache misses, cache expiry, runaway tool results, re-reads, exploring in the main context, compaction churn, idle MCP servers, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, error loops, hook overhead, oversized prefix, missing hand-off.
 
+Some numbers moved in 0.3: the turn count is Claude Code's own (`promptId`; interrupts, slash commands and task notifications no longer count, so it reads ~15 % lower than before), API-error lines no longer set the model or count as a compaction, compactions come from the `compact_boundary` records Claude Code writes since 2.1.263, and the autocompact threshold is the effective window − 13 000 tokens (967 k on 1M-window models) rather than 80 %.
+
 ## How it works
 
 Read-only. No changes to Claude Code. Data comes from what Claude Code already writes:
@@ -176,7 +178,7 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | Metric | Unit | How it is computed | Sources | Caveats | Estimate |
 |---|---|---|---|---|---|
 | **Status** <a id="session_status"></a> `session_status` | enum | `status` from the session registry (busy/idle); WAITING when a permission request is pending; ENDED when the pid is gone | D1 D4 | — | never |
-| **Turn** <a id="turn_number"></a> `turn_number` | count | Number of user prompts so far (non-meta user lines without a tool_result block) | D2 | A resumed session starts counting at the resume point | never |
+| **Turn** <a id="turn_number"></a> `turn_number` | count | Prompts the person wrote so far, one per `promptId` (`promptSource` typed / suggestion_accepted / queued, or `origin.kind` human); interrupts, slash commands, task notifications, teammate messages and the compaction summary are not turns | D2 | A resumed session starts counting at the resume point; before Claude Code 2.1.220 every non-meta text line counts | never |
 | **Turn elapsed** <a id="turn_elapsed"></a> `turn_elapsed` | ms | `turn_duration.durationMs` once the turn ended, else now − turn start | D2 | — | never |
 | **Effort** <a id="effort"></a> `effort` | enum | `effort` field of the latest assistant line | D2 | — | never |
 | **CPU** <a id="process_cpu"></a> `process_cpu` | % | CPU share of the `claude` process over the last sample interval | D5 | — | never |
@@ -190,8 +192,8 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **Context window** <a id="context_window"></a> `context_window` | tokens | `context_window_size` from the status line, else the model's default window | D3 | — | est without the status-line shim |
 | **Fixed prefix** <a id="context_prefix"></a> `context_prefix` | tokens | `cache_read + cache_write` of the session's first API call: system prompt, CLAUDE.md, tool schemas | D2 | With a warm cache the first call is a read, so both fields are summed | never |
 | **Context velocity** <a id="context_velocity"></a> `context_velocity` | tokens/turn | Exponential moving average (α = 1/5) of Δ context size per turn | D2 | Turns that compacted are excluded from the average | never |
-| **Turns until autocompact** <a id="turns_until_compaction"></a> `turns_until_compaction` | turns | (autocompact threshold − context size) / context velocity | D2 D3 | Threshold defaults to 80 % of the window until a compaction has been observed for the model, then the observed value is used | est until a compaction has been observed |
-| **Compactions** <a id="compactions"></a> `compactions` | count | Turns where context size dropped ≥ 30 % from the previous turn, or a PreCompact hook fired | D2 D4 | — | never |
+| **Turns until autocompact** <a id="turns_until_compaction"></a> `turns_until_compaction` | turns | (autocompact threshold − context size) / context velocity | D2 D3 | Threshold = Claude Code's effective window − 13 000 tokens (967 000 on native-1M models, 187 000 on 200 k windows) until a compaction has been observed for the model, then the observed value is used | est until a compaction has been observed |
+| **Compactions** <a id="compactions"></a> `compactions` | count | `system/compact_boundary` lines (exact: trigger, pre/post tokens, duration), or a PreCompact hook | D2 D4 | API-error lines (`<synthetic>`, zero usage) never count | Before Claude Code 2.1.263 a ≥ 30 % context drop between turns is taken as a compaction |
 
 ### Tokens & Cost
 
@@ -206,7 +208,7 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **Cache TTL** <a id="cache_ttl"></a> `cache_ttl` | enum | 1h if the latest call reports `ephemeral_1h_input_tokens > 0`, else 5m | D2 | — | never |
 | **Cost** <a id="cost"></a> `cost` | USD | Claude Code's `cost-state.totalCostUSD` plus a priced estimate of responses newer than that line | D11 D2 D9 | Subscription plans have no per-token bill; the figure is the API-equivalent list price | ≈ when any part is estimated |
 | **Cost by model** <a id="cost_by_model"></a> `cost_by_model` | USD | `cost-state.modelUsage[*].costUSD` plus estimates per model | D11 D9 | — | ≈ when any part is estimated |
-| **Burn rate** <a id="burn_rate"></a> `burn_rate` | USD/h | Cost of turns started in the trailing 15 minutes × 4 | D2 D9 | Windows shorter than 1 minute are treated as 1 minute | ≈ (always priced from the table) |
+| **Burn rate** <a id="burn_rate"></a> `burn_rate` | USD/h | Cost of turns active in the trailing 15 minutes, scaled to an hour over the part of the window they cover | D2 D9 | A turn counts from its start (clamped to the window) to its last line; windows shorter than 1 minute are treated as 1 minute | ≈ (always priced from the table) |
 | **Input rate** <a id="input_rate"></a> `input_rate` | tokens/min | Total input tokens of turns started in the trailing 15 minutes ÷ window | D2 | — | never |
 
 ### Limits

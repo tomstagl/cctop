@@ -239,7 +239,13 @@ pub fn rates(agg: &Aggregate, pricing: &Pricing, now_ms: i64) -> Rates {
         if at < now_ms - WINDOW_MS || at > now_ms {
             continue;
         }
-        earliest = earliest.min(at);
+        let started = t
+            .started_at
+            .as_deref()
+            .and_then(parse_ts_ms)
+            .unwrap_or(at)
+            .max(now_ms - WINDOW_MS);
+        earliest = earliest.min(started);
         tokens += t.usage.total_input();
         for m in &t.models {
             if let Some(c) = pricing.estimate(&t.usage, m) {
@@ -279,6 +285,32 @@ pub fn parse_ts_ms(s: &str) -> Option<i64> {
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
     Some((((days * 24 + h) * 60 + mi) * 60 + se) * 1000 + ms)
+}
+
+/// Epoch milliseconds → the ISO-8601 UTC form Claude Code writes
+/// (`2026-08-27T09:25:06.911Z`); the inverse of [`parse_ts_ms`].
+pub fn format_ts_ms(ms: i64) -> String {
+    let secs = ms.div_euclid(1000);
+    let millis = ms.rem_euclid(1000);
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400);
+    // Civil from days (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{millis:03}Z",
+        sod / 3600,
+        (sod % 3600) / 60,
+        sod % 60
+    )
 }
 
 /// Price to use for a cache write of a given TTL (helper for callers that
@@ -423,6 +455,14 @@ mod tests {
             Some(1_787_822_706_911)
         );
         assert_eq!(parse_ts_ms("garbage"), None);
+        for ts in [
+            "2026-08-27T09:25:06.911Z",
+            "1970-01-01T00:00:00.000Z",
+            "2024-02-29T23:59:59.999Z",
+            "2026-03-01T00:00:00.000Z",
+        ] {
+            assert_eq!(format_ts_ms(parse_ts_ms(ts).unwrap()), ts);
+        }
 
         let lines = fixture();
         let agg = Aggregate::from_lines(&lines);

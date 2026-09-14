@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use crate::metrics::cost::parse_ts_ms;
-use crate::transcript::{AssistantBlock, Line};
+use crate::transcript::{AssistantBlock, Line, PromptKind};
 
 /// One tool invocation.
 #[derive(Debug, Clone)]
@@ -126,8 +126,13 @@ impl Stats {
     pub fn push(&mut self, line: &Line) {
         match line {
             Line::User(u) => {
-                let is_prompt = !u.is_meta && u.message.content.tool_results().next().is_none();
-                if is_prompt {
+                if matches!(
+                    u.prompt_kind(),
+                    PromptKind::Human
+                        | PromptKind::Machine
+                        | PromptKind::TaskNotification
+                        | PromptKind::TeammateMessage
+                ) {
                     self.turn += 1;
                 }
                 let at = u.timestamp.as_deref().and_then(parse_ts_ms);

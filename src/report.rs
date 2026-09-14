@@ -13,7 +13,7 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
     let s = &state.session;
     let ctx = state.context();
     let u = state.agg.total;
-    let turns = state.agg.turns.len().max(1) as f64;
+    let turns = state.agg.human_turns().max(1) as f64;
     out.push_str(&format!(
         "# cctop report — {}\n\n",
         if s.name.is_empty() {
@@ -28,7 +28,7 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
         state.model().unwrap_or("—"),
         if s.version.is_empty() { "?" } else { &s.version },
         s.cwd.display(),
-        state.agg.turns.len(),
+        state.agg.human_turns(),
         state.agg.api_calls(),
         state.tools.calls.len()
     ));
@@ -283,7 +283,7 @@ mod tests {
         }
         assert!(md.contains("total $9.90"), "{md}");
         assert!(
-            md.contains("cost per turn: $0.66 vs median $0.33 (×2.0)"),
+            md.contains("cost per turn: $0.71 vs median $0.33 (×2.1)"),
             "{md}"
         );
         assert!(md.contains("- **A15**"), "{md}");
@@ -297,10 +297,10 @@ mod tests {
     fn export_shapes() {
         let s = state();
         let j = export_json(&s);
-        assert_eq!(j["ledger"].as_array().unwrap().len(), 15);
+        assert_eq!(j["ledger"].as_array().unwrap().len(), 14);
         assert!(!j["events"].as_array().unwrap().is_empty());
         let csv = export_csv(&s, false);
-        assert_eq!(csv.lines().count(), 16);
+        assert_eq!(csv.lines().count(), 15, "header + 14 turns");
         assert!(csv.starts_with("turn,started_at_ms"));
         let ev = export_csv(&s, true);
         assert!(ev.starts_with("at_ms,kind,text"));

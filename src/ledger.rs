@@ -160,7 +160,7 @@ mod tests {
     fn fixture_rows() {
         let s = state();
         let r = rows(&s);
-        assert_eq!(r.len(), 15);
+        assert_eq!(r.len(), 14);
         assert_eq!(r.iter().map(|x| x.api_calls).sum::<usize>(), 143);
         let t3 = &r[2];
         assert_eq!(t3.turn, 3);

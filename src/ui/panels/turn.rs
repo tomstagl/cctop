@@ -186,12 +186,11 @@ mod tests {
     #[test]
     fn turn_panel_on_fixture() {
         let app = fixture_app();
-        let out = render_to_string(&app, 60, 51);
-        assert!(out.contains("4 Turn ─ 0:00"), "{out}");
-        assert!(
-            out.contains("elapsed 0:00   api 0 calls"),
-            "last prompt got no response: {out}"
-        );
+        let out = render_to_string(&app, 80, 51);
+        // The session ended with an interrupt, which is not a turn: the
+        // panel shows the last real turn (52 API calls, cut after 19:54).
+        assert!(out.contains("4 Turn ─ 19:54"), "{out}");
+        assert!(out.contains("elapsed 19:54   api 52 calls"), "{out}");
         assert!(out.contains("idle"), "{out}");
         assert!(out.contains("hooks —   permission waits —"), "{out}");
         // Retry time from the fixture's cost-state (2.9 s).

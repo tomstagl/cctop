@@ -144,7 +144,7 @@ impl Panel for Tokens {
             l7.push(Span::raw(s));
         }
         if let Some(b) = state.baseline.as_ref().filter(|b| b.sessions > 0) {
-            let turns = state.agg.turns.len().max(1) as f64;
+            let turns = state.agg.human_turns().max(1) as f64;
             let tok = crate::baseline::Baseline::multiplier(
                 Some(state.agg.total.total() as f64 / turns),
                 b.tokens_per_turn,
@@ -226,7 +226,7 @@ mod tests {
         });
         let out = render_to_string(&app, 72, 70);
         assert!(out.contains("· 7d ×"), "{out}");
-        assert!(out.contains("×2.0$"), "{out}");
+        assert!(out.contains("×2.1$"), "{out}");
     }
 
     #[test]

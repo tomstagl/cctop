@@ -197,7 +197,12 @@ def anon_text(s):
     for t in TAGS:
         if s.startswith(t):
             return t + fill(len(s) - len(t))
-    return fill(min(len(s), MAX_STR))
+    out = fill(min(len(s), MAX_STR))
+    # A trailing question mark is a shape the rules read (a turn that ended
+    # by asking); keep it.
+    if s.rstrip().endswith("?") and out:
+        out = out[:-1] + "?"
+    return out
 
 
 def anon(v, key=None, parent=None):

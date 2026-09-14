@@ -209,7 +209,7 @@ mod tests {
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
             assert_eq!(app.state.overlay, Some(1), "panel {panel}");
             let out = render_to_string(&app, 120, 30);
-            assert!(out.contains("Turn ledger — 15 turns"), "{out}");
+            assert!(out.contains("Turn ledger — 14 turns"), "{out}");
             assert!(out.contains("START"), "{out}");
             // Turn 3: 95.8 s, 8 API calls, medium effort, sonnet.
             let t3 = out

@@ -63,7 +63,7 @@ fn figures(path: &Path) -> Option<SessionFigures> {
             cost_state = Some(c.clone());
         }
     }
-    if agg.turns.len() < MIN_TURNS {
+    if agg.human_turns() < MIN_TURNS {
         return None;
     }
     let calls = stats.calls.len();
@@ -75,7 +75,7 @@ fn figures(path: &Path) -> Option<SessionFigures> {
         }
     }
     Some(SessionFigures {
-        turns: agg.turns.len(),
+        turns: agg.human_turns(),
         cost: cost_state.as_ref().map(|c| c.total_cost_usd),
         tokens: agg.total.total(),
         cache_hit: agg.total.cache_hit_ratio(),
@@ -218,7 +218,7 @@ mod tests {
         .unwrap();
         let b = compute(&projects, 7, now);
         assert_eq!(b.sessions, 2, "the 1-turn session is ignored");
-        assert!((b.cost_per_turn.unwrap() - 9.9035 / 15.0).abs() < 1e-3);
+        assert!((b.cost_per_turn.unwrap() - 9.9035 / 14.0).abs() < 1e-3);
         assert!(b.tokens_per_turn.unwrap() > 1_000_000.0);
         assert!(b.cache_hit_ratio.unwrap() > 0.9);
         assert!(b.tool_error_rate.unwrap() > 0.0 && b.tool_error_rate.unwrap() < 0.1);

@@ -50,7 +50,7 @@ pub const PANELS: &[&str] = &[
 pub const METRICS: &[Metric] = &[
     // -- Header
     metric!(session_status, "Header", "Status", "enum", "`status` from the session registry (busy/idle); WAITING when a permission request is pending; ENDED when the pid is gone", ["D1", "D4"], "", ""),
-    metric!(turn_number, "Header", "Turn", "count", "Number of user prompts so far (non-meta user lines without a tool_result block)", ["D2"], "A resumed session starts counting at the resume point", ""),
+    metric!(turn_number, "Header", "Turn", "count", "Prompts the person wrote so far, one per `promptId` (`promptSource` typed / suggestion_accepted / queued, or `origin.kind` human); interrupts, slash commands, task notifications, teammate messages and the compaction summary are not turns", ["D2"], "A resumed session starts counting at the resume point; before Claude Code 2.1.220 every non-meta text line counts", ""),
     metric!(turn_elapsed, "Header", "Turn elapsed", "ms", "`turn_duration.durationMs` once the turn ended, else now − turn start", ["D2"], "", ""),
     metric!(effort, "Header", "Effort", "enum", "`effort` field of the latest assistant line", ["D2"], "", ""),
     metric!(process_cpu, "Header", "CPU", "%", "CPU share of the `claude` process over the last sample interval", ["D5"], "", ""),
@@ -60,8 +60,8 @@ pub const METRICS: &[Metric] = &[
     metric!(context_window, "Context", "Context window", "tokens", "`context_window_size` from the status line, else the model's default window", ["D3"], "", "est without the status-line shim"),
     metric!(context_prefix, "Context", "Fixed prefix", "tokens", "`cache_read + cache_write` of the session's first API call: system prompt, CLAUDE.md, tool schemas", ["D2"], "With a warm cache the first call is a read, so both fields are summed", ""),
     metric!(context_velocity, "Context", "Context velocity", "tokens/turn", "Exponential moving average (α = 1/5) of Δ context size per turn", ["D2"], "Turns that compacted are excluded from the average", ""),
-    metric!(turns_until_compaction, "Context", "Turns until autocompact", "turns", "(autocompact threshold − context size) / context velocity", ["D2", "D3"], "Threshold defaults to 80 % of the window until a compaction has been observed for the model, then the observed value is used", "est until a compaction has been observed"),
-    metric!(compactions, "Context", "Compactions", "count", "Turns where context size dropped ≥ 30 % from the previous turn, or a PreCompact hook fired", ["D2", "D4"], "", ""),
+    metric!(turns_until_compaction, "Context", "Turns until autocompact", "turns", "(autocompact threshold − context size) / context velocity", ["D2", "D3"], "Threshold = Claude Code's effective window − 13 000 tokens (967 000 on native-1M models, 187 000 on 200 k windows) until a compaction has been observed for the model, then the observed value is used", "est until a compaction has been observed"),
+    metric!(compactions, "Context", "Compactions", "count", "`system/compact_boundary` lines (exact: trigger, pre/post tokens, duration), or a PreCompact hook", ["D2", "D4"], "API-error lines (`<synthetic>`, zero usage) never count", "Before Claude Code 2.1.263 a ≥ 30 % context drop between turns is taken as a compaction"),
     // -- Tokens & Cost
     metric!(cache_read, "Tokens & Cost", "Cache read", "tokens", "Σ `cache_read_input_tokens` over distinct API responses", ["D2"], "Counted once per `message.id`; Claude Code writes one line per content block", ""),
     metric!(cache_write, "Tokens & Cost", "Cache write", "tokens", "Σ `cache_creation_input_tokens`, split into 5-minute and 1-hour TTL from `cache_creation.ephemeral_*`", ["D2"], "", ""),
@@ -72,7 +72,7 @@ pub const METRICS: &[Metric] = &[
     metric!(cache_ttl, "Tokens & Cost", "Cache TTL", "enum", "1h if the latest call reports `ephemeral_1h_input_tokens > 0`, else 5m", ["D2"], "", ""),
     metric!(cost, "Tokens & Cost", "Cost", "USD", "Claude Code's `cost-state.totalCostUSD` plus a priced estimate of responses newer than that line", ["D11", "D2", "D9"], "Subscription plans have no per-token bill; the figure is the API-equivalent list price", "≈ when any part is estimated"),
     metric!(cost_by_model, "Tokens & Cost", "Cost by model", "USD", "`cost-state.modelUsage[*].costUSD` plus estimates per model", ["D11", "D9"], "", "≈ when any part is estimated"),
-    metric!(burn_rate, "Tokens & Cost", "Burn rate", "USD/h", "Cost of turns started in the trailing 15 minutes × 4", ["D2", "D9"], "Windows shorter than 1 minute are treated as 1 minute", "≈ (always priced from the table)"),
+    metric!(burn_rate, "Tokens & Cost", "Burn rate", "USD/h", "Cost of turns active in the trailing 15 minutes, scaled to an hour over the part of the window they cover", ["D2", "D9"], "A turn counts from its start (clamped to the window) to its last line; windows shorter than 1 minute are treated as 1 minute", "≈ (always priced from the table)"),
     metric!(input_rate, "Tokens & Cost", "Input rate", "tokens/min", "Total input tokens of turns started in the trailing 15 minutes ÷ window", ["D2"], "", ""),
     // -- Limits
     metric!(limit_5h, "Limits", "5-hour usage", "%", "`rate_limits.five_hour.used_percentage` from the status line", ["D3"], "Account-wide: other live sessions contribute", ""),

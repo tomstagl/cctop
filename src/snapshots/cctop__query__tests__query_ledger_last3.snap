@@ -8,6 +8,62 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
       "approx": false,
       "metric_id": "api_calls",
       "unit": "count",
+      "value": 41
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 7930343
+    },
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 79549
+    },
+    "compaction": false,
+    "cost": {
+      "approx": true,
+      "metric_id": "cost",
+      "unit": "USD",
+      "value": 2.0875686
+    },
+    "duration": {
+      "approx": false,
+      "metric_id": "turn_duration",
+      "unit": "ms",
+      "value": 398534
+    },
+    "effort": "medium",
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 82
+    },
+    "model": "claude-sonnet-5",
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 18314
+    },
+    "started_at_ms": 1787823940869,
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 9795
+    },
+    "tools": "mcp:claude-in-chrome×66",
+    "turn": 12
+  },
+  {
+    "api_calls": {
+      "approx": false,
+      "metric_id": "api_calls",
+      "unit": "count",
       "value": 16
     },
     "cache_read": {
@@ -114,56 +170,5 @@ expression: "serde_json::to_string_pretty(&ledger_json(&s, Some(3))).unwrap()"
     },
     "tools": "mcp:claude-in-chrome×122 Bash×3",
     "turn": 14
-  },
-  {
-    "api_calls": {
-      "approx": false,
-      "metric_id": "api_calls",
-      "unit": "count",
-      "value": 0
-    },
-    "cache_read": {
-      "approx": false,
-      "metric_id": "cache_read",
-      "unit": "tokens",
-      "value": 0
-    },
-    "cache_write": {
-      "approx": false,
-      "metric_id": "cache_write",
-      "unit": "tokens",
-      "value": 0
-    },
-    "compaction": false,
-    "cost": null,
-    "duration": {
-      "approx": false,
-      "metric_id": "turn_duration",
-      "unit": "ms",
-      "value": 0
-    },
-    "effort": "",
-    "fresh_input": {
-      "approx": false,
-      "metric_id": "fresh_input",
-      "unit": "tokens",
-      "value": 0
-    },
-    "model": "",
-    "output": {
-      "approx": false,
-      "metric_id": "output",
-      "unit": "tokens",
-      "value": 0
-    },
-    "started_at_ms": 1787825847564,
-    "thinking": {
-      "approx": false,
-      "metric_id": "thinking",
-      "unit": "tokens",
-      "value": 0
-    },
-    "tools": "",
-    "turn": 15
   }
 ]

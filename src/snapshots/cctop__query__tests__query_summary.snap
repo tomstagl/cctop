@@ -20,7 +20,7 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "approx": true,
     "metric_id": "burn_rate",
     "unit": "USD/h",
-    "value": 25.99123573283813
+    "value": 16.2667304
   },
   "context": {
     "compactions": {
@@ -51,7 +51,7 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
       "approx": true,
       "metric_id": "turns_until_compaction",
       "unit": "turns",
-      "value": 8.036989501372158
+      "value": 11.362214634795054
     },
     "velocity": {
       "approx": false,
@@ -80,18 +80,24 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "approx": false,
     "metric_id": "turn_elapsed",
     "unit": "ms",
-    "value": 0
+    "value": 1194956
   },
   "hooks_installed": false,
   "input_rate": {
     "approx": false,
     "metric_id": "input_rate",
     "unit": "tokens/min",
-    "value": 1833602.701373589
+    "value": 1147568.4
   },
   "limits": {
     "hint": "run cctop install",
     "source": "missing"
+  },
+  "machine_turns": {
+    "approx": false,
+    "metric_id": "turn_number",
+    "unit": "count",
+    "value": 0
   },
   "otel": {
     "hint": "run cctop with --otlp and export telemetry (cctop install --otel)",
@@ -177,6 +183,6 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "approx": false,
     "metric_id": "turn_number",
     "unit": "count",
-    "value": 15
+    "value": 14
   }
 }

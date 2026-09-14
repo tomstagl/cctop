@@ -216,7 +216,7 @@ mod tests {
         let summary: Value =
             serde_json::from_str(lines[2]["result"]["content"][0]["text"].as_str().unwrap())
                 .unwrap();
-        assert_eq!(summary["turns"]["value"], 15);
+        assert_eq!(summary["turns"]["value"], 14);
         assert_eq!(lines[2]["result"]["isError"], false);
         let explain: Value =
             serde_json::from_str(lines[3]["result"]["content"][0]["text"].as_str().unwrap())

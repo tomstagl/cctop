@@ -1,6 +1,8 @@
 //! Context-window arithmetic: how full, how fast it fills, when autocompact
 //! will hit, and what compactions already happened.
 
+use crate::harness_facts::{autocompact, first_seen};
+
 use super::usage::Aggregate;
 
 /// Default context window per model family when the status line is absent.
@@ -13,9 +15,8 @@ pub fn default_window(model: Option<&str>) -> u64 {
     }
 }
 
-/// Autocompact fires at this share of the window until observed otherwise.
-pub const DEFAULT_THRESHOLD_RATIO: f64 = 0.80;
-/// A drop of at least this share between consecutive turns is a compaction.
+/// A drop of at least this share between consecutive turns is taken as a
+/// compaction on transcripts too old to carry `compact_boundary`.
 pub const COMPACTION_DROP_RATIO: f64 = 0.30;
 const EMA_ALPHA: f64 = 1.0 / 5.0;
 
@@ -25,6 +26,9 @@ pub struct Compaction {
     pub turn: usize,
     pub before: u64,
     pub after: u64,
+    /// `auto` / `manual` from `compact_boundary`; empty for the heuristic.
+    pub trigger: String,
+    pub duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -41,7 +45,11 @@ pub struct ContextView {
     /// EMA of Δsize per turn (compaction turns excluded).
     pub velocity: f64,
     pub compactions: Vec<Compaction>,
-    /// Threshold in tokens; learned from the first observed compaction.
+    /// The compactions come from the ≥ 30 % drop heuristic (transcripts
+    /// before 2.1.263), not from `compact_boundary` lines.
+    pub compactions_heuristic: bool,
+    /// Autocompact threshold in tokens: effective window − 13 000, or the
+    /// size observed just before a compaction when one was seen.
     pub threshold: u64,
     pub threshold_learned: bool,
 }
@@ -88,23 +96,45 @@ pub fn view(
         .filter(|t| t.api_calls > 0)
         .map(|t| t.context_size)
         .collect();
-    let mut compactions = Vec::new();
-    let mut velocity = 0.0;
-    let mut have_velocity = false;
     let turn_numbers: Vec<usize> = agg
         .turns
         .iter()
         .filter(|t| t.api_calls > 0)
         .map(|t| t.number)
         .collect();
+    // Exact records when the transcript can carry them; the drop heuristic
+    // only on older transcripts (and never on API-error lines, which have no
+    // usage and no turn entry here).
+    let exact = first_seen::COMPACT_BOUNDARY.at_most(agg.version.as_deref());
+    let mut compactions: Vec<Compaction> = if exact {
+        agg.compactions
+            .iter()
+            .map(|c| Compaction {
+                turn: c.turn,
+                before: c.pre_tokens,
+                after: c.post_tokens,
+                trigger: c.trigger.clone(),
+                duration_ms: Some(c.duration_ms),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut velocity = 0.0;
+    let mut have_velocity = false;
     for i in 1..history.len() {
         let (prev, cur) = (history[i - 1], history[i]);
-        if prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO) {
-            compactions.push(Compaction {
-                turn: turn_numbers[i],
-                before: prev,
-                after: cur,
-            });
+        let dropped = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
+        if dropped {
+            if !exact {
+                compactions.push(Compaction {
+                    turn: turn_numbers[i],
+                    before: prev,
+                    after: cur,
+                    trigger: String::new(),
+                    duration_ms: None,
+                });
+            }
             continue;
         }
         let delta = cur as f64 - prev as f64;
@@ -116,7 +146,7 @@ pub fn view(
         }
     }
     let observed = learned_threshold.or_else(|| compactions.iter().map(|c| c.before).max());
-    let threshold = observed.unwrap_or((window as f64 * DEFAULT_THRESHOLD_RATIO) as u64);
+    let threshold = observed.unwrap_or_else(|| autocompact::threshold(window));
     let prefix = agg
         .turns
         .iter()
@@ -131,6 +161,7 @@ pub fn view(
         history,
         velocity,
         compactions,
+        compactions_heuristic: !exact,
         threshold,
         threshold_learned: observed.is_some(),
     }
@@ -142,16 +173,17 @@ mod tests {
     use crate::transcript::{parse_file, Line};
     use std::path::Path;
 
-    fn agg() -> Aggregate {
-        let lines =
-            parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl"))
-                .unwrap();
+    fn agg(name: &str) -> Aggregate {
+        let lines = parse_file(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl")),
+        )
+        .unwrap();
         Aggregate::from_lines(&lines)
     }
 
     #[test]
     fn fixture_view() {
-        let v = view(&agg(), None, None, None);
+        let v = view(&agg("session-a"), None, None, None);
         assert_eq!(v.prefix, 60_582);
         assert_eq!(v.size, 396_365);
         assert_eq!(v.window, 1_000_000);
@@ -159,8 +191,9 @@ mod tests {
         assert_eq!(v.history.len(), 10);
         assert_eq!(v.history[0], 78_509);
         assert!(v.compactions.is_empty());
+        assert!(v.compactions_heuristic, "2.1.247 predates compact_boundary");
         assert!(v.velocity > 0.0);
-        assert_eq!(v.threshold, 800_000);
+        assert_eq!(v.threshold, 967_000, "effective window − 13 000");
         assert!(!v.threshold_learned);
         let n = v.turns_until_compaction().unwrap();
         assert!(n > 0.0 && n < 50.0, "{n}");
@@ -170,23 +203,46 @@ mod tests {
 
     #[test]
     fn overrides_and_learned_threshold() {
-        let v = view(&agg(), Some(200_000), Some(134_000), Some(185_000));
+        let v = view(
+            &agg("session-a"),
+            Some(200_000),
+            Some(134_000),
+            Some(185_000),
+        );
         assert_eq!(v.window, 200_000);
         assert!(v.window_exact);
         assert_eq!(v.size, 134_000);
         assert_eq!(v.threshold, 185_000);
         assert!(v.threshold_learned);
+        let v = view(&agg("session-a"), Some(200_000), None, None);
+        assert_eq!(v.threshold, 187_000);
         assert_eq!(default_window(Some("claude-haiku-4-5-20251001")), 200_000);
         assert_eq!(default_window(Some("claude-opus-5")), 1_000_000);
         assert_eq!(default_window(None), 1_000_000);
     }
 
     #[test]
-    fn compaction_detected_and_learned() {
+    fn exact_compaction_on_fixture_b_and_no_fake_one_from_error_lines() {
+        let a = agg("session-b");
+        let v = view(&a, None, None, None);
+        assert!(!v.compactions_heuristic);
+        assert_eq!(v.compactions.len(), 1);
+        let c = &v.compactions[0];
+        assert_eq!((c.before, c.after), (567_672, 230_014));
+        assert_eq!(c.trigger, "auto");
+        assert_eq!(c.duration_ms, Some(80_690));
+        assert_eq!(v.threshold, 567_672, "learned from the observed compaction");
+        // The two API-error lines carry zero usage; they are not in the
+        // history, so no ≥ 30 % drop is invented from them.
+        assert!(v.history.iter().all(|&h| h > 0));
+    }
+
+    #[test]
+    fn compaction_detected_and_learned_on_old_transcripts() {
         let mut a = Aggregate::default();
         let mk = |id: &str, ctx: u64| -> Vec<Line> {
             vec![
-                Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}"#).unwrap(),
+                Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","version":"2.1.247","message":{"role":"user","content":"go"}}"#).unwrap(),
                 Line::parse(&format!(
                     r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{{"id":"{id}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":{ctx},"output_tokens":1}}}}}}"#
                 ))
@@ -202,13 +258,16 @@ mod tests {
             }
         }
         let v = view(&a, None, None, None);
+        assert!(v.compactions_heuristic);
         assert_eq!(v.compactions.len(), 1);
         assert_eq!(
             v.compactions[0],
             Compaction {
                 turn: 4,
                 before: 200_000,
-                after: 60_000
+                after: 60_000,
+                trigger: String::new(),
+                duration_ms: None,
             }
         );
         assert_eq!(v.threshold, 200_000, "learned from the observed compaction");
@@ -220,6 +279,24 @@ mod tests {
             v.velocity
         );
         assert_eq!(v.size, 90_000);
+        // The same drop on a 2.1.263+ transcript without a compact_boundary
+        // is not a compaction (an error line or a /clear, not a compaction).
+        let mut b = Aggregate::default();
+        for (i, ctx) in [200_000u64, 60_000].iter().enumerate() {
+            for l in mk(&format!("n{i}"), *ctx) {
+                let l = match l {
+                    Line::User(mut u) => {
+                        u.version = Some("2.1.270".into());
+                        Line::User(u)
+                    }
+                    other => other,
+                };
+                b.push(&l);
+            }
+        }
+        let v = view(&b, None, None, None);
+        assert!(!v.compactions_heuristic);
+        assert!(v.compactions.is_empty());
     }
 
     #[test]

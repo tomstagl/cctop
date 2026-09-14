@@ -350,9 +350,24 @@
     "text": "turn done in 1:35"
   },
   {
+    "at_ms": 1787823296772,
+    "kind": "api",
+    "text": "cache miss: tools_changed 77k"
+  },
+  {
+    "at_ms": 1787823298992,
+    "kind": "api",
+    "text": "cache miss: tools_changed 77k"
+  },
+  {
     "at_ms": 1787823300951,
     "kind": "tool",
     "text": "Bash make check ▶"
+  },
+  {
+    "at_ms": 1787823300951,
+    "kind": "api",
+    "text": "cache miss: tools_changed 77k"
   },
   {
     "at_ms": 1787823302919,
@@ -428,6 +443,11 @@
     "at_ms": 1787823870285,
     "kind": "tool",
     "text": "mcp:claude-in-chrome tabs_context_mcp ▶"
+  },
+  {
+    "at_ms": 1787823870285,
+    "kind": "api",
+    "text": "cache miss: tools_changed 88k"
   },
   {
     "at_ms": 1787823884621,
@@ -1106,8 +1126,8 @@
   },
   {
     "at_ms": 1787824319463,
-    "kind": "api",
-    "text": "mcp:claude-in-chrome ✗ error"
+    "kind": "perm",
+    "text": "mcp:claude-in-chrome ✗ denied"
   },
   {
     "at_ms": 1787824322216,
@@ -2665,7 +2685,12 @@
     "text": "mcp:claude-in-chrome ✓ 68"
   },
   {
-    "at_ms": 1787825284295,
+    "at_ms": 1787825847564,
+    "kind": "note",
+    "text": "interrupted after 125 calls"
+  },
+  {
+    "at_ms": 1787825847564,
     "kind": "api",
     "text": "cost-state $9.90 · api 18:45 · retries 0:02"
   }

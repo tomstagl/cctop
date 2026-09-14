@@ -54,7 +54,8 @@ pub fn summary(state: &State) -> Value {
             "effort": state.agg.turns.iter().rev().find_map(|t| t.effort.clone()),
             "plan": state.session.plan.clone().map(Value::from).unwrap_or_else(|| missing(INSTALL_HINT)),
         },
-        "turns": m(state.agg.turns.len(), "count", "turn_number", false),
+        "turns": m(state.agg.human_turns(), "count", "turn_number", false),
+        "machine_turns": m(state.agg.turns.len() - state.agg.human_turns(), "count", "turn_number", false),
         "api_calls": m(state.agg.api_calls(), "count", "api_calls", false),
         "current_turn_elapsed": current.and_then(|t| t.elapsed_ms(state.clock_ms())).map(|e| m(e, "ms", "turn_elapsed", false)),
         "context": {
@@ -350,7 +351,14 @@ mod tests {
         // The fixture's last prompt came 9 min after its last event.
         let ev = events(&s, Some(15 * 60_000));
         assert!(!ev.as_array().unwrap().is_empty());
-        assert!(events(&s, Some(1)).as_array().unwrap().is_empty());
+        // Only events on the clock's last millisecond (the interrupt note
+        // and the cost-state written with it) are "since 1 ms".
+        let last = s.clock_ms() - 1;
+        assert!(events(&s, Some(1))
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["at_ms"].as_i64().unwrap() >= last));
         assert_eq!(events(&s, None).as_array().unwrap().len(), s.events.len());
         assert_eq!(explain("cache_hit_ratio")["panel"], "Tokens & Cost");
         assert!(explain("nope")["error"].is_string());
