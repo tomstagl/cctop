@@ -352,6 +352,36 @@ mod tests {
         );
     }
 
+    /// Fixture B folded into a state, as `cctop query --session` would.
+    fn state_b() -> State {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        s.session.ended_at_ms = s.last_line_at_ms;
+        s
+    }
+
+    #[test]
+    fn fixture_b_summary_snapshot() {
+        let s = state_b();
+        let sum = summary(&s);
+        assert_eq!(sum["turns"]["value"], 6);
+        assert_eq!(sum["context"]["compactions"]["value"], 1);
+        assert_eq!(sum["cache"]["source"], "transcript");
+        insta::assert_snapshot!(
+            "query_summary_b",
+            serde_json::to_string_pretty(&sum).unwrap()
+        );
+        insta::assert_snapshot!(
+            "query_events_b_tail",
+            serde_json::to_string_pretty(&events(&s, Some(5 * 60_000))).unwrap()
+        );
+    }
+
     #[test]
     fn shapes_and_missing_sources() {
         let s = state();

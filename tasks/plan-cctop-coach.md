@@ -10,6 +10,8 @@ The PRD is three things stacked: **evidence** (read what Claude Code already wri
 
 Seven phases, each shippable, each ending with both surfaces in sync (§3). Phase 0 shipped today.
 
+**Progress.** Phase 0 shipped 2026-09-14 (`4547948`). Phase 1 shipped 2026-09-14 in seven commits (`8692b3a` transcript fields + fixture B, `1f9310b` turn identity and the number changes, `0691529` phase.rs, `f3c281b` status and the cache clock, `847463b` hooks, `4252e00` files/A04, plus the fixture-B query snapshots): every field the PRD names is parsed, `cctop query summary` / `ledger` / `events` carry the new facts, both fixtures and both surfaces' tests are regenerated; the phase classifier agrees with the research reference on 99.9 % of 5 163 real commands.
+
 | Phase | Stories | Ships | Size |
 |---|---|---|---|
 | 0 | — | nav bar inside the pane, frame digits = TUI panel ids, the design canvas | done |

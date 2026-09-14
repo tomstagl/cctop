@@ -1,0 +1,51 @@
+---
+source: src/query.rs
+expression: "serde_json::to_string_pretty(&events(&s, Some(5 * 60_000))).unwrap()"
+---
+[
+  {
+    "at_ms": 1789428336352,
+    "kind": "tool",
+    "text": "AskUserQuestion ✓ 83"
+  },
+  {
+    "at_ms": 1789428426352,
+    "kind": "tool",
+    "text": "Bash git commit -m \"$(cat lorem_i lorem_ipsu lorem_i lore cctop lor lorem_ip add lor lorem view lorem_ lo lorem_ lore lorem_ipsu l lorem_ip lorem_ipsum_ l cctop lo lorem_ip lor lorem_ipsum_ lorem_ips lore… ▶"
+  },
+  {
+    "at_ms": 1789428428068,
+    "kind": "tool",
+    "text": "Bash ✓ 32"
+  },
+  {
+    "at_ms": 1789428473068,
+    "kind": "tool",
+    "text": "Bash git push lorem_ lore 2>&1 ▶"
+  },
+  {
+    "at_ms": 1789428476823,
+    "kind": "tool",
+    "text": "Bash ✓ 16"
+  },
+  {
+    "at_ms": 1789428521823,
+    "kind": "tool",
+    "text": "Bash git commit -m \"$(cat lorem_i lorem lore lor lorem_i lorem_ip lorem_i lorem_i in lor install lore lor lor lorem_i lo lorem_i lorem_ lor release lo lor workflow lore lorem_i lor lorem_ipsum_d lorem_ in… ▶"
+  },
+  {
+    "at_ms": 1789428525471,
+    "kind": "tool",
+    "text": "Bash ✓ 49"
+  },
+  {
+    "at_ms": 1789428570471,
+    "kind": "note",
+    "text": "/clear · continued in a new session"
+  },
+  {
+    "at_ms": 1789428570471,
+    "kind": "api",
+    "text": "cost-state $18.75 · api 22:14 · retries 0:00"
+  }
+]
