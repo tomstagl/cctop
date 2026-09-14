@@ -119,11 +119,19 @@
   b.addEventListener('click',function(){navigator.clipboard.writeText(c.textContent).then(function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1500)})});
 })();
 (function(){
-  // The demo decodes in software on weak devices; start it when it scrolls into view.
+  // The demo decodes in software on weak devices, and its fetch + decode is
+  // the one thing that can block the main thread on this page: start it only
+  // once the page has loaded and gone idle AND half of it is in view (no
+  // margin), so the first paint and interaction never wait for it.
   var v=document.querySelector('.demo video');
   if(!v||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-  if(!('IntersectionObserver' in window)){v.autoplay=true;v.load();return;}
-  new IntersectionObserver(function(es,o){if(es[0].isIntersecting){v.play();o.disconnect()}},{rootMargin:'200px'}).observe(v);
+  var idle=function(fn){(window.requestIdleCallback||function(f){setTimeout(f,1)})(fn)};
+  var ready=false,seen=false;
+  var go=function(){if(ready&&seen){v.play();}};
+  var loaded=function(){idle(function(){ready=true;go()})};
+  if(document.readyState==='complete')loaded();else window.addEventListener('load',loaded);
+  if(!('IntersectionObserver' in window)){seen=true;go();return;}
+  new IntersectionObserver(function(es,o){if(es[0].isIntersecting){seen=true;o.disconnect();go()}},{threshold:0.5}).observe(v);
 })();
 </script>
 </body>
