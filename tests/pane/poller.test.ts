@@ -48,7 +48,7 @@ function binaryScripts(help = HELP): Record<string, ProcessScript> {
     'cctop query --help': ok(help),
   };
   for (const verb of QUERY_FIXTURES) {
-    scripts[`cctop query ${verb} --session ${SESSION}`] = ok(JSON.stringify(fixture(verb)));
+    scripts[`cctop query ${verb} --session ${SESSION} --surface pane`] = ok(JSON.stringify(fixture(verb)));
   }
   return scripts;
 }
@@ -106,7 +106,7 @@ test('a tick reads the verbs once, runs every verb in order and parses the JSON'
     ['query --help', ...QUERY_VERBS.map((v) => `query ${v}`)],
   );
   for (const argv of queries($)) {
-    assert.deepEqual(argv.slice(3), ['--session', SESSION]);
+    assert.deepEqual(argv.slice(3), ['--session', SESSION, '--surface', 'pane']);
   }
   assert.deepEqual(model().verbs, [...QUERY_VERBS]);
   assert.equal(model().sessionId, SESSION);
@@ -154,7 +154,7 @@ test('cadence: 2 s while busy, 10 s idle, re-evaluated on each turn change', asy
 
 test('a slow summary blocks further ticks: one process at a time, no overlap', async () => {
   const scripts = binaryScripts();
-  scripts[`cctop query summary --session ${SESSION}`] = () => new Promise<ProcessRunResult>(() => {});
+  scripts[`cctop query summary --session ${SESSION} --surface pane`] = () => new Promise<ProcessRunResult>(() => {});
   const { $, poller, busy, advance, model } = bootPoller(scripts);
   busy();
   poller.start();
@@ -179,9 +179,9 @@ test('a failed or non-JSON call keeps the previous data; stale after 30 s of fai
 
   // The fake copies the scripts at construction: later answers go through `$.process.script`.
   const scripts = $.process.script;
-  scripts[`cctop query summary --session ${SESSION}`] = ok('not json {');
-  scripts[`cctop query tools --session ${SESSION}`] = { exitCode: 2, stdout: '', stderr: 'no such session' };
-  scripts[`cctop query files --session ${SESSION}`] = new Error('spawn failed');
+  scripts[`cctop query summary --session ${SESSION} --surface pane`] = ok('not json {');
+  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 2, stdout: '', stderr: 'no such session' };
+  scripts[`cctop query files --session ${SESSION} --surface pane`] = new Error('spawn failed');
   await advance(10000);
   assert.deepEqual(model().query.summary, summary, 'non-JSON keeps the previous summary');
   assert.deepEqual(model().query.tools, tools, 'a non-zero exit keeps the previous tools');
@@ -338,8 +338,8 @@ const NO_MATCH: ProcessRunResult = { exitCode: 2, stdout: '', stderr: `cctop: no
 function rotatedScripts(): Record<string, ProcessScript> {
   const scripts = binaryScripts();
   for (const verb of QUERY_FIXTURES) {
-    scripts[`cctop query ${verb} --session ${SESSION}`] = NO_MATCH;
-    scripts[`cctop query ${verb} --session ${NEXT}`] = ok(JSON.stringify(fixture(verb)));
+    scripts[`cctop query ${verb} --session ${SESSION} --surface pane`] = NO_MATCH;
+    scripts[`cctop query ${verb} --session ${NEXT} --surface pane`] = ok(JSON.stringify(fixture(verb)));
   }
   return scripts;
 }
@@ -348,7 +348,7 @@ const readMarker = ($: FakeEngine, path: string) => JSON.parse($.fs.files.get(pa
 
 test('a rotated session id: the next tick follows it, swaps the markers and drops the old data', async () => {
   const scripts = binaryScripts();
-  scripts[`cctop query tools --session ${SESSION}`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken' };
   const from: Model = { ...reduce(initialModel(), { type: 'binary', binary: 'present' }), open: true, openedAt: T0 };
   const { $, poller, advance, model } = bootPoller(scripts, from);
   poller.start();
@@ -361,7 +361,7 @@ test('a rotated session id: the next tick follows it, swaps the markers and drop
   // and its tools verb is broken as well.
   $.session.scripted.id = NEXT;
   Object.assign($.process.script, rotatedScripts());
-  $.process.script[`cctop query tools --session ${NEXT}`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  $.process.script[`cctop query tools --session ${NEXT} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken' };
   await advance(10000);
   assert.equal(model().sessionId, NEXT);
   assert.ok($.ui.logs.some((l) => l === `cctop: session ${SESSION} rotated to ${NEXT}: following it`), JSON.stringify($.ui.logs));
@@ -390,8 +390,8 @@ test('a rotated session id: the next tick follows it, swaps the markers and drop
 test('a query answered after the session rotated is discarded; stale is judged from the rotation', async () => {
   let answer: (r: ProcessRunResult) => void = () => {};
   const scripts = binaryScripts();
-  scripts[`cctop query summary --session ${SESSION}`] = () => new Promise<ProcessRunResult>((resolve) => (answer = resolve));
-  for (const verb of QUERY_FIXTURES) scripts[`cctop query ${verb} --session ${NEXT}`] = ok(JSON.stringify(fixture(verb)));
+  scripts[`cctop query summary --session ${SESSION} --surface pane`] = () => new Promise<ProcessRunResult>((resolve) => (answer = resolve));
+  for (const verb of QUERY_FIXTURES) scripts[`cctop query ${verb} --session ${NEXT} --surface pane`] = ok(JSON.stringify(fixture(verb)));
   const { $, poller, advance, model } = bootPoller(scripts);
   poller.start();
   await settle();

@@ -11,6 +11,7 @@ pub mod attach;
 pub mod baseline;
 pub mod claude_home;
 pub mod coach;
+pub mod coach_stats;
 pub mod config;
 pub mod dashboard;
 pub mod discover;

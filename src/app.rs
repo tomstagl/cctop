@@ -99,6 +99,9 @@ pub struct App {
     pub persist_config: bool,
     /// Human turn of the last NOW-class toast (at most one per turn).
     last_now_toast_turn: Option<usize>,
+    /// The exposure arm is assigned once the model is known (the stratum
+    /// needs it); `on` / `off` need no assignment.
+    exposure_assigned: bool,
 }
 
 impl App {
@@ -124,6 +127,7 @@ impl App {
             last_theme_check: None,
             persist_config: false,
             last_now_toast_turn: None,
+            exposure_assigned: false,
         }
     }
 
@@ -222,7 +226,13 @@ impl App {
     pub fn evaluate_alerts(&mut self) {
         let fired = self.alerts.evaluate(&self.state);
         if !fired.is_empty() {
-            crate::alerts::deliver(&fired, &mut self.state, self.desktop_notify);
+            // Desktop notifications are the coach's three cases: none on
+            // the control arm.
+            crate::alerts::deliver(
+                &fired,
+                &mut self.state,
+                self.desktop_notify && self.advisor.exposed,
+            );
         }
         let now = self.state.clock_ms();
         let turn = self.state.agg.human_turns();
@@ -240,13 +250,20 @@ impl App {
         for toast in self.advisor.poll_requests(turn, now) {
             self.state.set_toast(toast);
         }
+        self.advisor.surface = match self.state.view {
+            crate::ui::state::View::Coach => "tui-coach",
+            crate::ui::state::View::Dashboard => "tui-dashboard",
+        }
+        .into();
+        self.assign_exposure();
         self.advisor.evaluate(&self.state);
         for ev in self.advisor.drain_events() {
             // A NOW-class promotion is the one toast the coach raises,
-            // once per human turn.
+            // once per human turn — never on the control arm.
             if ev.text.starts_with("NOW ")
                 && ev.text.contains(" fired · ")
                 && self.last_now_toast_turn != Some(turn)
+                && self.advisor.exposed
             {
                 self.last_now_toast_turn = Some(turn);
                 if let Some(o) = &self.advisor.occupant {
@@ -279,15 +296,69 @@ impl App {
     }
 
     /// Attach the advisor to the session's persisted state under `home`
-    /// (`~/.cctop`), as the writer when this is the live TUI.
+    /// (`~/.cctop`), as the writer when this is the live TUI; the rules the
+    /// record demoted (`coach-stats`) are held back from the slot.
     pub fn attach_advisor(&mut self, home: &std::path::Path, writer: bool) {
         self.advisor.release();
         let mut engine = crate::advisor::Engine::default();
         let id = self.state.session.session_id.clone();
         if !id.is_empty() {
             engine.attach(home, &id, writer);
+            engine.demote(&crate::coach_stats::demotions(
+                home,
+                self.state.now_ms - 8 * 7 * 86_400_000,
+            ));
         }
         self.advisor = engine;
+        self.exposure_assigned = false;
+    }
+
+    /// `--coach on|off|auto`: the writer picks this session's arm once the
+    /// model is known (`auto` alternates within the project / model family
+    /// / version stratum), logs it, and a control-arm session shows no
+    /// nudge while the engine keeps recording.
+    fn assign_exposure(&mut self) {
+        if self.exposure_assigned || !self.advisor.writer {
+            return;
+        }
+        let mode = self.config.coach.as_str();
+        let Some(model) = self.state.model().map(str::to_string) else {
+            if mode == "auto" {
+                return; // the stratum needs the model
+            }
+            self.advisor.exposed = mode != "off";
+            self.exposure_assigned = true;
+            return;
+        };
+        let Some(home) = self
+            .advisor
+            .path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .map(std::path::Path::to_path_buf)
+        else {
+            return; // no persisted state: nothing to alternate against
+        };
+        let on = crate::coach_stats::assign(
+            &home,
+            mode,
+            &self.state.session.cwd.to_string_lossy(),
+            &model,
+            &self.state.session.version,
+        );
+        self.advisor.exposed = on;
+        self.exposure_assigned = true;
+        if mode != "on" {
+            self.state.events.push(crate::events::Event {
+                at: self.state.clock_ms(),
+                kind: crate::events::Kind::Coach,
+                text: format!(
+                    "coach {} this session ({mode}: the {} arm)",
+                    if on { "on" } else { "off" },
+                    if on { "exposed" } else { "control" }
+                ),
+            });
+        }
     }
 
     /// The live engine (the coach object the views draw).
@@ -302,8 +373,19 @@ impl App {
 
     /// Release the advisor's writer lock (on exit).
     pub fn release_advisor(&mut self) {
+        self.note_coach_cost();
         self.advisor.save();
         self.advisor.release();
+    }
+
+    /// What the coach cost so far: this process's CPU, the git shell-outs,
+    /// Claude Code's own hook latency for the previous session here.
+    pub fn note_coach_cost(&mut self) {
+        let c = &mut self.advisor.cost;
+        c.cpu_s = crate::coach_stats::process_cpu_s();
+        c.git_shellouts = crate::git::SHELLOUTS.load(std::sync::atomic::Ordering::Relaxed);
+        c.hook_ms = self.state.previous_session.as_ref().and_then(|p| p.hook_ms);
+        self.advisor.mark_dirty();
     }
 
     /// Feed one transcript line; buffered while paused.
@@ -383,7 +465,10 @@ impl App {
                                     .and_then(|d| crate::ask::peer_token(&d, pid))
                             });
                             match crate::ask::send_over_socket(sock, token.as_deref(), &text) {
-                                Ok(_) => "sent to the session as a peer message".to_string(),
+                                Ok(_) => {
+                                    self.advisor.note_send(text.chars().count());
+                                    "sent to the session as a peer message".to_string()
+                                }
                                 Err(e) => format!("send failed: {e} — copied instead?"),
                             }
                         }
@@ -507,11 +592,13 @@ impl App {
                     *ui = Default::default();
                 } else {
                     self.state.view = View::Dashboard;
+                    self.advisor.note_view_left(self.state.clock_ms());
                     self.save_config();
                 }
             }
             KeyCode::Char('c') => {
                 self.state.view = View::Dashboard;
+                self.advisor.note_view_left(self.state.clock_ms());
                 self.save_config();
             }
             KeyCode::Char('e') => {
@@ -1007,6 +1094,58 @@ mod tests {
             self.keys.set(self.keys.get() + 1);
             Handled::Yes
         }
+    }
+
+    /// `--coach auto`: the writer assigns the arm once the model is known,
+    /// alternating within the stratum, logs it, and the control arm draws
+    /// no nudge while the fires are recorded.
+    #[test]
+    fn coach_auto_alternates_the_arm_and_logs_it() {
+        let home = std::env::temp_dir().join(format!("cctop-app-arm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut arms = Vec::new();
+        for i in 0..3 {
+            let mut app = App::new(
+                crate::ui::panels::all(),
+                Box::new(|l, s: &mut State| s.apply(l)),
+            );
+            app.config.coach = "auto".into();
+            app.state = crate::advisor::tests_support::state_with_turns(3);
+            app.state.session.session_id = format!("arm-{i}");
+            app.state.session.cwd = std::path::PathBuf::from("/p");
+            app.state.session.version = "2.1.270".into();
+            app.attach_advisor(&home, true);
+            app.evaluate_alerts();
+            arms.push(app.advisor().exposed);
+            let logged = app
+                .state
+                .events
+                .iter()
+                .any(|e| e.kind == crate::events::Kind::Coach && e.text.starts_with("coach "));
+            assert!(logged, "the assignment is an Events row");
+            app.release_advisor();
+        }
+        assert_eq!(
+            arms,
+            [true, false, true],
+            "alternating within /p · opus · 2.1.270"
+        );
+        let a: crate::coach_stats::Assignments =
+            serde_json::from_str(&std::fs::read_to_string(home.join("exposure.json")).unwrap())
+                .unwrap();
+        assert_eq!(a.strata["/p|opus|2.1.270"], 3);
+        // `off` needs no model and logs; `on` (the default) logs nothing.
+        let mut off = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        off.config.coach = "off".into();
+        off.state.session.session_id = "arm-off".into();
+        off.attach_advisor(&home, true);
+        off.evaluate_alerts();
+        assert!(!off.advisor().exposed);
+        off.release_advisor();
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

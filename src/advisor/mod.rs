@@ -373,6 +373,33 @@ pub struct FireRecord {
     pub acted_delay_ms: Option<i64>,
     pub snoozed: bool,
     pub session_mode: SessionMode,
+    /// The surface that showed it: `tui-coach`, `tui-dashboard`, `pane`,
+    /// `query`, or `none` (the coach off, or a headless reader). An
+    /// "exposed fire" — the denominator of every rate — is any but `none`.
+    #[serde(default = "surface_none")]
+    pub surface: String,
+    /// Milliseconds since the person's last input when it fired.
+    #[serde(default)]
+    pub human_idle_ms: Option<i64>,
+    /// `x` / `X` delay after the showing; under 2 s is a reflex dismissal.
+    #[serde(default)]
+    pub time_to_x_ms: Option<i64>,
+    /// The snooze was for the session (`X`, or the third `x`).
+    #[serde(default)]
+    pub snoozed_session: bool,
+    /// The coach view was left within 10 s of the promotion.
+    #[serde(default)]
+    pub toggled_away: bool,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub project: String,
+}
+
+fn surface_none() -> String {
+    "none".into()
 }
 
 /// A retired nudge, for the coach's lifecycle rows.
@@ -436,6 +463,25 @@ pub struct Persisted {
     promotions: Vec<(usize, Urgency)>,
     #[serde(default)]
     cooldown_until: HashMap<String, usize>,
+    /// `on` / `off`: the exposure arm this session was assigned to.
+    #[serde(default = "exposure_on")]
+    pub exposure: String,
+    /// What the coach cost this session (the TUI writes it).
+    #[serde(default)]
+    pub cost: crate::coach_stats::Cost,
+}
+
+fn exposure_on() -> String {
+    "on".into()
+}
+
+/// A rule held back by its own record (US-012's demotion rule).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Demotion {
+    /// False positives past the bar: the next row only.
+    NextRow,
+    /// Precision collapsed on this Claude Code version: LATER.
+    Later,
 }
 
 /// One Events row the engine wants written (`kind=coach`).
@@ -469,6 +515,17 @@ pub struct Engine {
     /// The writer's occupant, adopted on the next evaluation while its rule
     /// still fires.
     adopt: Option<PersistedOccupant>,
+    /// The surface this engine draws for (`tui-coach`, `tui-dashboard`,
+    /// `pane`, `query`, `none`), stamped on every fire record.
+    pub surface: String,
+    /// Whether nudges are shown at all this session (`--coach off` records
+    /// the fires and shows nothing: the control arm of the measurement).
+    pub exposed: bool,
+    /// Rules demoted by their own record (US-012): to the next row, or to
+    /// LATER after a precision collapse on this Claude Code version.
+    pub demoted: HashMap<&'static str, Demotion>,
+    /// The coach's own cost this session, persisted beside the records.
+    pub cost: crate::coach_stats::Cost,
     /// Where the state persists, when it does.
     pub path: Option<PathBuf>,
     /// This process holds the single-writer lock (the TUI); others read,
@@ -497,6 +554,21 @@ fn requests_path(path: &Path) -> PathBuf {
     path.with_extension("requests")
 }
 
+static READER_SURFACE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Name the surface a one-shot reader draws for (`cctop query coach
+/// --surface pane`); `query` when unnamed. Set once per process.
+pub fn set_reader_surface(surface: &str) {
+    let _ = READER_SURFACE.set(surface.to_string());
+}
+
+pub fn reader_surface() -> String {
+    READER_SURFACE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| "query".into())
+}
+
 /// `$HOME/.cctop`, where the advisor state lives.
 pub fn default_home() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -520,6 +592,10 @@ impl Engine {
             session_mode: SessionMode::Interactive,
             pending_events: Vec::new(),
             adopt: None,
+            surface: "none".into(),
+            exposed: true,
+            demoted: HashMap::new(),
+            cost: crate::coach_stats::Cost::default(),
             path: None,
             writer: false,
             dirty: false,
@@ -528,9 +604,14 @@ impl Engine {
 
     /// The engine every one-shot consumer uses (`query`, MCP, the report,
     /// `advise`): attached to the live session's persisted state as a
-    /// reader, evaluated once. Fixture files get no persistence.
+    /// reader, evaluated once. Fixture files get no persistence. The
+    /// surface stamped on a fire it promotes itself (no dashboard running)
+    /// is [`reader_surface`]'s: `query`, or `pane` when the pane asked.
     pub fn for_state(state: &State) -> Engine {
-        let mut e = Engine::default();
+        let mut e = Engine {
+            surface: reader_surface(),
+            ..Default::default()
+        };
         if state.session.pid.is_some() && !state.session.session_id.is_empty() {
             if let Some(home) = default_home() {
                 e.attach(&home, &state.session.session_id, false);
@@ -574,6 +655,33 @@ impl Engine {
         self.promotions = p.promotions.into_iter().collect();
         self.records = p.records;
         self.adopt = p.occupant.filter(|o| o.record < self.records.len());
+        // A reader follows the writer's arm; the writer sets its own.
+        if !self.writer {
+            self.exposed = p.exposure != "off";
+        }
+        self.cost = p.cost;
+    }
+
+    /// Apply the demotions the record earned (`coach_stats::demotions`).
+    pub fn demote(&mut self, demotions: &std::collections::BTreeMap<String, Demotion>) {
+        let ids: Vec<&'static str> = self.rules.iter().map(|r| r.id()).collect();
+        for (rule, d) in demotions {
+            if let Some(id) = ids.iter().find(|id| **id == rule) {
+                self.demoted.insert(id, *d);
+            }
+        }
+    }
+
+    /// Something worth saving changed outside the engine (the cost).
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// A prompt went to the session through the socket: the coach's cost.
+    pub fn note_send(&mut self, chars: usize) {
+        self.cost.socket_sends += 1;
+        self.cost.socket_chars += chars;
+        self.dirty = true;
     }
 
     fn persisted(&self) -> Persisted {
@@ -604,6 +712,8 @@ impl Engine {
                 .iter()
                 .map(|(k, v)| (k.to_string(), *v))
                 .collect(),
+            exposure: if self.exposed { "on" } else { "off" }.into(),
+            cost: self.cost.clone(),
         }
     }
 
@@ -676,7 +786,8 @@ impl Engine {
             }
         }
 
-        // Every rule that fires, with its first-fired turn.
+        // Every rule that fires, with its first-fired turn; a demoted rule
+        // fires into the next row, or as LATER.
         let mut fired: Vec<Advice> = Vec::new();
         let mut firing: Vec<&'static str> = Vec::new();
         for r in &self.rules {
@@ -698,6 +809,11 @@ impl Engine {
                 self.suppressed
                     .push((id, format!("cooldown until turn {u}")));
                 continue;
+            }
+            match self.demoted.get(id) {
+                Some(Demotion::NextRow) => a.next_row_only = true,
+                Some(Demotion::Later) => a.urgency = Urgency::Later,
+                None => {}
             }
             fired.push(a);
         }
@@ -829,6 +945,11 @@ impl Engine {
             if let Some(old) = self.occupant.take() {
                 self.retire(old, "pre-empted", now);
             }
+            let last_input = state
+                .agg
+                .current_turn()
+                .and_then(|t| t.last_human_input_at.as_deref().or(t.started_at.as_deref()))
+                .and_then(crate::metrics::cost::parse_ts_ms);
             self.records.push(FireRecord {
                 rule: a.rule.into(),
                 family: a.family.into(),
@@ -839,6 +960,18 @@ impl Engine {
                 acted_delay_ms: None,
                 snoozed: false,
                 session_mode: self.session_mode,
+                surface: if self.exposed {
+                    self.surface.clone()
+                } else {
+                    "none".into()
+                },
+                human_idle_ms: last_input.map(|t| (now - t).max(0)),
+                time_to_x_ms: None,
+                snoozed_session: false,
+                toggled_away: false,
+                version: state.session.version.clone(),
+                model: state.model().unwrap_or("").to_string(),
+                project: state.session.cwd.to_string_lossy().into_owned(),
             });
             self.pending_events.push(CoachEvent {
                 at_ms: now,
@@ -994,12 +1127,20 @@ impl Engine {
     }
 
     fn mark_snoozed(&mut self, rule: &'static str, now: i64) {
+        let session_wide = self
+            .snoozed
+            .get(rule)
+            .is_some_and(|s| s.until_turn.is_none());
         if self
             .occupant
             .as_ref()
             .is_some_and(|o| o.advice.rule == rule)
         {
             let occ = self.occupant.take().unwrap();
+            if let Some(r) = self.records.get_mut(occ.record) {
+                r.time_to_x_ms = Some((now - occ.fired_at_ms).max(0));
+                r.snoozed_session = session_wide;
+            }
             self.retire(occ, "snoozed", now);
         } else {
             self.pending_events.push(CoachEvent {
@@ -1139,6 +1280,19 @@ impl Engine {
     }
 
     /// The SessionEnd tally: `(fired, acted, snoozed)`.
+    /// The coach view was left at `now`: within 10 s of the occupant's
+    /// promotion that is a toggle-away, kept on its record.
+    pub fn note_view_left(&mut self, now: i64) {
+        if let Some(o) = &self.occupant {
+            if now - o.fired_at_ms <= 10_000 {
+                if let Some(r) = self.records.get_mut(o.record) {
+                    r.toggled_away = true;
+                    self.dirty = true;
+                }
+            }
+        }
+    }
+
     pub fn tally(&self) -> (usize, usize, usize) {
         let fired = self.records.len();
         let acted = self
@@ -1639,6 +1793,83 @@ mod tests {
         let mut fresh = mk(&waiting);
         fresh.evaluate(&s);
         assert_eq!(fresh.occupant.as_ref().unwrap().advice.rule, "W");
+        writer.release();
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// US-012's measurement hooks: the control arm records a fire under
+    /// `surface: none` and shows nothing; a snooze keeps its delay; leaving
+    /// the coach view within 10 s is a toggle-away; a demoted rule fires
+    /// into the next row, or as LATER.
+    #[test]
+    fn control_arm_time_to_x_toggle_away_and_demotions() {
+        let mk = || {
+            Engine::new(vec![
+                Box::new(Fixed("A", "verify-gap", Urgency::Next, Saving::Tokens(1)))
+                    as Box<dyn Rule>,
+            ])
+        };
+        let mut s = state_with_turns(4);
+        s.session.version = "2.1.270".into();
+        let mut e = mk();
+        e.surface = "tui-coach".into();
+        e.exposed = false;
+        e.evaluate(&s);
+        assert!(e.occupant.is_some(), "the engine keeps working");
+        assert_eq!(e.records[0].surface, "none");
+        assert_eq!(e.records[0].version, "2.1.270");
+        assert_eq!(e.records[0].model.as_str(), "claude-opus-5");
+        assert_eq!(e.records[0].human_idle_ms, Some(30_000));
+        let c = crate::coach::snapshot(&s, &e);
+        assert!(c.nudge.is_none() && c.next.is_none() && !c.exposed);
+        assert!(
+            c.quiet_row.starts_with("  coach off (control arm)"),
+            "{}",
+            c.quiet_row
+        );
+        assert!(e.persisted().exposure == "off");
+        // Exposed: the surface is stamped; x 1.5 s later is a reflex.
+        let mut e = mk();
+        e.surface = "tui-dashboard".into();
+        e.evaluate(&s);
+        assert_eq!(e.records[0].surface, "tui-dashboard");
+        let shown = e.records[0].shown_at_ms;
+        e.snooze("A", 4, shown + 1_500);
+        assert_eq!(e.records[0].time_to_x_ms, Some(1_500));
+        assert!(!e.records[0].snoozed_session);
+        let mut e = mk();
+        e.surface = "tui-coach".into();
+        e.evaluate(&s);
+        let shown = e.records[0].shown_at_ms;
+        e.note_view_left(shown + 5_000);
+        assert!(e.records[0].toggled_away);
+        e.snooze_session("A", shown + 20_000);
+        assert!(e.records[0].snoozed_session);
+        assert_eq!(e.records[0].time_to_x_ms, Some(20_000));
+        // Demotions from the record.
+        let mut e = mk();
+        e.demote(&[("A".to_string(), Demotion::NextRow)].into_iter().collect());
+        e.evaluate(&s);
+        assert!(e.occupant.is_none(), "next-row only");
+        assert!(e.current[0].next_row_only);
+        let mut e = mk();
+        e.demote(&[("A".to_string(), Demotion::Later)].into_iter().collect());
+        e.evaluate(&s);
+        assert_eq!(e.current[0].urgency, Urgency::Later);
+        // A reader follows the writer's arm from the file.
+        let home = std::env::temp_dir().join(format!("cctop-arm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut writer = mk();
+        writer.attach(&home, "s3", true);
+        writer.exposed = false;
+        writer.evaluate(&s);
+        writer.note_send(120);
+        writer.save();
+        let mut reader = mk();
+        reader.attach(&home, "s3", false);
+        assert!(!reader.exposed, "the control arm, as the file says");
+        assert_eq!(reader.cost.socket_sends, 1);
+        assert_eq!(reader.cost.socket_chars, 120);
         writer.release();
         let _ = std::fs::remove_dir_all(&home);
     }

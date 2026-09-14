@@ -21,10 +21,18 @@ pub struct Config {
     /// `dashboard` or `coach`: the view the TUI opens with.
     #[serde(default = "default_view")]
     pub view: String,
+    /// `on` / `off` / `auto`: whether the coach shows its nudges, or
+    /// alternates by session (the control arm of its own measurement).
+    #[serde(default = "default_coach")]
+    pub coach: String,
 }
 
 fn default_view() -> String {
     "dashboard".into()
+}
+
+fn default_coach() -> String {
+    "on".into()
 }
 
 impl Default for Config {
@@ -37,6 +45,7 @@ impl Default for Config {
             notify: false,
             pricing: None,
             view: "dashboard".into(),
+            coach: "on".into(),
         }
     }
 }
@@ -92,6 +101,7 @@ mod tests {
             notify: true,
             pricing: Some(PathBuf::from("/x/pricing.toml")),
             view: "coach".into(),
+            coach: "auto".into(),
         };
         c.save_to(&path).unwrap();
         assert_eq!(Config::load_from(&path), c);

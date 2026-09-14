@@ -2,6 +2,16 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// `git` processes this cctop spawned (status, numstat, diff): part of the
+/// coach's own cost (`coach-stats`).
+pub static SHELLOUTS: AtomicUsize = AtomicUsize::new(0);
+
+/// Count one shell-out.
+pub fn note_shellout() {
+    SHELLOUTS.fetch_add(1, Ordering::Relaxed);
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GitInfo {
@@ -12,6 +22,7 @@ pub struct GitInfo {
 /// `None` when `cwd` is not inside a git work tree (or git is missing).
 pub fn info(cwd: &Path) -> Option<GitInfo> {
     let git = |args: &[&str]| {
+        note_shellout();
         Command::new("git")
             .arg("-C")
             .arg(cwd)

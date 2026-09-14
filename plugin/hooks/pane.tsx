@@ -251,7 +251,7 @@ function coachActions($: EngineInterface): CoachActions {
       const id = model.sessionId;
       if (id === null) return;
       $.process
-        .run(['cctop', 'query', 'coach', '--snooze', rule, '--session', id], { timeoutMs: 5000 })
+        .run(['cctop', 'query', 'coach', '--snooze', rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
         .then((result) => {
           if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
           const answer = JSON.parse(result.stdout) as { snooze?: unknown };

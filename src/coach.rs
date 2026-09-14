@@ -158,6 +158,9 @@ pub struct Coach {
     /// The first turn's dim line: the project's `/insights` medians and
     /// the previous session here (`None` after the first turn).
     pub start_line: Option<String>,
+    /// Nudges are shown this session (`false` on the control arm of the
+    /// measurement, `cctop run --coach off|auto`).
+    pub exposed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -219,49 +222,58 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         .current
         .len()
         .saturating_sub(engine.occupant.is_some() as usize);
-    let nudge = engine.occupant.as_ref().map(|o| {
-        let a = &engine.current[0];
-        let fire_point = match a.urgency {
-            Urgency::Now => {
-                let calls = state.agg.current_turn().map(|t| t.tool_calls).unwrap_or(0);
-                format!("fired at call {calls}")
+    // The control arm (`--coach off`): the engine fires and records, the
+    // surfaces show no nudge.
+    let nudge = engine
+        .occupant
+        .as_ref()
+        .filter(|_| engine.exposed)
+        .map(|o| {
+            let a = &engine.current[0];
+            let fire_point = match a.urgency {
+                Urgency::Now => {
+                    let calls = state.agg.current_turn().map(|t| t.tool_calls).unwrap_or(0);
+                    format!("fired at call {calls}")
+                }
+                _ => format!("since turn {}", a.since_turn),
+            };
+            Nudge {
+                id: a.rule,
+                family: a.family,
+                class: a.urgency,
+                line1: cut(&format!("▸ {}", a.headline)),
+                line2: cut(&format!("  {}", a.action)),
+                evidence: cut(&format!(
+                    "  {} · {fire_point} · +{queued} queued{}{}",
+                    a.urgency.label(),
+                    if queued > 0 { " (n)" } else { "" },
+                    if o.acting { " · acting…" } else { "" }
+                )),
+                action_text: a.action_text.clone(),
+                action_kind: a.action_kind,
+                since_turn: a.since_turn,
+                retires_on: a.retires_on,
+                acting: o.acting,
+                fired_at_ms: o.fired_at_ms,
+                queued,
+                saving: a.saving.label(),
+                explain: crate::advisor::rules::explain(a.doc_key),
             }
-            _ => format!("since turn {}", a.since_turn),
-        };
-        Nudge {
+        });
+    let next = engine
+        .next_up()
+        .filter(|_| engine.exposed)
+        .map(|(a, promotes)| Next {
             id: a.rule,
             family: a.family,
             class: a.urgency,
-            line1: cut(&format!("▸ {}", a.headline)),
-            line2: cut(&format!("  {}", a.action)),
-            evidence: cut(&format!(
-                "  {} · {fire_point} · +{queued} queued{}{}",
-                a.urgency.label(),
-                if queued > 0 { " (n)" } else { "" },
-                if o.acting { " · acting…" } else { "" }
+            headline: a.headline.clone(),
+            promotes,
+            row: cut(&format!(
+                "next     {} → {} · {}",
+                a.family, promotes, a.headline
             )),
-            action_text: a.action_text.clone(),
-            action_kind: a.action_kind,
-            since_turn: a.since_turn,
-            retires_on: a.retires_on,
-            acting: o.acting,
-            fired_at_ms: o.fired_at_ms,
-            queued,
-            saving: a.saving.label(),
-            explain: crate::advisor::rules::explain(a.doc_key),
-        }
-    });
-    let next = engine.next_up().map(|(a, promotes)| Next {
-        id: a.rule,
-        family: a.family,
-        class: a.urgency,
-        headline: a.headline.clone(),
-        promotes,
-        row: cut(&format!(
-            "next     {} → {} · {}",
-            a.family, promotes, a.headline
-        )),
-    });
+        });
     let turn = state.agg.human_turns();
     let ids = engine.rule_ids();
     let snoozed: Vec<Snoozed> = engine
@@ -320,6 +332,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         snoozed_row: String::new(),
         quiet_row: String::new(),
         start_line: state.start_line().map(|l| cut(&l)),
+        exposed: engine.exposed,
     };
     c.lines = StatusLines {
         l0: c.line(80),
@@ -367,6 +380,13 @@ impl Coach {
 
     /// The quiet line when nothing occupies the slot.
     pub fn quiet_row(&self) -> String {
+        if !self.exposed {
+            return cut(&format!(
+                "  coach off (control arm) · {} fire{} recorded",
+                self.nudges_this_hour,
+                if self.nudges_this_hour == 1 { "" } else { "s" }
+            ));
+        }
         if let Some(l) = &self.start_line {
             return cut(&format!("  {l}"));
         }

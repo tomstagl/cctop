@@ -154,6 +154,8 @@ pub struct Dashboard {
     /// The first turn's dim line, drawn where the nudge goes while there is
     /// none.
     pub start_line: Option<String>,
+    /// Nudges are shown this session (`false` on the control arm).
+    pub exposed: bool,
     pub rows: Vec<Row>,
     pub session_mode: crate::advisor::SessionMode,
     /// The coach's one-line forms, for the narrow tiles (L1 / L2).
@@ -203,6 +205,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Dashboard {
         tiles,
         nudge,
         start_line: c.start_line.as_ref().map(|l| fmt::clip(l, ROW_WIDTH)),
+        exposed: c.exposed,
         rows,
         session_mode: engine.session_mode,
         lines: c.lines.clone(),

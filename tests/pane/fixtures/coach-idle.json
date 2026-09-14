@@ -1,5 +1,6 @@
 {
   "agents": null,
+  "exposed": true,
   "lights": [
     {
       "alt": "333k ▇▇▇▁▁▁▁▁▁▁ 33% · re-reads 333k/call",

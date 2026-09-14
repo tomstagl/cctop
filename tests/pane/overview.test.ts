@@ -96,6 +96,10 @@ test('the first turn draws the insights line where the nudge goes, and nothing w
   const lines = raw(build({ dashboard: start }), 100);
   has(lines, /^ insights 2026-08-16 · 12 sessions here/);
   assert.ok(!lines.some((l) => l.includes('quiet · nothing')), JSON.stringify(lines));
+  // The control arm of the coach's own measurement shows no nudge and says so.
+  const off = { ...(fixture('dashboard') as Record<string, unknown>), nudge: null, exposed: false };
+  assert.equal(dashboardOf(off)!.exposed, false);
+  has(raw(build({ dashboard: off }), 100), /^ coach off \(control arm\)/);
 });
 
 test('the dashboard fixture parses into tiles, a nudge and nine rows', () => {

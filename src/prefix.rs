@@ -443,6 +443,7 @@ impl Prefix {
 /// `<cwd>/CLAUDE.md` and `<cwd>/.claude/CLAUDE.md`, the same in each parent up to
 /// the git root, then `~/.claude/CLAUDE.md`. Only paths that exist are returned.
 pub fn claude_md_paths(cwd: &Path, home: Option<&Path>) -> Vec<PathBuf> {
+    crate::git::note_shellout();
     let root = std::process::Command::new("git")
         .arg("-C")
         .arg(cwd)

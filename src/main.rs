@@ -48,6 +48,20 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// The coach measured on its own record: per rule, exposed fires,
+    /// acted, snoozed, reflex dismissals, the control arm, the verdict.
+    CoachStats {
+        /// Only sessions with a fire after this long ago (`4w`, `10d`, `2h`).
+        #[arg(long, default_value = "4w")]
+        since: String,
+        /// Transcripts (or a directory of them) to replay for the
+        /// acted-anyway baseline column.
+        #[arg(long, value_name = "PATH")]
+        replay: Vec<PathBuf>,
+        /// Print JSON instead of the table.
+        #[arg(long)]
+        json: bool,
+    },
     /// Write an end-of-session report.
     Report(ReportArgs),
     /// Export ledger and events.
@@ -73,6 +87,10 @@ struct QueryArgs {
     /// Feed only the first N transcript lines (a point in time; fixtures).
     #[arg(long, global = true)]
     lines: Option<usize>,
+    /// The surface asking (`pane` for the function-hooks pane): stamped on
+    /// the coach's fire records when no dashboard runs.
+    #[arg(long, global = true, value_parser = ["query", "pane"])]
+    surface: Option<String>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -138,6 +156,11 @@ struct RunArgs {
     /// Open this view: dashboard or coach (overrides config).
     #[arg(long, value_parser = ["dashboard", "coach"])]
     view: Option<String>,
+    /// Show the coach's nudges: on, off, or auto — alternating by session
+    /// within a project / model family / version, the assignment logged in
+    /// ~/.cctop/<session>.advisor.json (overrides config).
+    #[arg(long, value_parser = ["on", "off", "auto"])]
+    coach: Option<String>,
     /// Theme name (bundled or ~/.config/cctop/themes/*.toml).
     #[arg(long)]
     theme: Option<String>,
@@ -364,36 +387,39 @@ fn main() {
         },
         Command::Advise(a) => advise(a),
         Command::CoachReplay { paths, json } => {
-            // Transcripts named directly, or found one level under a
-            // directory (`~/.claude/projects/<slug>/*.jsonl`); subagent
-            // files live deeper and are never replayed.
-            fn scan(dir: &std::path::Path, depth: u8, files: &mut Vec<PathBuf>) {
-                let Ok(rd) = std::fs::read_dir(dir) else {
-                    return;
-                };
-                for e in rd.flatten() {
-                    let f = e.path();
-                    if f.is_dir() && depth > 0 {
-                        scan(&f, depth - 1, files);
-                    } else if f.extension().is_some_and(|x| x == "jsonl") {
-                        files.push(f);
-                    }
-                }
-            }
-            let mut files: Vec<PathBuf> = Vec::new();
-            for p in paths {
-                if p.is_dir() {
-                    scan(&p, 1, &mut files);
-                } else {
-                    files.push(p);
-                }
-            }
-            files.sort();
-            let r = cctop::replay::replay(&files);
+            let r = cctop::replay::replay(&transcript_files(paths));
             if json {
                 emit(&format!("{}\n", serde_json::to_string_pretty(&r).unwrap()));
             } else {
                 emit(&cctop::replay::table(&r));
+            }
+        }
+        Command::CoachStats {
+            since,
+            replay,
+            json,
+        } => {
+            let since_ms = match cctop::query::parse_since(&since) {
+                Some(ms) => cctop::app::now_ms() - ms,
+                None => {
+                    eprintln!("cctop: --since takes 4w, 10d, 2h or 30m");
+                    std::process::exit(2);
+                }
+            };
+            let sessions = cctop::coach_stats::load(&cctop::status::cctop_dir(), since_ms);
+            let replayed =
+                (!replay.is_empty()).then(|| cctop::replay::replay(&transcript_files(replay)));
+            if json {
+                let v = serde_json::json!({
+                    "since_ms": since_ms,
+                    "sessions": sessions.len(),
+                    "rules": cctop::coach_stats::stats(&sessions),
+                    "cost": cctop::coach_stats::cost(&sessions),
+                    "replay": replayed,
+                });
+                emit(&format!("{}\n", serde_json::to_string_pretty(&v).unwrap()));
+            } else {
+                emit(&cctop::coach_stats::table(&sessions, replayed.as_ref()));
             }
         }
         Command::Report(r) => {
@@ -437,6 +463,35 @@ fn main() {
     }
 }
 
+/// Transcripts named directly, or found one level under a directory
+/// (`~/.claude/projects/<slug>/*.jsonl`); subagent files live deeper and
+/// are never replayed.
+fn transcript_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    fn scan(dir: &std::path::Path, depth: u8, files: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let f = e.path();
+            if f.is_dir() && depth > 0 {
+                scan(&f, depth - 1, files);
+            } else if f.extension().is_some_and(|x| x == "jsonl") {
+                files.push(f);
+            }
+        }
+    }
+    let mut files: Vec<PathBuf> = Vec::new();
+    for p in paths {
+        if p.is_dir() {
+            scan(&p, 1, &mut files);
+        } else {
+            files.push(p);
+        }
+    }
+    files.sort();
+    files
+}
+
 fn run(args: RunArgs) {
     use cctop::app::{self, App};
     use cctop::ui::state::{SessionInfo, State};
@@ -445,6 +500,7 @@ fn run(args: RunArgs) {
         headless,
         notify,
         view,
+        coach,
         theme,
         refresh_ms,
         otlp,
@@ -467,6 +523,9 @@ fn run(args: RunArgs) {
     let mut config = cctop::config::Config::load();
     if let Some(v) = view {
         config.view = v;
+    }
+    if let Some(c) = coach {
+        config.coach = c;
     }
     if let Some(t) = theme {
         config.theme = t;
@@ -588,6 +647,9 @@ fn load_state_lines(attach: &Attach, lines: Option<usize>) -> cctop::ui::State {
 
 fn query(q: QueryArgs) {
     use cctop::query as qy;
+    if let Some(s) = &q.surface {
+        cctop::advisor::set_reader_surface(s);
+    }
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
         QueryWhat::Coach {

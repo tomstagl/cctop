@@ -128,7 +128,9 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
 
   const query = async (verb: QueryVerb, sessionId: string): Promise<boolean> => {
     try {
-      const argv = ['cctop', 'query', verb, '--session', sessionId];
+      // `--surface pane`: a fire the binary promotes for this pane (no
+      // dashboard running) is recorded as shown here.
+      const argv = ['cctop', 'query', verb, '--session', sessionId, '--surface', 'pane'];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.

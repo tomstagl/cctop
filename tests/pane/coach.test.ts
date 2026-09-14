@@ -137,10 +137,10 @@ async function boot(coach: unknown) {
   const script: Record<string, ProcessRunResult> = {
     'cctop --version': ok('cctop 0.2.0\n'),
     'cctop query --help': ok(HELP),
-    [`cctop query coach --session ${SESSION}`]: ok(JSON.stringify(coach)),
+    [`cctop query coach --session ${SESSION} --surface pane`]: ok(JSON.stringify(coach)),
   };
   for (const verb of ['summary', 'dashboard', 'tools', 'files', 'agents', 'advice', 'events'] as const) {
-    script[`cctop query ${verb} --session ${SESSION}`] = ok(JSON.stringify(fixture(verb)));
+    script[`cctop query ${verb} --session ${SESSION} --surface pane`] = ok(JSON.stringify(fixture(verb)));
   }
   const $ = fakeEngine({ process: script });
   const { on, dispatch } = fakeOn($, { surface: { columns: 160, bodyColumns: 72 } });
@@ -176,7 +176,7 @@ test('the Coach tab draws the card, sets the status line once per change and fil
   await settle();
   assert.deepEqual($.prompt.fills, ['Use an Explore subagent for the rest.']);
   // `[2 snooze]` asks the binary and takes its answer as the new object.
-  $.process.script[`cctop query coach --snooze A23 --session ${SESSION}`] = ok(JSON.stringify({ ...prompt, nudge: null, snooze: 'A23 snoozed for 5 turns' }));
+  $.process.script[`cctop query coach --snooze A23 --session ${SESSION} --surface pane`] = ok(JSON.stringify({ ...prompt, nudge: null, snooze: 'A23 snoozed for 5 turns' }));
   $.ui.press('coach-snooze');
   await settle();
   await settle();
@@ -203,7 +203,7 @@ test('a NOW nudge taking the slot raises one toast per fire and at most one per 
   $.clock.tick(10_000);
   await settle();
   assert.equal($.ui.toasts.length, 1);
-  $.process.script[`cctop query coach --session ${SESSION}`] = ok(JSON.stringify({ ...now, nudge: { ...now.nudge, fired_at_ms: 2 } }));
+  $.process.script[`cctop query coach --session ${SESSION} --surface pane`] = ok(JSON.stringify({ ...now, nudge: { ...now.nudge, fired_at_ms: 2 } }));
   $.clock.tick(10_000);
   await settle();
   await settle();

@@ -25,7 +25,7 @@ const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr:
 
 function binaryScripts(): Record<string, ProcessScript> {
   const scripts: Record<string, ProcessScript> = { 'cctop --version': ok('cctop 0.9.0\n'), 'cctop query --help': ok(HELP) };
-  for (const verb of QUERY_FIXTURES) scripts[`cctop query ${verb} --session ${SESSION}`] = ok(JSON.stringify(fixture(verb)));
+  for (const verb of QUERY_FIXTURES) scripts[`cctop query ${verb} --session ${SESSION} --surface pane`] = ok(JSON.stringify(fixture(verb)));
   return scripts;
 }
 

@@ -149,9 +149,10 @@ fn tile_block<'a>(t: &Theme, d: &Dashboard, per_row: usize, cells: usize) -> Vec
 
 fn nudge_line<'a>(t: &Theme, d: &Dashboard, width: usize, action: bool) -> Line<'a> {
     let Some(n) = &d.nudge else {
-        let text = match &d.start_line {
-            Some(l) => format!(" {l}"),
-            None => " quiet · nothing to act on".to_string(),
+        let text = match (&d.start_line, d.exposed) {
+            (_, false) => " coach off (control arm) · fires recorded, nothing shown".to_string(),
+            (Some(l), true) => format!(" {l}"),
+            (None, true) => " quiet · nothing to act on".to_string(),
         };
         return Line::from(Span::styled(
             crate::ui::fmt::clip(&t.coach_text(&text), width),

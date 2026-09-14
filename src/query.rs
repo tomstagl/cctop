@@ -475,6 +475,7 @@ pub fn parse_since(s: &str) -> Option<i64> {
         "m" => n * 60_000,
         "h" => n * 3_600_000,
         "d" => n * 86_400_000,
+        "w" => n * 7 * 86_400_000,
         _ => return None,
     })
 }
@@ -605,6 +606,7 @@ mod tests {
         assert!(explain("nope")["error"].is_string());
         assert_eq!(parse_since("10m"), Some(600_000));
         assert_eq!(parse_since("2h"), Some(7_200_000));
+        assert_eq!(parse_since("4w"), Some(4 * 7 * 86_400_000));
         assert_eq!(parse_since("x"), None);
     }
 }

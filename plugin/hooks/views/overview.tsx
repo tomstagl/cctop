@@ -458,6 +458,8 @@ export type Dashboard = {
   nudge: { line: string; tag: string; cls: string } | null;
   /** The first turn's dim line (the project's /insights medians), drawn where the nudge goes while there is none. */
   startLine: string | null;
+  /** Nudges are shown this session; false on the control arm of the coach's own measurement (`cctop run --coach off|auto`). */
+  exposed: boolean;
   rows: LedgerRow[];
   lines: { l1: string; l2: string };
 };
@@ -523,6 +525,7 @@ export function dashboardOf(query: unknown): Dashboard | null {
         ? null
         : { line: stringAt(nudge, 'line') ?? '', tag: stringAt(nudge, 'tag') ?? '', cls: stringAt(nudge, 'class') ?? '' },
     startLine: stringAt(query, 'start_line'),
+    exposed: at(query, 'exposed') !== false,
     rows: rows.map((r) => ({
       digit: typeof at(r, 'digit') === 'number' ? (at(r, 'digit') as number) : 0,
       name: stringAt(r, 'name') ?? '',
@@ -703,7 +706,8 @@ export function renderOverview(
     body.push(textRow([seg(' ▸ ', { color: THEME.yellow }), seg(headline ?? d.nudge.line, { bold: true }), seg('  '), seg(d.nudge.tag, tagStyle)], el, 'advice_saving'));
     if (action !== undefined) body.push(textRow([seg('   '), seg(action, { color: ACCENT })], el));
   } else {
-    body.push(textRow([dim(` ${d.startLine ?? 'quiet · nothing to act on'}`)], el, 'advice_saving'));
+    const quiet = d.exposed ? (d.startLine ?? 'quiet · nothing to act on') : 'coach off (control arm) · fires recorded, nothing shown';
+    body.push(textRow([dim(` ${quiet}`)], el, 'advice_saving'));
   }
   body.push(...ledgerRows(d, model, columns, now, buttons?.el ?? { ...el, Button: el.Box as OverviewElements['Button'] }, buttons?.actions));
   return <Box flexDirection="column">{body}</Box>;

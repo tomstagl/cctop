@@ -1,4 +1,5 @@
 {
+  "exposed": true,
   "header": {
     "cwd": "/home/user/project",
     "elapsed": "9h 25m",

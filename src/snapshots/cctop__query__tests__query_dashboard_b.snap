@@ -3,6 +3,7 @@ source: src/query.rs
 expression: "serde_json::to_string_pretty(&d).unwrap()"
 ---
 {
+  "exposed": true,
   "header": {
     "cwd": "/home/user/project",
     "elapsed": "9h 25m",

@@ -356,6 +356,7 @@ fn bash_read_paths(cmd: &str) -> Vec<String> {
 
 /// `HEAD` of `cwd` right now, for the session-start baseline.
 pub fn head_commit(cwd: &Path) -> Option<String> {
+    crate::git::note_shellout();
     let out = Command::new("git")
         .arg("-C")
         .arg(cwd)
@@ -368,6 +369,7 @@ pub fn head_commit(cwd: &Path) -> Option<String> {
 
 /// `(path, added, removed)` for the working tree vs `base`.
 pub fn numstat(cwd: &Path, base: &str) -> Vec<(String, u64, u64)> {
+    crate::git::note_shellout();
     let Ok(out) = Command::new("git")
         .arg("-C")
         .arg(cwd)
