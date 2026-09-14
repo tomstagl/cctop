@@ -8,3 +8,4 @@ plugin/.claude/types/claude-code-mcp.d.ts
 node_modules/
 ralph/.last-branch
 ralph/logs/
+tasks/design-site/cctop-site-redesign.html

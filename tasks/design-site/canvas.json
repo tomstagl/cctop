@@ -1,0 +1,63 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Home · desktop",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 9300
+    },
+    {
+      "file": "Guide.dc.html",
+      "title": "Panel guide · Context",
+      "x": 1540,
+      "y": 0,
+      "w": 1440,
+      "h": 2050
+    },
+    {
+      "file": "Mobile.dc.html",
+      "title": "Home · phone",
+      "x": 3080,
+      "y": 0,
+      "w": 390,
+      "h": 15400
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "Direction B · Terminal-native",
+      "x": 3570,
+      "y": 0,
+      "w": 900,
+      "h": 760
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "title": "Direction C · Poster",
+      "x": 3570,
+      "y": 900,
+      "w": 900,
+      "h": 760
+    }
+  ],
+  "annotations": [
+    {
+      "id": "direction-a",
+      "x": 0,
+      "y": -340,
+      "w": 520,
+      "text": "Direction A — Operator's manual (built)\nTwo inks on paper: ink for text and rules, the mark's terracotta for callouts and every \"what to do\". A running margin column for section numbers and cross-references, numbered figures, ruled entries. No cards, no gradients, no shadows.\nThis is what lives on the site-redesign branch; the phone layout and one guide page are beside it."
+    },
+    {
+      "id": "alternates",
+      "x": 3570,
+      "y": -260,
+      "w": 420,
+      "text": "Two low-fi alternates, not built. Each has a case for it and a tradeoff. Say the word and one of them becomes the deliverable instead."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

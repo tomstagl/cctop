@@ -1,0 +1,340 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans+Condensed:wght@700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+/* cctop site — an operator's manual. Two inks on paper: ink for text and
+   rules, terracotta (the mark's beard) for callouts, cross-references and
+   the one thing to do. No cards, no shadows, no gradients: hairlines,
+   double rules, a margin column and numbered figures. */
+:root{
+  --paper:#F3F1EC;--paper-2:#EAE7E0;--ink:#17191E;--ink-2:#595C64;--ink-3:#8B8E96;
+  --rule:#17191E;--hair:#CBC8C0;--hair-soft:#E1DED6;
+  --spot:#D97757;--spot-ink:#A8482A;--spot-soft:#F4DED3;
+  --ok:#2F8F58;--warn:#B8860B;--crit:#C9403F;
+  --term-bg:#0E1318;--term-fg:#D6DEE8;--term-dim:#8593A6;--term-acc:#4CC2C2;--term-ok:#5FC77E;--term-warn:#E2B04A;--term-crit:#E5605E;--term-border:#2A3644;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",var(--sans);
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --margin:172px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#121417;--paper-2:#1A1D22;--ink:#E8E5DE;--ink-2:#A9A69F;--ink-3:#6F727A;
+  --rule:#E8E5DE;--hair:#34373E;--hair-soft:#24272D;
+  --spot-ink:#E48C67;--spot-soft:#3A241B;
+  --ok:#5FC77E;--warn:#E2B04A;--crit:#E5605E;
+}}
+*{box-sizing:border-box}
+html{color-scheme:light dark;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-inline:clamp(16px,4vw,48px);padding-block:0 72px;-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto}
+a{color:var(--spot-ink);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover,a:focus-visible{color:var(--ink)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+p code{background:var(--paper-2);padding:1px 5px;border-radius:2px}
+kbd{border:1px solid var(--hair);border-bottom-width:2px;border-radius:3px;padding:0 5px;font-size:.85em;background:var(--paper-2)}
+h1,h2,h3,h4{font-family:var(--cond);font-weight:700;letter-spacing:-.015em;text-wrap:balance;margin:0}
+h2{font-size:clamp(28px,3.4vw,40px);line-height:1.02;margin-bottom:16px}
+h3{font-size:21px;line-height:1.15}
+p{margin:0 0 12px;max-width:68ch}
+p.wide{max-width:none}
+strong{font-weight:600}
+.small{font-size:14px;color:var(--ink-2)}
+.eyebrow{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.spot{color:var(--spot-ink)}
+hr{border:0;border-top:1px solid var(--hair);margin:24px 0}
+
+/* masthead */
+.masthead{display:flex;align-items:center;justify-content:space-between;gap:16px 28px;flex-wrap:wrap;padding-block:16px;border-bottom:2px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink)}
+.brand svg{width:34px;height:34px;flex:none}
+.brand b{font:700 25px/1 var(--cond);letter-spacing:-.01em}
+.brand span{font:500 11.5px/1.2 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);border-left:1px solid var(--hair);padding-left:11px;margin-left:2px}
+.nav{display:flex;flex-wrap:wrap;gap:6px 22px;font:500 12.5px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.nav a{color:var(--ink-2);text-decoration:none;padding-block:8px}
+.nav a:hover,.nav a:focus-visible,.nav a[aria-current]{color:var(--spot-ink);box-shadow:0 2px 0 0 var(--spot)}
+
+/* the manual grid: a margin column for section numbers and marginalia */
+.sec{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding-block:44px 12px;border-top:1px solid var(--rule)}
+.sec.first{border-top:0}
+.mg{position:relative}
+.mg .no{font:700 46px/1 var(--cond);letter-spacing:-.03em;color:var(--spot);display:block}
+.mg .no small{font-size:.5em;vertical-align:.45em;margin-right:2px;letter-spacing:0}
+.mg .lbl{display:block;font:500 11.5px/1.5 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);margin-top:10px;max-width:14ch}
+.mg .note{display:block;font-size:13px;line-height:1.45;color:var(--ink-2);margin-top:18px;padding-top:10px;border-top:1px solid var(--hair);max-width:22ch}
+.mg .note b{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--spot-ink);display:block;margin-bottom:2px}
+.mg .note a{color:inherit}
+@media (min-width:901px){.mg .stick{position:sticky;top:24px}}
+.body>p:first-child{margin-top:2px}
+
+/* cover */
+.cover{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding-block:52px 40px}
+.cover .mg .no{font-size:15px;line-height:1.5;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);font-family:var(--mono);font-weight:500}
+.cover h1{font:700 clamp(42px,6.1vw,86px)/.96 var(--cond);letter-spacing:-.025em;max-width:15ch;margin:0 0 24px;text-wrap:balance}
+.cover h1 em{font-style:normal;color:var(--spot-ink)}
+.lede{font-size:clamp(17px,1.55vw,20px);line-height:1.5;max-width:62ch;margin-bottom:30px}
+.spec{list-style:none;margin:0 0 36px;padding:0;border-top:2px solid var(--rule);max-width:820px}
+.spec li{display:grid;grid-template-columns:118px minmax(0,1fr);column-gap:18px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--hair)}
+.spec li>span:first-child{font:500 11.5px/1.6 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.spec li>span:last-child{font-size:15.5px}
+.spec .install{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:2px}
+.spec .install code{font-size:14.5px;background:var(--ink);color:var(--paper);padding:12px 14px;white-space:nowrap;overflow-x:auto;max-width:100%}
+.spec .install button{font:500 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;padding:0 14px;border:1px solid var(--ink);margin-left:-1px;background:var(--paper);color:var(--ink);cursor:pointer;min-height:44px}
+.spec .install button:hover,.spec .install button:focus-visible{background:var(--spot);border-color:var(--spot);color:#0E1318;outline:none}
+.spec .install button[hidden]{display:none}
+.spec .also{display:block;font:400 12.5px/1.6 var(--mono);color:var(--ink-2);margin-top:6px}
+
+/* figures */
+figure{margin:0}
+.plate{border:1px solid var(--rule);padding:5px;background:var(--paper)}
+.plate video,.plate img{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font:400 13px/1.5 var(--mono);color:var(--ink-2);margin-top:9px;max-width:80ch}
+figcaption b{font-weight:600;color:var(--ink);margin-right:6px}
+figcaption b::after{content:" —";color:var(--ink-3)}
+.term{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.35;width:max-content;max-width:100%}
+.term pre{margin:0;font:inherit;white-space:pre}
+.term .t{color:var(--term-acc);font-weight:600}
+.term .co{display:inline-block;width:1ch;line-height:1.3;background:var(--spot);color:#0E1318;font-weight:700;text-align:center;border-radius:2px}
+.term .d{color:var(--term-dim)}
+.co-inline{display:inline-block;min-width:1.55em;height:1.55em;line-height:1.55em;text-align:center;background:var(--spot);color:#0E1318;font:700 12px/1.55em var(--mono);border-radius:2px;vertical-align:1px}
+
+.figrow{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:36px;align-items:end}
+.figrow figcaption{margin-top:0}
+.figrow .how{font-size:14.5px;color:var(--ink);margin-bottom:18px;max-width:40ch}
+.figrow .how b{display:block;font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--spot-ink)}
+@media (max-width:900px){.figrow{grid-template-columns:minmax(0,1fr)}.figrow .how{margin:14px 0 0}}
+
+/* ruled lists: the legend, the questions */
+.ruled{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.ruled>li{display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;padding:18px 0;border-bottom:1px solid var(--hair)}
+.ruled .n{font:700 30px/1 var(--cond);color:var(--spot);letter-spacing:-.02em;padding-top:2px}
+.ruled .n.k{font:700 13px/1.3 var(--mono);color:var(--ink-2);letter-spacing:.04em;padding-top:8px}
+.ruled h3{margin-bottom:6px}
+.ruled h3 small{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-left:10px}
+.ruled p{margin-bottom:8px;font-size:15.5px}
+.ruled p:last-child{margin-bottom:0}
+.do{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;align-items:baseline;font-size:15px}
+.do b{font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--spot-ink);white-space:nowrap}
+.do b::before{content:"→ "}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:44px}
+.two>.ruled{border-top:1px solid var(--rule)}
+.qs>li{grid-template-columns:minmax(0,1fr)}
+.qs h3{font-size:24px}
+.qs .ref{font:500 12px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-top:6px}
+.qs .ref a{color:var(--spot-ink);text-decoration:none}
+.qs .ref a:hover{text-decoration:underline}
+
+/* symbols */
+.syms{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0 36px;border-top:1px solid var(--rule)}
+.sym{display:grid;grid-template-columns:130px minmax(0,1fr);column-gap:14px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14.5px;align-items:start}
+.sym code{font-size:12.5px;background:var(--term-bg);color:var(--term-fg);padding:3px 7px;white-space:pre-wrap;justify-self:start;max-width:100%}
+.sym code.g{color:var(--term-ok)}.sym code.a{color:var(--term-warn)}.sym code.r{color:var(--term-crit)}.sym code.c{color:var(--term-acc)}
+.sym span b{font-weight:600}
+
+/* the Advisor */
+.advice{display:grid;gap:10px;margin:14px 0 12px;max-width:820px}
+.adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:12px 14px;font-family:var(--mono);font-size:13px;line-height:1.45}
+.adv .h{color:var(--term-warn)}.adv .a{color:var(--term-acc)}.adv .s{color:var(--term-dim)}
+.rules{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.rules>li{display:grid;grid-template-columns:60px minmax(0,1fr);column-gap:16px;padding:18px 0;border-bottom:1px solid var(--hair);scroll-margin-top:16px}
+.rules .code{font:600 13px/1.4 var(--mono);color:var(--spot-ink);padding-top:5px}
+.rules h3{margin-bottom:4px}
+.rules .when{font:400 13.5px/1.5 var(--mono);color:var(--ink-2);margin-bottom:8px}
+.rules .when b{font-weight:500;color:var(--ink);text-transform:uppercase;letter-spacing:.07em;font-size:11px;margin-right:6px}
+.rules p{font-size:15px}
+
+/* the two views */
+.views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 40px}
+.views h3{margin-bottom:6px}
+.views .eyebrow{display:block;margin-bottom:8px}
+.views figure{margin-top:12px}
+.views .term{font-size:11.5px}
+
+/* install */
+pre.block{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.55;margin:0 0 20px;max-width:820px}
+pre.block .c{color:var(--term-dim)}
+.hosts{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;list-style:none;padding:0}
+.hosts li{font:500 12.5px/1 var(--mono);letter-spacing:.05em;border:1px solid var(--ink);padding:8px 12px}
+.steps{list-style:none;margin:0 0 8px;padding:0;counter-reset:s;border-top:1px solid var(--rule);max-width:820px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;padding:14px 0;border-bottom:1px solid var(--hair);font-size:15.5px}
+.steps li::before{content:counter(s,decimal-leading-zero);font:700 22px/1.2 var(--cond);color:var(--spot)}
+.steps li p{margin:0}
+.steps li p+p{margin-top:4px}
+
+/* themes */
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0 8px}
+.theme{padding:12px 12px 10px;font:500 12.5px/1.4 var(--mono);border:1px solid var(--rule)}
+.theme i{display:inline-block;width:14px;height:14px;margin:8px 4px 0 0;vertical-align:-2px}
+.theme .bar{display:block;letter-spacing:-.5px;margin-top:4px}
+
+/* tables (the reference appendix) */
+.tbl{overflow-x:auto;border-top:2px solid var(--rule);margin:14px 0 30px}
+table{border-collapse:collapse;width:100%;min-width:860px;font-size:14px;table-layout:fixed}
+col.c1{width:17%}col.c2{width:9%}col.c3{width:31%}col.c4{width:13%}col.c5{width:20%}col.c6{width:10%}
+th{font:500 11px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);text-align:left;padding:10px 12px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap;vertical-align:bottom}
+td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair);vertical-align:top;font-size:14px}
+td:first-child{font-weight:600;white-space:nowrap}
+td code{font-size:12.5px}
+tr:target td{background:var(--spot-soft)}
+
+/* guide entries */
+.entry{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding:26px 0;border-top:1px solid var(--hair);scroll-margin-top:16px}
+.entry:first-of-type{border-top:2px solid var(--rule)}
+.entry .mg h3{font-size:22px;line-height:1.1;margin-bottom:6px}
+.entry .reads{display:block;font:400 12.5px/1.5 var(--mono);color:var(--ink-2)}
+.entry .reads code{display:inline-block;background:var(--term-bg);color:var(--term-fg);padding:2px 7px;margin-top:4px;white-space:pre-wrap;max-width:100%;vertical-align:top;line-height:1.5}
+.entry dl{margin:0;display:grid;grid-template-columns:108px minmax(0,1fr);column-gap:16px;row-gap:10px;align-items:baseline}
+.entry dt{font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.entry dt.act{color:var(--spot-ink)}
+.entry dt.act::before{content:"→ "}
+.entry dd{margin:0;font-size:15.5px;max-width:68ch}
+.entry dd.meta{font-size:13.5px;color:var(--ink-2)}
+.entry dd.meta a{color:var(--spot-ink)}
+.toc{list-style:none;margin:0;padding:0;border-top:2px solid var(--rule);max-width:820px}
+.toc li{border-bottom:1px solid var(--hair)}
+.toc li a{display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;color:inherit;text-decoration:none}
+.toc .n{font:700 26px/1 var(--cond);color:var(--spot);padding:14px 0}
+.toc .t{padding:14px 0}
+.toc .t b{font-family:var(--cond);font-weight:700;font-size:21px;display:block;margin-bottom:2px}
+.toc .t span{font-size:14.5px;color:var(--ink-2)}
+.toc li:hover .t b,.toc li:focus-within .t b{color:var(--spot-ink)}
+.crumbs{font:500 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);margin:26px 0 -20px}
+.crumbs a{color:inherit;text-decoration:none}
+.crumbs a:hover{color:var(--spot-ink)}
+.pager{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:40px;padding-top:14px;border-top:1px solid var(--rule);font:500 13px/1.4 var(--mono)}
+.pager a{text-decoration:none}
+
+/* colophon */
+.colophon{margin-top:64px;padding-top:18px;border-top:3px double var(--rule);display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;font:400 13px/1.7 var(--mono);color:var(--ink-2)}
+.colophon .brand b{font-size:20px}
+.colophon nav{display:flex;flex-wrap:wrap;gap:4px 22px;margin-bottom:8px}
+.colophon a{color:var(--ink-2)}
+.colophon a:hover{color:var(--spot-ink)}
+
+/* narrow screens: the margin column folds above the body */
+@media (max-width:900px){
+  .sec,.cover,.entry,.colophon{grid-template-columns:minmax(0,1fr);row-gap:8px}
+  .mg{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:8px}
+  .mg .no{font-size:32px}
+  .mg .lbl{margin-top:0;max-width:none}
+  .mg .note{flex-basis:100%;max-width:none;margin-top:4px;padding-top:6px}
+  .entry .mg{display:block}
+  .entry dl{grid-template-columns:minmax(0,1fr);row-gap:2px}
+  .entry dd{margin-bottom:8px}
+  .two,.views{grid-template-columns:minmax(0,1fr)}
+  .two>.ruled+.ruled{border-top:0}
+  .spec li{grid-template-columns:minmax(0,1fr);row-gap:2px}
+  .cover{padding-block:36px 28px}
+  .masthead{padding-block:10px}
+  .nav{gap:0 14px}
+  .nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
+}
+@media (max-width:520px){
+  .ruled>li{grid-template-columns:40px minmax(0,1fr)}
+  .ruled.qs>li{grid-template-columns:minmax(0,1fr)}
+  .term{font-size:11px;padding:10px 12px}
+  .ruled .n{font-size:24px}
+  .sym{grid-template-columns:minmax(0,1fr);row-gap:4px}
+  .rules>li,.steps li{grid-template-columns:44px minmax(0,1fr)}
+  .do{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.plate video{display:none}.plate img.still{display:block}}
+@media (prefers-reduced-motion:no-preference){.plate img.still{display:none}}
+.plate img.still{display:block !important}
+
+  </style>
+</helmet>
+<div class="page">
+<header class="masthead">
+  <a class="brand" href="../" aria-label="cctop home"><svg viewBox="0 0 256 256" aria-hidden="true"><g fill="#D97757"><path d="M128 111 C118 98 100 98 92 106 C87 111 91 118 98 116 C107 113 117 115 128 121 C139 115 149 113 158 116 C165 118 169 111 164 106 C156 98 138 98 128 111 Z"/><rect x="78" y="118" width="100" height="30" rx="2"/><rect x="84" y="155" width="88" height="22" rx="2"/><rect x="90" y="184" width="76" height="20" rx="2"/><path d="M96 211 H160 L156 230 L146 222 L136 240 L128 254 L120 240 L110 222 L100 230 Z"/></g><g><circle cx="88" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><circle cx="168" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><path d="M118 56 Q128 45 138 56" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M58 55 L42 51 M198 55 L214 51" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></g></svg><b>cctop</b><span>Operator's manual</span></a>
+  <nav class="nav" aria-label="Sections">
+    <a href="../#dashboard">The dashboard</a>
+    <a href="./" aria-current="page">Panel guide</a>
+    <a href="advisor.html">Advisor</a>
+    <a href="../#install">Install</a>
+    <a href="../metrics.html">Reference</a>
+    <a href="https://github.com/tomstagl/cctop">GitHub</a>
+  </nav>
+</header>
+<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Context</p>
+<section class="sec first">
+  <div class="mg"><span class="no"><small>§</small>1</span><span class="lbl">Context</span><span class="note"><b>Note</b>Amber from 60 % of the window, red from 80 %.</span></div>
+  <div class="body">
+    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Context</h1>
+    <p>How full the context window is, how fast it's filling, and how many turns are left before the next compaction rewrites it.</p>
+  </div>
+</section>
+<article class="entry" id="context_size">
+<div class="mg">
+<h3>Context size</h3>
+<span class="reads">reads as<br><code>134k / 200k</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How much of the model's attention window is occupied right now. It drives both cost (a bigger context costs more even when cached) and answer quality, which degrades as a session crowds toward the limit.</dd>
+<dt class="act">What to do</dt><dd>If it's growing fast, check the Tools panel's <em>tokens → ctx</em> column for which single tool call pushed the most in before reaching for anything else.</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · the status line (after cctop install) · ≈ when read from the transcript alone · <a href="../metrics.html#context_size">how</a></dd>
+</dl></article>
+<article class="entry" id="context_window">
+<div class="mg">
+<h3>Context window</h3>
+<span class="reads">reads as<br><code>/ 200k</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The ceiling this session is filling toward. It changes with the model, so the same context size means a different amount of headroom on different models.</dd>
+<dt class="act">What to do</dt><dd>Compare it against context size to see real headroom — there's nothing to configure here directly.</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the status line (after cctop install) · ≈ until cctop install · <a href="../metrics.html#context_window">how</a></dd>
+</dl></article>
+<article class="entry" id="context_prefix">
+<div class="mg">
+<h3>Fixed prefix</h3>
+<span class="reads">reads as<br><code>sys+tools 28k</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The fixed cost paid on every single turn regardless of task: system prompt, CLAUDE.md, tool definitions, skills. A bloated prefix taxes the whole session, forever.</dd>
+<dt class="act">What to do</dt><dd>Trim CLAUDE.md, move rarely-used rules into skills, and disable MCP servers this project doesn't use.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A17">A17 Oversized prefix</a></dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · exact · <a href="../metrics.html#context_prefix">how</a></dd>
+</dl></article>
+<article class="entry" id="context_velocity">
+<div class="mg">
+<h3>Context velocity</h3>
+<span class="reads">reads as<br><code>+9.4k/turn</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How fast the remaining headroom is being burned — a leading indicator that context size alone can't give you.</dd>
+<dt class="act">What to do</dt><dd>A high velocity late in a session is the cue to hand exploration off to a subagent, or to wrap up before the next compaction.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A05">A05 Exploring in the main context</a></dd>
+<dt>Measured</dt><dd class="meta">tokens/turn · from the transcript · exact · <a href="../metrics.html#context_velocity">how</a></dd>
+</dl></article>
+<article class="entry" id="turns_until_compaction">
+<div class="mg">
+<h3>Turns until autocompact</h3>
+<span class="reads">reads as<br><code>autocompact in ~3 turns est</code></span>
+</div><dl>
+<dt>What it means</dt><dd>A forecast of when the session's history gets summarised — and how much detail that summary will drop.</dd>
+<dt class="act">What to do</dt><dd>If this is low and you're mid-task, write a short hand-off note now rather than after the compaction happens.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A18">A18 Missing hand-off</a></dd>
+<dt>Measured</dt><dd class="meta">turns · from the transcript · the status line (after cctop install) · ≈ until the first compaction has been seen · <a href="../metrics.html#turns_until_compaction">how</a></dd>
+</dl></article>
+<article class="entry" id="compactions">
+<div class="mg">
+<h3>Compactions</h3>
+<span class="reads">reads as<br><code>compactions 1 (turn 9, −71k)</code></span>
+</div><dl>
+<dt>What it means</dt><dd>Each compaction spends output tokens on a summary and loses detail the model then has to re-derive.</dd>
+<dt class="act">What to do</dt><dd>Two or more compactions in one session usually means it would have been cheaper to end the session at a natural boundary and start fresh.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A06">A06 Compaction churn</a> · <a href="advisor.html#A18">A18 Missing hand-off</a></dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · hook events (after cctop install) · exact · <a href="../metrics.html#compactions">how</a></dd>
+</dl></article>
+<nav class="pager" aria-label="Panels"><a href="header.html">← Header</a><a href="tokens-cost.html">2 Tokens &amp; Cost →</a></nav>
+<footer class="colophon">
+  <a class="brand" href="../"><b>cctop</b></a>
+  <div><nav aria-label="Footer"><a href="../">Home</a><a href="./">Panel guide</a><a href="../metrics.html">How each number is measured</a><a href="https://github.com/tomstagl/cctop">GitHub</a></nav><span>© 2026 Thomas Stagl</span></div>
+</footer>
+</div>
+</x-dc>
+</body>
+</html>

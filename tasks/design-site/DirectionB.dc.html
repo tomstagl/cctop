@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&amp;family=IBM+Plex+Sans:wght@400;600&amp;display=swap">
+  <style>
+    body { margin: 0; background: #F3F1EC; font-family: "IBM Plex Sans", system-ui, sans-serif; color: #17191E; }
+    a { color: #A8482A; } a:hover { color: #17191E; }
+  </style>
+</helmet>
+<div style="width: 900px; height: 760px; padding: 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; background: #F3F1EC;">
+  <div style="display: flex; align-items: baseline; gap: 14px;">
+    <span style="font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: #A8482A;">Direction B · not chosen</span>
+    <span style="font: 600 22px/1.1 'IBM Plex Sans', sans-serif;">Terminal-native — the site is a cctop screen</span>
+  </div>
+  <div style="flex: 1; background: #0E1318; color: #D6DEE8; border: 1px solid #17191E; padding: 18px 20px; font: 400 12.5px/1.4 'IBM Plex Mono', monospace; display: flex; flex-direction: column; gap: 10px;">
+    <div style="color: #8593A6;">┌─ cctop ── tomstagl.github.io/cctop ────────────────────────── v0.2.0 ┐</div>
+    <div style="color: #4CC2C2;">│ ● LIVE  <span style="color: #D6DEE8;">See what Claude Code is doing — live, in a pane beside it.</span></div>
+    <div style="display: flex; gap: 8px; padding-left: 12px;">
+      <div style="width: 380px; height: 12px; background: #2A3644;"></div>
+      <div style="width: 140px; height: 12px; background: #2A3644;"></div>
+    </div>
+    <div style="color: #8593A6;">├─1 What it answers ───────────────────────────────────────────────────┤</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 12px;">
+      <div style="width: 520px; height: 10px; background: #2A3644;"></div>
+      <div style="width: 460px; height: 10px; background: #2A3644;"></div>
+      <div style="width: 500px; height: 10px; background: #2A3644;"></div>
+    </div>
+    <div style="color: #8593A6;">├─2 The dashboard ─────────────────────────────── ▇▇▇▇▇▇▇▁▁▁ 67 % ┤</div>
+    <div style="display: flex; gap: 14px; padding-left: 12px;">
+      <div style="width: 300px; height: 150px; background: #1A2430; border: 1px solid #2A3644;"></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="width: 260px; height: 10px; background: #2A3644;"></div>
+        <div style="width: 220px; height: 10px; background: #2A3644;"></div>
+        <div style="width: 240px; height: 10px; background: #2A3644;"></div>
+        <div style="width: 200px; height: 10px; background: #2A3644;"></div>
+      </div>
+    </div>
+    <div style="color: #8593A6;">├─9 Advisor ───────────────────────────────────────────────── 1 of 3 ┤</div>
+    <div style="padding-left: 12px; color: #E2B04A;">▸ brew install tomstagl/tap/cctop <span style="color: #4CC2C2;">then /cctop</span></div>
+    <div style="color: #8593A6; margin-top: auto;">└ ?help 1 answers 2 dashboard 3 advisor 4 install 5 guide g github ┘</div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; font-size: 14px; line-height: 1.5;">
+    <p style="margin: 0;"><b style="font: 600 11px/1.8 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: #A8482A; display: block;">Why</b>The page looks exactly like the thing it documents: nav is the key line, sections are numbered panels, the install line is an Advisor recommendation. Zero translation for a terminal person.</p>
+    <p style="margin: 0;"><b style="font: 600 11px/1.8 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: #A8482A; display: block;">Tradeoff</b>"Terminal chic" is what most CLI tool sites already do, so it is the least distinctive of the three; and long explanatory prose in monospace on black reads slowly — the guide pages would fight the brief.</p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
