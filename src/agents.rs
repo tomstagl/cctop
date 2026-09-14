@@ -60,6 +60,11 @@ pub struct Agent {
     pub usage: Usage,
     pub api_calls: usize,
     pub tool_calls: usize,
+    /// Tool calls the hook spool attributed to this agent (`agent_id`), and
+    /// their exact run time — the agent's transcript may not exist yet.
+    pub hook_tool_calls: usize,
+    pub hook_tool_ms: u64,
+    pub hook_tool_errors: usize,
     // -- derived-state inputs
     pending_tool_uses: usize,
     last_was_error_result: bool,
@@ -84,11 +89,33 @@ impl Agent {
             usage: Usage::default(),
             api_calls: 0,
             tool_calls: 0,
+            hook_tool_calls: 0,
+            hook_tool_ms: 0,
+            hook_tool_errors: 0,
             pending_tool_uses: 0,
             last_was_error_result: false,
             last_assistant_ended_with_text: false,
             last_stop_reason: None,
             agg: Aggregate::default(),
+        }
+    }
+
+    /// A hook event carrying this agent's `agent_id`: exact tool timings
+    /// before (or without) the agent's own transcript.
+    pub fn note_hook(&mut self, event: &str, duration_ms: Option<u64>, at_ms: i64) {
+        self.started_at = self.started_at.or(Some(at_ms));
+        self.last_line_at = Some(self.last_line_at.unwrap_or(at_ms).max(at_ms));
+        match event {
+            "PostToolUse" => {
+                self.hook_tool_calls += 1;
+                self.hook_tool_ms += duration_ms.unwrap_or(0);
+            }
+            "PostToolUseFailure" => {
+                self.hook_tool_calls += 1;
+                self.hook_tool_errors += 1;
+                self.hook_tool_ms += duration_ms.unwrap_or(0);
+            }
+            _ => {}
         }
     }
 

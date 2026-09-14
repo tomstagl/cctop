@@ -12,17 +12,30 @@ use serde_json::Value;
 pub const EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
+    "UserPromptExpansion",
     "PreToolUse",
     "PostToolUse",
     "PostToolUseFailure",
+    "PostToolBatch",
     "PermissionRequest",
+    "PermissionDenied",
     "Notification",
     "SubagentStart",
     "SubagentStop",
     "PreCompact",
+    "PostCompact",
+    "PreModelSwitch",
+    "PostModelSwitch",
+    "InstructionsLoaded",
+    "TaskCreated",
+    "TaskCompleted",
     "Stop",
+    "StopFailure",
     "SessionEnd",
 ];
+
+/// Bound on the command text kept from a `tool_input` or a background task.
+const COMMAND_CHARS: usize = 200;
 
 pub const HOOK_COMMAND: &str = "cctop hook";
 /// Spool files older than this are pruned on start.
@@ -70,10 +83,37 @@ impl HookEvent {
             .and_then(Value::as_str)
             .map(str::to_string);
         if let Some(o) = v.as_object_mut() {
-            // Keep the spool small: results and inputs live in the transcript.
-            o.remove("tool_response");
-            o.remove("tool_input");
+            // Keep the spool small and free of text: results and inputs
+            // live in the transcript; prompts are measured, never kept.
+            let is_agent = tool_name.as_deref() == Some("Agent");
+            if let Some(resp) = o.remove("tool_response") {
+                if is_agent {
+                    o.insert("tool_response".into(), agent_response_facts(&resp));
+                }
+            }
+            if let Some(input) = o.remove("tool_input") {
+                if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+                    o.insert("command".into(), Value::String(bounded(cmd, COMMAND_CHARS)));
+                }
+            }
             o.remove("transcript_path");
+            for key in ["prompt", "last_assistant_message"] {
+                if let Some(Value::String(text)) = o.remove(key) {
+                    o.insert(format!("{key}_chars"), Value::from(text.chars().count()));
+                    o.insert(
+                        format!("{key}_ends_with_question"),
+                        Value::Bool(text.trim_end().ends_with('?')),
+                    );
+                }
+            }
+            if let Some(Value::Array(tasks)) = o.get_mut("background_tasks") {
+                for t in tasks.iter_mut() {
+                    if let Some(cmd) = t.get("command").and_then(Value::as_str) {
+                        let short = bounded(cmd, COMMAND_CHARS);
+                        t["command"] = Value::String(short);
+                    }
+                }
+            }
         }
         Some(HookEvent {
             at,
@@ -84,6 +124,36 @@ impl HookEvent {
             payload: v,
         })
     }
+}
+
+/// Clip to `max` characters, marking the cut.
+fn bounded(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", s.chars().take(max - 1).collect::<String>())
+    }
+}
+
+/// What a finished `Agent` reports, without its text: the model it ran on,
+/// its usage and how many tools it called.
+fn agent_response_facts(resp: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    for k in [
+        "resolvedModel",
+        "totalToolUseCount",
+        "usage",
+        "status",
+        "agentId",
+    ] {
+        if let Some(v) = resp.get(k) {
+            out.insert(k.into(), v.clone());
+        }
+    }
+    if let Some(stats) = resp.get("toolStats") {
+        out.insert("toolStats".into(), stats.clone());
+    }
+    Value::Object(out)
 }
 
 /// Append `payload` (the hook's stdin) to the spool. Never errors.
@@ -309,6 +379,52 @@ mod tests {
     }
 
     #[test]
+    fn spool_keeps_facts_and_never_text() {
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s1","hook_event_name":"UserPromptSubmit","prompt":"what is the plan?","prompt_id":"p1"
+        })).unwrap();
+        assert!(ev.payload.get("prompt").is_none());
+        assert_eq!(ev.payload["prompt_chars"], 17);
+        assert_eq!(ev.payload["prompt_ends_with_question"], true);
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s1","hook_event_name":"Stop","last_assistant_message":"Done.","background_tasks":[{"id":"b1","type":"shell","status":"running","command":"x".repeat(900),"description":"builds"}],"session_crons":[]
+        })).unwrap();
+        assert!(ev.payload.get("last_assistant_message").is_none());
+        assert_eq!(ev.payload["last_assistant_message_chars"], 5);
+        assert_eq!(
+            ev.payload["last_assistant_message_ends_with_question"],
+            false
+        );
+        assert_eq!(
+            ev.payload["background_tasks"][0]["command"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .count(),
+            200
+        );
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s1","hook_event_name":"PostToolUse","tool_name":"Agent","tool_use_id":"t","tool_input":{"prompt":"go","subagent_type":"Explore"},"tool_response":{"content":"long text","resolvedModel":"claude-haiku-4-5-20251001","totalToolUseCount":9,"usage":{"input_tokens":1},"toolStats":{"Read":4}}
+        })).unwrap();
+        assert!(ev.payload.get("tool_input").is_none());
+        assert_eq!(
+            ev.payload["tool_response"]["resolvedModel"],
+            "claude-haiku-4-5-20251001"
+        );
+        assert_eq!(ev.payload["tool_response"]["totalToolUseCount"], 9);
+        assert!(ev.payload["tool_response"].get("content").is_none());
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s1","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"gh api repos/x"},"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"gh api:*"}]}]
+        })).unwrap();
+        assert_eq!(ev.payload["command"], "gh api repos/x");
+        assert_eq!(
+            ev.payload["permission_suggestions"][0]["rules"][0]["ruleContent"],
+            "gh api:*"
+        );
+        assert_eq!(EVENTS.len(), 22);
+    }
+
+    #[test]
     fn prune_removes_old_spools() {
         let home = std::env::temp_dir().join(format!("cctop-prune-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
@@ -393,5 +509,122 @@ mod state_tests {
             .events
             .iter()
             .any(|e| e.text.starts_with("Bash allowed after ≈0:24")));
+    }
+
+    fn with(event: &str, at: i64, id: &str, payload: serde_json::Value) -> HookEvent {
+        let mut e = ev(event, at, id);
+        e.payload = payload;
+        e
+    }
+
+    #[test]
+    fn every_field_of_the_spool_lands_in_state() {
+        use crate::metrics::usage::BoundaryKind;
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}],"usage":{"input_tokens":1000}}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:30Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#).unwrap());
+        let t0 = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:00Z").unwrap();
+        // duration_ms is the tool's own run time: exact, no PreToolUse needed.
+        s.apply_hook(&with("PostToolUse", t0 + 30_000, "t1", serde_json::json!({"duration_ms": 909, "permission_mode": "acceptEdits", "effort": {"level": "high"}, "prompt_id": "p1"})));
+        let c = s.tools.get("t1").unwrap();
+        assert_eq!(c.duration_ms, Some(909));
+        assert!(!c.approx_duration);
+        assert_eq!(s.session.permission_mode.as_deref(), Some("acceptEdits"));
+        assert_eq!(s.status_facts.effort_level.as_deref(), Some("high"));
+        assert_eq!(s.session.hook_prompt_id.as_deref(), Some("p1"));
+        // A failure with its error and the interrupt flag.
+        s.apply_hook(&with("PostToolUseFailure", t0 + 31_000, "t1", serde_json::json!({"duration_ms": 65, "error": "Command failed with exit code 1", "is_interrupt": false})));
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "Bash failed: Command failed with exit code 1"));
+        s.apply_hook(&with(
+            "PostToolUseFailure",
+            t0 + 32_000,
+            "t1",
+            serde_json::json!({"is_interrupt": true}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "Bash interrupted"));
+        // Auto mode: the permission_prompt notification is the only WAITING sign.
+        s.apply_hook(&with("Notification", t0 + 40_000, "", serde_json::json!({"notification_type": "permission_prompt", "message": "Claude needs your permission to use Bash"})));
+        assert!(s.session.permission_pending);
+        assert_eq!(s.session.permission_waiting_since_ms, Some(t0 + 40_000));
+        assert_eq!(
+            s.session.notification.as_ref().map(|(k, _)| k.as_str()),
+            Some("permission_prompt")
+        );
+        s.apply_hook(&with(
+            "UserPromptSubmit",
+            t0 + 41_000,
+            "",
+            serde_json::json!({"prompt_chars": 12}),
+        ));
+        assert!(s.session.notification.is_none());
+        // A resume: Claude Code's own cold-write estimate, and a boundary.
+        s.apply_hook(&with("SessionStart", t0 + 50_000, "", serde_json::json!({"source": "resume", "seconds_since_last_response": 7200, "context_tokens": 223927, "prompt_cache_likely_expired": true, "estimated_cache_write_usd": 2.2393})));
+        let r = s.session.resume.as_ref().unwrap();
+        assert_eq!(r.source, "resume");
+        assert_eq!(r.context_tokens, Some(223_927));
+        assert_eq!(r.prompt_cache_likely_expired, Some(true));
+        assert_eq!(r.estimated_cache_write_usd, Some(2.2393));
+        assert_eq!(s.agg.boundaries.last().unwrap().kind, BoundaryKind::Resume);
+        assert_eq!(s.session.start_source.as_deref(), Some("resume"));
+        // Stop: background tasks, crons, the question flag; the task list follows.
+        s.apply_hook(&with("Stop", t0 + 60_000, "", serde_json::json!({"background_tasks": [{"id": "b1", "type": "shell", "status": "running", "command": "cargo build --release", "description": "builds the thing"}], "session_crons": [{"id": "c1"}], "last_assistant_message_chars": 40, "last_assistant_message_ends_with_question": true})));
+        assert_eq!(s.session.background_tasks.len(), 1);
+        assert_eq!(s.session.background_tasks[0].kind, "shell");
+        assert_eq!(s.session.session_crons, 1);
+        assert_eq!(s.session.last_stop_asked, Some(true));
+        s.refresh_tasks(Vec::new());
+        assert_eq!(s.tasks.len(), 1);
+        assert_eq!(s.tasks[0].description, "builds the thing");
+        assert!(s.events.iter().any(|e| e.text == "Stop · 1 background"));
+        // The new events.
+        s.apply_hook(&with(
+            "StopFailure",
+            t0 + 61_000,
+            "",
+            serde_json::json!({"error": "rate_limit"}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "turn died: rate_limit"));
+        s.apply_hook(&with("PreModelSwitch", t0 + 62_000, "", serde_json::json!({"from_model": "claude-opus-5", "to_model": "claude-sonnet-5", "prompt_cache_warm": true, "estimated_cache_write_usd": 0.8})));
+        assert!(s.events.iter().any(|e| e.text
+            == "model switch claude-opus-5 → claude-sonnet-5 · cache warm · re-write ≈$0.80"));
+        s.apply_hook(&with(
+            "PermissionDenied",
+            t0 + 63_000,
+            "",
+            serde_json::json!({"reason": "matches deny rule"}),
+        ));
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "Bash denied: matches deny rule"));
+        s.apply_hook(&with(
+            "SessionEnd",
+            t0 + 64_000,
+            "",
+            serde_json::json!({"reason": "prompt_input_exit"}),
+        ));
+        assert_eq!(s.session.end_reason.as_deref(), Some("prompt_input_exit"));
+        // A subagent's tool events go to the agent, not the session's tools.
+        s.apply_hook(&with(
+            "PostToolUse",
+            t0 + 65_000,
+            "t9",
+            serde_json::json!({"agent_id": "a1", "agent_type": "Explore", "duration_ms": 120}),
+        ));
+        s.apply_hook(&with(
+            "PostToolUseFailure",
+            t0 + 66_000,
+            "t9",
+            serde_json::json!({"agent_id": "a1", "agent_type": "Explore", "duration_ms": 30}),
+        ));
+        let a = s.agents.get("a1").unwrap();
+        assert_eq!(a.agent_type, "Explore");
+        assert_eq!(a.hook_tool_calls, 2);
+        assert_eq!(a.hook_tool_errors, 1);
+        assert_eq!(a.hook_tool_ms, 150);
+        assert!(s.tools.get("t9").is_none());
     }
 }

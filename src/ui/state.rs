@@ -52,6 +52,47 @@ pub struct SessionInfo {
     pub permission_wait_ms: i64,
     /// Permission prompts per tool name.
     pub permission_by_tool: std::collections::BTreeMap<String, usize>,
+    /// The last `Notification` hook: `(notification_type, epoch ms)` —
+    /// `permission_prompt`, `idle_prompt`, `agent_needs_input`…; cleared by
+    /// the next prompt or tool result.
+    pub notification: Option<(String, i64)>,
+    /// How the session started or resumed (`SessionStart.source`: startup,
+    /// resume, clear, compact, fork).
+    pub start_source: Option<String>,
+    /// Claude Code's own cold-resume figures (`SessionStart` on a resume).
+    pub resume: Option<ResumeInfo>,
+    /// `Stop.background_tasks`: what is still running at turn end.
+    pub background_tasks: Vec<BackgroundTask>,
+    /// `Stop.session_crons` count.
+    pub session_crons: usize,
+    /// The last `Stop`'s assistant message ended with a question mark.
+    pub last_stop_asked: Option<bool>,
+    /// Hook `prompt_id` of the last event, to join with the transcript.
+    pub hook_prompt_id: Option<String>,
+    /// `SessionEnd.reason`, once it fired.
+    pub end_reason: Option<String>,
+}
+
+/// `SessionStart` on a resume or fork: what Claude Code expects the first
+/// call to cost.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ResumeInfo {
+    pub source: String,
+    pub seconds_since_last_response: Option<u64>,
+    pub context_tokens: Option<u64>,
+    pub prompt_cache_likely_expired: Option<bool>,
+    pub estimated_cache_write_usd: Option<f64>,
+    pub at_ms: i64,
+}
+
+/// A background task Claude Code listed at turn end.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BackgroundTask {
+    pub id: String,
+    /// `shell`, `agent`, `workflow`…
+    pub kind: String,
+    pub status: String,
+    pub description: String,
 }
 
 /// Rate-limit figures from the status line (shim), plus cctop's projection.
@@ -396,6 +437,37 @@ impl State {
         self.session.hooks_installed = true;
         let at = ev.at;
         let id = ev.tool_use_id.clone().unwrap_or_default();
+        let p = &ev.payload;
+        let pstr = |k: &str| p.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        if let Some(mode) = pstr("permission_mode") {
+            self.session.permission_mode = Some(mode);
+        }
+        if let Some(level) = p
+            .get("effort")
+            .and_then(|e| e.get("level"))
+            .and_then(|v| v.as_str())
+        {
+            self.status_facts.effort_level = Some(level.to_string());
+        }
+        if let Some(pid) = pstr("prompt_id") {
+            self.session.hook_prompt_id = Some(pid);
+        }
+        // A subagent's event is the agent's, not the session's.
+        if let Some(agent_id) = pstr("agent_id").filter(|a| !a.is_empty()) {
+            if !matches!(ev.event.as_str(), "SubagentStart" | "SubagentStop") {
+                let agent = self.agents.entry(agent_id.clone()).or_insert_with(|| {
+                    crate::agents::Agent::new(
+                        &agent_id,
+                        crate::agents::Meta {
+                            agent_type: pstr("agent_type").unwrap_or_default(),
+                            ..Default::default()
+                        },
+                    )
+                });
+                agent.note_hook(&ev.event, p.get("duration_ms").and_then(|v| v.as_u64()), at);
+                return;
+            }
+        }
         match ev.event.as_str() {
             "PreToolUse" => {
                 if !id.is_empty() {
@@ -425,10 +497,17 @@ impl State {
             "PostToolUse" | "PostToolUseFailure" => {
                 self.session.permission_pending = false;
                 self.session.permission_waiting_since_ms = None;
+                self.session.notification = None;
                 let name = self.tools.get(&id).map(|c| c.name.clone());
                 // Exact timing first, so the permission wait below subtracts
                 // the tool's real median rather than the transcript's guess.
-                if let Some(start) = self.hook_pre.remove(&id) {
+                // `duration_ms` (2.1.26x) is the tool's own run time, without
+                // the permission wait or the hooks; the PreToolUse gap is
+                // the fallback.
+                let start = self.hook_pre.remove(&id);
+                if let Some(d) = p.get("duration_ms").and_then(|v| v.as_i64()) {
+                    self.tools.set_exact_duration(&id, at - d, at);
+                } else if let Some(start) = start {
                     self.tools.set_exact_duration(&id, start, at);
                 }
                 if let Some(perm_at) = self.hook_perm.remove(&id) {
@@ -451,13 +530,40 @@ impl State {
                     });
                 }
                 if ev.event == "PostToolUseFailure" {
+                    let interrupted = p
+                        .get("is_interrupt")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let error = pstr("error").map(|e| crate::ui::fmt::clip(&e, 60));
+                    let text = match (interrupted, error) {
+                        (true, _) => {
+                            format!("{} interrupted", name.unwrap_or_else(|| "tool".into()))
+                        }
+                        (false, Some(e)) => {
+                            format!("{} failed: {e}", name.unwrap_or_else(|| "tool".into()))
+                        }
+                        (false, None) => {
+                            format!("{} failed", name.unwrap_or_else(|| "tool".into()))
+                        }
+                    };
                     self.events.push(crate::events::Event {
                         at,
                         kind: Kind::Api,
-                        text: format!("{} failed", name.unwrap_or_else(|| "tool".into())),
+                        text,
                     });
                 }
             }
+            "PermissionDenied" => self.events.push(crate::events::Event {
+                at,
+                kind: Kind::Perm,
+                text: format!(
+                    "{} denied{}",
+                    ev.tool_name.as_deref().unwrap_or("tool"),
+                    pstr("reason")
+                        .map(|r| format!(": {}", crate::ui::fmt::clip(&r, 60)))
+                        .unwrap_or_default()
+                ),
+            }),
             "PreCompact" => {
                 let size = self.context().size;
                 if let Some(m) = self.model().map(str::to_string) {
@@ -476,24 +582,196 @@ impl State {
                 text: ev.event.trim_start_matches("Subagent").to_lowercase(),
             }),
             "Notification" => {
+                let kind = pstr("notification_type").unwrap_or_else(|| "notification".into());
                 let msg = ev
                     .payload
                     .get("message")
                     .and_then(|m| m.as_str())
-                    .unwrap_or("notification");
+                    .unwrap_or(kind.as_str())
+                    .to_string();
+                if kind == "permission_prompt" && !self.session.permission_pending {
+                    // Auto mode never raises PermissionRequest; the notification
+                    // is the only sign the model is waiting on a dialog.
+                    self.session.permission_pending = true;
+                    self.session.permission_waiting_since_ms = Some(at);
+                }
+                self.session.notification = Some((kind, at));
                 self.events.push(crate::events::Event {
                     at,
                     kind: Kind::Note,
-                    text: crate::ui::fmt::clip(msg, 80),
+                    text: crate::ui::fmt::clip(&msg, 80),
                 });
             }
-            "SessionStart" | "SessionEnd" | "Stop" | "UserPromptSubmit" => {
+            "UserPromptSubmit" => {
+                self.session.notification = None;
                 self.events.push(crate::events::Event {
                     at,
                     kind: Kind::Hook,
                     text: ev.event.clone(),
                 })
             }
+            "SessionStart" => {
+                let source = pstr("source").unwrap_or_else(|| "startup".into());
+                self.session.start_source = Some(source.clone());
+                let n = |k: &str| p.get(k).and_then(|v| v.as_u64());
+                if p.get("context_tokens").is_some()
+                    || p.get("seconds_since_last_response").is_some()
+                {
+                    self.session.resume = Some(ResumeInfo {
+                        source: source.clone(),
+                        seconds_since_last_response: n("seconds_since_last_response"),
+                        context_tokens: n("context_tokens"),
+                        prompt_cache_likely_expired: p
+                            .get("prompt_cache_likely_expired")
+                            .and_then(|v| v.as_bool()),
+                        estimated_cache_write_usd: p
+                            .get("estimated_cache_write_usd")
+                            .and_then(|v| v.as_f64()),
+                        at_ms: at,
+                    });
+                }
+                use crate::metrics::usage::BoundaryKind;
+                match source.as_str() {
+                    "resume" => self.agg.push_boundary(BoundaryKind::Resume, at),
+                    "fork" => self.agg.push_boundary(BoundaryKind::Fork, at),
+                    "compact" => self.agg.push_boundary(BoundaryKind::Compact, at),
+                    _ => {}
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("SessionStart {source}"),
+                });
+            }
+            "Stop" => {
+                self.session.background_tasks = p
+                    .get("background_tasks")
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .map(|t| BackgroundTask {
+                                id: t
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                kind: t
+                                    .get("type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("task")
+                                    .to_string(),
+                                status: t
+                                    .get("status")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                description: crate::ui::fmt::clip(
+                                    t.get("description")
+                                        .or_else(|| t.get("command"))
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or(""),
+                                    60,
+                                ),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                self.session.session_crons = p
+                    .get("session_crons")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                self.session.last_stop_asked = p
+                    .get("last_assistant_message_ends_with_question")
+                    .and_then(|v| v.as_bool());
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: if self.session.background_tasks.is_empty() {
+                        "Stop".into()
+                    } else {
+                        format!("Stop · {} background", self.session.background_tasks.len())
+                    },
+                })
+            }
+            "StopFailure" => self.events.push(crate::events::Event {
+                at,
+                kind: Kind::Api,
+                text: format!(
+                    "turn died: {}",
+                    pstr("error")
+                        .map(|e| crate::ui::fmt::clip(&e, 60))
+                        .unwrap_or_else(|| "error".into())
+                ),
+            }),
+            "SessionEnd" => {
+                self.session.end_reason = pstr("reason");
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!(
+                        "SessionEnd{}",
+                        self.session
+                            .end_reason
+                            .as_deref()
+                            .map(|r| format!(" ({r})"))
+                            .unwrap_or_default()
+                    ),
+                })
+            }
+            "PostCompact" => self.events.push(crate::events::Event {
+                at,
+                kind: Kind::Compact,
+                text: "compaction done (hook)".into(),
+            }),
+            "PreModelSwitch" | "PostModelSwitch" => {
+                let from = pstr("from_model").unwrap_or_default();
+                let to = pstr("to_model").unwrap_or_default();
+                let warm = p.get("prompt_cache_warm").and_then(|v| v.as_bool());
+                let usd = p.get("estimated_cache_write_usd").and_then(|v| v.as_f64());
+                let mut text = format!(
+                    "{} {from} → {to}",
+                    if ev.event == "PreModelSwitch" {
+                        "model switch"
+                    } else {
+                        "model switched"
+                    }
+                );
+                if warm == Some(true) {
+                    text.push_str(" · cache warm");
+                }
+                if let Some(u) = usd {
+                    text.push_str(&format!(" · re-write ≈{}", crate::ui::fmt::usd(u)));
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Api,
+                    text,
+                });
+            }
+            "TaskCreated"
+            | "TaskCompleted"
+            | "InstructionsLoaded"
+            | "UserPromptExpansion"
+            | "PostToolBatch" => self.events.push(crate::events::Event {
+                at,
+                kind: Kind::Hook,
+                text: match ev.event.as_str() {
+                    "InstructionsLoaded" => format!(
+                        "instructions loaded{}",
+                        pstr("memory_type")
+                            .map(|m| format!(" ({m})"))
+                            .unwrap_or_default()
+                    ),
+                    "UserPromptExpansion" => format!(
+                        "skill expanded{}",
+                        pstr("command_name")
+                            .map(|c| format!(" {c}"))
+                            .unwrap_or_default()
+                    ),
+                    other => other.to_string(),
+                },
+            }),
             _ => {}
         }
     }
@@ -582,6 +860,30 @@ impl State {
                 l.exhaustion_ms = ex;
             }
         }
+    }
+
+    /// The task list for the Agents panel: what the last `Stop` hook listed
+    /// (exact, when hooks are installed), else what the task directory
+    /// holds (older Claude Code versions).
+    pub fn refresh_tasks(&mut self, dir_tasks: Vec<crate::tasks::Task>) {
+        if self.session.background_tasks.is_empty() {
+            self.tasks = dir_tasks;
+            return;
+        }
+        let now = self.clock_ms();
+        self.tasks = self
+            .session
+            .background_tasks
+            .iter()
+            .map(|t| crate::tasks::Task {
+                id: t.id.clone(),
+                kind: t.kind.clone(),
+                description: t.description.clone(),
+                started_at_ms: now,
+                status: Some(t.status.clone()),
+            })
+            .chain(dir_tasks)
+            .collect();
     }
 
     /// Take what `~/.claude.json` says about the account and this directory.

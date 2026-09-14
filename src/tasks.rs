@@ -1,7 +1,10 @@
-//! Background tasks Claude Code tracks under `~/.claude/tasks/session-<id8>/`.
-//! The directory holds one file per task; cctop treats each file generically
-//! (id = stem, kind = extension or a `kind` field if the file is JSON,
-//! description = first line) so a format change never breaks the panel.
+//! Background tasks. On 2.1.269 the directory
+//! `~/.claude/tasks/session-<id8>/` holds only `.lock` / `.highwatermark`;
+//! the list itself arrives in the `Stop` hook's `background_tasks` (see
+//! [`crate::ui::state::State::refresh_tasks`]). The directory scan stays for
+//! older versions and skips dotfiles; each file is read generically (id =
+//! stem, kind = extension or a `kind` field if the file is JSON, description
+//! = first line) so a format change never breaks the panel.
 
 use std::path::{Path, PathBuf};
 
@@ -35,6 +38,7 @@ pub fn load(dir: &Path) -> Vec<Task> {
     let mut tasks: Vec<Task> = entries
         .flatten()
         .filter(|e| e.path().is_file())
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
         .filter_map(|e| read_task(&e.path()))
         .collect();
     tasks.sort_by_key(|t| std::cmp::Reverse(t.started_at_ms));
@@ -96,8 +100,10 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("m1.output"), "first line of output\nsecond\n").unwrap();
+        std::fs::write(dir.join(".lock"), "").unwrap();
+        std::fs::write(dir.join(".highwatermark"), "12").unwrap();
         let tasks = load(&dir);
-        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks.len(), 2, "dotfiles are bookkeeping, not tasks");
         let bash = tasks.iter().find(|t| t.id == "b7f3").unwrap();
         assert_eq!(bash.kind, "bash");
         assert_eq!(bash.description, "cargo build --release");

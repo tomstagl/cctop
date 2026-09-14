@@ -144,7 +144,8 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         app.tick_hooks.push(Box::new(move |state: &mut State| {
             if last.elapsed() >= Duration::from_secs(2) {
                 last = Instant::now();
-                state.tasks = crate::tasks::load(&dir);
+                let dir_tasks = crate::tasks::load(&dir);
+                state.refresh_tasks(dir_tasks);
             }
         }));
     }
