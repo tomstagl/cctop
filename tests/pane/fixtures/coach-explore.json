@@ -67,16 +67,24 @@
       "unit": ""
     }
   ],
+  "lines": {
+    "l0": "◐193k ≈$.11 · ○cache 59m · ○5h — · ◐edits 1",
+    "l1": "◐19% ○— ○59m ◐1",
+    "l2": "◐○○◐"
+  },
   "model": "claude-opus-5",
   "next": null,
+  "next_row": "next     —",
   "nudge": null,
   "nudges_this_hour": 0,
   "queued": 0,
+  "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
   "recent": [],
   "schema": 1,
   "session": "session-b",
   "session_mode": "team",
   "snoozed": [],
+  "snoozed_row": "snoozed  —",
   "state": {
     "kind": "EXPLORING",
     "line": "EXPLORING · 14c +6.3k · silent 4:32",

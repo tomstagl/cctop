@@ -19,6 +19,7 @@ import {
   type View,
 } from './model';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
+import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
 
 // Re-exported so the checked-in `$` contract's own version (US-009) has one
@@ -48,6 +49,7 @@ export const HIDDEN_AFTER_MS = 2000;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 // The views in view-bar order; the `view` is the /cctop-pane argument.
 const VIEWS: { view: View; label: string }[] = [
+  { view: 'coach', label: 'Coach' },
   { view: 'overview', label: 'Overview' },
   { view: 'tools', label: 'Tools' },
   { view: 'agents', label: 'Agents' },
@@ -119,6 +121,8 @@ function unpinStatus($: EngineInterface): void {
   if (!statusPinned) return;
   $.ui.status(undefined);
   statusPinned = false;
+  model = reduce(model, { type: 'coach.status', status: null });
+  coachChanged($);
 }
 
 // A render arrived: the pane is drawn, here and this wide. Settles every
@@ -134,6 +138,8 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>): void {
   });
   stopHiddenTimer();
   unpinStatus($);
+  // The width may have changed the status line's form.
+  coachChanged($);
   const waiters = renderWaiters;
   renderWaiters = [];
   for (const resolve of waiters) resolve();
@@ -181,8 +187,69 @@ function stopRenderTimer(): void {
 }
 
 function replaceModel($: EngineInterface, next: Model): void {
+  const before = model;
   model = next;
   if (model.open) requestRender($);
+  if (model.query.coach !== before.query.coach) coachChanged($);
+}
+
+// The coach's own surfaces beyond the pane, kept from the last `cctop
+// query coach`: the status line under the prompt (L0 / L1 / L2 by the
+// pane's width, set again only when it changes) and the one toast the
+// coach raises — a NOW-class nudge taking the slot, once per fire and at
+// most once per turn. The hidden notice keeps the status line while the
+// pane is not drawn.
+function coachChanged($: EngineInterface): void {
+  const c = coachOf(model.query.coach);
+  if (c === null) return;
+  // The width decides the form, so nothing is pinned before the first render.
+  if (model.open && !statusPinned && model.bodyColumns !== null) {
+    const status = statusLine(c, model.bodyColumns);
+    if (status !== model.coachStatus) {
+      $.ui.status(status);
+      model = reduce(model, { type: 'coach.status', status });
+    }
+  }
+  const n = c.nudge;
+  if (n !== null && n.cls === 'NOW') {
+    const key = `${n.id}:${n.firedAt ?? 0}`;
+    if (key !== model.coachToasted && model.coachToastTurn !== model.turn.number) {
+      $.ui.toast(n.line1);
+      model = reduce(model, { type: 'coach.toasted', key, turn: model.turn.number });
+    }
+  }
+}
+
+// What the coach view's Buttons do: `fill` writes a prompt- or slash-class
+// action into the prompt box (never submits it), `snooze` asks the binary
+// (queued for the TUI while it runs) and re-polls, `why` and `light` are
+// view state.
+function coachActions($: EngineInterface): CoachActions {
+  return {
+    fill: (text) => {
+      $.prompt
+        .fill({ text })
+        .then(({ isFilled }) => {
+          if (!isFilled) $.ui.toast('cctop: the prompt box is busy — the action was not filled');
+        })
+        .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
+    },
+    snooze: (rule) => {
+      const id = model.sessionId;
+      if (id === null) return;
+      $.process
+        .run(['cctop', 'query', 'coach', '--snooze', rule, '--session', id], { timeoutMs: 5000 })
+        .then((result) => {
+          if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
+          const answer = JSON.parse(result.stdout) as { snooze?: unknown };
+          if (typeof answer.snooze === 'string') $.ui.toast(`cctop: ${answer.snooze}`);
+          apply($, { type: 'query', verb: 'coach', data: answer });
+        })
+        .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
+    },
+    why: () => apply($, { type: 'coach.why', why: !model.coachWhy }),
+    light: (light: LightId) => apply($, { type: 'coach.light', light }),
+  };
 }
 
 function apply($: EngineInterface, action: Action): void {
@@ -370,6 +437,10 @@ function paneClosed($: EngineInterface): void {
   stopRenderTimer();
   stopHiddenTimer();
   unpinStatus($);
+  if (model.coachStatus !== null) {
+    $.ui.status(undefined);
+    model = reduce(model, { type: 'coach.status', status: null });
+  }
   persistPane($);
   updateMarker($);
 }
@@ -407,7 +478,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
   return (
     <Box flexDirection="column">
       {viewBar($, el, columns)}
-      {renderView(model, el, columns, 'dock', now)}
+      {renderView(model, el, columns, 'dock', now, { el, actions: coachActions($) })}
       {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
       {model.stale && <Text wrap="truncate">cctop query stale</Text>}
       {unsupportedVerbs(model).map((verb) => (

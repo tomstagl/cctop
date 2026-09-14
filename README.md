@@ -125,9 +125,13 @@ Claude Code's own frame and colour style — no multiplexer needed:
 ╰────────────────────────────╯╰────────────────────────────╯
 ```
 
-This is the Overview; press a digit (`1`–`6`) from the composer to switch to
-Tools, Agents, Files, Events or the Advisor, the same way `s`/`f`/`p` work in
-the terminal view. It needs `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the
+This is the Overview; the view bar switches to the Coach, Tools, Agents,
+Files, Events or the Advisor, the same way `c`/`s`/`f`/`p` work in the
+terminal view. The Coach view draws the same 56-column card as the TUI's
+`c` view — the state line, four lights, the one nudge — with `[1 fill]`
+(writes a prompt-class action into the prompt box; nothing is ever
+submitted), `[2 snooze]` and `[3 why]`, and pins the coach's one-line form
+under the prompt. It needs `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the
 `env` block of `~/.claude/settings.json` and `/tui fullscreen`; `cctop pane
 status` tells you which prerequisite is missing. The `/diff` panel and the
 cctop panel share one dock, so hide one to see the other — see
@@ -150,7 +154,7 @@ terminal view automatically when function hooks are off.
 | 9 | **Advisor** | One evidence-backed recommendation at a time, ranked by tokens saved |
 <!-- panels:end -->
 
-The Advisor is rule-based (18 rules, no model call): cache misses, cache expiry, runaway tool results, re-reads, exploring in the main context, compaction churn, idle MCP servers, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, error loops, hook overhead, oversized prefix, missing hand-off.
+The Advisor is rule-based (16 rules today, no model call): named cache misses, cache expiry, runaway tool results, re-reads, exploration runs in the main context, post-compaction re-triggers, idle MCP servers and plugins, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, hook overhead, oversized prefix. Its engine keeps one nudge in a slot by class (NOW › NEXT › LATER), with hard TTLs, cooldowns, an `acted` predicate per rule and persistent snoozes (`x` five turns, `X` the session), and the coach view (`c`) shows that slot beside four lights: context, cache, limits, rework.
 
 Some numbers moved with the coach work: the turn count is Claude Code's own (`promptId`; interrupts, slash commands and task notifications no longer count, so it reads ~15 % lower than before), API-error lines no longer set the model or count as a compaction, compactions come from the `compact_boundary` records Claude Code writes since 2.1.263, and the autocompact threshold is the effective window − 13 000 tokens (967 k on 1M-window models) rather than 80 %.
 

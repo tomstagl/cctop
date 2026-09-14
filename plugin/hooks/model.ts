@@ -4,7 +4,7 @@
 import type { RenderElement, SessionUsage } from 'claude-code';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
-export type View = 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
+export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
 export type Placement = 'dock' | 'inline';
 export type Binary = 'unknown' | 'present' | 'missing';
 /** Whether the engine is drawing the pane: `hidden` once an open pane got
@@ -23,7 +23,9 @@ export const TESTED_WITH = '2.1.270';
 export const MIN_DOCK_COLUMNS = 110;
 
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
-export const QUERY_VERBS = ['summary', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+export const QUERY_VERBS = ['summary', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+/** Verbs a busy tick (every 2 s) skips: they change at turn boundaries, the idle tick reads them. */
+export const IDLE_ONLY_VERBS: readonly QueryVerb[] = ['advice'];
 export type QueryVerb = (typeof QUERY_VERBS)[number];
 /** The parsed JSON of the last successful `cctop query <verb>`, per verb. */
 export type QueryData = Partial<Record<QueryVerb, unknown>>;
@@ -100,6 +102,14 @@ export type Model = {
   viewportColumns: number | null;
   /** The context size at the end of each turn (the last HISTORY_TURNS), for the Context sparkline. */
   contextHistory: number[];
+  /** The coach view: which light's detail frame is open (null = the highest light) and whether the why frame is. */
+  coachLight: 'context' | 'cache' | 'limits' | 'rework' | null;
+  coachWhy: boolean;
+  /** `id:fired_at_ms` of the nudge last toasted, and the turn it was toasted in (one toast per turn). */
+  coachToasted: string | null;
+  coachToastTurn: number | null;
+  /** The last `$.ui.status` line the coach set; set again only when it changes. */
+  coachStatus: string | null;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -125,7 +135,11 @@ export type Action =
   | { type: 'stale'; stale: boolean }
   // The engine asked for the pane's tree: it is being drawn, here and this wide.
   | { type: 'render'; at: number; placement: Placement; bodyColumns: number; viewportColumns: number | null }
-  | { type: 'visibility'; visibility: Visibility };
+  | { type: 'visibility'; visibility: Visibility }
+  | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | null }
+  | { type: 'coach.why'; why: boolean }
+  | { type: 'coach.toasted'; key: string; turn: number }
+  | { type: 'coach.status'; status: string | null };
 
 export function initialModel(): Model {
   return {
@@ -161,6 +175,11 @@ export function initialModel(): Model {
     bodyColumns: null,
     viewportColumns: null,
     contextHistory: [],
+    coachLight: null,
+    coachWhy: false,
+    coachToasted: null,
+    coachToastTurn: null,
+    coachStatus: null,
   };
 }
 
@@ -244,6 +263,9 @@ export function reduce(model: Model, action: Action): Model {
         queryAt: null,
         stale: false,
         contextHistory: [],
+        coachToasted: null,
+        coachToastTurn: null,
+        coachStatus: null,
       };
     case 'verbs':
       return { ...model, verbs: action.verbs };
@@ -264,6 +286,14 @@ export function reduce(model: Model, action: Action): Model {
       };
     case 'visibility':
       return model.visibility === action.visibility ? model : { ...model, visibility: action.visibility };
+    case 'coach.light':
+      return { ...model, coachLight: action.light, coachWhy: false };
+    case 'coach.why':
+      return { ...model, coachWhy: action.why };
+    case 'coach.toasted':
+      return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
+    case 'coach.status':
+      return model.coachStatus === action.status ? model : { ...model, coachStatus: action.status };
   }
 }
 

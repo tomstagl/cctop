@@ -89,8 +89,8 @@ export function wrapWords(text: string, width: number): string[] {
 }
 
 export type Panel = {
-  /** The TUI's id for this panel (5 Tools … 9 Advisor), drawn in the frame as the TUI and the guide number it. */
-  hotkey: string;
+  /** The TUI's id for this panel (5 Tools … 9 Advisor), drawn in the frame as the TUI and the guide number it; none for the coach's frames. */
+  hotkey?: string;
   title: string;
   summary?: string;
 };

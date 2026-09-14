@@ -10,7 +10,7 @@
 // into functions declared in pane.tsx, so it receives `PollerEngine`, the
 // slice of `$` it uses, built there by a top-level function.
 import type { EngineInterface, Timer } from 'claude-code';
-import { QUERY_VERBS, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
+import { IDLE_ONLY_VERBS, QUERY_VERBS, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
 
 export type PollerEngine = {
   clock: Pick<EngineInterface['clock'], 'now' | 'every'>;
@@ -181,8 +181,11 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     if (getModel().verbs === null) await readVerbs();
     let ok = true;
     let called = 0;
+    const busy = getModel().turn.state === 'busy';
     for (const verb of QUERY_VERBS) {
       if (!isSupported(getModel(), verb)) continue;
+      // The busy tick is the coach's: the slow verbs wait for the idle one.
+      if (busy && IDLE_ONLY_VERBS.includes(verb)) continue;
       called += 1;
       if (!(await query(verb, sessionId))) ok = false;
     }

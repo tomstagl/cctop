@@ -23,6 +23,7 @@ Usage: cctop query [OPTIONS] <COMMAND>
 Commands:
   summary   Session, context, tokens, cost, limits at a glance
   ledger    One row per turn
+  coach     The coach object: state line, four lights, the nudge, next, snoozed
   tools     Per-tool statistics and the largest results
   files     Files touched
   agents    Subagents, MCP servers, background tasks
@@ -89,8 +90,8 @@ function bootPoller(process: Record<string, ProcessScript> = binaryScripts(), fr
 }
 
 test('parseQueryVerbs keeps the known verbs of the Commands block', () => {
-  assert.deepEqual(parseQueryVerbs(HELP), ['summary', 'tools', 'files', 'agents', 'advice', 'events']);
-  assert.deepEqual(parseQueryVerbs(HELP.replace(/^  advice .*\n/m, '')), ['summary', 'tools', 'files', 'agents', 'events']);
+  assert.deepEqual(parseQueryVerbs(HELP), ['summary', 'coach', 'tools', 'files', 'agents', 'advice', 'events']);
+  assert.deepEqual(parseQueryVerbs(HELP.replace(/^  advice .*\n/m, '')), ['summary', 'coach', 'tools', 'files', 'agents', 'events']);
   assert.deepEqual(parseQueryVerbs('nothing here'), []);
   // Nothing after the block counts, and unknown verbs are dropped.
   assert.deepEqual(parseQueryVerbs('Commands:\n  events  x\n  pane  y\n\nOptions:\n  summary\n'), ['events']);
@@ -200,7 +201,7 @@ test('a failed or non-JSON call keeps the previous data; stale after 30 s of fai
 test('an unsupported verb is never called', async () => {
   const { $, poller, model } = bootPoller(binaryScripts(HELP.replace(/^  advice .*\n/m, '')));
   await poller.tick();
-  assert.deepEqual(model().verbs, ['summary', 'tools', 'files', 'agents', 'events']);
+  assert.deepEqual(model().verbs, ['summary', 'coach', 'tools', 'files', 'agents', 'events']);
   assert.equal(queries($, 'advice').length, 0);
   assert.equal(model().query.advice, undefined);
   assert.equal(model().stale, false);
@@ -441,7 +442,8 @@ test('/clear between turns: the open pane follows the new id at the next turn, w
   assert.equal(next?.open, true, 'the new id’s marker open');
   assert.equal(next?.loaded, true);
   const after = queries($).slice(before);
-  assert.ok(after.length >= QUERY_VERBS.length, 'the new session is queried at once, not at the next timer');
+  // A turn runs: the busy tick skips the idle-only verbs (advice).
+  assert.ok(after.length >= QUERY_VERBS.length - 1, 'the new session is queried at once, not at the next timer');
   assert.ok(after.every((argv) => argv[4] === NEXT), JSON.stringify(after));
   assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), JSON.stringify($.ui.logs));
   const rows = await render(80);

@@ -67,6 +67,11 @@
       "unit": ""
     }
   ],
+  "lines": {
+    "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l1": "○14% ○— ○59m ●1 ▸",
+    "l2": "○○○●"
+  },
   "model": "claude-sonnet-5",
   "next": {
     "class": "LATER",
@@ -76,6 +81,7 @@
     "promotes": "when the slot frees",
     "row": "next     long-foreground → when the slot frees · `c…"
   },
+  "next_row": "next     long-foreground → when the slot frees · `c…",
   "nudge": {
     "acting": false,
     "action_kind": "setting",
@@ -95,11 +101,13 @@
   },
   "nudges_this_hour": 1,
   "queued": 1,
+  "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
   "schema": 1,
   "session": "session-b",
   "session_mode": "team",
   "snoozed": [],
+  "snoozed_row": "snoozed  —",
   "state": {
     "kind": "COMMITTING",
     "line": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",

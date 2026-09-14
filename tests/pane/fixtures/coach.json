@@ -67,6 +67,11 @@
       "unit": ""
     }
   ],
+  "lines": {
+    "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l1": "◐40% ○— ○50m ◐1 ▸",
+    "l2": "◐○○◐"
+  },
   "model": "claude-sonnet-5",
   "next": {
     "class": "LATER",
@@ -76,6 +81,7 @@
     "promotes": "when the slot frees",
     "row": "next     runaway-result → when the slot frees · mcp…"
   },
+  "next_row": "next     runaway-result → when the slot frees · mcp…",
   "nudge": {
     "acting": false,
     "action_kind": "setting",
@@ -95,11 +101,13 @@
   },
   "nudges_this_hour": 1,
   "queued": 1,
+  "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
   "schema": 1,
   "session": "session-a",
   "session_mode": "team",
   "snoozed": [],
+  "snoozed_row": "snoozed  —",
   "state": {
     "kind": "IDLE",
     "line": "IDLE 0s",

@@ -67,16 +67,24 @@
       "unit": ""
     }
   ],
+  "lines": {
+    "l0": "◐227k ≈$.13 · ○cache 59m · ○5h — · ○edits 2",
+    "l1": "◐23% ○— ○59m ○2",
+    "l2": "◐○○○"
+  },
   "model": "claude-opus-5",
   "next": null,
+  "next_row": "next     —",
   "nudge": null,
   "nudges_this_hour": 0,
   "queued": 0,
+  "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
   "recent": [],
   "schema": 1,
   "session": "session-b",
   "session_mode": "team",
   "snoozed": [],
+  "snoozed_row": "snoozed  —",
   "state": {
     "kind": "IMPLEMENTING",
     "line": "IMPLEMENTING · 30c +8.4k · silent 7m",

@@ -67,6 +67,11 @@
       "unit": ""
     }
   ],
+  "lines": {
+    "l0": "◐720k ≈$.37 · ○cache 1h00 · ○5h — · ●blocked 4 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l1": "◐72% ○— ○1h00 ●4 ▸",
+    "l2": "◐○○●"
+  },
   "model": "claude-opus-5",
   "next": {
     "class": "LATER",
@@ -76,6 +81,7 @@
     "promotes": "when the slot frees",
     "row": "next     reread → when the slot frees · lorem_ipsum…"
   },
+  "next_row": "next     reread → when the slot frees · lorem_ipsum…",
   "nudge": {
     "acting": false,
     "action_kind": "setting",
@@ -95,11 +101,13 @@
   },
   "nudges_this_hour": 1,
   "queued": 2,
+  "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
   "schema": 1,
   "session": "session-b",
   "session_mode": "team",
   "snoozed": [],
+  "snoozed_row": "snoozed  —",
   "state": {
     "kind": "IDLE",
     "line": "IDLE 0s · python3 - lor… ok 19m ago",

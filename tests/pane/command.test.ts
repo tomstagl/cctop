@@ -10,7 +10,7 @@ import { register } from '../../plugin/hooks/pane';
 // /cctop-pane and the view bar through the headless harness: the command's
 // arguments open, toggle, switch and close the pane, a Button press switches
 // the view, and the inline placement draws the short form without the bar.
-const USAGE = 'usage: /cctop-pane [overview|tools|agents|files|events|advisor|close]';
+const USAGE = 'usage: /cctop-pane [coach|overview|tools|agents|files|events|advisor|close]';
 // What an open answers on the test surface (160 columns, a 72-wide dock).
 const DOCKED = 'docked beside the transcript (72 columns): click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.';
 
@@ -136,6 +136,7 @@ test('the view bar names the views, the current one inverse, and a press switche
   assert.deepEqual(
     bar.map((b) => [b.props?.hotkey, b.props?.label, b.props?.plain, b.props?.key]),
     [
+      [undefined, 'Coach', true, 'coach'],
       [undefined, 'Tools', true, 'tools'],
       [undefined, 'Agents', true, 'agents'],
       [undefined, 'Files', true, 'files'],
@@ -143,7 +144,7 @@ test('the view bar names the views, the current one inverse, and a press switche
       [undefined, 'Advisor', true, 'advisor'],
     ],
   );
-  assert.equal(rows[0], 'cctop  Overview  [Tools]  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.equal(rows[0], 'cctop  [Coach]  Overview  [Tools]  [Agents]  [Files]  [Events]  [Advisor]');
   assert.ok(inverseTexts(tree).includes(' Overview '), 'the current view is drawn inverse');
 
   const before = $.ui.invalidates['ui.render'] ?? 0;
@@ -153,7 +154,7 @@ test('the view bar names the views, the current one inverse, and a press switche
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const after = await render(80);
   assert.match(after.rows[2], /^│ TOOL\s+N\s+ERR/);
-  assert.equal(after.rows[0], 'cctop  [Overview]  Tools  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.equal(after.rows[0], 'cctop  [Coach]  [Overview]  Tools  [Agents]  [Files]  [Events]  [Advisor]');
   assert.ok(inverseTexts(after.tree).includes(' Tools '));
 });
 
@@ -163,10 +164,10 @@ test('the view bar wraps at narrow widths and never overflows', async () => {
   for (const columns of [40, 50, 60, 80]) {
     const { rows } = await render(columns);
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
-    assert.ok(rows[0].startsWith('cctop  Overview'), rows[0]);
+    assert.ok(rows[0].startsWith('cctop  [Coach]  Overview'), rows[0]);
     const barRows = rows.filter((r) => /\[[A-Z][a-z]+\]/.test(r) && !r.startsWith('╭'));
-    // One row from 64 columns (the bar reserves `[ ]` around each Button).
-    assert.equal(barRows.length, columns >= 64 ? 1 : 2, JSON.stringify(barRows));
+    // One row from 73 columns (the bar reserves `[ ]` around each Button).
+    assert.equal(barRows.length, columns >= 73 ? 1 : 2, JSON.stringify(barRows));
     assert.ok(barRows.some((r) => r.includes('[Advisor]')), JSON.stringify(barRows));
   }
 });
@@ -185,7 +186,7 @@ test('inline placement draws the header, Context and Limits without the view bar
   );
   // The docked form of the same model draws the bar and the Tools view.
   const dock = await render(80);
-  assert.ok(buttons(dock.tree).length === 5);
+  assert.ok(buttons(dock.tree).length === 6);
 });
 
 test('the /cctop skill prompt opens the pane and hands the model the outcome to relay', async () => {

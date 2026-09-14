@@ -132,6 +132,12 @@ export type FakeEngineOptions = {
 
 // What the fake adds on top of `EngineInterface`: the inspection points.
 export type FakeExtras = {
+  prompt: {
+    /** Every `$.prompt.fill` text, in order. */
+    fills: string[];
+    /** What the next fills answer (`isFilled`). */
+    filled: boolean;
+  };
   ui: {
     /** `$.ui.invalidate` calls, counted per event name. */
     invalidates: Record<string, number>;
@@ -329,6 +335,17 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (answer instanceof Error) throw answer;
         if (typeof answer === 'function') return answer();
         return answer;
+      },
+    },
+    prompt: {
+      fills: [] as string[],
+      filled: true,
+      fill: async ({ text }: { text: string }) => {
+        engine.prompt.fills.push(text);
+        return { isFilled: engine.prompt.filled };
+      },
+      submit: async () => {
+        throw new Error('fakeEngine: prompt.submit is never called by cctop');
       },
     },
     env: {

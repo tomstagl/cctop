@@ -192,6 +192,20 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+11a. **Coach matches the CLI.** The pane's Coach view is the coach object.
+    Setup: pane open, `cctop` binary present.
+    Keys: `/cctop-pane coach`; separately, in a shell, run
+    `cctop query coach --session <id>` and `cctop query coach --line`.
+    Expected: the state line, the four light rows and the nudge's two lines
+    are the JSON's `state.line`, `lights[].text` and `nudge.line1/line2`
+    byte for byte; the status line under the prompt is `--line`'s output
+    (L0 at ≥ 80 body columns, L1 below); `[1 fill]` appears only for a
+    prompt- or slash-class action and writes it into the prompt box without
+    submitting; `[2 snooze]` removes the nudge and `cctop query coach` on
+    the same id shows it under `snoozed`.
+    Claude Code version:
+    Result: pending
+
 12. **Context % is live.** Engine-native values (no `cctop` binary needed)
     update promptly after a turn.
     Setup: pane open on Overview.

@@ -148,6 +148,20 @@ pub struct Coach {
     pub nudges_this_hour: usize,
     /// Rules the engine holds in its queue behind the occupant.
     pub queued: usize,
+    /// The one-line forms for status bars: L0 (≥ 80 columns), L1 (≥ 40),
+    /// L2 (glyphs only).
+    pub lines: StatusLines,
+    /// The `next` and `snoozed` rows as drawn.
+    pub next_row: String,
+    pub snoozed_row: String,
+    pub quiet_row: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+pub struct StatusLines {
+    pub l0: String,
+    pub l1: String,
+    pub l2: String,
 }
 
 /// Cut to [`WIDTH`] cells.
@@ -278,7 +292,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         .iter()
         .filter(|r| now - r.shown_at_ms <= 3_600_000)
         .count();
-    Coach {
+    let mut c = Coach {
         schema: 1,
         session: state.session.name.clone(),
         model: state.model().unwrap_or("—").to_string(),
@@ -298,7 +312,20 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         session_mode: engine.session_mode,
         nudges_this_hour,
         queued,
-    }
+        lines: StatusLines::default(),
+        next_row: String::new(),
+        snoozed_row: String::new(),
+        quiet_row: String::new(),
+    };
+    c.lines = StatusLines {
+        l0: c.line(80),
+        l1: c.line(40),
+        l2: c.line(0),
+    };
+    c.next_row = c.next_row();
+    c.snoozed_row = c.snoozed_row();
+    c.quiet_row = c.quiet_row();
+    c
 }
 
 fn family_of(_ids: &[&'static str], id: &'static str) -> &'static str {

@@ -4,15 +4,25 @@
 import type { RenderElement } from 'claude-code';
 import type { Model, Placement } from '../model';
 import { renderAdvisor } from './advisor';
+import { renderCoach, type CoachActions, type CoachElements } from './coach';
 import { renderAgents } from './agents';
 import { renderEvents } from './events';
 import { renderFiles } from './files';
 import { renderOverview, type ViewElements } from './overview';
 import { renderTools } from './tools';
 
-export function renderView(model: Model, el: ViewElements, columns: number, placement: Placement, now: number): RenderElement {
+export function renderView(
+  model: Model,
+  el: ViewElements,
+  columns: number,
+  placement: Placement,
+  now: number,
+  coach?: { el: CoachElements; actions: CoachActions },
+): RenderElement {
   if (placement === 'inline') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
+    case 'coach':
+      return coach === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, coach.el, columns, coach.actions);
     case 'tools':
       return renderTools(model, el, columns, now);
     case 'agents':
