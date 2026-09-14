@@ -123,7 +123,8 @@ struct RunArgs {
     attach: Attach,
     #[command(flatten)]
     headless: Headless,
-    /// Also send critical alerts as desktop notifications.
+    /// Desktop notifications for three moments: Claude waiting on you (30 s),
+    /// the cache countdown while you are asked, a turn that died.
     #[arg(long)]
     notify: bool,
     /// Open this view: dashboard or coach (overrides config).
