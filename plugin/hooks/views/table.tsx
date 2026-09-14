@@ -89,7 +89,7 @@ export function wrapWords(text: string, width: number): string[] {
 }
 
 export type Panel = {
-  /** The view's hotkey, drawn in the frame as the TUI numbers its panels. */
+  /** The TUI's id for this panel (5 Tools … 9 Advisor), drawn in the frame as the TUI and the guide number it. */
   hotkey: string;
   title: string;
   summary?: string;

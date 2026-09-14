@@ -32,42 +32,42 @@ Restart Claude Code (or `/reload-plugins`) and type `/cctop`.
 
 With function hooks enabled, `/cctop-pane` docks the dashboard beside the
 transcript instead of opening a terminal split. It is drawn the way the
-standalone TUI draws its panels — round frames titled `╭2 Tools ─ 257 calls╮`,
+standalone TUI draws its panels — round frames titled `╭5 Tools ─ 257 calls╮`,
 gauges (`▇▇▇▁▁▁`) coloured by band, the status pill (`● BUSY`), a context
 sparkline once turns have run, dim secondary text — in Claude Code's own
 theme colours, so it follows light and dark. It shows the same six views as
 the TUI's panels:
 
-| Key | View | What it shows |
+| View | TUI panels | What it shows |
 |---|---|---|
-| 1 | Overview | Header, Context, Tokens & Cost, Limits, Turn — the TUI's top half |
-| 2 | Tools | Calls, errors, p50/p95, tokens pushed into context, per tool |
-| 3 | Agents | Subagents, MCP servers, background tasks |
-| 4 | Files | Touched files, edits, re-reads |
-| 5 | Events | Tool / hook / permission / compaction stream |
-| 6 | Advisor | Ranked, evidence-backed recommendations |
+| Overview | header, 1–4 | Header, Context, Tokens & Cost, Limits, Turn — the TUI's top half |
+| Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
+| Agents | 6 | Subagents, MCP servers, background tasks |
+| Files | 7 | Touched files, edits, re-reads |
+| Events | 8 | Tool / hook / permission / compaction stream |
+| Advisor | 9 | Ranked, evidence-backed recommendations |
+
+The frames inside a view carry the TUI's panel digits (`╭5 Tools ─ 257
+calls╮`), the same numbers the guide and `cctop query` use, so the pane and
+the terminal read alike.
 
 `/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
 of `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or closes it;
 with no argument it toggles.
 
-### Switching views by key
+### Switching views
 
-While the pane is docked, a one-line bar `cctop 1: Overview  2: Tools …` sits
-in the band above the prompt. **Type the digit into the empty prompt and pause
-a moment** (about half a second): the view switches and the digit is cleared.
-A second character typed within that moment cancels it, so a prompt that
-starts with a digit is safe to keep typing. Clicking a bar entry — above the
-prompt or at the top of the pane — switches too.
+The bar `cctop  Overview  Tools  Agents  Files  Events  Advisor` is the pane's
+first row, the current view drawn inverse. Click another name to switch, or
+give the pane the keyboard with `ctrl+x tab`, move with `tab` / `shift+tab`,
+press `enter`, and leave with `esc`. `/cctop-pane <view>` switches without
+either. Nothing is drawn above the prompt: Claude Code honours a Button's
+hotkey only in the band there, and that band cost the transcript a row, so
+the pane has no digit hotkeys — a digit typed into the composer is yours.
 
-That band is the only place Claude Code honours a Button's `hotkey`; keys
-pressed inside the docked pane never reach the plugin, whether or not it is
-focused (`ctrl+x tab`). If you would rather keep the digits for yourself,
-collapse the band with `ctrl+x ctrl+a` (`[-]`): the bar folds to one line and
-the hotkeys are off until you expand it again. Context, cost and rate limits come from the
-engine itself, so the pane is useful with nothing installed; once the `cctop`
-binary is found, the rest (tool timings, files, agents, the Advisor) is
-filled in from `cctop query`.
+Context, cost and rate limits come from the engine itself, so the pane is
+useful with nothing installed; once the `cctop` binary is found, the rest
+(tool timings, files, agents, the Advisor) is filled in from `cctop query`.
 
 Every open answers with where the pane went, so the state is never a guess:
 
@@ -163,7 +163,8 @@ The `Result:` lines below are still for a person to fill in:
 7. `/cctop-pane tools` opens straight to the Tools view
 8. `/cctop:cctop` (the skill) still resolves, and answers the one-liner when
    the pane is already open
-9. hotkeys `1`-`6` act only after `ctrl+x tab` gives the pane focus
+9. the view bar sits in the pane, nothing above the prompt; a click and
+   `ctrl+x tab` + `tab` + `enter` switch views
 10. `ctrl+x` arrows resize the pane and persist `pluginPanes.dockColumns`
 11. the Advisor view's top row matches `cctop query advice --session <id>`
 12. Context % updates within 1 s of a response

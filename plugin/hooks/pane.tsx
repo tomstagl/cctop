@@ -46,7 +46,7 @@ export const OPEN_SETTLE_MS = 800;
 // line under the prompt says so.
 export const HIDDEN_AFTER_MS = 2000;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
-// The views in view-bar order; the hotkey is the 1-based position.
+// The views in view-bar order; the `view` is the /cctop-pane argument.
 const VIEWS: { view: View; label: string }[] = [
   { view: 'overview', label: 'Overview' },
   { view: 'tools', label: 'Tools' },
@@ -113,9 +113,6 @@ function markHidden($: EngineInterface): void {
   $.ui.status(HIDDEN_STATUS);
   statusPinned = true;
   updateMarker($);
-  // The band above the prompt drops its bar: its hotkeys would switch a
-  // view nobody can see.
-  $.ui.invalidate('ui.render');
 }
 
 function unpinStatus($: EngineInterface): void {
@@ -375,8 +372,6 @@ function paneClosed($: EngineInterface): void {
   unpinStatus($);
   persistPane($);
   updateMarker($);
-  // The band above the prompt drops its bar with the pane.
-  $.ui.invalidate('ui.render');
 }
 
 async function closePane($: EngineInterface): Promise<void> {
@@ -424,48 +419,55 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
   );
 }
 
-// The view bar: `1: Overview  2: Tools  …` as plain Buttons, drawn in the
-// pane (a click switches) and in the band above the prompt (a click, or the
-// digit typed into the empty composer: the one site whose hotkeys the
-// engine honours). Buttons that do not fit on one line continue on the
-// next, so the bar never overflows a narrow pane. `lead` is a dim label
-// before the first Button (the band says whose bar it is).
+// The view bar, the pane's first row: `cctop  Overview  Tools  …`. The
+// current view is an inverse Text; the others are plain Buttons (a click,
+// or Enter after `ctrl+x tab` and `tab`, switches). No hotkeys: the docked
+// pane never reads them (docs/claude-code-panels.md §5.5), and the band
+// above the prompt that used to carry them cost the transcript a row, so
+// the bar lives here alone. Tabs that do not fit on one line continue on
+// the next, so the bar never overflows a narrow pane.
 function viewBar(
   $: EngineInterface,
   el: Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>,
   columns: number,
-  lead?: string,
 ): RenderElement {
   const { Box, Text, Button } = el;
-  const lines: RenderElement[][] = [[]];
-  let used = 0;
-  if (lead !== undefined) {
-    lines[0].push(
-      <Text wrap="truncate" dimColor>
-        {lead}{' '}
+  const lines: RenderElement[][] = [
+    [
+      <Text wrap="truncate" bold>
+        {BAR_LEAD}
       </Text>,
-    );
-    used = lead.length + 1;
-  }
-  VIEWS.forEach(({ view, label }, i) => {
-    const hotkey = String(i + 1);
-    // `1: Overview` on the engine; one more for the harness's `[1 Overview]`.
-    const width = hotkey.length + 3 + label.length;
-    const line = lines[lines.length - 1];
-    if (line.length > 0 && i > 0) {
-      if (used + 2 + width > columns) {
-        lines.push([]);
-        used = 0;
-      } else {
-        line.push(<Text wrap="truncate">{'  '}</Text>);
-        used += 2;
-      }
+    ],
+  ];
+  let used = BAR_LEAD.length;
+  let prevActive = false;
+  for (const { view, label } of VIEWS) {
+    const active = view === model.view;
+    // Two cells between tabs; the active tab's inverse padding is one of them.
+    let gap = prevActive || active ? 1 : 2;
+    // The label plus two: the active tab's padding, or the `[ ]` a surface
+    // may draw around a Button (the harness does; the engine's plain form
+    // is the bare label), so the row never overflows on either.
+    const width = label.length + 2;
+    if (used + gap + width > columns) {
+      lines.push([]);
+      used = 0;
+      gap = 0;
     }
-    lines[lines.length - 1].push(
-      <Button key={view} label={label} hotkey={hotkey} plain onPress={() => selectView($, view)} />,
+    const line = lines[lines.length - 1];
+    if (gap > 0) line.push(<Text wrap="truncate">{' '.repeat(gap)}</Text>);
+    line.push(
+      active ? (
+        <Text key={view} wrap="truncate" inverse>
+          {` ${label} `}
+        </Text>
+      ) : (
+        <Button key={view} label={label} plain onPress={() => selectView($, view)} />
+      ),
     );
-    used += width;
-  });
+    used += gap + width;
+    prevActive = active;
+  }
   return (
     <Box flexDirection="column">
       {lines.map((line, i) => (
@@ -476,27 +478,8 @@ function viewBar(
     </Box>
   );
 }
-
-// The band above the prompt while the pane is docked: the view bar again,
-// because the band is the one site whose Button hotkeys the engine honours
-// (docs/claude-code-panels.md §5.5): a digit typed into the empty composer
-// presses the Button 400 ms later (a second character within that cancels
-// it, so a prompt that starts with a digit is safe to keep typing), and the
-// person collapses the band with ctrl+x ctrl+a, which also disarms it. Not
-// drawn while the pane is closed, hidden, or itself inline above the prompt,
-// nor over a survey; what other plugins draw in the band stays beneath.
-async function buildBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, rest: RenderElement): Promise<RenderElement> {
-  const { Box } = $.ui.resolve(e);
-  const bar = viewBar($, $.ui.resolve(e), e.viewport?.columns ?? BAND_COLUMNS, 'cctop');
-  return (
-    <Box flexDirection="column">
-      {bar}
-      {rest}
-    </Box>
-  );
-}
-// The band's width when the surface has not measured it.
-const BAND_COLUMNS = 80;
+// The label before the first tab: whose bar this is.
+const BAR_LEAD = 'cctop';
 
 export const register: Register = (on) => {
   model = initialModel();
@@ -643,16 +626,6 @@ export const register: Register = (on) => {
     });
   }).catch(($, e, next) => {
     $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
-    return next(e);
-  });
-
-  // The composer's hotkeys live in the band above the prompt (buildBand).
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const rest = await next(e);
-    if (!model.open || model.visibility !== 'visible' || model.placement !== 'dock' || e.props.hasSurvey) return rest;
-    return buildBand($, e, rest);
-  }).catch(($, e, next) => {
-    $.ui.log(`cctop: band render failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
   });
 

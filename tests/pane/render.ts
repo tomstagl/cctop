@@ -19,7 +19,7 @@ export function isBorder(line: string): boolean {
   return /^[╭╰]/.test(line) && /[╮╯]\s*$/.test(line);
 }
 
-/** The title runs of the frame tops in a rendered view: `2 Tools ─ 257 calls`. */
+/** The title runs of the frame tops in a rendered view: `5 Tools ─ 257 calls`. */
 export function frameTitles(lines: string[]): string[] {
   const out: string[] = [];
   for (const line of lines) {

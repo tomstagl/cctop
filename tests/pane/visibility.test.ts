@@ -33,7 +33,7 @@ test('outcomeText: docked, inline under 110 columns, inline in the classic rende
   const docked = { ...base, visibility: 'visible' as const, placement: 'dock' as const, bodyColumns: 72, viewportColumns: 160 };
   assert.equal(
     outcomeText(docked),
-    'cctop pane docked beside the transcript (72 columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.',
+    'cctop pane docked beside the transcript (72 columns): click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.',
   );
   assert.match(outcomeText(docked, 'Tools'), /^cctop pane on Tools docked beside the transcript \(72 columns\)/);
 
@@ -62,7 +62,7 @@ test('an open the surface draws docked answers docked, with the body width', asy
   const result = await run('');
   assert.equal(
     result.text,
-    'cctop pane docked beside the transcript (72 columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.',
+    'cctop pane docked beside the transcript (72 columns): click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.',
   );
   assert.deepEqual($.ui.statuses, [], 'no status line while the pane is drawn');
   const m = marker();

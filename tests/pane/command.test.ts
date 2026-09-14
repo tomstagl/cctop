@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CommandRunResult, RenderElement, RenderNode, SkillPromptResult } from 'claude-code';
-import { fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
+import { fakeEngine, fakeOn, paneRender, textOf, type FakeEngine } from './harness';
 // The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
@@ -12,7 +12,7 @@ import { register } from '../../plugin/hooks/pane';
 // the view, and the inline placement draws the short form without the bar.
 const USAGE = 'usage: /cctop-pane [overview|tools|agents|files|events|advisor|close]';
 // What an open answers on the test surface (160 columns, a 72-wide dock).
-const DOCKED = 'docked beside the transcript (72 columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.';
+const DOCKED = 'docked beside the transcript (72 columns): click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.';
 
 // Lets the promise chains a hook left behind (binary detection) settle.
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -51,6 +51,15 @@ function buttons(node: RenderNode | undefined, out: Node[] = []): Node[] {
   return out;
 }
 
+/** The text of every `inverse` Text in the tree (the view bar's current tab). */
+function inverseTexts(node: RenderNode | undefined, out: string[] = []): string[] {
+  if (node === undefined || typeof node === 'string' || node.type === 'engine') return out;
+  const n = node as Node;
+  if (n.type === 'Text' && n.props?.inverse === true) out.push(textOf(n.children));
+  for (const child of n.children ?? []) inverseTexts(child, out);
+  return out;
+}
+
 test('no args toggles the pane and remembers it', async () => {
   const { $, run } = await boot();
   assert.equal(stored($), undefined);
@@ -81,7 +90,7 @@ test('a view name opens the pane on that view', async () => {
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const { rows } = await render(80);
-  assert.match(rows[1], /^╭2 Tools/, JSON.stringify(rows));
+  assert.match(rows[1], /^╭5 Tools/, JSON.stringify(rows));
   assert.match(rows[2], /^│ TOOL\s+N\s+ERR/, JSON.stringify(rows));
 
   // A second view while open switches without a close; whitespace is ignored.
@@ -117,42 +126,48 @@ test('an unknown argument answers the usage line', async () => {
   assert.equal(stored($), undefined);
 });
 
-test('the view bar has six plain hotkeyed Buttons and a press switches the view', async () => {
+test('the view bar names the views, the current one inverse, and a press switches the view', async () => {
   const { $, run, render } = await boot({ binary: 'present' });
   await run('');
   const { tree, rows } = await render(80);
+  // The current view is not a Button: nothing to press. No hotkeys: the
+  // docked pane never reads them, and the band that carried them is gone.
   const bar = buttons(tree);
   assert.deepEqual(
     bar.map((b) => [b.props?.hotkey, b.props?.label, b.props?.plain, b.props?.key]),
     [
-      ['1', 'Overview', true, 'overview'],
-      ['2', 'Tools', true, 'tools'],
-      ['3', 'Agents', true, 'agents'],
-      ['4', 'Files', true, 'files'],
-      ['5', 'Events', true, 'events'],
-      ['6', 'Advisor', true, 'advisor'],
+      [undefined, 'Tools', true, 'tools'],
+      [undefined, 'Agents', true, 'agents'],
+      [undefined, 'Files', true, 'files'],
+      [undefined, 'Events', true, 'events'],
+      [undefined, 'Advisor', true, 'advisor'],
     ],
   );
-  assert.equal(rows[0], '[1 Overview]  [2 Tools]  [3 Agents]  [4 Files]  [5 Events]  [6 Advisor]');
+  assert.equal(rows[0], 'cctop  Overview  [Tools]  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.ok(inverseTexts(tree).includes(' Overview '), 'the current view is drawn inverse');
 
   const before = $.ui.invalidates['ui.render'] ?? 0;
   $.ui.press('tools');
   assert.equal($.ui.invalidates['ui.render'], before + 1);
   await settle();
   assert.deepEqual(stored($), { open: true, view: 'tools' });
-  assert.match((await render(80)).rows[2], /^│ TOOL\s+N\s+ERR/);
+  const after = await render(80);
+  assert.match(after.rows[2], /^│ TOOL\s+N\s+ERR/);
+  assert.equal(after.rows[0], 'cctop  [Overview]  Tools  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.ok(inverseTexts(after.tree).includes(' Tools '));
 });
 
 test('the view bar wraps at narrow widths and never overflows', async () => {
   const { run, render } = await boot();
   await run('');
-  for (const columns of [50, 60, 80]) {
+  for (const columns of [40, 50, 60, 80]) {
     const { rows } = await render(columns);
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
-    assert.ok(rows[0].startsWith('[1 Overview]'), rows[0]);
-    const barRows = rows.filter((r) => /\[\d [A-Z]/.test(r));
-    assert.equal(barRows.length, columns === 80 ? 1 : 2, JSON.stringify(barRows));
-    assert.ok(barRows.some((r) => r.includes('[6 Advisor]')), JSON.stringify(barRows));
+    assert.ok(rows[0].startsWith('cctop  Overview'), rows[0]);
+    const barRows = rows.filter((r) => /\[[A-Z][a-z]+\]/.test(r) && !r.startsWith('╭'));
+    // One row from 64 columns (the bar reserves `[ ]` around each Button).
+    assert.equal(barRows.length, columns >= 64 ? 1 : 2, JSON.stringify(barRows));
+    assert.ok(barRows.some((r) => r.includes('[Advisor]')), JSON.stringify(barRows));
   }
 });
 
@@ -165,12 +180,12 @@ test('inline placement draws the header, Context and Limits without the view bar
   assert.ok(rows.some((r) => /(^|\s)Context(\s|$)/.test(r)), JSON.stringify(rows));
   assert.ok(rows.some((r) => /(^|\s)Limits(\s|$)/.test(r)), JSON.stringify(rows));
   assert.ok(
-    !rows.some((r) => /\[\d [A-Z]/.test(r) || r.startsWith('TOOL') || r.includes('Tokens & Cost') || r.includes('waiting on')),
+    !rows.some((r) => /\[[A-Z][a-z]+\]/.test(r) || r.startsWith('TOOL') || r.includes('Tokens & Cost') || r.includes('waiting on')),
     JSON.stringify(rows),
   );
   // The docked form of the same model draws the bar and the Tools view.
   const dock = await render(80);
-  assert.ok(buttons(dock.tree).length === 6);
+  assert.ok(buttons(dock.tree).length === 5);
 });
 
 test('the /cctop skill prompt opens the pane and hands the model the outcome to relay', async () => {

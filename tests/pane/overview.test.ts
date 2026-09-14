@@ -101,16 +101,20 @@ for (const columns of [50, 60, 80]) {
     has(lines, /^auto · medium · \$9\.90\s+bin shim hooks 2\.1\.270$/);
     const titles = frameTitles(screen);
     assert.equal(titles[0], 'cctop ─ claude-sonnet-5');
-    for (const title of ['Context ─ 40 %', 'Tokens & Cost ─ 33.6M', 'Limits ─ 5h 42 % · 7d 17 %', 'Turn ─ 0:48']) {
+    // The blocks carry the TUI's panel digits, as the guide numbers them.
+    // In a 30-column frame (two columns at 60) the Limits title keeps its
+    // 5 h figure and drops the 7 d one rather than clipping it.
+    const limits = columns === 60 ? '3 Limits ─ 5h 42 %' : '3 Limits ─ 5h 42 % · 7d 17 %';
+    for (const title of ['1 Context ─ 40 %', '2 Tokens & Cost ─ 33.6M', limits, '4 Turn ─ 0:48']) {
       assert.ok(titles.includes(title), `no frame ${title}: ${JSON.stringify(titles)}`);
     }
   });
 
   test(`overview at ${columns} columns: two-column rows only from 60`, () => {
     const screen = raw(build(), columns);
-    const paired = screen.some((r) => r.includes('╭Context') && r.includes('╭Tokens & Cost'));
+    const paired = screen.some((r) => r.includes('╭1 Context') && r.includes('╭2 Tokens & Cost'));
     assert.equal(paired, columns >= 60, JSON.stringify(screen));
-    const order = ['Context', 'Tokens & Cost', 'Limits', 'Turn'].map((t) => screen.findIndex((r) => r.includes(`╭${t} `)));
+    const order = ['1 Context', '2 Tokens & Cost', '3 Limits', '4 Turn'].map((t) => screen.findIndex((r) => r.includes(`╭${t} `)));
     assert.deepEqual([...order].sort((a, b) => a - b), order, 'blocks in order');
     if (columns >= 60) {
       // Paired frames close on the same line.
@@ -122,7 +126,7 @@ for (const columns of [50, 60, 80]) {
 
 test('values are right-aligned in one column per block, gauges between label and value', () => {
   const screen = raw(build(), 50);
-  const start = screen.findIndex((r) => r.startsWith('╭Tokens & Cost'));
+  const start = screen.findIndex((r) => r.startsWith('╭2 Tokens & Cost'));
   const end = screen.findIndex((r, i) => i > start && r.startsWith('╰'));
   const tokens = body(screen.slice(start + 1, end));
   const ends = new Set(tokens.map((r) => r.length));
@@ -224,7 +228,7 @@ test('a high-severity Advisor headline is the last row', () => {
   assert.ok(!rows(build({ advice: [{ ...advice[0], severity: 'medium' }] }), 80).includes(last));
   // In its own frame, the last one on the screen.
   const titles = frameTitles(raw(build({ advice: [{ ...advice[0], severity: 'high' }] }), 80));
-  assert.equal(titles.at(-1), 'Advisor');
+  assert.equal(titles.at(-1), '9 Advisor');
 });
 
 test('a missing binary draws one line per binary-backed section and keeps the engine rows', () => {
@@ -249,7 +253,7 @@ test('without any source the rows draw — and the header turn 0', () => {
   has(lines, /^5 h\s+—$/);
   has(lines, /^waiting on\s+—$/);
   assert.ok(!lines.some((r) => r.includes(NEEDS_BINARY)), 'unknown is not missing');
-  assert.deepEqual(frameTitles(raw(initialModel(), 50)), ['cctop ─ —', 'Context', 'Tokens & Cost', 'Limits', 'Turn']);
+  assert.deepEqual(frameTitles(raw(initialModel(), 50)), ['cctop ─ —', '1 Context', '2 Tokens & Cost', '3 Limits', '4 Turn']);
 });
 
 test('inline placement draws the header, Context and Limits only, without frames', () => {
@@ -257,6 +261,6 @@ test('inline placement draws the header, Context and Limits only, without frames
   has(lines, /^● BUSY · turn 1 · 0:48 · claude-sonnet-5 · medium\s+bin shim hooks 2\.1\.270$/);
   has(lines, /^Context$/);
   has(lines, /^Limits$/);
-  assert.ok(!lines.some((r) => /[╭╰│]/.test(r)), 'no frames in the band above the prompt');
+  assert.ok(!lines.some((r) => /[╭╰│]/.test(r)), 'no frames in the inline form above the prompt');
   assert.ok(!lines.some((r) => r.includes('Tokens & Cost') || r.includes('cache read') || r.includes('waiting on')), JSON.stringify(lines));
 });

@@ -40,7 +40,7 @@ function eventCells(e: unknown): Cell[] {
 
 export function renderEvents(model: Model, el: ViewElements, columns: number): RenderElement {
   const all = Array.isArray(model.query.events) ? model.query.events : [];
-  const p = { hotkey: '5', title: 'Events', summary: model.binary === 'missing' ? undefined : String(all.length) };
+  const p = { hotkey: '8', title: 'Events', summary: model.binary === 'missing' ? undefined : String(all.length) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY)], columns, el);
   const inner = bodyWidth(columns);
   const events = all.slice(-EVENT_ROWS);

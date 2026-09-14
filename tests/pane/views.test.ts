@@ -108,7 +108,7 @@ for (const columns of [50, 80]) {
     const lines = rows('tools', build(), columns);
     fits(lines, columns);
     has(lines, /^TOOL\s+N\s+ERR\s+p50\s+p95\s+→CTX$/);
-    assert.deepEqual(frameTitles(rawRows('tools', build(), columns)), ['2 Tools ─ 257 calls']);
+    assert.deepEqual(frameTitles(rawRows('tools', build(), columns)), ['5 Tools ─ 257 calls']);
     // The chrome MCP server: 214 calls, 2 errors, p50/p95 estimated, 22k tokens into the context.
     has(lines, /^mcp:claude-i.*\s214\s+2\s+≈1\.6s\s+≈25\.4s\s+≈22k$/);
     has(lines, /^Bash ▶0:46\s+15\s+3\s+≈2\.0s\s+≈27\.2s\s+≈4k$/);
@@ -129,7 +129,7 @@ for (const columns of [50, 80]) {
     has(lines, /^✓ fork\s+Check whether a set.*\s0:42\s+549k$/);
     has(lines, 'mcp: no live process (fixture)');
     assert.equal(lines.filter((r) => r !== '').length, 2, JSON.stringify(lines));
-    assert.deepEqual(frameTitles(rawRows('agents', build(), columns)), ['3 Agents & MCP ─ 0/1 agents']);
+    assert.deepEqual(frameTitles(rawRows('agents', build(), columns)), ['6 Agents & MCP ─ 0/1 agents']);
   });
 
   test(`files at ${columns} columns: paths, touches and no diff`, () => {
@@ -141,7 +141,7 @@ for (const columns of [50, 80]) {
     // The path keeps its tail when cut.
     if (columns === 50) has(lines, /^…ad450c\.rs\s/);
     assert.equal(lines.filter((r) => r !== '').length, 5, JSON.stringify(lines));
-    assert.deepEqual(frameTitles(rawRows('files', build(), columns)), ['4 Files ─ 4 touched']);
+    assert.deepEqual(frameTitles(rawRows('files', build(), columns)), ['7 Files ─ 4 touched']);
   });
 
   test(`events at ${columns} columns: the last 50, newest at the bottom`, () => {
@@ -165,7 +165,7 @@ for (const columns of [50, 80]) {
     fits(lines, columns);
     has(lines, columns >= 80 ? /^\s+▸\s+A15\s+`Bash make check` failed 3× with the same input\s+~481\/turn$/ : /^\s+▸\s+A15\s+`Bash make check` fail.*~481\/turn$/);
     has(lines, /^\s+2\.\s+A03\s+second headline\s+~12\/turn$/);
-    assert.deepEqual(frameTitles(rawRows('advisor', model, columns)), ['6 Advisor ─ 1 of 2']);
+    assert.deepEqual(frameTitles(rawRows('advisor', model, columns)), ['9 Advisor ─ 1 of 2']);
     const text = lines.join(' ').replace(/\s+/g, ' ');
     for (const field of ['evidence', 'action', 'saving', 'why']) has(lines, new RegExp(`^\\s+${field}\\s`));
     assert.ok(text.includes(advice[0].evidence), text);
@@ -307,7 +307,7 @@ test('events: kinds carry the TUI colours', () => {
   const lines = body(renderToText(tree, 80));
   assert.equal(lines[0], '12:00:00 tool    Read x ▶');
   assert.equal(lines[5], '12:00:05 away    idle');
-  assert.deepEqual(frameTitles(renderToText(tree, 80)), ['5 Events ─ 6']);
+  assert.deepEqual(frameTitles(renderToText(tree, 80)), ['8 Events ─ 6']);
   assert.deepEqual(rows('events', build({ query: { events: [] } }), 50), ['no events yet']);
 });
 

@@ -235,8 +235,11 @@ Buttons, so its hotkeys are off.
 The docked `Pane` site (`pce`) never reads `hotkey`: its bindings are
 scroll, `tab`/`shift+tab` between focusables, `enter` press, `ctrl+x`
 arrows resize, `ctrl+x x` close. A plugin that wants keyboard switching
-therefore draws its Buttons in the band too (`on("ui.render", { component:
-"AbovePrompt" }, …)`), and the same `onPress` serves both.
+would have to draw its Buttons in the band too (`on("ui.render", {
+component: "AbovePrompt" }, …)`) with the same `onPress`. cctop did until
+0.3.x and stopped: the band cost the transcript a row for six digits, so
+the view bar now lives in the pane alone (click, or `ctrl+x tab` then
+`tab` / `enter`).
 
 ### 5.6 Drawing: what the terminal honours
 

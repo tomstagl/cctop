@@ -46,7 +46,12 @@ export type Row = {
   spark?: readonly number[];
 };
 
-export type Block = { title: string; rows: Row[]; summary?: string };
+/**
+ * A framed block. `hotkey` is the TUI's id for the panel (1 Context … 4
+ * Turn), drawn in the frame as the TUI numbers it; `summaryShort` replaces
+ * `summary` in the title when the full one would not fit the frame's top.
+ */
+export type Block = { hotkey?: string; title: string; rows: Row[]; summary?: string; summaryShort?: string };
 
 export type Badge = { label: 'bin' | 'shim' | 'hooks'; on: boolean; text?: string };
 
@@ -172,7 +177,7 @@ export function contextBlock(model: Model): Block {
   // before the module loaded, the event's those the poller has not read yet.
   const counted = measured(summary, 'context', 'compactions');
   rows.push({ key: 'compactions', label: 'compactions', value: String(Math.max(model.compactions, counted?.value ?? 0)) });
-  return { title: 'Context', rows, summary: summaryText };
+  return { hotkey: '1', title: 'Context', rows, summary: summaryText };
 }
 
 export function tokensBlock(model: Model): Block {
@@ -212,7 +217,7 @@ export function tokensBlock(model: Model): Block {
     const burn = measured(summary, 'burn_rate');
     rows.push({ key: 'burn_rate', label: 'burn rate', value: burn === null ? DASH : mark(`${formatUsd(burn.value)}/h`, burn.approx) });
   }
-  return { title: 'Tokens & Cost', rows, summary: summaryText };
+  return { hotkey: '2', title: 'Tokens & Cost', rows, summary: summaryText };
 }
 
 const LIMIT_WINDOWS: { kind: string; key: string; label: string }[] = [
@@ -259,7 +264,13 @@ export function limitsBlock(model: Model, now: number): Block {
     label: 'exhausted in',
     value: exhaustion === null ? DASH : mark(formatCountdown(exhaustion.value - now), exhaustion.approx),
   });
-  return { title: 'Limits', rows, summary: summaryParts.length === 0 ? undefined : summaryParts.join(' · ') };
+  return {
+    hotkey: '3',
+    title: 'Limits',
+    rows,
+    summary: summaryParts.length === 0 ? undefined : summaryParts.join(' · '),
+    summaryShort: summaryParts[0],
+  };
 }
 
 export function turnBlock(model: Model, now: number): Block {
@@ -300,7 +311,7 @@ export function turnBlock(model: Model, now: number): Block {
     value: queued === null ? DASH : mark(String(queued.value), queued.approx),
     color: queued !== null && queued.value > 0 ? 'yellow' : undefined,
   });
-  return { title: 'Turn', rows, summary: elapsed === null ? undefined : formatDuration(elapsed) };
+  return { hotkey: '4', title: 'Turn', rows, summary: elapsed === null ? undefined : formatDuration(elapsed) };
 }
 
 /** The top Advisor headline when its severity is high; the binary line while it is missing; else null. */
@@ -368,7 +379,15 @@ function blockRows(block: Block, inner: number): { line: Line; key?: string }[] 
 function blockFrame(block: Block, frameWidth: number, el: ViewElements, height?: number): RenderElement {
   const rows = blockRows(block, innerWidth(frameWidth));
   while (height !== undefined && rows.length < height) rows.push({ line: [] });
-  return frame({ title: block.title, summary: block.summary, width: frameWidth, rows }, el);
+  return frame({ hotkey: block.hotkey, title: block.title, summary: blockSummary(block, frameWidth), width: frameWidth, rows }, el);
+}
+
+/** The block's summary, or its short form when the title row cannot hold the full one. */
+function blockSummary(block: Block, frameWidth: number): string | undefined {
+  if (block.summary === undefined) return undefined;
+  // `╭`, the digit and its space, the title, ` ─ `, the summary, a space, `╮`.
+  const head = 1 + (block.hotkey === undefined ? 0 : block.hotkey.length + 1) + width(block.title) + 3 + width(block.summary) + 2;
+  return head <= frameWidth || block.summaryShort === undefined ? block.summary : block.summaryShort;
 }
 
 /** Rows a block's frame holds, for pairing frames at one height. */
@@ -464,7 +483,7 @@ export function renderOverview(model: Model, el: ViewElements, columns: number, 
   if (advice !== null) {
     body.push(
       frame(
-        { title: 'Advisor', width: columns, rows: [{ key: advice.key, line: [seg(advice.label, { color: themed(advice.color), dim: advice.color === undefined })] }] },
+        { hotkey: '9', title: 'Advisor', width: columns, rows: [{ key: advice.key, line: [seg(advice.label, { color: themed(advice.color), dim: advice.color === undefined })] }] },
         el,
       ),
     );

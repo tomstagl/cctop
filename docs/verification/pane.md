@@ -153,18 +153,20 @@ hooks are off or before its module is accepted.
    Claude Code version:
    Result: pending
 
-9. **Hotkeys from the composer.** View-bar hotkeys `1`-`6` act from the
-   empty composer through the band above the prompt (the docked pane's own
-   keys never reach the plugin, `docs/claude-code-panels.md` §5.5); a
-   collapsed band keeps the digits for typing. Verified at 110, 144 and 200
-   columns.
-   Setup: pane open and docked, at each of 110/144/200 columns in turn; the
-   band `cctop 1: Overview …` visible above the prompt.
-   Keys: type `2` into the empty composer and wait half a second; then
-   `ctrl+x ctrl+a` to collapse the band, type `1`, wait.
-   Expected: the first `2` switches the pane to the Tools view and clears the
-   composer; after the collapse the `1` stays in the composer and the pane
-   does not change; `ctrl+x ctrl+a` again re-arms the digits.
+9. **The view bar in the pane.** The bar `cctop  Overview  Tools …` is the
+   pane's first row, the current view inverse, the others plain Buttons
+   without hotkeys; nothing is drawn in the band above the prompt, and a
+   digit typed into the empty composer stays there. Verified at 110, 144
+   and 200 columns.
+   Setup: pane open and docked, at each of 110/144/200 columns in turn.
+   Keys: type `2` into the empty composer and wait a second; clear it; click
+   `Tools` in the bar; then `ctrl+x tab`, `tab` to `Files`, `enter`, `esc`.
+   Expected: the `2` stays in the composer and the pane does not change; the
+   click switches to Tools and the bar reads `cctop  Overview  Tools …`
+   with `Tools` inverse; the keyboard route switches to Files; the plain
+   Buttons draw as their bare label (no `:`, no `[ ]`) — if they draw
+   otherwise, `viewBar` in `pane.tsx` must drop `plain` for the `[ Label ]`
+   chrome. Nothing appears above the prompt.
    Claude Code version:
    Result: pending
 
@@ -346,7 +348,7 @@ Observed, verbatim from the captures:
 
 - items 1, 2, 5: `/cctop-pane` docked the pane beside the transcript on the
   first try; the reply was `cctop pane docked beside the transcript (71
-  columns): ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.`
+  columns): click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.`
   (72-column dock, 1 for the grip). The debug log had the load line, `/cctop-pane
   listed`, and no `refused` or `hook failed` line.
 - item 21: `/diff` answered `Diff panel shown`, the cctop pane vanished, and
@@ -385,3 +387,18 @@ Same setup at 140×45 (the maintainer's terminal width), `--plugin-dir
 - `/reload-plugins` picked up the new module with the pane open; the view
   bar, band and frames came back at once.
 
+
+### Run notes (automated, 2026-09-14, third pass: the view bar in the pane)
+
+Same setup at 162×45, `--plugin-dir ./plugin --debug`, after the band above
+the prompt was removed:
+
+- Item 9 as reworded: the pane's first row read `cctop  Overview  Tools
+  Agents  Files  Events  Advisor` with `Overview` inverse (ANSI `7m`); the
+  plain Buttons without a hotkey drew as their bare labels. The frames read
+  `╭1 Context╮╭2 Tokens & Cost╮`, `╭3 Limits╮╭4 Turn╮` and, on the Tools
+  view, `╭5 Tools ─ 0 calls╮`. Nothing was drawn above the prompt.
+- `ctrl+x tab`, `tab`, `enter` switched to Tools (debug log: `ui.press
+  cctop/tools in Pane from terminal: settled in 1.1ms`) and the inverse
+  moved to `Tools`; a `2` typed into the empty composer stayed there and
+  switched nothing. No `refused` or `hook failed` line in the debug log.

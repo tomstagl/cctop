@@ -283,7 +283,7 @@ export function outcomeText(model: Model, viewLabel?: string): string {
   }
   if (model.placement === 'dock') {
     const width = model.bodyColumns === null ? '' : ` (${model.bodyColumns} columns)`;
-    return `${subject} docked beside the transcript${width}: ctrl+x tab focuses it, 1-6 switch views, ctrl+x x closes it.`;
+    return `${subject} docked beside the transcript${width}: click a view in its bar to switch (or ctrl+x tab, then tab and enter), ctrl+x x closes it.`;
   }
   const columns = model.viewportColumns;
   if (columns !== null && columns < MIN_DOCK_COLUMNS) {

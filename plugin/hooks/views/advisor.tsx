@@ -51,7 +51,7 @@ function detail(label: string, text: string, inner: number, color?: Color): Fram
 
 export function renderAdvisor(model: Model, el: ViewElements, columns: number): RenderElement {
   const items = Array.isArray(model.query.advice) ? model.query.advice.map(adviceOf) : [];
-  const p = { hotkey: '6', title: 'Advisor', summary: model.binary === 'missing' || items.length === 0 ? undefined : `1 of ${items.length}` };
+  const p = { hotkey: '9', title: 'Advisor', summary: model.binary === 'missing' || items.length === 0 ? undefined : `1 of ${items.length}` };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'advice_saving' })], columns, el);
   if (items.length === 0) return panel(p, [line(EMPTY, { key: 'advice_saving' })], columns, el);
   const inner = bodyWidth(columns);

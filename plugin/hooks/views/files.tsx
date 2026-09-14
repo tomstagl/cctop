@@ -53,7 +53,7 @@ const HEADER: Cell[] = [
 
 export function renderFiles(model: Model, el: ViewElements, columns: number): RenderElement {
   const all = Array.isArray(model.query.files) ? model.query.files : [];
-  const p = { hotkey: '4', title: 'Files', summary: model.binary === 'missing' ? undefined : `${all.length} touched` };
+  const p = { hotkey: '7', title: 'Files', summary: model.binary === 'missing' ? undefined : `${all.length} touched` };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'file_touches' })], columns, el);
   const inner = bodyWidth(columns);
   const files = all.slice(0, MAX_ROWS - 1);

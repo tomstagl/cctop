@@ -123,7 +123,7 @@ function callsSummary(model: Model): string | undefined {
 }
 
 export function renderTools(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
-  const p = { hotkey: '2', title: 'Tools', summary: callsSummary(model) };
+  const p = { hotkey: '5', title: 'Tools', summary: callsSummary(model) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'tool_calls' })], columns, el);
   const inner = bodyWidth(columns);
   // The header, the `top ctx` title and its rows come out of the cap first.

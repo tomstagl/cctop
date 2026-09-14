@@ -66,7 +66,7 @@ function agentsSummary(data: unknown): string | undefined {
 
 export function renderAgents(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
   const data = model.query.agents;
-  const p = { hotkey: '3', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
+  const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = [];
