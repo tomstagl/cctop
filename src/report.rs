@@ -292,7 +292,7 @@ mod tests {
             "{md}"
         );
         assert!(
-            md.contains("- nudges: 1 fired, 0 acted, 0 snoozed · session mode remote"),
+            md.contains("- nudges: 1 fired, 0 acted, 0 snoozed · session mode interactive"),
             "{md}"
         );
         assert!(md.contains("- **LATER A17**"), "{md}");

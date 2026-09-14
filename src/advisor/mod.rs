@@ -298,8 +298,9 @@ pub enum SessionMode {
     Team,
     /// `-p` / SDK entrypoint: no nudges.
     Workflow,
-    /// A bridged session (remote control): replies may come from the other
-    /// device, so no reply advice.
+    /// The last prompt came through the Remote Control bridge: replies may
+    /// come from the other device, so no reply advice. Not derived yet — a
+    /// bridge prompt has no transcript marker on 2.1.270.
     Remote,
 }
 
@@ -342,9 +343,10 @@ impl SessionMode {
         if state.agg.agent_setting.is_some() || !state.teammates.is_empty() {
             return SessionMode::Team;
         }
-        if state.agg.bridged {
-            return SessionMode::Remote;
-        }
+        // `bridge-session` only says Remote Control is registered, and a
+        // prompt from the phone carries no marker of its own (2.1.270 writes
+        // `promptSource` ∈ typed / queued / suggestion_accepted / system /
+        // sdk), so `Remote` stays dormant until one exists.
         SessionMode::Interactive
     }
 }
@@ -1432,6 +1434,35 @@ mod tests {
             "no lock: the reader may write"
         );
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// `cctop advise --session fixtures/session-b.jsonl`: the ranked set the
+    /// real catalog produces on fixture B, the slot first.
+    #[test]
+    fn fixture_b_ranked_set() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        s.session.ended_at_ms = s.last_line_at_ms;
+        let e = Engine::for_state(&s);
+        let ranked: Vec<(&str, &str)> = e
+            .current
+            .iter()
+            .map(|a| (a.urgency.label(), a.rule))
+            .collect();
+        assert_eq!(ranked, [("LATER", "A17"), ("LATER", "A10")], "{ranked:?}");
+        assert_eq!(e.occupant.as_ref().unwrap().advice.rule, "A17");
+        assert_eq!(
+            e.session_mode,
+            SessionMode::Interactive,
+            "bridge registered, prompts typed"
+        );
+        assert!(e.path.is_none(), "a fixture file never persists");
+        assert!(e.suppressed.is_empty(), "{:?}", e.suppressed);
     }
 
     /// The advisor must be pure: rules only read `State`. The sources of the

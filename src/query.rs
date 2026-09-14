@@ -520,7 +520,7 @@ mod tests {
         assert_eq!(a["mcp"]["source"], "missing");
         let adv = advice(&s);
         assert_eq!(adv["schema"], 2);
-        assert_eq!(adv["session_mode"], "remote", "fixture A is bridged");
+        assert_eq!(adv["session_mode"], "interactive");
         let items = adv["items"].as_array().unwrap();
         assert!(!items.is_empty());
         assert!(items

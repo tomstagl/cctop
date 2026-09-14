@@ -89,6 +89,9 @@ pub struct Turn {
     /// False for machine-originated turns: task notifications, teammate
     /// messages, SDK prompts.
     pub human: bool,
+    /// `promptSource` as written (`typed`, `suggestion_accepted`, `queued`,
+    /// `system`, `sdk`…).
+    pub prompt_source: Option<String>,
     /// Timestamp of the user line that started the turn (ISO-8601 as written).
     pub started_at: Option<String>,
     /// Timestamp of the last line seen in this turn.
@@ -404,6 +407,7 @@ impl Aggregate {
                         number: self.turns.len() + 1,
                         prompt_id: u.prompt_id.clone(),
                         human: kind == PromptKind::Human,
+                        prompt_source: u.prompt_source.clone(),
                         started_at: u.timestamp.clone(),
                         last_at: u.timestamp.clone(),
                         prompt_chars: u.message.content.text().chars().count(),
