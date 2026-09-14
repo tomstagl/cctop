@@ -285,6 +285,15 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | Metric | Unit | How it is computed | Sources | Caveats | Estimate |
 |---|---|---|---|---|---|
 | **Estimated saving** <a id="advice_saving"></a> `advice_saving` | tokens|seconds | Rule-specific estimate of what following the advice saves per remaining turn | D2 | Ranking key; always an estimate | ≈ always |
+
+### Coach
+
+| Metric | Unit | How it is computed | Sources | Caveats | Estimate |
+|---|---|---|---|---|---|
+| **Context light** <a id="coach_context"></a> `coach_context` | percent | The context size as % of the exact window; ○ below 150k, ◐ from 150k (or ≥ 300k on a 1M window while a turn runs), ● inside the autocompact warn band (effective window − 13 000 − 20 000) or at ≥ 300k with a clean stop available | D1 D3 | Never a fixed 80 %: a deliberate 1M session sits amber | ≈ when the window is the model default |
+| **Cache light** <a id="coach_cache"></a> `coach_cache` | minutes|tokens | Minutes of cache left (`prompt_cache.expires_at`, else last call + observed TTL ≈), or the re-write size when cold; ◐ inside the countdown band (the last 5 min of a 1 h entry, 2 min of a 5 m one), ● when a reply now would save ≥ 50k | D1 D3 | — | ≈ without the status-line shim |
+| **Limits light** <a id="coach_limits"></a> `coach_limits` | percent | The 5 h window used; ◐ when the exhaustion fit lands before the reset or ≥ 80 %, ● on a rate-limit or spend-limit error line; `—` without the status line | D3 D1 | — | never |
+| **Rework light** <a id="coach_rework"></a> `coach_rework` | count | Open issues: consecutive failed calls of the turn (denials excluded), corrections (interrupts, rejected calls) in the last three turns, blocked calls; else the source edits since the last confirmed test run. ◐ after 10 min or 14 calls unverified, two fails, a PR without a review, an uncommitted tail; ● on a cascade, a denial streak, a correction streak, destructive git on a dirty tree, a commit without a check | D1 D7 | — | never |
 <!-- metrics:end -->
 
 ## Ask your session about it

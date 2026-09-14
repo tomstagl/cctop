@@ -45,6 +45,7 @@ pub const PANELS: &[&str] = &[
     "Files",
     "Advisor",
     "Events",
+    "Coach",
 ];
 
 pub const METRICS: &[Metric] = &[
@@ -142,6 +143,11 @@ pub const METRICS: &[Metric] = &[
     metric!(file_rereads, "Files", "Re-reads", "count", "Whole-file reads (Read or a Bash reader) with no Edit/Write in between; ⚠ at ≥ 3", ["D8"], "Ranged reads (offset/limit) and `file_unchanged` results do not count; the counter resets when the file changed under the model (an IDE edit, a stale-read recovery) and at every context boundary", ""),
     // -- Advisor
     metric!(advice_saving, "Advisor", "Estimated saving", "tokens|seconds", "Rule-specific estimate of what following the advice saves per remaining turn", ["D2"], "Ranking key; always an estimate", "≈ always"),
+    // -- Coach (the four lights; the dashboard's tiles enlarge their figures)
+    metric!(coach_context, "Coach", "Context light", "percent", "The context size as % of the exact window; ○ below 150k, ◐ from 150k (or ≥ 300k on a 1M window while a turn runs), ● inside the autocompact warn band (effective window − 13 000 − 20 000) or at ≥ 300k with a clean stop available", ["D1", "D3"], "Never a fixed 80 %: a deliberate 1M session sits amber", "≈ when the window is the model default"),
+    metric!(coach_cache, "Coach", "Cache light", "minutes|tokens", "Minutes of cache left (`prompt_cache.expires_at`, else last call + observed TTL ≈), or the re-write size when cold; ◐ inside the countdown band (the last 5 min of a 1 h entry, 2 min of a 5 m one), ● when a reply now would save ≥ 50k", ["D1", "D3"], "", "≈ without the status-line shim"),
+    metric!(coach_limits, "Coach", "Limits light", "percent", "The 5 h window used; ◐ when the exhaustion fit lands before the reset or ≥ 80 %, ● on a rate-limit or spend-limit error line; `—` without the status line", ["D3", "D1"], "", ""),
+    metric!(coach_rework, "Coach", "Rework light", "count", "Open issues: consecutive failed calls of the turn (denials excluded), corrections (interrupts, rejected calls) in the last three turns, blocked calls; else the source edits since the last confirmed test run. ◐ after 10 min or 14 calls unverified, two fails, a PR without a review, an uncommitted tail; ● on a cascade, a denial streak, a correction streak, destructive git on a dirty tree, a commit without a check", ["D1", "D7"], "", ""),
 ];
 
 /// Look up a metric by id.

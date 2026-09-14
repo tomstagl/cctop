@@ -353,7 +353,7 @@ test('renderView dispatches on model.view and draws the Overview inline', () => 
   const first = new Map<View, string>();
   for (const view of [...DETAIL, 'overview'] as View[]) first.set(view, rows(view, model, 80)[0]);
   assert.equal(new Set(first.values()).size, 6, JSON.stringify([...first]));
-  assert.match(first.get('overview')!, /^● BUSY/);
+  assert.match(first.get('overview')!, /^ cctop  /);
   assert.match(first.get('tools')!, /^TOOL/);
   assert.match(first.get('events')!, /^\d\d:\d\d:\d\d /);
   for (const view of DETAIL) {

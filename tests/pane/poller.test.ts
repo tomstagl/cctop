@@ -23,6 +23,7 @@ Usage: cctop query [OPTIONS] <COMMAND>
 Commands:
   summary   Session, context, tokens, cost, limits at a glance
   ledger    One row per turn
+  dashboard The dashboard object: header, four tiles, the nudge, nine ledger rows
   coach     The coach object: state line, four lights, the nudge, next, snoozed
   tools     Per-tool statistics and the largest results
   files     Files touched
@@ -90,8 +91,8 @@ function bootPoller(process: Record<string, ProcessScript> = binaryScripts(), fr
 }
 
 test('parseQueryVerbs keeps the known verbs of the Commands block', () => {
-  assert.deepEqual(parseQueryVerbs(HELP), ['summary', 'coach', 'tools', 'files', 'agents', 'advice', 'events']);
-  assert.deepEqual(parseQueryVerbs(HELP.replace(/^  advice .*\n/m, '')), ['summary', 'coach', 'tools', 'files', 'agents', 'events']);
+  assert.deepEqual(parseQueryVerbs(HELP), ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events']);
+  assert.deepEqual(parseQueryVerbs(HELP.replace(/^  advice .*\n/m, '')), ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'events']);
   assert.deepEqual(parseQueryVerbs('nothing here'), []);
   // Nothing after the block counts, and unknown verbs are dropped.
   assert.deepEqual(parseQueryVerbs('Commands:\n  events  x\n  pane  y\n\nOptions:\n  summary\n'), ['events']);
@@ -201,7 +202,7 @@ test('a failed or non-JSON call keeps the previous data; stale after 30 s of fai
 test('an unsupported verb is never called', async () => {
   const { $, poller, model } = bootPoller(binaryScripts(HELP.replace(/^  advice .*\n/m, '')));
   await poller.tick();
-  assert.deepEqual(model().verbs, ['summary', 'coach', 'tools', 'files', 'agents', 'events']);
+  assert.deepEqual(model().verbs, ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'events']);
   assert.equal(queries($, 'advice').length, 0);
   assert.equal(model().query.advice, undefined);
   assert.equal(model().stale, false);
@@ -254,8 +255,8 @@ function bootHooks(process: Record<string, ProcessScript>) {
       { answer: 'ok', durationMs: 2900, isAborted: false, turnId: 't1', reason: 'answer' },
       () => ({ text: 'ok' }),
     );
-  const render = async (columns = 80) =>
-    renderToText(await dispatch<RenderElement>('ui.render', paneRender('cctop', columns)), columns);
+  const render = async (columns = 80, placement: 'dock' | 'inline' = 'dock') =>
+    renderToText(await dispatch<RenderElement>('ui.render', paneRender('cctop', columns, { placement })), columns);
   return { $, start, open, turnStart, turnComplete, render };
 }
 
@@ -446,7 +447,7 @@ test('/clear between turns: the open pane follows the new id at the next turn, w
   assert.ok(after.length >= QUERY_VERBS.length - 1, 'the new session is queried at once, not at the next timer');
   assert.ok(after.every((argv) => argv[4] === NEXT), JSON.stringify(after));
   assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), JSON.stringify($.ui.logs));
-  const rows = await render(80);
+  const rows = await render(80, 'inline');
   assert.ok(rows.some((r) => r.includes('12k / 200k (6 %)')), `the new session’s context, read at once: ${JSON.stringify(rows)}`);
   assert.ok(rows.some((r) => /turn 1\b/.test(r)), `the running turn is the new session’s first: ${JSON.stringify(rows)}`);
   assert.ok(!rows.some((r) => r.includes('stale')));

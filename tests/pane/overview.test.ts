@@ -4,20 +4,31 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RenderElement, RenderNode, SessionUsage } from 'claude-code';
 import { fakeElements, textOf } from './harness';
-import { body, frameTitles, renderToText } from './render';
+import { renderToText } from './render';
 import { fixture } from './fixture';
 import { initialModel, reduce, type Action, type Binary, type Model } from '../../plugin/hooks/model';
-import { NEEDS_BINARY, renderOverview } from '../../plugin/hooks/views/overview';
+import {
+  L2_MAX,
+  NEEDS_BINARY,
+  TILES_MIN,
+  dashboardOf,
+  engineTiles,
+  renderOverview,
+  viewOfDigit,
+  type OverviewActions,
+} from '../../plugin/hooks/views/overview';
+import { BIG_GLYPHS, bigDigits } from '../../plugin/hooks/views/frame';
 
-// The Overview from the fixtures: a turn started at T0 with Bash running
-// since T0 + 2 s, drawn 48 s in. Every figure the tests expect comes from
-// tests/pane/fixtures/{summary,usage,advice}.json.
+// The Overview (plan B) from the fixtures: `cctop query dashboard` on
+// fixture A (tests/pane/fixtures/dashboard.json) drawn at 40 / 50 / 72 / 100
+// body columns; a turn started at T0 with Bash running since T0 + 2 s, drawn
+// 48 s in, for the engine-side rows.
 const T0 = Date.UTC(2026, 8, 12, 12, 0, 0);
 const NOW = T0 + 48_000;
 const el = fakeElements(new Map());
 const repo = join(__dirname, '..', '..', '..');
 
-type Options = { usage?: boolean; summary?: boolean; binary?: Binary; advice?: unknown };
+type Options = { usage?: boolean; summary?: boolean; dashboard?: boolean | unknown; binary?: Binary; unfolded?: number[] };
 
 function build(opts: Options = {}): Model {
   const actions: Action[] = [
@@ -29,25 +40,24 @@ function build(opts: Options = {}): Model {
   ];
   if (opts.usage ?? true) actions.push({ type: 'usage', usage: fixture<SessionUsage>('usage'), at: NOW });
   if (opts.summary ?? true) actions.push({ type: 'query', verb: 'summary', data: fixture('summary') });
-  if (opts.advice !== undefined) actions.push({ type: 'query', verb: 'advice', data: opts.advice });
-  return actions.reduce(reduce, initialModel());
+  const dash = opts.dashboard ?? true;
+  if (dash !== false) actions.push({ type: 'query', verb: 'dashboard', data: dash === true ? fixture('dashboard') : dash });
+  const model = actions.reduce(reduce, initialModel());
+  return opts.unfolded === undefined ? model : { ...model, unfolded: opts.unfolded };
 }
 
-// The rendered lines; `rows` gives the frames' content (borders and `│`
-// stripped, side-by-side frames joined with a space), `raw` the screen.
-function raw(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock'): string[] {
-  return renderToText(renderOverview(model, el, columns, placement, NOW), columns);
+function raw(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock', actions?: OverviewActions): string[] {
+  const buttons = actions === undefined ? undefined : { el, actions };
+  return renderToText(renderOverview(model, el, columns, placement, NOW, buttons), columns);
 }
-function rows(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock'): string[] {
-  return body(raw(model, columns, placement));
-}
-
-// The theme keys the views draw with (views/frame.tsx THEME) and the TUI roles they stand for.
-const THEME_KEYS: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
 
 function has(lines: string[], text: string | RegExp): void {
   const hit = lines.some((r) => (typeof text === 'string' ? r.includes(text) : text.test(r)));
   assert.ok(hit, `no row has ${String(text)}: ${JSON.stringify(lines)}`);
+}
+
+function fits(lines: string[], columns: number): void {
+  for (const row of lines) assert.ok([...row].length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
 }
 
 type Node = { type: string; props?: Record<string, unknown>; children?: RenderNode[] };
@@ -59,7 +69,6 @@ function walk(node: RenderNode | undefined, visit: (n: Node) => void): void {
   for (const c of n.children ?? []) walk(c, visit);
 }
 
-// The text of every keyed row Box, by key (the row that shows the metric).
 function keyed(tree: RenderElement): Map<string, string> {
   const out = new Map<string, string>();
   walk(tree, (n) => {
@@ -68,121 +77,157 @@ function keyed(tree: RenderElement): Map<string, string> {
   return out;
 }
 
-const EXPECTED = [
-  '396k / 1.0M (40 %)',
-  '+50k/turn',
-  '≈12 turns',
-  '33.0M',
-  '597k',
-  '286',
-  '67k',
-  '31k',
-  '98 %',
-  '1h',
-  '$9.90',
-  '≈$16.3/h',
-  '42 %',
-  '17 %',
-  '2h 29m',
-  'Bash 0:46',
-  '≈0:02 / 0:46',
-];
-
-for (const columns of [50, 60, 80]) {
-  test(`overview at ${columns} columns shows the fixture values within the width`, () => {
-    const screen = raw(build(), columns);
-    for (const row of screen) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
-    // Every frame row is exactly as wide as its frame: the right border lands.
-    for (const row of screen) if (row.startsWith('│')) assert.ok(row.endsWith('│'), `open frame row: ${JSON.stringify(row)}`);
-    const lines = rows(build(), columns);
-    for (const text of EXPECTED) has(lines, text);
-    // The header frame: the status pill, the turn and its elapsed; the model in the title.
-    has(lines, /^● BUSY  turn 1  0:48$/);
-    has(lines, /^auto · medium · \$9\.90\s+bin shim hooks 2\.1\.270$/);
-    const titles = frameTitles(screen);
-    assert.equal(titles[0], 'cctop ─ claude-sonnet-5');
-    // The blocks carry the TUI's panel digits, as the guide numbers them.
-    // In a 30-column frame (two columns at 60) the Limits title keeps its
-    // 5 h figure and drops the 7 d one rather than clipping it.
-    const limits = columns === 60 ? '3 Limits ─ 5h 42 %' : '3 Limits ─ 5h 42 % · 7d 17 %';
-    for (const title of ['1 Context ─ 40 %', '2 Tokens & Cost ─ 33.6M', limits, '4 Turn ─ 0:48']) {
-      assert.ok(titles.includes(title), `no frame ${title}: ${JSON.stringify(titles)}`);
-    }
+function buttons(tree: RenderElement): Node[] {
+  const out: Node[] = [];
+  walk(tree, (n) => {
+    if (n.type === 'Button') out.push(n);
   });
+  return out;
+}
 
-  test(`overview at ${columns} columns: two-column rows only from 60`, () => {
-    const screen = raw(build(), columns);
-    const paired = screen.some((r) => r.includes('╭1 Context') && r.includes('╭2 Tokens & Cost'));
-    assert.equal(paired, columns >= 60, JSON.stringify(screen));
-    const order = ['1 Context', '2 Tokens & Cost', '3 Limits', '4 Turn'].map((t) => screen.findIndex((r) => r.includes(`╭${t} `)));
-    assert.deepEqual([...order].sort((a, b) => a - b), order, 'blocks in order');
-    if (columns >= 60) {
-      // Paired frames close on the same line.
-      const closes = screen.filter((r) => /^╰.*╯╰.*╯$/.test(r));
-      assert.equal(closes.length, 2, JSON.stringify(screen));
-    }
+const THEME_KEYS: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
+
+test('the dashboard fixture parses into tiles, a nudge and nine rows', () => {
+  const d = dashboardOf(fixture('dashboard'));
+  assert.ok(d !== null);
+  assert.equal(d.tiles.length, 4);
+  assert.deepEqual(
+    d.tiles.map((t) => t.id),
+    ['context', 'cache', 'limits', 'rework'],
+  );
+  assert.equal(d.rows.length, 9);
+  assert.deepEqual(
+    d.rows.map((r) => r.digit),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  );
+  assert.ok(d.headerLine.startsWith('cctop  claude-sonnet-5 · turn 14'), d.headerLine);
+  assert.equal(d.phase.word, 'IDLE');
+  assert.ok(d.nudge !== null && d.nudge.line.startsWith('Fixed prefix 60k tokens'), JSON.stringify(d.nudge));
+  assert.equal(d.tiles[0].figure, '40');
+  assert.equal(d.tiles[0].unit, '%');
+  assert.equal(dashboardOf(null), null);
+  assert.equal(dashboardOf({ tiles: 'x' }), null);
+});
+
+test('the block font is 3 × 3 per glyph, one cell between digits', () => {
+  for (const [c, rows] of Object.entries(BIG_GLYPHS)) {
+    assert.equal(rows.length, 3, c);
+    for (const r of rows) assert.equal([...r].length, 3, `${c}: ${JSON.stringify(r)}`);
+  }
+  const lines = bigDigits('41', 'error');
+  assert.deepEqual(
+    lines.map((l) => l.map((s) => s.text).join('')),
+    ['█ █  ▄█', '▀▀█   █', '  ▀   ▀'],
+  );
+  assert.equal(lines[0][0].color, 'error');
+  assert.equal(bigDigits('—')[1][0].text, '▀▀▀');
+});
+
+for (const columns of [50, 72, 100]) {
+  test(`overview at ${columns} columns: header, tiles two per row, the nudge, nine ledger rows`, () => {
+    const model = build();
+    const lines = raw(model, columns);
+    fits(lines, columns);
+    assert.ok(lines[0].startsWith(' cctop  claude-sonnet-5 · turn 14'), lines[0]);
+    assert.ok(lines[0].includes('○ IDLE'), 'the phase cell: ' + lines[0]);
+    // Two tiles per row: the context and cache names on one line, limits and rework further down.
+    const names = lines.filter((l) => /[○◐●] (context|cache|limits|rework)/.test(l));
+    assert.ok(names.length >= 2, JSON.stringify(lines));
+    assert.ok(names[0].includes('context') && names[0].includes('cache'), names[0]);
+    has(lines, /^ ▸ Fixed prefix 60k tokens/);
+    for (let d = 1; d <= 9; d++) assert.ok(lines.some((l) => new RegExp(`^ ?${d} `).test(l)), `row ${d}: ${JSON.stringify(lines)}`);
+    has(lines, /^ ?1 Context\s+▇/);
+    has(lines, /^ ?9 Advisor\s+LATER A17/);
+    // The detail rows sit under their value rows from 50 columns.
+    has(lines, /^ {13}\S/);
   });
 }
 
-test('values are right-aligned in one column per block, gauges between label and value', () => {
-  const screen = raw(build(), 50);
-  const start = screen.findIndex((r) => r.startsWith('╭2 Tokens & Cost'));
-  const end = screen.findIndex((r, i) => i > start && r.startsWith('╰'));
-  const tokens = body(screen.slice(start + 1, end));
-  const ends = new Set(tokens.map((r) => r.length));
-  assert.equal(ends.size, 1, `token rows end at different columns: ${JSON.stringify(tokens)}`);
-  assert.match(tokens[0], /^cache read\s+▇+\s+33\.0M$/);
-  assert.match(tokens[1], /^cache write\s+▁+\s+597k$/);
-  // The context gauge takes its own row above the bare figure, as the TUI's.
-  const context = rows(build(), 50);
-  const gaugeRow = context.findIndex((r) => /^▇+▁+$/.test(r));
-  assert.ok(gaugeRow >= 0, JSON.stringify(context));
-  assert.match(context[gaugeRow + 1], /^396k \/ 1\.0M \(40 %\)$/);
-  // Limits carry their gauge inline.
-  has(context, /^5 h\s+▇+▁+\s+42 %$/);
+test('below 50 columns the tiles collapse to the coach line, below 40 to its glyphs, and the rows keep their names', () => {
+  const model = build();
+  const d = dashboardOf(fixture('dashboard'))!;
+  const narrow = raw(model, 48);
+  fits(narrow, 48);
+  assert.ok(!narrow.some((l) => l.includes('▀▀▀')), 'no block digits');
+  has(narrow, ` ${d.lines.l1}`);
+  const tiny = raw(model, 36);
+  fits(tiny, 36);
+  has(tiny, ` ${d.lines.l2}`);
+  assert.ok(tiny.some((l) => /^ ?1 Context/.test(l)), JSON.stringify(tiny));
+  assert.equal(TILES_MIN, 50);
+  assert.equal(L2_MAX, 40);
 });
 
-test('≈ marks exactly the values the fixture calls approx', () => {
-  const summary = fixture<Record<string, Record<string, { approx: boolean }>>>('summary');
-  const byKey = keyed(renderOverview(build({ usage: false }), el, 80, 'dock', NOW));
-  const checks: [string, boolean][] = [
-    ['context_size', summary.context.size.approx],
-    ['context_velocity', summary.context.velocity.approx],
-    ['turns_until_compaction', summary.context.turns_until_compaction.approx],
-    ['cache_read', summary.tokens.cache_read.approx],
-    ['cache_hit_ratio', summary.tokens.cache_hit_ratio.approx],
-    ['cost', (summary.cost as unknown as { approx: boolean }).approx],
-    ['burn_rate', (summary.burn_rate as unknown as { approx: boolean }).approx],
-    ['queued_prompts', (summary.queued_prompts as unknown as { approx: boolean }).approx],
-  ];
-  for (const [key, approx] of checks) {
-    const text = byKey.get(key);
-    assert.ok(text !== undefined, `no row keyed ${key}`);
-    assert.equal(text.includes('≈'), approx, `${key}: ${JSON.stringify(text)}`);
-  }
-  assert.ok(byKey.get('context_size')?.includes('≈396k / 1.0M (40 %)'), byKey.get('context_size'));
-  // The engine's own context figure is exact: no marker once usage is present.
-  assert.ok(!keyed(renderOverview(build(), el, 80, 'dock', NOW)).get('context_size')?.includes('≈'));
+test('ledger rows are plain Buttons: 5–9 open the view, 1–4 unfold their block and fold again', () => {
+  const pressed: number[] = [];
+  const actions: OverviewActions = { row: (d) => pressed.push(d) };
+  const model = build();
+  const tree = renderOverview(model, el, 72, 'dock', NOW, { el, actions });
+  const rows = buttons(tree);
+  assert.deepEqual(
+    rows.map((b) => [b.props?.hotkey, b.props?.plain, b.props?.key]),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [String(d), true, `ledger-${d}`]),
+  );
+  assert.deepEqual(rows.map((b) => String(b.props?.label).trim()), ['Context', 'Tokens', 'Limits', 'Turn', 'Tools', 'Agents', 'Files', 'Events', 'Advisor']);
+  assert.equal(viewOfDigit(5), 'tools');
+  assert.equal(viewOfDigit(9), 'advisor');
+  assert.equal(viewOfDigit(1), null);
+  // Unfolded rows 1 and 3 draw the Context and Limits frames beneath them.
+  const unfolded = raw(build({ unfolded: [1, 3] }), 72);
+  assert.ok(unfolded.some((l) => l.startsWith('╭1 Context')), JSON.stringify(unfolded));
+  assert.ok(unfolded.some((l) => l.startsWith('╭3 Limits')), JSON.stringify(unfolded));
+  assert.ok(!unfolded.some((l) => l.startsWith('╭2 Tokens')), JSON.stringify(unfolded));
+  const folded = raw(build(), 72);
+  assert.ok(!folded.some((l) => l.startsWith('╭')), 'no frames while folded');
+  // The model toggles.
+  const m1 = reduce(build(), { type: 'overview.toggle', digit: 2 });
+  assert.deepEqual(m1.unfolded, [2]);
+  assert.deepEqual(reduce(m1, { type: 'overview.toggle', digit: 2 }).unfolded, []);
+  assert.equal(pressed.length, 0);
 });
 
-test('every metric row is keyed by an id from docs/metrics.md', () => {
+test('before the binary answers the tiles read the engine, and a missing binary says so', () => {
+  const model = build({ dashboard: false });
+  const tiles = engineTiles(model);
+  assert.equal(tiles[0].figure, '40', 'the usage read: 396365 of 1M');
+  assert.equal(tiles[0].sub1, '396k of 1.0M');
+  assert.equal(tiles[1].figure, '—');
+  const lines = raw(model, 72);
+  fits(lines, 72);
+  assert.ok(lines[0].startsWith(' cctop  claude-sonnet-5 · turn 1'), lines[0]);
+  assert.ok(lines.some((l) => l.includes('◐ context')), JSON.stringify(lines));
+  has(lines, 'waiting for cctop query dashboard…');
+  const missing = raw(build({ dashboard: false, binary: 'missing' }), 72);
+  has(missing, NEEDS_BINARY);
+  // No usage read either: the context tile is `—`.
+  assert.equal(engineTiles(build({ dashboard: false, usage: false }))[0].figure, '—');
+});
+
+test('the inline form keeps the flat header, gains the coach line, then Context and Limits', () => {
+  const lines = raw(build(), 80, 'inline');
+  fits(lines, 80);
+  assert.match(lines[0], /^● BUSY · turn 1 · 0:48 · claude-sonnet-5/);
+  const d = dashboardOf(fixture('dashboard'))!;
+  assert.equal(lines[1], d.lines.l1);
+  assert.ok(lines.some((l) => /^Context$/.test(l)), JSON.stringify(lines));
+  assert.ok(lines.some((l) => /^Limits$/.test(l)), JSON.stringify(lines));
+  assert.ok(!lines.some((l) => l.startsWith('╭') || /^ ?\d Context/.test(l)), 'no frames, no ledger inline');
+});
+
+test('every keyed row is a metric id from docs/metrics.md and colours are theme keys only', () => {
   const doc = readFileSync(join(repo, 'docs', 'metrics.md'), 'utf8');
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));
   assert.ok(ids.size > 40, `metrics.md parsed ${ids.size} ids`);
-  const keys = [...keyed(renderOverview(build({ advice: { schema: 2, primary: { class: 'NOW', rule: 'A47', headline: 'x' }, items: [] } }), el, 80, 'dock', NOW)).keys()];
-  assert.ok(keys.length >= 20, `only ${keys.length} keyed rows`);
+  const tree = renderOverview(build({ unfolded: [1, 2, 3, 4] }), el, 100, 'dock', NOW);
+  const keys = [...keyed(tree).keys()].filter((k) => !k.startsWith('ledger_'));
+  assert.ok(keys.length >= 10, `only ${keys.length} keyed rows`);
   for (const key of keys) assert.ok(ids.has(key), `row key ${key} is not a metric id`);
-});
-
-test('every row Text truncates and colours are theme keys only', () => {
-  const tree = renderOverview(build({ advice: { schema: 2, primary: { class: 'NOW', rule: 'A47', headline: 'x' }, items: [] } }), el, 80, 'dock', NOW);
   let texts = 0;
   const visit = (node: RenderNode | undefined, inText: boolean): void => {
     if (node === undefined || typeof node === 'string' || node.type === 'engine') return;
     const n = node as Node;
     if (n.type === 'Text') {
       texts += 1;
-      // A row Text truncates; the segments inside it inherit that.
       if (!inText) assert.equal(n.props?.wrap, 'truncate', JSON.stringify(n.props));
       for (const prop of ['color', 'backgroundColor']) {
         const c = n.props?.[prop];
@@ -200,79 +245,17 @@ test('every row Text truncates and colours are theme keys only', () => {
   }
 });
 
-test('the header dims the badges that are off and colours the ones on', () => {
-  const badges = new Map<string, { dim: boolean; color: unknown }>();
-  walk(renderOverview(build(), el, 80, 'dock', NOW), (n) => {
-    if (n.type !== 'Text') return;
-    const text = textOf(n.children).trim();
-    if (text === 'bin' || text === 'shim' || text.startsWith('hooks ')) badges.set(text.split(' ')[0], { dim: n.props?.dimColor === true, color: n.props?.color });
+test('the nudge line carries its class tag and the tile levels colour the digits', () => {
+  const tree = renderOverview(build(), el, 100, 'dock', NOW);
+  const coloured: [string, string][] = [];
+  walk(tree, (n) => {
+    if (n.type === 'Text' && typeof n.props?.color === 'string') coloured.push([textOf(n.children).trim(), THEME_KEYS[n.props.color] ?? String(n.props.color)]);
   });
-  // The fixture summary has no shim (limits missing) and no hooks.
-  assert.deepEqual(
-    [...badges.entries()],
-    [
-      ['bin', { dim: false, color: 'success' }],
-      ['shim', { dim: true, color: undefined }],
-      ['hooks', { dim: true, color: undefined }],
-    ],
-  );
-});
-
-test("the coach's slot occupant is the last row, coloured by class", () => {
-  const advice = fixture<{ items: Record<string, unknown>[]; primary: Record<string, unknown> }>('advice');
-  const queued = { ...advice, primary: null };
-  const none = rows(build({ advice: queued }), 80);
-  assert.ok(!none.some((r) => r.includes(String(advice.items[0].headline))), 'no row without an occupant');
-  const lines = rows(build({ advice }), 80);
-  const last = lines.filter((r) => r !== '').at(-1)!;
-  assert.ok(last.startsWith(`▸ LATER A17 ${String(advice.primary.headline)}`.slice(0, 40)), last);
-  // In its own frame, the last one on the screen.
-  const titles = frameTitles(raw(build({ advice }), 80));
-  assert.equal(titles.at(-1), '9 Advisor');
-  // A NOW occupant is red, a NEXT one yellow, a LATER one plain.
-  const colourOf = (cls: string): string | undefined => {
-    const primary = { ...advice.primary, class: cls, rule: 'A47', headline: 'Rate limit (session) · resets 22:20' };
-    let found: string | undefined;
-    walk(renderOverview(build({ advice: { ...advice, primary } }), el, 80, 'dock', NOW), (n) => {
-      if (n.type === 'Text' && textOf(n.children).includes(`▸ ${cls} A47`)) found = THEME_KEYS[String(n.props?.color)] ?? String(n.props?.color);
-    });
-    return found;
-  };
-  assert.equal(colourOf('NOW'), 'red');
-  assert.equal(colourOf('NEXT'), 'yellow');
-  assert.equal(colourOf('LATER'), 'undefined');
-});
-
-test('a missing binary draws one line per binary-backed section and keeps the engine rows', () => {
-  for (const columns of [50, 80]) {
-    const lines = rows(build({ binary: 'missing', summary: false }), columns);
-    // Velocity, the token breakdown and the Advisor: one line each (two share a row from 60 columns).
-    assert.equal(lines.join('\n').split(NEEDS_BINARY).length - 1, 3, JSON.stringify(lines));
-    for (const text of ['396k / 1.0M (40 %)', '$9.90', '42 %', '17 %', '2h 29m', 'Bash 0:46']) has(lines, text);
-    for (const gone of ['cache read', 'velocity', 'burn rate']) assert.ok(!lines.some((r) => r.includes(gone)), gone);
-    has(lines, /bin shim hooks 2\.1\.270$/);
-    for (const row of raw(build({ binary: 'missing', summary: false }), columns)) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
-  }
-});
-
-test('without any source the rows draw — and the header turn 0', () => {
-  const lines = rows(initialModel(), 50);
-  has(lines, /^○ IDLE  turn 0  —$/);
-  // Effort and cost unknown, the badges still drawn; the bare context figure.
-  has(lines, /^— · —\s+bin shim hooks 2\.1\.270$/);
-  has(lines, /^—$/);
-  has(lines, /^cache read\s+—$/);
-  has(lines, /^5 h\s+—$/);
-  has(lines, /^waiting on\s+—$/);
-  assert.ok(!lines.some((r) => r.includes(NEEDS_BINARY)), 'unknown is not missing');
-  assert.deepEqual(frameTitles(raw(initialModel(), 50)), ['cctop ─ —', '1 Context', '2 Tokens & Cost', '3 Limits', '4 Turn']);
-});
-
-test('inline placement draws the header, Context and Limits only, without frames', () => {
-  const lines = raw(build(), 80, 'inline');
-  has(lines, /^● BUSY · turn 1 · 0:48 · claude-sonnet-5 · medium\s+bin shim hooks 2\.1\.270$/);
-  has(lines, /^Context$/);
-  has(lines, /^Limits$/);
-  assert.ok(!lines.some((r) => /[╭╰│]/.test(r)), 'no frames in the inline form above the prompt');
-  assert.ok(!lines.some((r) => r.includes('Tokens & Cost') || r.includes('cache read') || r.includes('waiting on')), JSON.stringify(lines));
+  // The context tile is watch-level on fixture A (396k of 1M): amber digits and name.
+  assert.ok(coloured.some(([t, c]) => t.includes('◐ context') && c === 'yellow'), JSON.stringify(coloured));
+  const lines = raw(build(), 100);
+  const nudge = lines.find((l) => l.startsWith(' ▸ '))!;
+  assert.ok(nudge.includes('LATER · turn 14'), nudge);
+  const next = lines[lines.indexOf(nudge) + 1];
+  assert.ok(next.startsWith('   trim CLAUDE.md'), next);
 });

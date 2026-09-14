@@ -21,6 +21,7 @@ import {
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
+import { viewOfDigit, type OverviewActions } from './views/overview';
 
 // Re-exported so the checked-in `$` contract's own version (US-009) has one
 // source (`model.ts`, already imported by both this file and the views) and
@@ -218,6 +219,18 @@ function coachChanged($: EngineInterface): void {
       model = reduce(model, { type: 'coach.toasted', key, turn: model.turn.number });
     }
   }
+}
+
+// What the Overview's ledger Buttons do: a digit 5–9 opens that view, 1–4
+// unfolds the row's block beneath it (and folds it on the next press).
+function overviewActions($: EngineInterface): OverviewActions {
+  return {
+    row: (digit) => {
+      const view = viewOfDigit(digit);
+      if (view !== null) selectView($, view);
+      else apply($, { type: 'overview.toggle', digit });
+    },
+  };
 }
 
 // What the coach view's Buttons do: `fill` writes a prompt- or slash-class
@@ -478,7 +491,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
   return (
     <Box flexDirection="column">
       {viewBar($, el, columns)}
-      {renderView(model, el, columns, 'dock', now, { el, actions: coachActions($) })}
+      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($) })}
       {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
       {model.stale && <Text wrap="truncate">cctop query stale</Text>}
       {unsupportedVerbs(model).map((verb) => (

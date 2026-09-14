@@ -23,7 +23,7 @@ export const TESTED_WITH = '2.1.270';
 export const MIN_DOCK_COLUMNS = 110;
 
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
-export const QUERY_VERBS = ['summary', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+export const QUERY_VERBS = ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
 /** Verbs a busy tick (every 2 s) skips: they change at turn boundaries, the idle tick reads them. */
 export const IDLE_ONLY_VERBS: readonly QueryVerb[] = ['advice'];
 export type QueryVerb = (typeof QUERY_VERBS)[number];
@@ -110,6 +110,8 @@ export type Model = {
   coachToastTurn: number | null;
   /** The last `$.ui.status` line the coach set; set again only when it changes. */
   coachStatus: string | null;
+  /** The Overview's ledger rows 1–4 unfolded inline (their digits). */
+  unfolded: number[];
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -139,7 +141,8 @@ export type Action =
   | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | null }
   | { type: 'coach.why'; why: boolean }
   | { type: 'coach.toasted'; key: string; turn: number }
-  | { type: 'coach.status'; status: string | null };
+  | { type: 'coach.status'; status: string | null }
+  | { type: 'overview.toggle'; digit: number };
 
 export function initialModel(): Model {
   return {
@@ -180,6 +183,7 @@ export function initialModel(): Model {
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
+    unfolded: [],
   };
 }
 
@@ -294,6 +298,11 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
     case 'coach.status':
       return model.coachStatus === action.status ? model : { ...model, coachStatus: action.status };
+    case 'overview.toggle':
+      return {
+        ...model,
+        unfolded: model.unfolded.includes(action.digit) ? model.unfolded.filter((d) => d !== action.digit) : [...model.unfolded, action.digit],
+      };
   }
 }
 

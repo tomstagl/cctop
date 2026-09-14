@@ -2,7 +2,7 @@
   "header": {
     "cwd": "/home/user/project",
     "elapsed": "52:41",
-    "line": "cctop  claude-sonnet-5 · turn 14 · 52:41 · /home/user/project",
+    "line": "cctop  claude-sonnet-5 · turn 14 · 52:41 · ENDED 10:17 · /home/user/project · v2.1.247",
     "model": "claude-sonnet-5",
     "phase": {
       "glyph": "○",
@@ -208,7 +208,7 @@
           "tone": "dim"
         },
         {
-          "text": "long_context 8268 %",
+          "text": "long_context 83 %",
           "tone": "fg"
         }
       ]

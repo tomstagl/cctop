@@ -191,6 +191,37 @@ export function frame(f: Frame, el: ViewElements): RenderElement {
   );
 }
 
+// The 3 × 3 block-digit font of the dashboard tiles (src/ui/widgets.rs
+// `big_digits`): one cell between digits, `—` for a missing figure.
+const BIG: Record<string, [string, string, string]> = {
+  '0': ['█▀█', '█ █', '▀▀▀'],
+  '1': [' ▄█', '  █', '  ▀'],
+  '2': ['▀▀█', '█▀▀', '▀▀▀'],
+  '3': ['▀▀█', '▀▀█', '▀▀▀'],
+  '4': ['█ █', '▀▀█', '  ▀'],
+  '5': ['█▀▀', '▀▀█', '▀▀▀'],
+  '6': ['█▀▀', '█▀█', '▀▀▀'],
+  '7': ['▀▀█', '  █', '  ▀'],
+  '8': ['█▀█', '█▀█', '▀▀▀'],
+  '9': ['█▀█', '▀▀█', '▀▀▀'],
+  '—': ['   ', '▀▀▀', '   '],
+  '.': ['   ', '   ', ' ▀ '],
+};
+
+/** `text` (digits, `.`, `—`) as three rows of block glyphs in `color`, one cell apart. */
+export function bigDigits(text: string, color?: string): [Line, Line, Line] {
+  const rows: [string, string, string] = ['', '', ''];
+  [...text].forEach((c, i) => {
+    const glyph = BIG[c] ?? ['   ', '   ', '   '];
+    for (let r = 0; r < 3; r++) rows[r] += (i > 0 ? ' ' : '') + glyph[r];
+  });
+  const style = color === undefined ? {} : { color };
+  return [[seg(rows[0], style)], [seg(rows[1], style)], [seg(rows[2], style)]];
+}
+
+/** Every glyph of the font, for the test that checks its shape. */
+export const BIG_GLYPHS: Record<string, readonly string[]> = BIG;
+
 /** Frames side by side on one row; each keeps its own width. */
 export function sideBySide(frames: RenderElement[], el: ViewElements): RenderElement {
   const { Box } = el;
