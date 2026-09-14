@@ -48,6 +48,9 @@ pub struct Light {
     /// The light's row after the glyph and name (`412k ▇▇▇▇▁▁▁▁▁▁ 41% ·
     /// ≈$.21/call`, `warm 41m (1h)`); the number is part of it.
     pub text: String,
+    /// The same row in rate-limit units (`re-reads 412k/call`), for the
+    /// context light when `$` is toggled.
+    pub alt: Option<String>,
     /// Where the figure comes from (`transcript`, `status line`, `git`…).
     pub source: &'static str,
     pub approx: bool,
@@ -528,6 +531,15 @@ pub fn context_light(state: &State) -> Light {
                 fmt::tokens(size)
             }
         ),
+        alt: Some(format!(
+            "{} {bar} {pct:.0}% · re-reads {}/call",
+            if size == 0 {
+                "—".to_string()
+            } else {
+                fmt::tokens(size)
+            },
+            fmt::tokens(size)
+        )),
         source: if v.window_exact {
             "status line"
         } else {
@@ -640,6 +652,7 @@ pub fn cache_light(state: &State) -> Light {
         figure,
         unit,
         text,
+        alt: None,
         source: if state.cache.from_shim {
             "status line"
         } else {
@@ -675,6 +688,7 @@ pub fn limits_light(state: &State) -> Light {
                 None if spend => "— spend limit hit".into(),
                 None => "— no status line".into(),
             },
+            alt: None,
             source: "status line",
             approx: false,
             lines: vec!["install the status line shim for the limits".into()],
@@ -744,6 +758,7 @@ pub fn limits_light(state: &State) -> Light {
         figure: Some(l.five_hour_pct.round()),
         unit: "%",
         text: parts.join(" · "),
+        alt: None,
         source: "status line",
         approx: false,
         lines,
@@ -947,6 +962,7 @@ pub fn rework_light(state: &State) -> Light {
         figure: Some(if issues > 0 { issues } else { edits } as f64),
         unit: "",
         text: parts.join(" · "),
+        alt: None,
         source: "transcript",
         approx: false,
         lines,

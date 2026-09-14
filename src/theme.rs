@@ -296,6 +296,37 @@ impl Theme {
         Style::default().fg(self.crit)
     }
 
+    /// The coach's glyphs (○ ◐ ● ◆ ▸ ↻ ✓ ▇ ▁) with their ASCII fallbacks
+    /// (`-` `+` `!` `?` `>` `~` `v` `#` `-`), applied to a whole line.
+    pub fn coach_text(&self, s: &str) -> String {
+        if !self.ascii {
+            return s.to_string();
+        }
+        s.chars()
+            .map(|c| match c {
+                '○' => '-',
+                '◐' => '+',
+                '●' => '!',
+                '◆' => '?',
+                '▸' => '>',
+                '↻' => '~',
+                '✓' => 'v',
+                '✗' => 'x',
+                '▇' => '#',
+                '▁' => '-',
+                '─' | '—' => '-',
+                '│' => '|',
+                '╭' | '╮' | '╰' | '╯' | '├' | '┤' => '+',
+                '·' => '.',
+                '→' => '>',
+                '≈' => '~',
+                '…' => '.',
+                '×' => 'x',
+                c => c,
+            })
+            .collect()
+    }
+
     /// Gauge / sparkline glyphs for this terminal.
     pub fn gauge_fill(&self) -> &'static str {
         if self.ascii {

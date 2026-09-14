@@ -2,6 +2,7 @@
   "agents": null,
   "lights": [
     {
+      "alt": "333k ▇▇▇▁▁▁▁▁▁▁ 33% · re-reads 333k/call",
       "approx": true,
       "figure": 33.0,
       "glyph": "●",
@@ -17,6 +18,7 @@
       "unit": "%"
     },
     {
+      "alt": null,
       "approx": true,
       "figure": 55.0,
       "glyph": "○",
@@ -33,6 +35,7 @@
       "unit": "m"
     },
     {
+      "alt": null,
       "approx": false,
       "figure": null,
       "glyph": "○",
@@ -47,6 +50,7 @@
       "unit": "%"
     },
     {
+      "alt": null,
       "approx": false,
       "figure": 1.0,
       "glyph": "○",

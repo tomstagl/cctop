@@ -52,4 +52,4 @@ expression: "render_to_string(&app, 60, 51)"
 │ 23:29:30 note   /clear · continued in a new session      │
 │ 23:29:30 api    cost-state $18.75 · api 22:14 · retries …│
 ╰──────────────────────────────────────────────────────────╯
- ?help 1-9 panels ⇥focus a ask t theme L sessions q quit
+ ?help 1-9 panels ⇥focus c coach a ask t theme L sessions q

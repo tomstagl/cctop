@@ -1,0 +1,24 @@
+---
+source: src/ui/coach_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+╭coach ─ session-b ─────────────────── opus-5 · turn 2 ╮
+│ IMPLEMENTING · 30c +8.4k · silent 7m                 │
+├──────────────────────────────────────────────────────┤
+│ ◐ context  227k ▇▇▁▁▁▁▁▁▁▁ 23% · ≈$.13/call          │
+│ ○ cache    warm 59m (1h) ≈                           │
+│ ○ limits   — no status line                          │
+│ ○ rework   edits 2 ✓ none 1m                         │
+├──────────────────────────────────────────────────────┤
+│   quiet · nothing to act on · 0 nudges this hour     │
+│                                                      │
+│                                                      │
+│                                                      │
+│ next     —                                           │
+│ snoozed  —                                           │
+╰──────────────────────────────────────────────────────╯
+
+
+
+
+ c dashboard  Enter act  x snooze  e why  1-4 light  q

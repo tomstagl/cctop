@@ -17,6 +17,13 @@ pub struct Config {
     pub notify: bool,
     /// Extra pricing TOML merged over the bundled table.
     pub pricing: Option<PathBuf>,
+    /// `dashboard` or `coach`: the view the TUI opens with.
+    #[serde(default = "default_view")]
+    pub view: String,
+}
+
+fn default_view() -> String {
+    "dashboard".into()
 }
 
 impl Default for Config {
@@ -28,6 +35,7 @@ impl Default for Config {
             hidden_panels: Vec::new(),
             notify: false,
             pricing: None,
+            view: "dashboard".into(),
         }
     }
 }
@@ -90,6 +98,7 @@ mod tests {
             hidden_panels: vec![6, 7],
             notify: true,
             pricing: Some(PathBuf::from("/x/pricing.toml")),
+            view: "coach".into(),
         };
         c.save_to(&path).unwrap();
         assert_eq!(Config::load_from(&path), c);
@@ -100,5 +109,9 @@ mod tests {
         let p = Config::load_from(&path);
         assert_eq!(p.theme, "btop");
         assert_eq!(p.refresh_ms, crate::app::REFRESH_DEFAULT_MS);
+        assert_eq!(
+            p.view, "dashboard",
+            "a file without `view` opens the dashboard"
+        );
     }
 }

@@ -15,6 +15,7 @@ fn fresh_state(prev: &State, info: SessionInfo) -> State {
     s.session = info;
     s.now_ms = crate::app::now_ms();
     s.hidden = prev.hidden.clone();
+    s.view = prev.view;
     s.tokens_include_agents = prev.tokens_include_agents;
     s.baseline = prev.baseline.clone();
     s.theme = prev.theme.clone();

@@ -1,0 +1,18 @@
+---
+source: src/ui/coach_view.rs
+expression: "render_to_string(&app, 40, 14)"
+---
+╭coach ── opus-5 · turn 5 ─────────────╮
+│ IDLE 0s · python3 - lor… ok 19m ago  │
+│ ◐ ctx 720k ≈$.37  ○ cache 1h00       │
+│ ○ 5h —            ● blocked 4 ✓no    │
+├──────────────────────────────────────┤
+│ ▸ Fixed prefix 49k tokens            │
+│   ≈$0.37/turn at 15 calls            │
+│   trim CLAUDE.md, move rarely-used   │
+│   rules to skills,…                  │
+╰──────────────────────────────────────╯
+
+
+
+ c dashboard  Enter act  x snooze  e why

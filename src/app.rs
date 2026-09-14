@@ -59,6 +59,10 @@ pub const BINDINGS: &[Binding] = &[
         action: "narrow / wide layout",
     },
     Binding {
+        keys: "c",
+        action: "coach view · Enter act · x snooze",
+    },
+    Binding {
         keys: "+ / -",
         action: "render interval 100 ms … 2 s",
     },
@@ -99,6 +103,8 @@ pub struct App {
     last_theme_check: Option<Instant>,
     /// Write config changes to disk (off in tests and headless runs).
     pub persist_config: bool,
+    /// Human turn of the last NOW-class toast (at most one per turn).
+    last_now_toast_turn: Option<usize>,
 }
 
 impl App {
@@ -124,6 +130,7 @@ impl App {
             user_theme_dir: None,
             last_theme_check: None,
             persist_config: false,
+            last_now_toast_turn: None,
         }
     }
 
@@ -144,6 +151,7 @@ impl App {
     /// Apply the config: layout, theme, refresh, hidden panels, notify.
     pub fn apply_config(&mut self, config: crate::config::Config) {
         self.mode_override = config.layout_mode();
+        self.state.view = crate::ui::state::View::parse(&config.view).unwrap_or_default();
         self.refresh_ms = config.refresh_ms.clamp(REFRESH_MIN_MS, REFRESH_MAX_MS);
         self.state.hidden = config.hidden_panels.clone();
         self.desktop_notify = self.desktop_notify || config.notify;
@@ -162,6 +170,7 @@ impl App {
             Some(Mode::Wide) => "wide".into(),
             None => "auto".into(),
         };
+        self.config.view = self.state.view.label().into();
         if self.persist_config {
             self.config.save();
         }
@@ -247,6 +256,20 @@ impl App {
         }
         self.advisor.evaluate(&self.state);
         for ev in self.advisor.drain_events() {
+            // A NOW-class promotion is the one toast the coach raises,
+            // once per human turn.
+            if ev.text.starts_with("NOW ")
+                && ev.text.contains(" fired · ")
+                && self.last_now_toast_turn != Some(turn)
+            {
+                self.last_now_toast_turn = Some(turn);
+                if let Some(o) = &self.advisor.occupant {
+                    self.state.set_toast(format!(
+                        "▸ {}",
+                        crate::ui::fmt::clip(&o.advice.headline, 70)
+                    ));
+                }
+            }
             self.state.events.push(crate::events::Event {
                 at: ev.at_ms,
                 kind: crate::events::Kind::Coach,
@@ -383,6 +406,11 @@ impl App {
                     self.state.set_toast(msg);
                     self.state.ask = None;
                 }
+                KeyCode::Char('S') if !self.state.ask_send_ok => {
+                    self.state.set_toast(
+                        "a settings snippet is not sent to the session — Enter copies it",
+                    );
+                }
                 KeyCode::Char('S') => {
                     let msg = match &self.state.messaging_socket {
                         Some(sock) => {
@@ -410,6 +438,9 @@ impl App {
             if self.route_to(id, key) == Handled::No && key.code == KeyCode::Esc {
                 self.state.overlay = None;
             }
+            return;
+        }
+        if self.state.view == crate::ui::state::View::Coach && self.coach_key(key) {
             return;
         }
         if let Some(id) = self.state.focused {
@@ -444,7 +475,10 @@ impl App {
             {
                 let panel = self.state.focused.unwrap_or(0);
                 match crate::ask::compose(&self.state, panel) {
-                    Some(text) => self.state.ask = Some((panel, text)),
+                    Some(text) => {
+                        self.state.ask_send_ok = true;
+                        self.state.ask = Some((panel, text));
+                    }
                     None => self.state.set_toast("nothing to ask about on this panel"),
                 }
             }
@@ -463,6 +497,11 @@ impl App {
                 let next = names[(i + 1) % names.len()].clone();
                 self.set_theme(&next);
                 self.state.set_toast(format!("theme: {next}"));
+                self.save_config();
+            }
+            KeyCode::Char('c') => {
+                self.state.view = crate::ui::state::View::Coach;
+                self.state.coach_ui = Default::default();
                 self.save_config();
             }
             KeyCode::Char('w') => {
@@ -501,9 +540,122 @@ impl App {
         }
     }
 
+    /// The coach view's keys (§6.5); global keys fall through.
+    fn coach_key(&mut self, key: KeyEvent) -> bool {
+        use crate::ui::state::View;
+        let ui = &mut self.state.coach_ui;
+        match key.code {
+            KeyCode::Esc => {
+                if ui.why || ui.lifecycle || ui.light.is_some() || ui.peek > 0 {
+                    *ui = Default::default();
+                } else {
+                    self.state.view = View::Dashboard;
+                    self.save_config();
+                }
+            }
+            KeyCode::Char('c') => {
+                self.state.view = View::Dashboard;
+                self.save_config();
+            }
+            KeyCode::Char('e') => {
+                ui.why = !ui.why;
+                ui.lifecycle = false;
+            }
+            KeyCode::Char('l') => {
+                ui.lifecycle = !ui.lifecycle;
+                ui.why = false;
+            }
+            KeyCode::Char('$') => ui.limit_units = !ui.limit_units,
+            KeyCode::Char('n') => {
+                let n = self.state.advice.len();
+                ui.peek = if n == 0 { 0 } else { (ui.peek + 1) % n };
+                ui.light = None;
+            }
+            KeyCode::Char('N') => {
+                let n = self.state.advice.len();
+                ui.peek = if n == 0 { 0 } else { (ui.peek + n - 1) % n };
+                ui.light = None;
+            }
+            KeyCode::Char(c @ '1'..='4') => {
+                let i = (c as u8 - b'0') as usize;
+                ui.light = if ui.light == Some(i) { None } else { Some(i) };
+                ui.peek = 0;
+            }
+            KeyCode::Char(c @ ('x' | 'X')) => {
+                let i = ui.peek.min(self.state.advice.len().saturating_sub(1));
+                if let Some(a) = self.state.advice.get(i) {
+                    let rule = a.rule;
+                    self.state.advice_snoozed.push((rule, c == 'X'));
+                    self.state.advice.remove(i);
+                    self.state.coach_ui.peek = 0;
+                } else {
+                    self.state.set_toast("nothing to snooze");
+                }
+            }
+            KeyCode::Enter => {
+                let i = ui.peek.min(self.state.advice.len().saturating_sub(1));
+                let Some(a) = self.state.advice.get(i).cloned() else {
+                    self.state.set_toast("nothing to act on");
+                    return true;
+                };
+                use crate::advisor::ActionKind;
+                let (text, sendable) = match a.action_kind {
+                    ActionKind::Prompt | ActionKind::Slash if !a.action_text.is_empty() => {
+                        (a.action_text.clone(), true)
+                    }
+                    ActionKind::AllowRule => (
+                        format!("\"permissions\": {{ \"allow\": [\"{}\"] }}", a.action_text),
+                        false,
+                    ),
+                    ActionKind::Setting | ActionKind::Key if !a.action_text.is_empty() => {
+                        (a.action_text.clone(), false)
+                    }
+                    _ => (
+                        format!(
+                            "cctop advises: {} — {} ({}). Can you apply this now in this session?",
+                            a.headline, a.action, a.evidence
+                        ),
+                        true,
+                    ),
+                };
+                if i == 0 && self.state.advice_view.has_occupant {
+                    self.state.advice_acting = true;
+                }
+                self.state.ask_send_ok = sendable;
+                self.state.ask = Some((9, text));
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Draw one frame.
     pub fn draw(&self, frame: &mut Frame) {
         let area = frame.area();
+        if self.state.view == crate::ui::state::View::Coach {
+            let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+            let coach = crate::coach::snapshot(&self.state, &self.advisor);
+            crate::ui::coach_view::render(frame, body, &coach, &self.state);
+            self.draw_footer(
+                frame,
+                Rect::new(
+                    area.x,
+                    area.y + area.height.saturating_sub(1),
+                    area.width,
+                    1,
+                ),
+            );
+            if let Some((panel, text)) = &self.state.ask {
+                self.draw_ask(frame, area, *panel, text);
+            }
+            if self.state.picker.is_some() {
+                crate::ui::picker::render(frame, area, &self.state);
+            }
+            if self.help {
+                self.draw_help(frame, area);
+            }
+            return;
+        }
         let specs: Vec<_> = self.panels.iter().map(|p| p.spec()).collect();
         let lay = layout::solve(area, &specs, &self.state.hidden, self.mode_override);
         for (id, rect) in &lay.rects {
@@ -546,9 +698,14 @@ impl App {
             h,
         );
         frame.render_widget(Clear, rect);
-        let has_socket = self.state.messaging_socket.is_some();
+        let has_socket = self.state.messaging_socket.is_some() && self.state.ask_send_ok;
         let title = format!(
-            " ask about panel {panel}  —  Enter copy · {}Esc cancel ",
+            " {}  —  Enter copy · {}Esc cancel ",
+            if self.state.view == crate::ui::state::View::Coach {
+                "act on the nudge".to_string()
+            } else {
+                format!("ask about panel {panel}")
+            },
             if has_socket { "S send · " } else { "" }
         );
         let block = Block::default().borders(Borders::ALL).title(title);
@@ -584,7 +741,15 @@ impl App {
                 ));
             }
             spans.push(Span::styled(
-                "?help 1-9 panels ⇥focus a ask t theme L sessions q quit",
+                if self.state.view == crate::ui::state::View::Coach {
+                    self.state
+                        .theme
+                        .coach_text(crate::ui::coach_view::FOOTER)
+                        .trim_start()
+                        .to_string()
+                } else {
+                    "?help 1-9 panels ⇥focus c coach a ask t theme L sessions q quit".to_string()
+                },
                 dim,
             ));
             TLine::from(spans)

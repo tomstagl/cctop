@@ -127,6 +127,9 @@ struct RunArgs {
     /// Force a layout: auto, narrow or wide (overrides config).
     #[arg(long, value_parser = ["auto", "narrow", "wide"])]
     layout: Option<String>,
+    /// Open this view: dashboard or coach (overrides config).
+    #[arg(long, value_parser = ["dashboard", "coach"])]
+    view: Option<String>,
     /// Theme name (bundled or ~/.config/cctop/themes/*.toml).
     #[arg(long)]
     theme: Option<String>,
@@ -401,6 +404,7 @@ fn run(args: RunArgs) {
         headless,
         notify,
         layout,
+        view,
         theme,
         refresh_ms,
         otlp,
@@ -423,6 +427,9 @@ fn run(args: RunArgs) {
     let mut config = cctop::config::Config::load();
     if let Some(l) = layout {
         config.layout = l;
+    }
+    if let Some(v) = view {
+        config.view = v;
     }
     if let Some(t) = theme {
         config.theme = t;

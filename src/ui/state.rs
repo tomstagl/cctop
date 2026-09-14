@@ -374,6 +374,12 @@ pub struct State {
     pub picker: Option<crate::ui::picker::PickerUi>,
     /// Drafted question from `a` (panel id, text) awaiting Enter/S/Esc.
     pub ask: Option<(PanelId, String)>,
+    /// The draft may go over the messaging socket (`S`): a question or a
+    /// prompt-class action, never a settings snippet.
+    pub ask_send_ok: bool,
+    /// Dashboard or coach.
+    pub view: View,
+    pub coach_ui: CoachUi,
     /// The session's messaging socket, from the registry.
     pub messaging_socket: Option<std::path::PathBuf>,
     /// Your last-7-days medians, when computed.
@@ -403,6 +409,45 @@ pub struct AdviceView {
     pub snoozed: Vec<(&'static str, Option<usize>)>,
     pub suppressed: Vec<(&'static str, String)>,
     pub recent: Vec<crate::advisor::Lifecycle>,
+}
+
+/// Which full-screen composition the TUI shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum View {
+    #[default]
+    Dashboard,
+    Coach,
+}
+
+impl View {
+    pub fn label(self) -> &'static str {
+        match self {
+            View::Dashboard => "dashboard",
+            View::Coach => "coach",
+        }
+    }
+    pub fn parse(s: &str) -> Option<View> {
+        match s {
+            "dashboard" => Some(View::Dashboard),
+            "coach" => Some(View::Coach),
+            _ => None,
+        }
+    }
+}
+
+/// The coach view's own state (peek, detail, overlays, units).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CoachUi {
+    /// `n` / `N`: which ranked nudge the slot shows (0 = the occupant).
+    pub peek: usize,
+    /// `1`–`4`: a light's three-line detail in the slot area.
+    pub light: Option<usize>,
+    /// `e`: the explain overlay.
+    pub why: bool,
+    /// `l`: the lifecycle log overlay.
+    pub lifecycle: bool,
+    /// `$`: rate-limit units instead of dollars on the context light.
+    pub limit_units: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

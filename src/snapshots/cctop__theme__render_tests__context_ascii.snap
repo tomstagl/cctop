@@ -45,4 +45,4 @@ expression: text
 | 10:17:27 api    cost-state $9.90 · api 18:45 · retries 0…|
 | 10:17:27 coach  LATER A17 fired · Fixed prefix 60k token…|
 +----------------------------------------------------------+
- ?help 1-9 panels ⇥focus a ask t theme L sessions q quit
+ ?help 1-9 panels ⇥focus c coach a ask t theme L sessions q

@@ -1,0 +1,24 @@
+---
+source: src/ui/coach_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮
+│ IDLE 0s · python3 - lor… ok 19m ago                  │
+├──────────────────────────────────────────────────────┤
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │
+│ ○ cache    warm 1h00 (1h) ≈                          │
+│ ○ limits   — no status line                          │
+│ ● rework   4 blocked · edits 3 ✓ none 18m            │
+├──────────────────────────────────────────────────────┤
+│ ▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls    │
+│   trim CLAUDE.md, move rarely-used rules to skills,… │
+│   LATER · since turn 5 · +2 queued (n)               │
+│                                                      │
+│ next     reread → when the slot frees · lorem_ipsum… │
+│ snoozed  —                                           │
+╰──────────────────────────────────────────────────────╯
+
+
+
+
+ c dashboard  Enter act  x snooze  e why  1-4 light  q
