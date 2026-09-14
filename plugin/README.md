@@ -15,7 +15,7 @@ Two skills, plus a docked pane on builds with function hooks:
 The binary first:
 
 ```
-brew install tomstagl/tap/cctop     # or: cargo install cctop
+brew install tomstagl/tap/cctop     # currently v0.2.0; or: cargo install cctop
 ```
 
 Then the plugin, from a local checkout or the marketplace entry:
