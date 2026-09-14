@@ -155,6 +155,9 @@ pub struct Coach {
     pub next_row: String,
     pub snoozed_row: String,
     pub quiet_row: String,
+    /// The first turn's dim line: the project's `/insights` medians and
+    /// the previous session here (`None` after the first turn).
+    pub start_line: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -316,6 +319,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         next_row: String::new(),
         snoozed_row: String::new(),
         quiet_row: String::new(),
+        start_line: state.start_line().map(|l| cut(&l)),
     };
     c.lines = StatusLines {
         l0: c.line(80),
@@ -363,6 +367,9 @@ impl Coach {
 
     /// The quiet line when nothing occupies the slot.
     pub fn quiet_row(&self) -> String {
+        if let Some(l) = &self.start_line {
+            return cut(&format!("  {l}"));
+        }
         cut(&format!(
             "  quiet · nothing to act on · {} nudge{} this hour",
             self.nudges_this_hour,
@@ -1160,6 +1167,79 @@ mod tests {
         (s, e)
     }
 
+    /// The first turn's dim line: `/insights` medians for the cwd and the
+    /// previous session here; gone from the second human turn; never for a
+    /// fixture (no pid), never the never-display text.
+    #[test]
+    fn start_line_on_the_first_turn_from_insights_and_the_previous_session() {
+        let dir = crate::insights::tests::dir("coach");
+        let mut s = state_with_turns(1);
+        s.session.cwd = std::path::PathBuf::from("/p");
+        s.refresh_insights(&dir);
+        assert!(
+            s.insights.is_none(),
+            "a fixture has no pid: nothing is read"
+        );
+        s.session.pid = Some(1);
+        s.refresh_insights(&dir);
+        let mtime = s.insights_mtime;
+        assert!(mtime.is_some() && s.insights.is_some());
+        s.apply_claude_home(&serde_json::json!({
+            "projects": {"/p": {"lastCost": 0.16, "lastDuration": 75000, "lastLinesAdded": 3, "lastLinesRemoved": 1, "lastSessionFirstPrompt": "NEVER-SHOWN"}}
+        }));
+        s.now_ms = s.insights.as_ref().unwrap().computed_at_ms + 86_400_000;
+        let line = s.start_line().expect("first turn");
+        assert!(line.starts_with("insights "), "{line}");
+        assert!(line.ends_with(" · last session $0.16 1:15 +3/−1"), "{line}");
+        assert!(!line.contains("NEVER-SHOWN"));
+        let e = Engine::for_state(&s);
+        let c = snapshot(&s, &e);
+        assert_eq!(c.start_line.as_deref(), Some(cut(&line).as_str()));
+        assert!(c.quiet_row.starts_with("  insights "), "{}", c.quiet_row);
+        let d = crate::dashboard::snapshot(&s, &e);
+        assert!(d.start_line.is_some() && d.nudge.is_none());
+        // The privacy contract across every consumer: no never-display
+        // field of `usage-data` or `~/.claude.json` reaches a query, the
+        // report, the export or a rendered panel.
+        let mut outputs = vec![
+            crate::query::summary(&s).to_string(),
+            crate::query::coach(&s, None).to_string(),
+            crate::query::dashboard(&s).to_string(),
+            crate::query::advice(&s).to_string(),
+            crate::query::agents(&s).to_string(),
+            crate::query::prefix(&s).to_string(),
+            crate::report::markdown(&s, s.baseline.as_ref()),
+            crate::report::export_json(&s).to_string(),
+        ];
+        let mut app = crate::app::App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, st: &mut State| st.apply(l)),
+        );
+        app.state = s;
+        app.caps = crate::theme::Caps::full();
+        app.set_theme("default-dark");
+        outputs.push(crate::app::render_to_string(&app, 120, 40));
+        app.state.view = crate::ui::state::View::Coach;
+        outputs.push(crate::app::render_to_string(&app, 56, 20));
+        for p in 1..=9 {
+            app.state.open = Some(p);
+            outputs.push(crate::app::render_to_string(&app, 100, 30));
+        }
+        for out in &outputs {
+            assert!(!out.contains("NEVER-SHOWN"), "{out}");
+        }
+        let mut s = app.state;
+        // Unchanged files are not re-read; a second human turn ends the line.
+        s.refresh_insights(&dir);
+        assert_eq!(s.insights_mtime, mtime);
+        let mut later = state_with_turns(2);
+        later.session.pid = Some(1);
+        later.session.cwd = std::path::PathBuf::from("/p");
+        later.refresh_insights(&dir);
+        assert_eq!(later.start_line(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn every_line_measures_at_most_52_cells_and_the_object_serialises() {
         let (s, e) = fixture_b();
@@ -1353,6 +1433,7 @@ mod tests {
             five_hour_resets_at_ms: Some(s.now_ms + 7_800_000),
             seven_day_resets_at_ms: None,
             exhaustion_ms: None,
+            exhaustion_in_active_hours: None,
         });
         let l = limits_light(&s);
         assert_eq!(l.level, Level::Watch);

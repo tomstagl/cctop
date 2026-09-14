@@ -151,6 +151,18 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     if app.state.session.pid.is_some() {
         app.state.load_autocompact();
     }
+    // `~/.claude/usage-data`: Claude Code's own analysis, at attach and
+    // whenever `/insights` writes a new file.
+    if let Some(dir) = crate::insights::default_dir() {
+        app.state.refresh_insights(&dir);
+        let mut last = Instant::now();
+        app.tick_hooks.push(Box::new(move |state: &mut State| {
+            if last.elapsed() >= Duration::from_secs(30) {
+                last = Instant::now();
+                state.refresh_insights(&dir);
+            }
+        }));
+    }
     // The advisor's snoozes and fire records, shared with `query` and the
     // pane; the TUI is the single writer.
     app.attach_advisor(&cctop_home, true);

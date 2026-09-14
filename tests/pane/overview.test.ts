@@ -87,6 +87,17 @@ function buttons(tree: RenderElement): Node[] {
 
 const THEME_KEYS: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
 
+test('the first turn draws the insights line where the nudge goes, and nothing when quiet', () => {
+  const quiet = { ...(fixture('dashboard') as Record<string, unknown>), nudge: null, start_line: null };
+  has(raw(build({ dashboard: quiet }), 100), /^ quiet · nothing to act on/);
+  const start = { ...quiet, start_line: 'insights 2026-08-16 · 12 sessions here · p50 42 min · 18 prompts · satisfied 80 %' };
+  const d = dashboardOf(start)!;
+  assert.equal(d.startLine, start.start_line);
+  const lines = raw(build({ dashboard: start }), 100);
+  has(lines, /^ insights 2026-08-16 · 12 sessions here/);
+  assert.ok(!lines.some((l) => l.includes('quiet · nothing')), JSON.stringify(lines));
+});
+
 test('the dashboard fixture parses into tiles, a nudge and nine rows', () => {
   const d = dashboardOf(fixture('dashboard'));
   assert.ok(d !== null);

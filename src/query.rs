@@ -36,6 +36,7 @@ pub fn summary(state: &State) -> Value {
             "seven_day": m(l.seven_day_pct, "%", "limit_7d", false),
             "five_hour_resets_at_ms": l.five_hour_resets_at_ms,
             "exhaustion_ms": l.exhaustion_ms.map(|e| m(e, "epoch_ms", "limit_exhaustion", true)),
+            "exhaustion_in_active_hours": l.exhaustion_in_active_hours,
             "other_live_sessions": state.other_live_sessions,
         }),
         None => missing(INSTALL_HINT),
@@ -111,6 +112,15 @@ pub fn summary(state: &State) -> Value {
         "queued_prompts": m(state.agg.queued_prompts, "count", "queued_prompts", false),
         "advice_count": state.advice.len(),
         "advice_primary": state.advice.first().filter(|_| state.advice_view.has_occupant).map(|a| a.rule),
+        "insights": match &state.insights {
+            Some(i) => json!({
+                "computed_at_ms": i.computed_at_ms,
+                "sessions": i.sessions.len(),
+                "project": i.project(&state.session.cwd),
+                "start_line": state.start_line(),
+            }),
+            None => missing("no ~/.claude/usage-data (run /insights), or a fixture"),
+        },
         "otel": match &state.otel {
             Some(o) => json!({
                 "tokens": o.tokens,

@@ -108,6 +108,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "PLANNING",
     "line": "PLANNING · 1c +83 · ▸ steer window",

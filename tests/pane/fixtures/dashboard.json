@@ -510,6 +510,7 @@
   ],
   "schema": 1,
   "session_mode": "interactive",
+  "start_line": null,
   "tiles": [
     {
       "approx": true,

@@ -20,6 +20,7 @@ pub mod git;
 pub mod harness_facts;
 pub mod history;
 pub mod hooks;
+pub mod insights;
 pub mod install;
 pub mod ledger;
 pub mod load;

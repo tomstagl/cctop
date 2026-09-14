@@ -101,6 +101,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "COMMITTING",
     "line": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",

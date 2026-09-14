@@ -300,6 +300,17 @@ pub fn destructive_git(cmd: &str) -> Option<String> {
     Some("git stash".to_string())
 }
 
+/// A path that is documentation or data, not source (coach PRD §5.2:
+/// `.md`, `.txt`, `.json`, `.yaml`, `.toml`, `.csv`): edits to these never
+/// count as unverified source.
+pub fn is_doc_path(path: &str) -> bool {
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    matches!(
+        ext.as_str(),
+        "md" | "markdown" | "txt" | "rst" | "adoc" | "json" | "yaml" | "yml" | "toml" | "csv"
+    )
+}
+
 /// Classify a tool call from its name and input.
 pub fn classify_tool(name: &str, input: &Value) -> ToolClass {
     let s = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or("");

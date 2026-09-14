@@ -262,6 +262,7 @@ mod tests {
             five_hour_resets_at_ms: Some(now + 6_480_000), // 1h 48m
             seven_day_resets_at_ms: Some(now + 356_400_000), // 4d 03h
             exhaustion_ms: None,
+            exhaustion_in_active_hours: None,
         });
         // 1 % per minute over the last 10 minutes → 38 min to 100 %: before the reset.
         app.state.limits_series_5h = (0..10)

@@ -367,6 +367,7 @@ mod tests {
             five_hour_resets_at_ms: Some(s.now_ms + 3_600_000),
             seven_day_resets_at_ms: None,
             exhaustion_ms: None,
+            exhaustion_in_active_hours: None,
         };
         s.limits = Some(lim.clone());
         let f = e.evaluate(&s);

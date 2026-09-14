@@ -108,6 +108,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "◆ WAITING",
     "line": "◆ WAITING 4:00 · Claude asked a question",

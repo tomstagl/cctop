@@ -1,6 +1,9 @@
 //! Your own recent sessions as the yardstick: medians over the last N days
-//! of cost per turn, tokens per turn, cache-hit ratio, tool error rate and
-//! model mix. A bare number is trivia; "2.3× your median" is a decision.
+//! of cost per turn, tokens per turn, calls per turn, cache-hit ratio, tool
+//! error rate and its categories, the interruption rate, the share of
+//! commits that landed unchecked, and the model mix; plus the hours of the
+//! day you work, from Claude Code's own session analysis. A bare number is
+//! trivia; "2.3× your median" is a decision.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -32,6 +35,23 @@ pub struct Baseline {
     /// calls" scale.
     #[serde(default)]
     pub calls_per_session: Option<f64>,
+    /// Median API calls per human turn.
+    #[serde(default)]
+    pub calls_per_turn: Option<f64>,
+    /// Median share of human turns the person interrupted.
+    #[serde(default)]
+    pub interruption_rate: Option<f64>,
+    /// Share of failed tool calls by error class (`Denied`, `Timeout`, …),
+    /// over every session.
+    #[serde(default)]
+    pub error_categories: BTreeMap<String, f64>,
+    /// Commits with unchecked source edits over every commit.
+    #[serde(default)]
+    pub commit_without_check_ratio: Option<f64>,
+    /// Messages per hour of day (24 entries) from `usage-data`, the
+    /// person's active hours; empty when `/insights` never ran.
+    #[serde(default)]
+    pub active_hours: Vec<u64>,
 }
 
 /// One session's figures, before taking medians.
@@ -44,6 +64,38 @@ struct SessionFigures {
     cache_hit: Option<f64>,
     error_rate: Option<f64>,
     cost_by_family: BTreeMap<String, f64>,
+    interrupts: usize,
+    errors_by_class: BTreeMap<String, usize>,
+    /// `(unchecked, total)` commits.
+    commits: (usize, usize),
+}
+
+/// Commits that landed with source edits after the last passing check
+/// (the coach's A33 window), and the total.
+pub fn unchecked_commits(stats: &tools::Stats) -> (usize, usize) {
+    let mut prev = i64::MIN;
+    let mut unchecked = 0;
+    for (at, _, _) in &stats.commits {
+        let verified_at = stats
+            .calls
+            .iter()
+            .filter(|c| c.is_confirmed_test() && !c.is_error)
+            .filter(|c| c.test_marker != crate::transcript::TestMarker::Failed)
+            .filter_map(|c| c.started_at)
+            .filter(|s| *s > prev && *s < *at)
+            .max()
+            .unwrap_or(prev);
+        let edited = stats.calls.iter().any(|c| {
+            c.class == crate::phase::ToolClass::Implement
+                && c.started_at.is_some_and(|s| s > verified_at && s < *at)
+                && (c.paths.is_empty() || c.paths.iter().any(|p| !crate::phase::is_doc_path(p)))
+        });
+        if edited {
+            unchecked += 1;
+        }
+        prev = *at;
+    }
+    (unchecked, stats.commits.len())
 }
 
 fn family(model: &str) -> String {
@@ -79,6 +131,11 @@ fn figures(path: &Path) -> Option<SessionFigures> {
             *by_family.entry(family(m)).or_insert(0.0) += mu.cost_usd;
         }
     }
+    let errors_by_class = stats
+        .errors_by_class()
+        .into_iter()
+        .map(|(k, n)| (k.label().to_string(), n))
+        .collect();
     Some(SessionFigures {
         turns: agg.human_turns(),
         api_calls: agg.api_calls(),
@@ -87,6 +144,9 @@ fn figures(path: &Path) -> Option<SessionFigures> {
         cache_hit: agg.total.cache_hit_ratio(),
         error_rate: (calls > 0).then(|| errors as f64 / calls as f64),
         cost_by_family: by_family,
+        interrupts: agg.interrupts.len(),
+        errors_by_class,
+        commits: unchecked_commits(&stats),
     })
 }
 
@@ -133,8 +193,25 @@ pub fn recent_transcripts(projects_dir: &Path, days: u64, now_ms: i64) -> Vec<Pa
     out
 }
 
-/// Compute medians over the recent transcripts.
+/// Compute medians over the recent transcripts; `insights` (Claude Code's
+/// `usage-data`, when it exists) supplies the active hours.
 pub fn compute(projects_dir: &Path, days: u64, now_ms: i64) -> Baseline {
+    compute_with(
+        projects_dir,
+        days,
+        now_ms,
+        crate::insights::default_dir()
+            .and_then(|d| crate::insights::load(&d))
+            .as_ref(),
+    )
+}
+
+pub fn compute_with(
+    projects_dir: &Path,
+    days: u64,
+    now_ms: i64,
+    insights: Option<&crate::insights::Insights>,
+) -> Baseline {
     let figs: Vec<SessionFigures> = recent_transcripts(projects_dir, days, now_ms)
         .iter()
         .filter_map(|p| figures(p))
@@ -151,6 +228,21 @@ pub fn compute(projects_dir: &Path, days: u64, now_ms: i64) -> Baseline {
             *v /= total;
         }
     }
+    let mut classes: BTreeMap<String, f64> = BTreeMap::new();
+    for f in &figs {
+        for (k, n) in &f.errors_by_class {
+            *classes.entry(k.clone()).or_insert(0.0) += *n as f64;
+        }
+    }
+    let errors_total: f64 = classes.values().sum();
+    if errors_total > 0.0 {
+        for v in classes.values_mut() {
+            *v /= errors_total;
+        }
+    }
+    let (unchecked, commits) = figs
+        .iter()
+        .fold((0, 0), |(u, t), f| (u + f.commits.0, t + f.commits.1));
     Baseline {
         computed_at_ms: now_ms,
         days,
@@ -169,6 +261,21 @@ pub fn compute(projects_dir: &Path, days: u64, now_ms: i64) -> Baseline {
         tool_error_rate: median(figs.iter().filter_map(|f| f.error_rate).collect()),
         model_mix: mix,
         calls_per_session: median(figs.iter().map(|f| f.api_calls as f64).collect()),
+        calls_per_turn: median(
+            figs.iter()
+                .map(|f| f.api_calls as f64 / f.turns as f64)
+                .collect(),
+        ),
+        interruption_rate: median(
+            figs.iter()
+                .map(|f| f.interrupts as f64 / f.turns as f64)
+                .collect(),
+        ),
+        error_categories: classes,
+        commit_without_check_ratio: (commits > 0).then(|| unchecked as f64 / commits as f64),
+        active_hours: insights
+            .map(|i| i.hour_histogram().to_vec())
+            .unwrap_or_default(),
     }
 }
 
@@ -223,8 +330,17 @@ mod tests {
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
         )
         .unwrap();
-        let b = compute(&projects, 7, now);
+        let insights_dir = crate::insights::tests::dir("baseline");
+        let insights = crate::insights::load(&insights_dir);
+        let b = compute_with(&projects, 7, now, insights.as_ref());
         assert_eq!(b.sessions, 2, "the 1-turn session is ignored");
+        assert!(b.calls_per_turn.unwrap() > 1.0, "{:?}", b.calls_per_turn);
+        assert!(b.interruption_rate.unwrap() > 0.0 && b.interruption_rate.unwrap() < 1.0);
+        assert!(!b.error_categories.is_empty());
+        assert!((b.error_categories.values().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert_eq!(b.active_hours.len(), 24);
+        assert_eq!(b.active_hours[9], 6);
+        let _ = std::fs::remove_dir_all(&insights_dir);
         assert!((b.cost_per_turn.unwrap() - 9.9035 / 14.0).abs() < 1e-3);
         assert!(b.tokens_per_turn.unwrap() > 1_000_000.0);
         assert!(b.cache_hit_ratio.unwrap() > 0.9);

@@ -108,6 +108,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "IDLE",
     "line": "IDLE 0s",

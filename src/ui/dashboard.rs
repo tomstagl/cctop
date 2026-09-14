@@ -149,7 +149,14 @@ fn tile_block<'a>(t: &Theme, d: &Dashboard, per_row: usize, cells: usize) -> Vec
 
 fn nudge_line<'a>(t: &Theme, d: &Dashboard, width: usize, action: bool) -> Line<'a> {
     let Some(n) = &d.nudge else {
-        return Line::from(Span::styled(" quiet · nothing to act on", t.dim()));
+        let text = match &d.start_line {
+            Some(l) => format!(" {l}"),
+            None => " quiet · nothing to act on".to_string(),
+        };
+        return Line::from(Span::styled(
+            crate::ui::fmt::clip(&t.coach_text(&text), width),
+            t.dim(),
+        ));
     };
     let text = if action {
         n.line.clone()

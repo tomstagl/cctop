@@ -85,6 +85,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "EXPLORING",
     "line": "EXPLORING · 14c +6.3k · silent 4:32",

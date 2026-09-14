@@ -191,6 +191,10 @@
     "unit": "tokens/min",
     "value": 40334.86666666667
   },
+  "insights": {
+    "hint": "no ~/.claude/usage-data (run /insights), or a fixture",
+    "source": "missing"
+  },
   "limit_weight_tier": 3.0,
   "limits": {
     "hint": "run cctop install",

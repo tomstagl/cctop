@@ -152,6 +152,9 @@ pub struct Limits {
     pub seven_day_resets_at_ms: Option<i64>,
     /// Projected moment the 5 h limit hits 100 % at the current slope.
     pub exhaustion_ms: Option<i64>,
+    /// Whether that moment falls in an hour you usually work (from the
+    /// baseline's active hours); `None` without a baseline or projection.
+    pub exhaustion_in_active_hours: Option<bool>,
 }
 
 impl SessionInfo {
@@ -295,6 +298,11 @@ pub struct State {
     pub status_facts: StatusFacts,
     /// The previous session in this directory, from `~/.claude.json`.
     pub previous_session: Option<crate::claude_home::PreviousSession>,
+    /// Claude Code's own session analysis (`usage-data`), counts and
+    /// verdicts only; live sessions of this machine, never a fixture.
+    pub insights: Option<crate::insights::Insights>,
+    /// The newest `usage-data` mtime applied, for the re-read on change.
+    pub insights_mtime: Option<i64>,
     pub agg: Aggregate,
     pub cost: CostTracker,
     pub tools: tools::Stats,
@@ -1057,14 +1065,23 @@ impl State {
                 five_hour_resets_at_ms: to_ms(rl.five_hour.resets_at),
                 seven_day_resets_at_ms: to_ms(rl.seven_day.resets_at),
                 exhaustion_ms: None,
+                exhaustion_in_active_hours: None,
             });
             self.limits_series_5h = series_5h.to_vec();
             let ex = crate::metrics::limits::exhaustion(
                 &self.limits_series_5h,
                 s.at_ms.max(self.now_ms),
             );
+            // The projection extends the last half hour's slope; whether you
+            // usually work at that hour says whether it will happen.
+            let active = ex.and_then(|ex| {
+                let hours = &self.baseline.as_ref()?.active_hours;
+                let peak = *hours.iter().max()?;
+                (peak > 0).then(|| hours[crate::ui::fmt::local_hour(ex) % 24] * 4 >= peak)
+            });
             if let Some(l) = self.limits.as_mut() {
                 l.exhaustion_ms = ex;
+                l.exhaustion_in_active_hours = active;
             }
         }
     }
@@ -1117,6 +1134,50 @@ impl State {
     }
 
     /// Take what `~/.claude.json` says about the account and this directory.
+    /// Read (or re-read, when a file changed) Claude Code's `usage-data`:
+    /// live sessions of this machine only, never a fixture.
+    pub fn refresh_insights(&mut self, dir: &std::path::Path) {
+        if self.session.pid.is_none() {
+            return;
+        }
+        let newest = crate::insights::newest_mtime(dir);
+        if newest.is_some() && newest == self.insights_mtime {
+            return;
+        }
+        self.insights_mtime = newest;
+        self.insights = crate::insights::load(dir);
+    }
+
+    /// The dim line for a session's first turn: the project's `/insights`
+    /// medians and the previous session's cost here, `None` afterwards.
+    pub fn start_line(&self) -> Option<String> {
+        if self.agg.human_turns() > 1 {
+            return None;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(i) = &self.insights {
+            if let Some(l) = i.start_line(&self.session.cwd, self.clock_ms()) {
+                parts.push(l);
+            }
+        }
+        if let Some(p) = &self.previous_session {
+            let mut last: Vec<String> = Vec::new();
+            if let Some(c) = p.cost_usd {
+                last.push(format!("${c:.2}"));
+            }
+            if let Some(d) = p.duration_ms {
+                last.push(crate::ui::fmt::duration_ms(d as i64));
+            }
+            if let (Some(a), Some(r)) = (p.lines_added, p.lines_removed) {
+                last.push(format!("+{a}/−{r}"));
+            }
+            if !last.is_empty() {
+                parts.push(format!("last session {}", last.join(" ")));
+            }
+        }
+        (!parts.is_empty()).then(|| parts.join(" · "))
+    }
+
     pub fn apply_claude_home(&mut self, v: &serde_json::Value) {
         if let Some(t) = crate::claude_home::rate_limit_tier(v) {
             self.session.tier = Some(t);

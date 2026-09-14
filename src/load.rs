@@ -147,6 +147,9 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
             state.apply_claude_home(&v);
         }
         state.load_autocompact();
+        if let Some(dir) = crate::insights::default_dir() {
+            state.refresh_insights(&dir);
+        }
     }
     let mut hooks =
         crate::hooks::Watcher::new(&crate::status::cctop_dir(), &state.session.session_id);

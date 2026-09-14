@@ -108,6 +108,7 @@
   "session_mode": "interactive",
   "snoozed": [],
   "snoozed_row": "snoozed  —",
+  "start_line": null,
   "state": {
     "kind": "IDLE",
     "line": "IDLE 4m · python3 - lor… ok 8m ago",

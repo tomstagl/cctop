@@ -89,6 +89,46 @@ pub fn clock_hhmm(ms: i64) -> String {
     format!("{:02}:{:02}", day / 3600, (day % 3600) / 60)
 }
 
+/// This machine's UTC offset in seconds (`tm_gmtoff`), for the hour-of-day
+/// comparisons against `/insights` figures, which Claude Code keeps in
+/// local time.
+pub fn local_offset_secs() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as libc::time_t)
+        .unwrap_or(0);
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: `localtime_r` writes only into the `tm` we own.
+    let ok = unsafe { !libc::localtime_r(&now, &mut tm).is_null() };
+    if ok {
+        tm.tm_gmtoff
+    } else {
+        0
+    }
+}
+
+/// Epoch ms → the local hour of day (0–23).
+pub fn local_hour(ms: i64) -> usize {
+    let s = ms.div_euclid(1000) + local_offset_secs();
+    (s.rem_euclid(86_400) / 3600) as usize
+}
+
+/// Epoch ms → `YYYY-MM-DD` (UTC), by the civil-from-days algorithm.
+pub fn date_ymd(ms: i64) -> String {
+    let days = ms.div_euclid(86_400_000);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
 /// Clip to `max` characters with an ellipsis.
 pub fn clip(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
@@ -104,6 +144,14 @@ pub fn clip(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dates() {
+        assert_eq!(date_ymd(0), "1970-01-01");
+        assert_eq!(date_ymd(1_767_225_600_000), "2026-01-01");
+        assert_eq!(date_ymd(1_789_428_525_471), "2026-09-14");
+        assert_eq!(date_ymd(951_782_400_000), "2000-02-29");
+    }
 
     #[test]
     fn formats() {

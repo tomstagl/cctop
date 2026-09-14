@@ -33,14 +33,9 @@ pub fn all() -> Vec<Box<dyn Rule>> {
     ]
 }
 
-/// A path that is documentation or data, not source (PRD §5.2: `.md`,
-/// `.txt`, `.json`, `.yaml`, `.toml`, `.csv`).
+/// A path that is documentation or data, not source (PRD §5.2).
 fn is_doc(path: &str) -> bool {
-    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    matches!(
-        ext.as_str(),
-        "md" | "markdown" | "txt" | "rst" | "adoc" | "json" | "yaml" | "yml" | "toml" | "csv"
-    )
+    crate::phase::is_doc_path(path)
 }
 
 /// The command a shell line is about: the first `&&` segment that is not

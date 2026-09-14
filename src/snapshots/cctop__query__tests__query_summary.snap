@@ -235,6 +235,10 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "unit": "tokens/min",
     "value": 1147568.4
   },
+  "insights": {
+    "hint": "no ~/.claude/usage-data (run /insights), or a fixture",
+    "source": "missing"
+  },
   "limit_weight_tier": 3.0,
   "limits": {
     "hint": "run cctop install",

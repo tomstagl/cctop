@@ -259,9 +259,14 @@ impl Rule for RateLimitPacing {
             fmt::duration_ms(reset - ex)
         );
         a.evidence = format!(
-            "{:.0} % used, exhausted in {}",
+            "{:.0} % used, exhausted in {}{}",
             l.five_hour_pct,
-            fmt::duration_ms(ex - state.clock_ms())
+            fmt::duration_ms(ex - state.clock_ms()),
+            if l.exhaustion_in_active_hours == Some(false) {
+                " · past your usual hours"
+            } else {
+                ""
+            }
         );
         a.action = format!(
             "{}; or move exploration to subagents and pause the heavy work until the reset",
@@ -489,6 +494,7 @@ mod tests {
             five_hour_resets_at_ms: Some(2_000_000),
             seven_day_resets_at_ms: None,
             exhaustion_ms: Some(1_500_000),
+            exhaustion_in_active_hours: None,
         });
         s.apply(&prompt("2026-01-01T00:00:00Z"));
         s.apply(&response("m", "2026-01-01T00:00:01Z", 10, 0, 1000));

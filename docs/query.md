@@ -37,7 +37,7 @@ An optional source that is not on disk is reported, never guessed:
 
 | What | Returns |
 |---|---|
-| `summary` | Session identity, turns, api calls, context (size/window/ratio/prefix/velocity/turns_until_compaction/compactions), tokens (five classes + cache_hit_ratio + cache_ttl), cost (+ by model), burn_rate, input_rate, limits (or missing), tool_calls, tokens_to_ctx, agents, hooks_installed, permission_waits (or missing), queued_prompts, advice_count |
+| `summary` | Session identity, turns, api calls, context (size/window/ratio/prefix/velocity/turns_until_compaction/compactions), tokens (five classes + cache_hit_ratio + cache_ttl), cost (+ by model), burn_rate, input_rate, limits (or missing), tool_calls, tokens_to_ctx, agents, hooks_installed, permission_waits (or missing), queued_prompts, advice_count, `insights` (Claude Code's own `/insights` analysis for this cwd: `computed_at_ms`, `sessions`, `project` medians — duration, prompts, interruptions, tool errors, commits, response time — the satisfied share, outcome and friction counts, and the first turn's `start_line`; counts and enum-like verdicts only, never `first_prompt`, `underlying_goal`, `brief_summary` or `friction_detail`; missing on a fixture) |
 | `ledger [--last N]` | One object per turn: turn, started_at_ms, duration, api_calls, cache_read, cache_write, fresh_input, output, thinking, cost, tools (`Read×3 Bash×1`), compaction, effort, model |
 | `tools` | `tools[]` (tool, calls, errors, running, p50, p95, last_call_at_ms, tokens_to_ctx) sorted by calls, and `top_ctx[]` (the 5 largest single results) |
 | `files` | Per touched file: path, reads, edits, writes, touches, lines_added/removed (or missing outside git), reread_warning |
@@ -47,6 +47,7 @@ An optional source that is not on disk is reported, never guessed:
 | `dashboard` | The drawn dashboard (plan B): `header` (session, model, version, turn, elapsed, cwd, pr, phase {glyph, word, tokens}, line), `tiles[4]` (the coach's lights enlarged: id, level, glyph, figure, unit, name, sub1, sub2, source, approx), `nudge` (id, class, line, tag, acting) or null, `rows[9]` (digit, name, values, detail — lines of `{text, tone}` segments, tone ∈ fg/dim/accent/ok/warn/crit/bold, cut at 118 cells), `session_mode`, `lines` (the coach's L0/L1/L2) |
 | `prefix` | `total` and `rows[]` (kind, name, bytes, tokens, count) of what rides on every request |
 | `events [--since 10m]` | `[{at_ms, kind, text}]`; `--since` accepts `90s`, `10m`, `2h`, `1d` |
+| `baseline` | Your last 7 days as medians (`~/.cctop/baseline.json`, recomputed hourly): sessions, cost_per_turn, tokens_per_turn, calls_per_turn, calls_per_session, cache_hit_ratio, tool_error_rate, error_categories (share by class), interruption_rate, commit_without_check_ratio, model_mix, active_hours (messages per local hour of day from `usage-data`; feeds `limits.exhaustion_in_active_hours`) |
 | `explain <metric_id>` | id, panel, name, unit, formula, sources, caveats, estimate_when — no session needed |
 
 ## Examples
