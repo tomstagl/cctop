@@ -62,8 +62,13 @@
 
 <section id="screenshot">
   <h2>One page, nine panels</h2>
+  <p><code>/cctop</code> picks one of two views automatically — it never asks you to choose.</p>
+  <h3>Terminal view</h3>
   <div class="term"><pre>@MOCKUP@</pre></div>
-  <p class="cap">narrow layout · 60 columns · the right-hand-pane case. At ≥ 100 columns the panels flow into two columns.</p>
+  <p class="cap">narrow layout · 60 columns · <code>cctop run</code> in a tmux/zellij/WezTerm/Kitty/iTerm2 split. At ≥ 100 columns the panels flow into two columns.</p>
+  <h3>Panel view</h3>
+  <div class="term"><pre>@PANEL_MOCKUP@</pre></div>
+  <p class="cap">On a Claude Code build with function hooks enabled, <code>/cctop</code> docks the same dashboard above the prompt, drawn in Claude Code's own frame and colour style — no multiplexer needed. Digits 1–6 switch views; falls back to the terminal view otherwise.</p>
 </section>
 
 <section id="panels">

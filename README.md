@@ -10,6 +10,7 @@
 <!-- hero:end -->
 
 <p align="center">
+  <a href="https://github.com/tomstagl/cctop/releases">Releases</a> ·
   <a href="tasks/prd-cctop.md">PRD</a> ·
   <a href="ralph/prd.json">build plan</a> ·
   <a href="brand/README.md">brand</a> ·
@@ -22,9 +23,12 @@
 **cctop** is an `htop`/`btop`-style terminal dashboard for a running Claude Code session. It shows the internals Claude Code doesn't — context fill and when the next compaction hits, tokens and cost with cache-hit ratio, rate limits with an exhaustion forecast, what the current turn is waiting on, per-tool latency and how much context each tool pushed, subagents and MCP servers, touched files — on one page, in real time, in a right-hand split while you keep working on the left.
 <!-- lede:end -->
 
-> **Status: planning.** The PRD is finished and reviewed against real transcripts; implementation (Rust + ratatui) starts from [`ralph/prd.json`](ralph/prd.json). Nothing installable yet.
+Type `/cctop` in a Claude Code session and it appears — docked **inside**
+Claude Code as a panel when the build supports it, otherwise attached as a
+**terminal** split beside it. One command either way; see
+[Two ways to see it](#two-ways-to-see-it).
 
-## What it will look like
+## What it looks like
 
 ```
 ┌─cctop ── cctop-46 ──────────────────── Opus 5 · v2.1.269 ┐
@@ -81,6 +85,54 @@
 ```
 
 Claude Code keeps running in the left pane; `cctop` attaches to it from the right. Rendered version with the wide layout: see the PRD.
+
+## Two ways to see it
+
+`/cctop` picks one automatically — it never asks you to choose.
+
+**Terminal view.** The full nine-panel dashboard above, running as its own
+process (`cctop run`) in a split of your terminal multiplexer (tmux, zellij,
+WezTerm, Kitty, iTerm2). This is what `/cctop` falls back to, and what you get
+from `cctop split` directly. See [Install & attach](#install--attach).
+
+**Panel view.** On a Claude Code build with function hooks enabled, `/cctop`
+docks the same dashboard *inside* Claude Code, above the prompt, drawn in
+Claude Code's own frame and colour style — no multiplexer needed:
+
+```
+╭cctop ─ claude-sonnet-5 ──────────────────────────────────╮
+│ ● BUSY  turn 1  0:48                                     │
+│ auto · medium · $9.90             bin shim hooks 2.1.270 │
+╰──────────────────────────────────────────────────────────╯
+╭Context ─ 40 % ─────────────╮╭Tokens & Cost ─ 33.6M ──────╮
+│ ▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ ││ cache read  ▇▇▇▇▇    33.0M │
+│ 396k / 1.0M (40 %)         ││ cache write ▁▁▁▁▁     597k │
+│ velocity         +50k/turn ││ fresh input ▁▁▁▁▁      286 │
+│ autocompact in    ≈9 turns ││ output      ▁▁▁▁▁      67k │
+│ compactions              0 ││ └ thinking  ▁▁▁▁▁      31k │
+│                            ││ cache hit             98 % │
+│                            ││ cache TTL               1h │
+│                            ││ cost                 $9.90 │
+│                            ││ burn rate         ≈$26.0/h │
+╰────────────────────────────╯╰────────────────────────────╯
+╭Limits ─ 5h 42 % · 7d 17 % ─╮╭Turn ─ 0:48 ────────────────╮
+│ 5 h          ▇▇▇▁▁▁   42 % ││ state                 busy │
+│ 7 d          ▇▁▁▁▁▁   17 % ││ elapsed               0:48 │
+│ resets in           2h 29m ││ api / tools   ≈0:02 / 0:46 │
+│ exhausted in             — ││ waiting on       Bash 0:46 │
+│                            ││ permission w…            — │
+│                            ││ queued                   0 │
+╰────────────────────────────╯╰────────────────────────────╯
+```
+
+This is the Overview; press a digit (`1`–`6`) from the composer to switch to
+Tools, Agents, Files, Events or the Advisor, the same way `s`/`f`/`p` work in
+the terminal view. It needs `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the
+`env` block of `~/.claude/settings.json` and `/tui fullscreen`; `cctop pane
+status` tells you which prerequisite is missing. The `/diff` panel and the
+cctop panel share one dock, so hide one to see the other — see
+[`docs/claude-code-panels.md`](docs/claude-code-panels.md). Falls back to the
+terminal view automatically when function hooks are off.
 
 ## Panels
 
@@ -214,24 +266,25 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 
 `cctop query … --json` exposes every number, and the bundled `cctop-insights` skill teaches Claude Code to use it — ask *"why is my cache hit ratio low?"* in the session and get numbers plus one change to make. See [`plugin/skills/cctop-insights/SKILL.md`](plugin/skills/cctop-insights/SKILL.md).
 
-## Planned install
+## Install & attach
 
 <!-- install:start -->
 ```
 brew install tomstagl/tap/cctop           # or: cargo install cctop
 claude plugin marketplace add tomstagl/cctop
 claude plugin install cctop               # adds /cctop and cctop-insights
-/cctop                                     # opens the dashboard in a right-hand pane
+/cctop                                     # opens the dashboard: panel or terminal split
 ```
 <!-- install:end -->
 
-Works in tmux, zellij, WezTerm, Kitty and iTerm2. With function hooks enabled
-(`"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of
-`~/.claude/settings.json`, then `/tui fullscreen`), `/cctop-pane` docks the
-dashboard inside Claude Code itself — no multiplexer needed. `cctop pane
-status` tells you which of the prerequisites is missing and what to do about
-it; the `/diff` panel and the pane share the same dock, so hide one to see
-the other (see [`docs/claude-code-panels.md`](docs/claude-code-panels.md)).
+`/cctop` is the only command you need — see [Two ways to see
+it](#two-ways-to-see-it) for what decides panel vs. terminal, and
+[`docs/claude-code-panels.md`](docs/claude-code-panels.md) for how the panel
+and the built-in `/diff` panel share one dock. If neither the panel nor a
+multiplexer split can attach, `/cctop` prints exactly what is missing and how
+to fix it — a rate-limit shim install, a terminal that isn't tmux/zellij/
+WezTerm/Kitty/iTerm2, or `cctop run --session <id>` to run it by hand in a
+second terminal.
 
 ## Repository
 

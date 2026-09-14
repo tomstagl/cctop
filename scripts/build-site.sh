@@ -44,9 +44,12 @@ for path in sorted(glob.glob("themes/*.toml")):
     kv = dict(re.findall(r'^(\w+)\s*=\s*"([^"]+)"', pathlib.Path(path).read_text(), re.M))
     sw = "".join(f'<i style="background:{kv[k]}"></i>' for k in ("accent", "ok", "warn", "crit"))
     themes.append(f'<div class="theme" style="background:{kv["bg"]};color:{kv["fg"]};border-color:{kv["border"]}">{kv["name"]}<br>{sw}</div>')
-# mockup: the fenced block after "## What it will look like"
-m = re.search(r"## What it will look like\n\n```\n(.*?)\n```", readme, re.S)
+# mockup: the fenced block after "## What it looks like" (the terminal view)
+m = re.search(r"## What it looks like\n\n```\n(.*?)\n```", readme, re.S)
 mockup = html.escape(m.group(1)) if m else ""
+# panel mockup: the fenced block under "**Panel view.**" in the same section
+m = re.search(r"\*\*Panel view\.\*\*.*?\n```\n(.*?)\n```", readme, re.S)
+panel_mockup = html.escape(m.group(1)) if m else ""
 
 # The demo block needs assets produced by `make demo`; drop it until they exist.
 if not pathlib.Path("site/assets/two-pane.png").exists():
@@ -56,7 +59,8 @@ out = (tmpl.replace("@HERO@", lede)
            .replace("@INSTALL@", install)
            .replace("@PANELS@", "\n".join(cards))
            .replace("@THEMES@", "\n".join(themes))
-           .replace("@MOCKUP@", mockup))
+           .replace("@MOCKUP@", mockup)
+           .replace("@PANEL_MOCKUP@", panel_mockup))
 pathlib.Path("site/index.html").write_text(out)
 
 # metrics.html from docs/metrics.md (headings, paragraphs, tables)

@@ -128,6 +128,8 @@ footer a{color:var(--muted)}
 
 <section id="screenshot">
   <h2>One page, nine panels</h2>
+  <p><code>/cctop</code> picks one of two views automatically — it never asks you to choose.</p>
+  <h3>Terminal view</h3>
   <div class="term"><pre>┌─cctop ── cctop-46 ──────────────────── Opus 5 · v2.1.269 ┐
 │ ● BUSY  turn 14  02:31  ▶ Bash 0:48  ~/code/cctop main*  │
 │ auto · medium · Max · 1h 12m · ≈ API $4.37 · 3% 412 MB   │
@@ -179,7 +181,32 @@ footer a{color:var(--muted)}
 │ 20:41:17 perm   Bash allowed (auto)                      │
 │ 20:41:39 note   rate-limit 5h crossed 60 %               │
 └ ?help 1-9 panels ⇥focus s sort f filter p pause q quit   ┘</pre></div>
-  <p class="cap">narrow layout · 60 columns · the right-hand-pane case. At ≥ 100 columns the panels flow into two columns.</p>
+  <p class="cap">narrow layout · 60 columns · <code>cctop run</code> in a tmux/zellij/WezTerm/Kitty/iTerm2 split. At ≥ 100 columns the panels flow into two columns.</p>
+  <h3>Panel view</h3>
+  <div class="term"><pre>╭cctop ─ claude-sonnet-5 ──────────────────────────────────╮
+│ ● BUSY  turn 1  0:48                                     │
+│ auto · medium · $9.90             bin shim hooks 2.1.270 │
+╰──────────────────────────────────────────────────────────╯
+╭Context ─ 40 % ─────────────╮╭Tokens &amp; Cost ─ 33.6M ──────╮
+│ ▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ ││ cache read  ▇▇▇▇▇    33.0M │
+│ 396k / 1.0M (40 %)         ││ cache write ▁▁▁▁▁     597k │
+│ velocity         +50k/turn ││ fresh input ▁▁▁▁▁      286 │
+│ autocompact in    ≈9 turns ││ output      ▁▁▁▁▁      67k │
+│ compactions              0 ││ └ thinking  ▁▁▁▁▁      31k │
+│                            ││ cache hit             98 % │
+│                            ││ cache TTL               1h │
+│                            ││ cost                 $9.90 │
+│                            ││ burn rate         ≈$26.0/h │
+╰────────────────────────────╯╰────────────────────────────╯
+╭Limits ─ 5h 42 % · 7d 17 % ─╮╭Turn ─ 0:48 ────────────────╮
+│ 5 h          ▇▇▇▁▁▁   42 % ││ state                 busy │
+│ 7 d          ▇▁▁▁▁▁   17 % ││ elapsed               0:48 │
+│ resets in           2h 29m ││ api / tools   ≈0:02 / 0:46 │
+│ exhausted in             — ││ waiting on       Bash 0:46 │
+│                            ││ permission w…            — │
+│                            ││ queued                   0 │
+╰────────────────────────────╯╰────────────────────────────╯</pre></div>
+  <p class="cap">On a Claude Code build with function hooks enabled, <code>/cctop</code> docks the same dashboard above the prompt, drawn in Claude Code's own frame and colour style — no multiplexer needed. Digits 1–6 switch views; falls back to the terminal view otherwise.</p>
 </section>
 
 <section id="panels">
@@ -211,7 +238,7 @@ footer a{color:var(--muted)}
   <pre class="block">brew install tomstagl/tap/cctop           # or: cargo install cctop
 claude plugin marketplace add tomstagl/cctop
 claude plugin install cctop               # adds /cctop and cctop-insights
-/cctop                                     # opens the dashboard in a right-hand pane</pre>
+/cctop                                     # opens the dashboard: panel or terminal split</pre>
   <h3>Optional: exact rate limits and tool timings</h3>
   <p><code>cctop install</code> wraps your status line with a tiny shim and registers <code>cctop hook</code> for Claude Code's hook events. It shows a diff of <code>~/.claude/settings.json</code>, backs the file up to <code>~/.cctop/backups/</code>, and asks before writing. <code>cctop uninstall</code> restores the original. Without it, every panel still works from the transcript alone.</p>
   <h3>Works in</h3>
