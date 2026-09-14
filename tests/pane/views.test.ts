@@ -109,18 +109,19 @@ for (const columns of [50, 80]) {
     fits(lines, columns);
     has(lines, /^TOOL\s+N\s+ERR\s+p50\s+p95\s+→CTX$/);
     assert.deepEqual(frameTitles(rawRows('tools', build(), columns)), ['5 Tools ─ 257 calls']);
-    // The chrome MCP server: 214 calls, 2 errors, p50/p95 estimated, 22k tokens into the context.
-    has(lines, /^mcp:claude-i.*\s214\s+2\s+≈1\.6s\s+≈25\.4s\s+≈22k$/);
+    // The chrome MCP server: 214 calls, 2 errors, p50/p95 estimated, 152k tokens into the
+    // context (87 screenshots at ~1 500 tokens each on top of their text).
+    has(lines, /^mcp:claude-i.*\s214\s+2\s+≈1\.6s\s+≈25\.4s\s+≈152k$/);
     has(lines, /^Bash ▶0:46\s+15\s+3\s+≈2\.0s\s+≈27\.2s\s+≈4k$/);
     has(lines, /^RemoteTrigger\s+16\s+0\s+≈4\.3s\s+≈10\.0s\s+≈9k$/);
     // The sort is the query's: by calls, descending.
     const order = ['mcp:claude-i', 'RemoteTrigger', 'Bash', 'ToolSearch'].map((t) => lines.findIndex((r) => r.startsWith(t)));
     assert.deepEqual([...order].sort((a, b) => a - b), order, JSON.stringify(lines));
     has(lines, 'top ctx');
-    // The input is cut to the room left at 50 columns.
-    has(lines, /^Read\s+\/home\/user\/project\/s.*\s+t1\s+≈1k$/);
-    has(lines, /^Bash\s+make check\s+t2\s+≈888$/);
-    assert.equal(lines.filter((r) => /\st\d\s+≈\d+k?$/.test(r)).length, 5, 'five top consumers');
+    // The top consumers are screenshot results (text + one image each); the
+    // input is cut to the room left at 50 columns.
+    has(lines, /^mcp:claude-.*\s+t1[24]\s+≈2k$/);
+    assert.equal(lines.filter((r) => /\st\d+\s+≈\d+k?$/.test(r)).length, 5, 'five top consumers');
   });
 
   test(`agents at ${columns} columns: the fixture agent and the missing MCP hint`, () => {

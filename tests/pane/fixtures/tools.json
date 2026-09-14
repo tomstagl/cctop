@@ -31,7 +31,7 @@
         "approx": true,
         "metric_id": "tokens_to_ctx",
         "unit": "tokens",
-        "value": 21984
+        "value": 152484
       },
       "tool": "mcp:claude-in-chrome"
     },
@@ -353,59 +353,59 @@
   ],
   "top_ctx": [
     {
-      "input": "/home/user/project/src/a3d75d…",
+      "input": "lorem",
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
         "unit": "tokens",
-        "value": 1000
+        "value": 1616
       },
-      "tool": "Read",
-      "turn": 1
+      "tool": "mcp:claude-in-chrome",
+      "turn": 12
     },
     {
-      "input": "/home/user/project/src/8008ee…",
+      "input": "lorem",
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
         "unit": "tokens",
-        "value": 1000
+        "value": 1616
       },
-      "tool": "Read",
-      "turn": 2
+      "tool": "mcp:claude-in-chrome",
+      "turn": 12
     },
     {
-      "input": "make check",
+      "input": "lorem",
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
         "unit": "tokens",
-        "value": 888
+        "value": 1610
       },
-      "tool": "Bash",
-      "turn": 2
+      "tool": "mcp:claude-in-chrome",
+      "turn": 12
     },
     {
-      "input": "lor",
+      "input": "lorem ipsu",
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
         "unit": "tokens",
-        "value": 756
+        "value": 1571
       },
-      "tool": "RemoteTrigger",
-      "turn": 2
+      "tool": "mcp:claude-in-chrome",
+      "turn": 14
     },
     {
-      "input": "lor",
+      "input": "lorem ipsu",
       "tokens": {
         "approx": true,
         "metric_id": "top_ctx",
         "unit": "tokens",
-        "value": 744
+        "value": 1571
       },
-      "tool": "RemoteTrigger",
-      "turn": 2
+      "tool": "mcp:claude-in-chrome",
+      "turn": 14
     }
   ]
 }

@@ -25,12 +25,12 @@ expression: text
 -4 Turn - 19:54 --------------------------------------------
 +5 Tools - 257 calls --------------------------------------+
 | TOOL          N  ERR    p50    p95   LAST  TOKENS→CTX  ↕N|
-| mcp:claude-…214    2   1.6s≈ 25.4s≈   9:25        21k    |
+| mcp:claude-…214    2   1.6s≈ 25.4s≈   9:25       152k    |
 | RemoteTrigg… 16    0   4.3s≈ 10.0s≈  32:26       9.2k    |
 | Bash         15    3   2.0s≈ 27.2s≈  19:05       3.9k    |
 | ToolSearch    4    0    8ms≈  16ms≈  32:59          8    |
 | Read          3    0   22ms≈ 513ms≈  41:58       2.2k    |
-| top ctx: Read /home/user/project/src/a3d75d… 1.0k · Rea… |
+| top ctx: mcp:claude-in-chrome lorem 1.6k · mcp:claude-i… |
 +----------------------------------------------------------+
 -6 Agents & MCP - 0/1 agents -------------------------------
 -7 Files - 4 touched ---------------------------------------

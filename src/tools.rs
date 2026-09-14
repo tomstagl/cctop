@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use crate::metrics::cost::parse_ts_ms;
-use crate::transcript::{AssistantBlock, Line, PromptKind};
+use crate::phase::{self, BashClass, CallShape, Phase, ToolClass};
+use crate::transcript::{AssistantBlock, Line, PromptKind, ReadKind, TestMarker, ToolUseDetail};
 
 /// One tool invocation.
 #[derive(Debug, Clone)]
@@ -16,8 +17,22 @@ pub struct Call {
     pub name: String,
     /// For MCP tools, the tool name within the server.
     pub mcp_tool: Option<String>,
-    /// ≤ 30 chars of the most telling input field.
+    /// The most telling input field: a bounded 200-char command for Bash,
+    /// ≤ 30 chars otherwise.
     pub input_summary: String,
+    /// Characters the model wrote as the tool's input (`IN→CTX`: they
+    /// stay in context like a result does).
+    pub input_chars: usize,
+    /// What the call is for, from its name and input.
+    pub class: ToolClass,
+    /// The Bash class, for Bash calls.
+    pub bash_class: Option<BashClass>,
+    /// A Bash command on the read-only allowlist (exploration runs).
+    pub read_only: bool,
+    /// File basenames the call touches.
+    pub paths: Vec<String>,
+    /// What the output said about a test run.
+    pub test_marker: TestMarker,
     /// Epoch ms of the assistant line that issued the call.
     pub started_at: Option<i64>,
     /// Epoch ms of the user line that carried the result.
@@ -27,8 +42,15 @@ pub struct Call {
     /// replace them and clear this flag.
     pub approx_duration: bool,
     pub is_error: bool,
-    /// `len(result text) / 4` — the context this result occupies.
+    /// `len(result text) / 4`, plus `w·h/750` per image (1 500 when the
+    /// size is unknown) — the context this result occupies.
     pub result_tokens_est: u64,
+    /// Bytes of output Claude Code spilled to `tool-results/` instead of the
+    /// context (the head stays; `result_tokens_est` is what stayed).
+    pub persisted_output_size: Option<u64>,
+    /// The result was replaced by `[Old tool result content cleared]`: it
+    /// no longer occupies context.
+    pub cleared: bool,
     /// Turn number the call belongs to (1-based), if known.
     pub turn: usize,
 }
@@ -36,6 +58,23 @@ pub struct Call {
 impl Call {
     pub fn is_running(&self) -> bool {
         self.finished_at.is_none()
+    }
+
+    /// The shape the phase assignment reads.
+    pub fn shape(&self) -> CallShape {
+        CallShape {
+            name: self.name.clone(),
+            class: self.class,
+            paths: self.paths.clone(),
+            turn: self.turn,
+            result_bytes: self.result_tokens_est * 4,
+            test_confirmed: self.test_marker != TestMarker::None,
+        }
+    }
+
+    /// A test-class command whose output confirmed a run.
+    pub fn is_confirmed_test(&self) -> bool {
+        self.class == ToolClass::Test && self.test_marker != TestMarker::None
     }
 }
 
@@ -49,7 +88,8 @@ pub fn display_name(raw: &str) -> (String, Option<String>) {
     (raw.to_string(), None)
 }
 
-/// Pick the most telling input field and clip it to 30 chars.
+/// Pick the most telling input field: a Bash command bounded at 200 chars,
+/// anything else clipped to 30.
 pub fn summarize_input(name: &str, input: &Value) -> String {
     const KEYS: &[&str] = &[
         "command",
@@ -76,8 +116,18 @@ pub fn summarize_input(name: &str, input: &Value) -> String {
             _ => String::new(),
         });
     let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    let _ = name;
-    clip(&s, 30)
+    clip(&s, if name == "Bash" { 200 } else { 30 })
+}
+
+/// Characters of every string in the input, recursively: what the model
+/// wrote to call the tool.
+pub fn input_chars(input: &Value) -> usize {
+    match input {
+        Value::String(s) => s.chars().count(),
+        Value::Array(a) => a.iter().map(input_chars).sum(),
+        Value::Object(m) => m.values().map(input_chars).sum(),
+        _ => 0,
+    }
 }
 
 fn clip(s: &str, max: usize) -> String {
@@ -136,6 +186,7 @@ impl Stats {
                     self.turn += 1;
                 }
                 let at = u.timestamp.as_deref().and_then(parse_ts_ms);
+                let detail = u.tool_use_detail();
                 for r in u.message.content.tool_results() {
                     let Some(&i) = self.index.get(&r.tool_use_id) else {
                         continue;
@@ -147,7 +198,24 @@ impl Stats {
                         _ => None,
                     };
                     c.is_error = r.is_error;
-                    c.result_tokens_est = (r.text().len() / 4) as u64;
+                    c.cleared = r.is_cleared();
+                    let mut tokens = (r.text().len() / 4) as u64;
+                    let mut images = r.images() as u64;
+                    match &detail {
+                        Some(ToolUseDetail::Bash(b)) => {
+                            c.test_marker = b.test_marker;
+                            c.persisted_output_size = b.persisted_output_size;
+                        }
+                        Some(ToolUseDetail::Read(rd)) => {
+                            if rd.kind == ReadKind::Image {
+                                tokens += rd.image_tokens().unwrap_or(1_500);
+                                images = images.saturating_sub(1);
+                            }
+                        }
+                        _ => {}
+                    }
+                    tokens += images * 1_500;
+                    c.result_tokens_est = if c.cleared { 0 } else { tokens };
                 }
             }
             Line::Assistant(a) => {
@@ -158,18 +226,33 @@ impl Stats {
                             continue; // duplicate line of the same response
                         }
                         let (display, mcp_tool) = display_name(name);
+                        let class = phase::classify_tool(name, input);
+                        let command = input.get("command").and_then(Value::as_str);
                         self.index.insert(id.clone(), self.calls.len());
                         self.calls.push(Call {
                             id: id.clone(),
                             name: display,
                             mcp_tool,
                             input_summary: summarize_input(name, input),
+                            input_chars: input_chars(input),
+                            class,
+                            bash_class: (name == "Bash")
+                                .then(|| phase::classify_bash(command.unwrap_or(""))),
+                            read_only: match name.as_str() {
+                                "Bash" => phase::read_only_bash(command.unwrap_or("")),
+                                "Read" | "Grep" | "Glob" | "WebFetch" | "LS" => true,
+                                _ => false,
+                            },
+                            paths: phase::paths_of(name, input),
+                            test_marker: TestMarker::None,
                             started_at: at,
                             finished_at: None,
                             duration_ms: None,
                             approx_duration: true,
                             is_error: false,
                             result_tokens_est: 0,
+                            persisted_output_size: None,
+                            cleared: false,
                             turn: self.turn.max(1),
                         });
                     }
@@ -197,6 +280,38 @@ impl Stats {
     /// The call currently running, if any (most recently issued first).
     pub fn running(&self) -> Option<&Call> {
         self.calls.iter().rev().find(|c| c.is_running())
+    }
+
+    /// The state-line phase word and its run length, over the last calls.
+    pub fn phase_now(&self) -> Option<(Phase, usize)> {
+        let start = self.calls.len().saturating_sub(7);
+        let shapes: Vec<CallShape> = self.calls[start..].iter().map(Call::shape).collect();
+        phase::current(&shapes)
+    }
+
+    /// Consecutive read-only calls at the end of the list (the current
+    /// exploration run): `(calls, context tokens they added)`. An `Agent`
+    /// spawn or any other call ends the run.
+    pub fn explore_run(&self) -> (usize, u64) {
+        let mut n = 0;
+        let mut tokens = 0;
+        for c in self.calls.iter().rev() {
+            if !c.read_only {
+                break;
+            }
+            n += 1;
+            tokens += c.result_tokens_est;
+        }
+        (n, tokens)
+    }
+
+    /// Model-written input characters per tool, the `IN→CTX` column.
+    pub fn input_chars_by_name(&self) -> BTreeMap<String, usize> {
+        let mut m = BTreeMap::new();
+        for c in &self.calls {
+            *m.entry(c.name.clone()).or_insert(0) += c.input_chars;
+        }
+        m
     }
 
     /// Per-tool statistics, keyed by display name.
@@ -300,6 +415,10 @@ mod tests {
         assert_eq!(c.result_tokens_est, 725);
         assert!(c.is_error);
         assert_eq!(c.input_summary, "make check");
+        assert_eq!(c.class, ToolClass::Test);
+        assert_eq!(c.bash_class, Some(BashClass::Test));
+        assert!(!c.read_only);
+        assert!(c.input_chars >= "make check".len());
     }
 
     #[test]
@@ -339,8 +458,18 @@ mod tests {
         assert_eq!(top.len(), 3);
         assert!(top[0].result_tokens_est >= top[1].result_tokens_est);
         assert!(top[1].result_tokens_est >= top[2].result_tokens_est);
-        // Fixture strings are capped at 4000 bytes → at most 1000 tokens each.
-        assert!(top[0].result_tokens_est <= 1000);
+        // Fixture strings are capped at 4000 bytes → at most 1000 tokens of
+        // text each; the largest results are screenshots, ~1 500 tokens per
+        // image on top of their text.
+        assert_eq!(top[0].name, "mcp:claude-in-chrome");
+        assert!(top[0].result_tokens_est > 1_500 && top[0].result_tokens_est <= 2_500);
+        assert!(s.calls.iter().all(|c| !c.cleared));
+        let (run, _) = s.explore_run();
+        assert_eq!(
+            run, 0,
+            "the session ended on MCP calls, not a read-only run"
+        );
+        assert!(s.phase_now().is_some());
         assert_eq!(percentile(&[], 0.5), None);
         assert_eq!(percentile(&[10, 20, 30, 40], 0.5), Some(20));
         assert_eq!(percentile(&[10, 20, 30, 40], 0.95), Some(40));

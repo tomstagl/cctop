@@ -167,7 +167,7 @@
     "approx": true,
     "metric_id": "tokens_to_ctx",
     "unit": "tokens",
-    "value": 37539
+    "value": 168039
   },
   "tool_calls": {
     "approx": false,

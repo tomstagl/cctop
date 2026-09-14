@@ -152,7 +152,7 @@ terminal view automatically when function hooks are off.
 
 The Advisor is rule-based (18 rules, no model call): cache misses, cache expiry, runaway tool results, re-reads, exploring in the main context, compaction churn, idle MCP servers, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, error loops, hook overhead, oversized prefix, missing hand-off.
 
-Some numbers moved in 0.3: the turn count is Claude Code's own (`promptId`; interrupts, slash commands and task notifications no longer count, so it reads ~15 % lower than before), API-error lines no longer set the model or count as a compaction, compactions come from the `compact_boundary` records Claude Code writes since 2.1.263, and the autocompact threshold is the effective window − 13 000 tokens (967 k on 1M-window models) rather than 80 %.
+Some numbers moved with the coach work: the turn count is Claude Code's own (`promptId`; interrupts, slash commands and task notifications no longer count, so it reads ~15 % lower than before), API-error lines no longer set the model or count as a compaction, compactions come from the `compact_boundary` records Claude Code writes since 2.1.263, and the autocompact threshold is the effective window − 13 000 tokens (967 k on 1M-window models) rather than 80 %.
 
 ## How it works
 

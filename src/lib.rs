@@ -23,6 +23,7 @@ pub mod mcp;
 pub mod metrics;
 pub mod otel;
 pub mod pane;
+pub mod phase;
 pub mod prefix;
 pub mod procs;
 pub mod query;
