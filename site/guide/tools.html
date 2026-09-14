@@ -3,162 +3,354 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tools — cctop guide</title>
-<meta name="description" content="What Tools shows in cctop, why each metric matters, and what to do about it.">
+<title>Tools — cctop panel guide</title>
+<meta name="description" content="What the Tools panel shows in cctop, what each reading means, and what to do about it.">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="../assets/favicon.ico">
+<link rel="preload" href="../assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/ibm-plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/ibm-plex-sans-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 /* IBM Plex, SIL OFL 1.1 — latin subsets as served by Google Fonts, self-hosted so they can be preloaded. */
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:optional;src:url(assets/fonts/ibm-plex-mono-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:optional;src:url(assets/fonts/ibm-plex-mono-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:optional;src:url(assets/fonts/ibm-plex-mono-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400 600;font-display:optional;src:url(assets/fonts/ibm-plex-sans-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Sans Condensed';font-style:normal;font-weight:700;font-display:optional;src:url(assets/fonts/ibm-plex-sans-condensed-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:optional;src:url(../assets/fonts/ibm-plex-mono-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:optional;src:url(../assets/fonts/ibm-plex-mono-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:optional;src:url(../assets/fonts/ibm-plex-mono-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400 600;font-display:optional;src:url(../assets/fonts/ibm-plex-sans-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans Condensed';font-style:normal;font-weight:700;font-display:optional;src:url(../assets/fonts/ibm-plex-sans-condensed-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+/* cctop site — an operator's manual. Two inks on paper: ink for text and
+   rules, terracotta (the mark's beard) for callouts, cross-references and
+   the one thing to do. No cards, no shadows, no gradients: hairlines,
+   double rules, a margin column and numbered figures. */
 :root{
-  --bg:#F1F3F6;--panel:#FFFFFF;--ink:#1A212C;--muted:#5A6577;--line:#D5DAE2;--line-soft:#E6E9EF;
-  --accent:#177F86;--accent-soft:#DCEFF0;--ok:#2F8F58;--warn:#C7911E;--crit:#C9403F;
+  --paper:#F3F1EC;--paper-2:#EAE7E0;--ink:#17191E;--ink-2:#595C64;--ink-3:#8B8E96;
+  --rule:#17191E;--hair:#CBC8C0;--hair-soft:#E1DED6;
+  --spot:#D97757;--spot-ink:#A8482A;--spot-soft:#F4DED3;
+  --ok:#2F8F58;--warn:#B8860B;--crit:#C9403F;
   --term-bg:#0E1318;--term-fg:#D6DEE8;--term-dim:#8593A6;--term-acc:#4CC2C2;--term-ok:#5FC77E;--term-warn:#E2B04A;--term-crit:#E5605E;--term-border:#2A3644;
-  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;--cond:"IBM Plex Sans Condensed",var(--sans);--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",var(--sans);
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --margin:172px;
 }
-@media (prefers-color-scheme:dark){:root{--bg:#0F1419;--panel:#161C24;--ink:#E3E8EF;--muted:#8B95A7;--line:#2A3441;--line-soft:#1F2833;--accent:#4CC2C2;--accent-soft:#12303A;--ok:#5FC77E;--warn:#E2B04A;--crit:#E5605E}}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#121417;--paper-2:#1A1D22;--ink:#E8E5DE;--ink-2:#A9A69F;--ink-3:#6F727A;
+  --rule:#E8E5DE;--hair:#34373E;--hair-soft:#24272D;
+  --spot-ink:#E48C67;--spot-soft:#3A241B;
+  --ok:#5FC77E;--warn:#E2B04A;--crit:#E5605E;
+}}
 *{box-sizing:border-box}
-html{color-scheme:light dark}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-block:0 64px;padding-inline:clamp(16px,4vw,40px)}
-.wrap{max-width:960px;margin:0 auto}
-a{color:var(--accent)}
-code{font-family:var(--mono);font-size:.9em;background:var(--line-soft);padding:1px 5px;border-radius:3px}
-h1,h2,h3{font-family:var(--cond);letter-spacing:-.01em;text-wrap:balance}
-h1{font-size:clamp(34px,5vw,52px);line-height:1.05;margin:0 0 12px}
-h2{font-size:26px;margin:0 0 12px}
-h3{font-size:18px;margin:20px 0 6px}
-p{max-width:68ch;margin:0 0 12px}
-section{padding-block:40px 0}
-.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:20px;border-bottom:1px solid var(--line)}
-header.top img{height:36px;width:90px}
-header.top nav{display:flex;gap:18px;font-family:var(--mono);font-size:13px}
-header.top nav a{color:var(--muted);text-decoration:none}
-header.top nav a:hover,header.top nav a:focus-visible{color:var(--accent);text-decoration:underline}
-.hero{padding-block:56px 24px}
-.hero .lede{font-size:20px;max-width:60ch}
-.install{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0 8px}
-.install code{font-size:15px;background:var(--term-bg);color:var(--term-fg);padding:12px 16px;border-radius:6px;border:1px solid var(--term-border);white-space:nowrap;overflow-x:auto;max-width:100%}
-.install button{font:inherit;font-family:var(--mono);font-size:13px;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
-.install button:hover,.install button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
-.install button[hidden]{display:none}
-.subline{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
-.term{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.32;box-shadow:0 12px 40px -18px rgba(0,0,0,.5)}
+html{color-scheme:light dark;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-inline:clamp(16px,4vw,48px);padding-block:0 72px;-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto}
+a{color:var(--spot-ink);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover,a:focus-visible{color:var(--ink)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+p code{background:var(--paper-2);padding:1px 5px;border-radius:2px}
+kbd{border:1px solid var(--hair);border-bottom-width:2px;border-radius:3px;padding:0 5px;font-size:.85em;background:var(--paper-2)}
+h1,h2,h3,h4{font-family:var(--cond);font-weight:700;letter-spacing:-.015em;text-wrap:balance;margin:0}
+h2{font-size:clamp(28px,3.4vw,40px);line-height:1.02;margin-bottom:16px}
+h3{font-size:21px;line-height:1.15}
+p{margin:0 0 12px;max-width:68ch}
+p.wide{max-width:none}
+strong{font-weight:600}
+.small{font-size:14px;color:var(--ink-2)}
+.eyebrow{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.spot{color:var(--spot-ink)}
+hr{border:0;border-top:1px solid var(--hair);margin:24px 0}
+
+/* masthead */
+.masthead{display:flex;align-items:center;justify-content:space-between;gap:16px 28px;flex-wrap:wrap;padding-block:16px;border-bottom:2px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink)}
+.brand svg{width:34px;height:34px;flex:none}
+.brand b{font:700 25px/1 var(--cond);letter-spacing:-.01em}
+.brand span{font:500 11.5px/1.2 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);border-left:1px solid var(--hair);padding-left:11px;margin-left:2px}
+.nav{display:flex;flex-wrap:wrap;gap:6px 22px;font:500 12.5px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.nav a{color:var(--ink-2);text-decoration:none;padding-block:8px}
+.nav a:hover,.nav a:focus-visible,.nav a[aria-current]{color:var(--spot-ink);box-shadow:0 2px 0 0 var(--spot)}
+
+/* the manual grid: a margin column for section numbers and marginalia */
+.sec{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding-block:44px 12px;border-top:1px solid var(--rule)}
+.sec.first{border-top:0}
+.mg{position:relative}
+.mg .no{font:700 46px/1 var(--cond);letter-spacing:-.03em;color:var(--spot);display:block}
+.mg .no small{font-size:.5em;vertical-align:.45em;margin-right:2px;letter-spacing:0}
+.mg .lbl{display:block;font:500 11.5px/1.5 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);margin-top:10px;max-width:14ch}
+.mg .note{display:block;font-size:13px;line-height:1.45;color:var(--ink-2);margin-top:18px;padding-top:10px;border-top:1px solid var(--hair);max-width:22ch}
+.mg .note b{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--spot-ink);display:block;margin-bottom:2px}
+.mg .note a{color:inherit}
+@media (min-width:901px){.mg .stick{position:sticky;top:24px}}
+.body>p:first-child{margin-top:2px}
+
+/* cover */
+.cover{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding-block:52px 40px}
+.cover .mg .no{font-size:15px;line-height:1.5;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);font-family:var(--mono);font-weight:500}
+.cover h1{font:700 clamp(42px,6.1vw,86px)/.96 var(--cond);letter-spacing:-.025em;max-width:15ch;margin:0 0 24px;text-wrap:balance}
+.cover h1 em{font-style:normal;color:var(--spot-ink)}
+.lede{font-size:clamp(17px,1.55vw,20px);line-height:1.5;max-width:62ch;margin-bottom:30px}
+.spec{list-style:none;margin:0 0 36px;padding:0;border-top:2px solid var(--rule);max-width:820px}
+.spec li{display:grid;grid-template-columns:118px minmax(0,1fr);column-gap:18px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--hair)}
+.spec li>span:first-child{font:500 11.5px/1.6 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.spec li>span:last-child{font-size:15.5px}
+.spec .install{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:2px}
+.spec .install code{font-size:14.5px;background:var(--ink);color:var(--paper);padding:12px 14px;white-space:nowrap;overflow-x:auto;max-width:100%}
+.spec .install button{font:500 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;padding:0 14px;border:1px solid var(--ink);margin-left:-1px;background:var(--paper);color:var(--ink);cursor:pointer;min-height:44px}
+.spec .install button:hover,.spec .install button:focus-visible{background:var(--spot);border-color:var(--spot);color:#0E1318;outline:none}
+.spec .install button[hidden]{display:none}
+.spec .also{display:block;font:400 12.5px/1.6 var(--mono);color:var(--ink-2);margin-top:6px}
+
+/* figures */
+figure{margin:0}
+.plate{border:1px solid var(--rule);padding:5px;background:var(--paper)}
+.plate video,.plate img{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font:400 13px/1.5 var(--mono);color:var(--ink-2);margin-top:9px;max-width:80ch}
+figcaption b{font-weight:600;color:var(--ink);margin-right:6px}
+figcaption b::after{content:" —";color:var(--ink-3)}
+.term{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.35;width:max-content;max-width:100%}
 .term pre{margin:0;font:inherit;white-space:pre}
-.term .b{color:var(--term-dim)}.term .t{color:var(--term-acc);font-weight:600}.term .g{color:var(--term-ok)}.term .w{color:var(--term-warn)}.term .r{color:var(--term-crit)}.term .d{color:var(--term-dim)}.term .a{color:var(--term-acc)}
-.demo{margin:20px 0 8px}
-.demo video,.demo img{display:block;width:100%;max-width:100%;border-radius:8px;border:1px solid var(--term-border)}
-.cap{font-family:var(--mono);font-size:12px;color:var(--muted);margin:6px 0 0}
-.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px}
-.pnl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
-.pnl h3{font-family:var(--mono);font-weight:500;font-size:13px;margin:0 0 6px;color:var(--accent)}
-.pnl h3 a{color:inherit;text-decoration:none}
-.pnl h3 a:hover,.pnl h3 a:focus-visible{text-decoration:underline}
-.pnl p{font-size:14px;color:var(--muted);margin:0}
-.advice{display:grid;gap:10px;margin-top:16px}
-.adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px}
+.term .t{color:var(--term-acc);font-weight:600}
+.term .co{display:inline-block;width:1ch;line-height:1.3;background:var(--spot);color:#0E1318;font-weight:700;text-align:center;border-radius:2px}
+.term .d{color:var(--term-dim)}
+.co-inline{display:inline-block;min-width:1.55em;height:1.55em;line-height:1.55em;text-align:center;background:var(--spot);color:#0E1318;font:700 12px/1.55em var(--mono);border-radius:2px;vertical-align:1px}
+
+.figrow{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:36px;align-items:end}
+.figrow figcaption{margin-top:0}
+.figrow .how{font-size:14.5px;color:var(--ink);margin-bottom:18px;max-width:40ch}
+.figrow .how b{display:block;font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--spot-ink)}
+@media (max-width:900px){.figrow{grid-template-columns:minmax(0,1fr)}.figrow .how{margin:14px 0 0}}
+
+/* ruled lists: the legend, the questions */
+.ruled{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.ruled>li{display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;padding:18px 0;border-bottom:1px solid var(--hair)}
+.ruled .n{font:700 30px/1 var(--cond);color:var(--spot);letter-spacing:-.02em;padding-top:2px}
+.ruled .n.k{font:700 13px/1.3 var(--mono);color:var(--ink-2);letter-spacing:.04em;padding-top:8px}
+.ruled h3{margin-bottom:6px}
+.ruled h3 small{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-left:10px}
+.ruled p{margin-bottom:8px;font-size:15.5px}
+.ruled p:last-child{margin-bottom:0}
+.do{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;align-items:baseline;font-size:15px}
+.do b{font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--spot-ink);white-space:nowrap}
+.do b::before{content:"→ "}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:44px}
+.two>.ruled{border-top:1px solid var(--rule)}
+.qs>li{grid-template-columns:minmax(0,1fr)}
+.qs h3{font-size:24px}
+.qs .ref{font:500 12px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-top:6px}
+.qs .ref a{color:var(--spot-ink);text-decoration:none}
+.qs .ref a:hover{text-decoration:underline}
+
+/* symbols */
+.syms{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0 36px;border-top:1px solid var(--rule)}
+.sym{display:grid;grid-template-columns:130px minmax(0,1fr);column-gap:14px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14.5px;align-items:start}
+.sym code{font-size:12.5px;background:var(--term-bg);color:var(--term-fg);padding:3px 7px;white-space:pre-wrap;justify-self:start;max-width:100%}
+.sym code.g{color:var(--term-ok)}.sym code.a{color:var(--term-warn)}.sym code.r{color:var(--term-crit)}.sym code.c{color:var(--term-acc)}
+.sym span b{font-weight:600}
+
+/* the Advisor */
+.advice{display:grid;gap:10px;margin:14px 0 12px;max-width:820px}
+.adv{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:12px 14px;font-family:var(--mono);font-size:13px;line-height:1.45}
 .adv .h{color:var(--term-warn)}.adv .a{color:var(--term-acc)}.adv .s{color:var(--term-dim)}
-.hosts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
-.hosts span{font-family:var(--mono);font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
-.themes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
-.theme{border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;border:1px solid var(--line)}
-.theme i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel);margin-top:12px}
-table{border-collapse:collapse;width:100%;font-size:14px}
-th{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:8px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
-tr:last-child td{border-bottom:0}
-pre.block{background:var(--term-bg);color:var(--term-fg);padding:14px 16px;border-radius:6px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5;border:1px solid var(--term-border)}
-footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
-footer a{color:var(--muted)}
-@media (max-width:520px){header.top nav{display:none}.hero{padding-block:32px 16px}}
-@media (prefers-reduced-motion:reduce){.demo video{display:none}.demo img.still{display:block}}
-@media (prefers-reduced-motion:no-preference){.demo img.still{display:none}}
-.why{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;margin:6px 0 18px}
-.why b{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:4px}
-.why.do b{color:var(--ok)}
-.metric{margin-top:28px;padding-top:4px;border-top:1px solid var(--line-soft)}
-.metric:first-of-type{border-top:0}
-.metric h3{margin-bottom:2px}
-.metric .unit{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 10px}
-.rules{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:2px 0 0}
-.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:20px}
-.guide-grid a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;text-decoration:none;color:var(--ink)}
-.guide-grid a:hover,.guide-grid a:focus-visible{border-color:var(--accent)}
-.guide-grid h3{margin:0 0 6px;color:var(--accent);font-family:var(--mono);font-size:14px;font-weight:500}
-.guide-grid p{margin:0;color:var(--muted);font-size:14px}
-.rule{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--term-border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:13px;margin-bottom:10px;scroll-margin-top:16px}
-.rule .h{color:var(--term-warn)}
-.rule .a{color:var(--term-acc)}
-.rule .t{color:var(--term-dim)}
+.rules{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.rules>li{display:grid;grid-template-columns:60px minmax(0,1fr);column-gap:16px;padding:18px 0;border-bottom:1px solid var(--hair);scroll-margin-top:16px}
+.rules .code{font:600 13px/1.4 var(--mono);color:var(--spot-ink);padding-top:5px}
+.rules h3{margin-bottom:4px}
+.rules .when{font:400 13.5px/1.5 var(--mono);color:var(--ink-2);margin-bottom:8px}
+.rules .when b{font-weight:500;color:var(--ink);text-transform:uppercase;letter-spacing:.07em;font-size:11px;margin-right:6px}
+.rules p{font-size:15px}
+
+/* the two views */
+.views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 40px}
+.views h3{margin-bottom:6px}
+.views .eyebrow{display:block;margin-bottom:8px}
+.views figure{margin-top:12px}
+.views .term{font-size:11.5px}
+
+/* install */
+pre.block{background:var(--term-bg);color:var(--term-fg);border:1px solid var(--rule);padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.55;margin:0 0 20px;max-width:820px}
+pre.block .c{color:var(--term-dim)}
+.hosts{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;list-style:none;padding:0}
+.hosts li{font:500 12.5px/1 var(--mono);letter-spacing:.05em;border:1px solid var(--ink);padding:8px 12px}
+.steps{list-style:none;margin:0 0 8px;padding:0;counter-reset:s;border-top:1px solid var(--rule);max-width:820px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;padding:14px 0;border-bottom:1px solid var(--hair);font-size:15.5px}
+.steps li::before{content:counter(s,decimal-leading-zero);font:700 22px/1.2 var(--cond);color:var(--spot)}
+.steps li p{margin:0}
+.steps li p+p{margin-top:4px}
+
+/* themes */
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0 8px}
+.theme{padding:12px 12px 10px;font:500 12.5px/1.4 var(--mono);border:1px solid var(--rule)}
+.theme i{display:inline-block;width:14px;height:14px;margin:8px 4px 0 0;vertical-align:-2px}
+.theme .bar{display:block;letter-spacing:-.5px;margin-top:4px}
+
+/* tables (the reference appendix) */
+.tbl{overflow-x:auto;border-top:2px solid var(--rule);margin:14px 0 30px}
+table{border-collapse:collapse;width:100%;min-width:860px;font-size:14px;table-layout:fixed}
+col.c1{width:17%}col.c2{width:9%}col.c3{width:31%}col.c4{width:13%}col.c5{width:20%}col.c6{width:10%}
+th{font:500 11px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);text-align:left;padding:10px 12px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap;vertical-align:bottom}
+td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair);vertical-align:top;font-size:14px}
+td:first-child{font-weight:600;white-space:nowrap}
+td code{font-size:12.5px}
+tr:target td{background:var(--spot-soft)}
+
+/* guide entries */
+.entry{display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;padding:26px 0;border-top:1px solid var(--hair);scroll-margin-top:16px}
+.entry:first-of-type{border-top:2px solid var(--rule)}
+.entry .mg h3{font-size:22px;line-height:1.1;margin-bottom:6px}
+.entry .reads{display:block;font:400 12.5px/1.5 var(--mono);color:var(--ink-2)}
+.entry .reads code{display:inline-block;background:var(--term-bg);color:var(--term-fg);padding:2px 7px;margin-top:4px;white-space:pre-wrap;max-width:100%;vertical-align:top;line-height:1.5}
+.entry dl{margin:0;display:grid;grid-template-columns:108px minmax(0,1fr);column-gap:16px;row-gap:10px;align-items:baseline}
+.entry dt{font:500 11px/1.8 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.entry dt.act{color:var(--spot-ink)}
+.entry dt.act::before{content:"→ "}
+.entry dd{margin:0;font-size:15.5px;max-width:68ch}
+.entry dd.meta{font-size:13.5px;color:var(--ink-2)}
+.entry dd.meta a{color:var(--spot-ink)}
+.toc{list-style:none;margin:0;padding:0;border-top:2px solid var(--rule);max-width:820px}
+.toc li{border-bottom:1px solid var(--hair)}
+.toc li a{display:grid;grid-template-columns:52px minmax(0,1fr);column-gap:16px;color:inherit;text-decoration:none}
+.toc .n{font:700 26px/1 var(--cond);color:var(--spot);padding:14px 0}
+.toc .t{padding:14px 0}
+.toc .t b{font-family:var(--cond);font-weight:700;font-size:21px;display:block;margin-bottom:2px}
+.toc .t span{font-size:14.5px;color:var(--ink-2)}
+.toc li:hover .t b,.toc li:focus-within .t b{color:var(--spot-ink)}
+.crumbs{font:500 12px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);margin:26px 0 -20px}
+.crumbs a{color:inherit;text-decoration:none}
+.crumbs a:hover{color:var(--spot-ink)}
+.pager{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:40px;padding-top:14px;border-top:1px solid var(--rule);font:500 13px/1.4 var(--mono)}
+.pager a{text-decoration:none}
+
+/* colophon */
+.colophon{margin-top:64px;padding-top:18px;border-top:3px double var(--rule);display:grid;grid-template-columns:var(--margin) minmax(0,1fr);column-gap:36px;font:400 13px/1.7 var(--mono);color:var(--ink-2)}
+.colophon .brand b{font-size:20px}
+.colophon nav{display:flex;flex-wrap:wrap;gap:4px 22px;margin-bottom:8px}
+.colophon a{color:var(--ink-2)}
+.colophon a:hover{color:var(--spot-ink)}
+
+/* narrow screens: the margin column folds above the body */
+@media (max-width:900px){
+  .sec,.cover,.entry,.colophon{grid-template-columns:minmax(0,1fr);row-gap:8px}
+  .mg{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:8px}
+  .mg .no{font-size:32px}
+  .mg .lbl{margin-top:0;max-width:none}
+  .mg .note{flex-basis:100%;max-width:none;margin-top:4px;padding-top:6px}
+  .entry .mg{display:block}
+  .entry dl{grid-template-columns:minmax(0,1fr);row-gap:2px}
+  .entry dd{margin-bottom:8px}
+  .two,.views{grid-template-columns:minmax(0,1fr)}
+  .two>.ruled+.ruled{border-top:0}
+  .spec li{grid-template-columns:minmax(0,1fr);row-gap:2px}
+  .cover{padding-block:36px 28px}
+  .masthead{padding-block:10px}
+  .nav{gap:0 14px}
+  .nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
+}
+@media (max-width:520px){
+  .ruled>li{grid-template-columns:40px minmax(0,1fr)}
+  .ruled.qs>li{grid-template-columns:minmax(0,1fr)}
+  .term{font-size:11px;padding:10px 12px}
+  .ruled .n{font-size:24px}
+  .sym{grid-template-columns:minmax(0,1fr);row-gap:4px}
+  .rules>li,.steps li{grid-template-columns:44px minmax(0,1fr)}
+  .do{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.plate video{display:none}.plate img.still{display:block}}
+@media (prefers-reduced-motion:no-preference){.plate img.still{display:none}}
 </style>
 </head>
 <body>
-<div class="wrap">
-<header class="top">
-  <a href="../" aria-label="cctop home">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="../assets/cctop-lockup-horizontal-dark.svg">
-      <img src="../assets/cctop-lockup-horizontal-light.svg" alt="cctop" width="90" height="36">
-    </picture>
-  </a>
-  <nav>
-    <a href="./">Guide</a>
-    <a href="../metrics.html">Metrics</a>
-    <a href="../#panels">Panels</a>
+<div class="page">
+<header class="masthead">
+  <a class="brand" href="../" aria-label="cctop home"><svg viewBox="0 0 256 256" aria-hidden="true"><g fill="#D97757"><path d="M128 111 C118 98 100 98 92 106 C87 111 91 118 98 116 C107 113 117 115 128 121 C139 115 149 113 158 116 C165 118 169 111 164 106 C156 98 138 98 128 111 Z"/><rect x="78" y="118" width="100" height="30" rx="2"/><rect x="84" y="155" width="88" height="22" rx="2"/><rect x="90" y="184" width="76" height="20" rx="2"/><path d="M96 211 H160 L156 230 L146 222 L136 240 L128 254 L120 240 L110 222 L100 230 Z"/></g><g><circle cx="88" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><circle cx="168" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><path d="M118 56 Q128 45 138 56" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M58 55 L42 51 M198 55 L214 51" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></g></svg><b>cctop</b><span>Operator's manual</span></a>
+  <nav class="nav" aria-label="Sections">
+    <a href="../#dashboard">The dashboard</a>
+    <a href="./" aria-current="page">Panel guide</a>
+    <a href="advisor.html">Advisor</a>
+    <a href="../#install">Install</a>
+    <a href="../metrics.html">Reference</a>
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>
 </header>
-<main class="metrics">
-<h1>5 Tools</h1>
-<p>Call counts, error rates, latency, and exactly how many tokens each tool pushed into context.</p>
-<div class="metric" id="tool_calls">
+<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Tools</p>
+<section class="sec first">
+  <div class="mg"><span class="no"><small>§</small>5</span><span class="lbl">Tools</span><span class="note"><b>Note</b><kbd>s</kbd> sorts the table, <kbd>f</kbd> filters it.</span></div>
+  <div class="body">
+    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Tools</h1>
+    <p>Call counts, error rates, latency, and exactly how many tokens each tool pushed into context.</p>
+  </div>
+</section>
+<article class="entry" id="tool_calls">
+<div class="mg">
 <h3>Calls</h3>
-<p class="unit"><code>tool_calls</code> · count</p>
-<div class="why"><b>Why it matters</b>Which tools actually dominate this session's activity, by call count.</div>
-<div class="why do"><b>What to do</b>A tool called far more than the task seems to need can indicate retrying or inefficient exploration.</div>
-</div>
-<div class="metric" id="tool_errors">
+<span class="reads">reads as<br><code>Read  71</code></span>
+</div><dl>
+<dt>What it means</dt><dd>Which tools actually dominate this session's activity, by call count.</dd>
+<dt class="act">What to do</dt><dd>A tool called far more than the task seems to need can indicate retrying or inefficient exploration.</dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#tool_calls">how</a></dd>
+</dl></article>
+<article class="entry" id="tool_errors">
+<div class="mg">
 <h3>Errors</h3>
-<p class="unit"><code>tool_errors</code> · count</p>
-<div class="why"><b>Why it matters</b>Errors are billed and re-injected into context exactly like successes are.</div>
-<div class="why do"><b>What to do</b>The same tool failing with the same input repeatedly is the signal to interrupt and hand the model the fix directly instead of letting it keep retrying. <span class="rules">Advisor: <a href="advisor.html#A15"><code>A15</code></a> Error loops</span></div>
-</div>
-<div class="metric" id="tool_p50">
+<span class="reads">reads as<br><code>ERR  3</code></span>
+</div><dl>
+<dt>What it means</dt><dd>Errors are billed and re-injected into context exactly like successes are.</dd>
+<dt class="act">What to do</dt><dd>The same tool failing with the same input repeatedly is the signal to interrupt and hand the model the fix directly instead of letting it keep retrying.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A15">A15 Error loops</a></dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#tool_errors">how</a></dd>
+</dl></article>
+<article class="entry" id="tool_p50">
+<div class="mg">
 <h3>p50 duration</h3>
-<p class="unit"><code>tool_p50</code> · ms</p>
-<div class="why"><b>Why it matters</b>The typical duration for this tool — the number to expect on a normal call.</div>
-<div class="why do"><b>What to do</b>Read alongside p95 rather than alone; a high median usually means the tool itself is just slow.</div>
-</div>
-<div class="metric" id="tool_p95">
+<span class="reads">reads as<br><code>p50  1.4s</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The typical duration for this tool — the number to expect on a normal call.</dd>
+<dt class="act">What to do</dt><dd>Read alongside p95 rather than alone; a high median usually means the tool itself is just slow.</dd>
+<dt>Measured</dt><dd class="meta">ms · from the transcript · hook events (after cctop install) · ≈ until hook timings replace it · <a href="../metrics.html#tool_p50">how</a></dd>
+</dl></article>
+<article class="entry" id="tool_p95">
+<div class="mg">
 <h3>p95 duration</h3>
-<p class="unit"><code>tool_p95</code> · ms</p>
-<div class="why"><b>Why it matters</b>The tail latency — what occasionally makes a turn feel much slower than usual.</div>
-<div class="why do"><b>What to do</b>A high p95 on a tool that also runs in the foreground (long Bash calls, builds, test suites) is a candidate to background instead. <span class="rules">Advisor: <a href="advisor.html#A10"><code>A10</code></a> Long foreground commands</span></div>
-</div>
-<div class="metric" id="tool_last_call">
+<span class="reads">reads as<br><code>p95  9.8s</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The tail latency — what occasionally makes a turn feel much slower than usual.</dd>
+<dt class="act">What to do</dt><dd>A high p95 on a tool that also runs in the foreground (long Bash calls, builds, test suites) is a candidate to run in the background instead.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A10">A10 Long foreground commands</a></dd>
+<dt>Measured</dt><dd class="meta">ms · from the transcript · hook events (after cctop install) · ≈ until hook timings replace it · <a href="../metrics.html#tool_p95">how</a></dd>
+</dl></article>
+<article class="entry" id="tool_last_call">
+<div class="mg">
 <h3>Last call</h3>
-<p class="unit"><code>tool_last_call</code> · duration</p>
-<div class="why"><b>Why it matters</b>How long since this tool was last used — staleness, not activity.</div>
-<div class="why do"><b>What to do</b>A tool or MCP server that hasn't been called in a while is still paying its schema tax on every prefix; pairs with Agents & MCP's MCP call count. <span class="rules">Advisor: <a href="advisor.html#A07"><code>A07</code></a> Idle MCP servers</span></div>
-</div>
-<div class="metric" id="tokens_to_ctx">
+<span class="reads">reads as<br><code>LAST  4:02</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How long since this tool was last used — staleness, not activity.</dd>
+<dt class="act">What to do</dt><dd>A tool or MCP server that hasn't been called in a while is still paying for its definitions on every turn; pairs with the MCP call count in Agents &amp; MCP.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A07">A07 Idle MCP servers</a></dd>
+<dt>Measured</dt><dd class="meta">duration · from the transcript · exact · <a href="../metrics.html#tool_last_call">how</a></dd>
+</dl></article>
+<article class="entry" id="tokens_to_ctx">
+<div class="mg">
 <h3>Tokens → context</h3>
-<p class="unit"><code>tokens_to_ctx</code> · tokens</p>
-<div class="why"><b>Why it matters</b>Exactly how much context each tool's results added — the direct, measurable cause of context growth.</div>
-<div class="why do"><b>What to do</b>The biggest single contributor here is almost always the right fix target: narrow the command, delegate to a subagent, or stop re-reading it. <span class="rules">Advisor: <a href="advisor.html#A03"><code>A03</code></a> Runaway tool results · <a href="advisor.html#A04"><code>A04</code></a> Re-reads · <a href="advisor.html#A05"><code>A05</code></a> Exploring in the main context</span></div>
-</div>
-<div class="metric" id="top_ctx">
+<span class="reads">reads as<br><code>TOKENS→CTX  41.2k</code></span>
+</div><dl>
+<dt>What it means</dt><dd>Exactly how much context each tool's results added — the direct, measurable cause of context growth.</dd>
+<dt class="act">What to do</dt><dd>The biggest single contributor here is almost always the right fix target: narrow the command, delegate to a subagent, or stop re-reading it.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A03">A03 Runaway tool results</a> · <a href="advisor.html#A04">A04 Re-reads</a> · <a href="advisor.html#A05">A05 Exploring in the main context</a></dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · OpenTelemetry · ≈ unless OpenTelemetry is on · <a href="../metrics.html#tokens_to_ctx">how</a></dd>
+</dl></article>
+<article class="entry" id="top_ctx">
+<div class="mg">
 <h3>Top context consumers</h3>
-<p class="unit"><code>top_ctx</code> · tokens</p>
-<div class="why"><b>Why it matters</b>The single largest results by context cost, named individually rather than summed by tool.</div>
-<div class="why do"><b>What to do</b>Start with the top entry, not the tool average — one oversized result usually explains most of the growth. <span class="rules">Advisor: <a href="advisor.html#A03"><code>A03</code></a> Runaway tool results</span></div>
-</div></main>
-<footer><a href="./">← Guide</a><a href="../">cctop</a><a href="https://github.com/tomstagl/cctop">GitHub</a></footer>
+<span class="reads">reads as<br><code>top ctx: Read src/render.rs 6.1k</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The single largest results by context cost, named individually rather than summed by tool.</dd>
+<dt class="act">What to do</dt><dd>Start with the top entry, not the tool average — one oversized result usually explains most of the growth.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A03">A03 Runaway tool results</a></dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ unless OpenTelemetry is on · <a href="../metrics.html#top_ctx">how</a></dd>
+</dl></article>
+<nav class="pager" aria-label="Panels"><a href="turn.html">← 4 Turn</a><a href="agents-mcp.html">6 Agents &amp; MCP →</a></nav>
+<footer class="colophon">
+  <a class="brand" href="../"><b>cctop</b></a>
+  <div><nav aria-label="Footer"><a href="../">Home</a><a href="./">Panel guide</a><a href="../metrics.html">How each number is measured</a><a href="https://github.com/tomstagl/cctop">GitHub</a></nav><span>© 2026 Thomas Stagl</span></div>
+</footer>
 </div>
 </body>
 </html>

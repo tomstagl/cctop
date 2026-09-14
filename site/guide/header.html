@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Advisor — cctop panel guide</title>
-<meta name="description" content="All 18 Advisor rules: what triggers each one and what to do about it.">
+<title>Header — cctop panel guide</title>
+<meta name="description" content="What the Header panel shows in cctop, what each reading means, and what to do about it.">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="../assets/favicon.ico">
 <link rel="preload" href="../assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -270,31 +270,72 @@ tr:target td{background:var(--spot-soft)}
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>
 </header>
-<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Advisor</p>
+<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Header</p>
 <section class="sec first">
-  <div class="mg"><span class="no"><small>§</small>9</span><span class="lbl">Advisor</span><span class="note"><b>Note</b>Ask a running session about any of them — the bundled <code>cctop-insights</code> skill answers from the same numbers — or run <code>cctop advise</code>.</span></div>
+  <div class="mg"><span class="no">top</span><span class="lbl">Header</span><span class="note"><b>Note</b>The header is drawn in every view, terminal and docked.</span></div>
   <div class="body">
-    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Advisor</h1>
-    <p>Eighteen deterministic rules over the same data the other eight panels show — no model call, no network. Each rule fires on a concrete threshold from this session's own evidence, names what it found, and estimates what following it saves for the rest of the session. The panel shows one recommendation at a time, ranked by that estimate; <kbd>n</kbd> shows the next, <kbd>Enter</kbd> the explanation below.</p>
+    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Header</h1>
+    <p>The two lines above the panels: the session at a glance — its state, the turn, what it is waiting on, where it runs, and what it has cost so far.</p>
   </div>
 </section>
-<article class="entry" id="advice_saving">
+<article class="entry" id="session_status">
 <div class="mg">
-<h3>Estimated saving</h3>
-<span class="reads">reads as<br><code>~4k/turn</code></span>
+<h3>Status</h3>
+<span class="reads">reads as<br><code>● BUSY</code></span>
 </div><dl>
-<dt>What it means</dt><dd>What following a recommendation saves for every remaining turn of the session — tokens, or seconds for the timing rules. It is also the ranking: the Advisor shows the biggest saving first.</dd>
-<dt class="act">What to do</dt><dd>Treat it as an order of magnitude, not an invoice. When two recommendations are close, take the one that's easier to act on.</dd>
-<dt>Measured</dt><dd class="meta">tokens or seconds · from the transcript · always an estimate · <a href="../metrics.html#advice_saving">how</a></dd>
+<dt>What it means</dt><dd>Whether Claude is working (BUSY), waiting for your next prompt (IDLE), waiting for you to answer a permission prompt (WAITING), or gone (ENDED — the process exited, the transcript is still readable).</dd>
+<dt class="act">What to do</dt><dd>WAITING is the one to act on: nothing happens until you answer. If you keep missing prompts, allow the tool pattern in your settings instead.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A09">A09 Permission waits</a></dd>
+<dt>Measured</dt><dd class="meta">enum · from the session list · hook events (after cctop install) · exact · <a href="../metrics.html#session_status">how</a></dd>
 </dl></article>
-<section class="sec">
-  <div class="mg"><span class="lbl">The 18 rules</span><span class="note"><b>Cross-references</b>Every panel page links the rules that watch its readings.</span></div>
-  <div class="body">
-    <h2>What each rule watches, and what to do when it fires</h2>
-    <ul class="rules"><li id="A01"><span class="code">A01</span><div><h3>Cache misses</h3><p class="when"><b>Fires when</b>cache-hit ratio &lt; 60 % over 5 turns with cache writes that are not explained by large tool output.</p><p>Prompt caching only works on an unchanged prefix. If any byte before the last cache breakpoint differs between requests, the whole prefix is re-written at the cache-write price (1.25× or 2× input) instead of read at 0.1×. Usual causes: a hook or status line that injects the time, a random id, or a counter; CLAUDE.md edited mid-session; tool schemas that change order.</p></div></li><li id="A02"><span class="code">A02</span><div><h3>Cache expiry</h3><p class="when"><b>Fires when</b>a prompt gap longer than the observed cache TTL followed by a full-context cache write.</p><p>A cache entry lives 5 minutes (or 1 hour on this session, as the API reported). After that, the next request re-writes the entire context. Batching questions or keeping the session busy avoids the cold write; a cold turn on a 400k context costs as much as ~20 warm ones.</p></div></li><li id="A03"><span class="code">A03</span><div><h3>Runaway tool results</h3><p class="when"><b>Fires when</b>one tool result &gt; 3k tokens, or the same input &gt; 2k twice.</p><p>Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request. One 4k-token <code>ls -R</code> repeated twice is 8k tokens on every subsequent call. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary.</p></div></li><li id="A04"><span class="code">A04</span><div><h3>Re-reads</h3><p class="when"><b>Fires when</b>a file read ≥ 3× with no edit in between.</p><p>Reading a file again re-injects it whole. If the model needs to see it again, a Read with offset/limit on the relevant range costs a fraction; better, ask it to note the lines it needs in its own summary.</p></div></li><li id="A05"><span class="code">A05</span><div><h3>Exploring in the main context</h3><p class="when"><b>Fires when</b>≥ 8 consecutive Read/Grep/Glob calls with no Edit/Write.</p><p>Long runs of Read/Grep/Glob in the main thread fill the main context with raw files that persist until compaction. An Explore subagent does the same search in its own context and hands back a paragraph.</p></div></li><li id="A06"><span class="code">A06</span><div><h3>Compaction churn</h3><p class="when"><b>Fires when</b>≥ 2 compactions, or one projected within 3 turns.</p><p>Each compaction spends output tokens on a summary and loses detail the model then re-reads. Two compactions in one session usually cost more than ending the session at a natural boundary with a short hand-off note and starting fresh.</p></div></li><li id="A07"><span class="code">A07</span><div><h3>Idle MCP servers</h3><p class="when"><b>Fires when</b>an MCP server with no calls for &gt; 20 min whose schemas cost &gt; 2k tokens.</p><p>Every MCP server's tool schemas are part of the prefix sent on each request, whether or not the server is used. A server with no calls for a long stretch is pure overhead: disable it for this project (.mcp.json) or rely on deferred loading so its schemas are fetched only when needed.</p></div></li><li id="A08"><span class="code">A08</span><div><h3>Thinking share</h3><p class="when"><b>Fires when</b>thinking &gt; 40 % of output over 5 turns, effort not already low.</p><p>Thinking tokens are billed as output. On routine edits the model rarely needs deep reasoning; a lower effort level cuts thinking without changing the edit. Reserve high effort for design and debugging.</p></div></li><li id="A09"><span class="code">A09</span><div><h3>Permission waits</h3><p class="when"><b>Fires when</b>&gt; 2 min waiting on permissions, or &gt; 5 prompts for one tool.</p><p>While a permission prompt is open the model does nothing and the wall clock runs. A tool pattern approved many times is a candidate for the allow-list in settings (permissions.allow), which removes the prompt entirely.</p></div></li><li id="A10"><span class="code">A10</span><div><h3>Long foreground commands</h3><p class="when"><b>Fires when</b>a Bash call longer than 60 s.</p><p>A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background: Claude keeps working and is notified when the command finishes.</p></div></li><li id="A11"><span class="code">A11</span><div><h3>Pasted input</h3><p class="when"><b>Fires when</b>a turn with &gt; 5k uncached input tokens.</p><p>Uncached input tokens are the most expensive kind. A large paste is billed in full on that turn and then stays in context. Point Claude at the file (it reads only what it needs) or paste the relevant slice.</p></div></li><li id="A12"><span class="code">A12</span><div><h3>Chatty turns</h3><p class="when"><b>Fires when</b>median prompt &lt; 8 tokens (~32 chars) and &gt; 20 turns in the last hour.</p><p>Every turn re-sends the whole context, cache reads included. Many tiny prompts multiply that cost; one prompt with several instructions costs a single context read and usually gets a more coherent answer.</p></div></li><li id="A13"><span class="code">A13</span><div><h3>Rate-limit pacing</h3><p class="when"><b>Fires when</b>the 5 h limit is projected to run out before it resets.</p><p>Rate limits are account-wide and reset on a fixed schedule. If the current burn reaches 100 % before the reset, the session stops mid-task. Moving exploration and summaries to cheaper subagents lowers the burn; pausing heavy work until the reset avoids the cut-off.</p></div></li><li id="A14"><span class="code">A14</span><div><h3>Subagent model choice</h3><p class="when"><b>Fires when</b>an Opus subagent doing search/summarise work.</p><p>Search, listing and summarising tasks do not need the most capable model. Running such subagents on Sonnet or Haiku cuts their cost several-fold with the same result, and leaves Opus for the reasoning-heavy main thread.</p></div></li><li id="A15"><span class="code">A15</span><div><h3>Error loops</h3><p class="when"><b>Fires when</b>the same tool with the same input failed ≥ 3×.</p><p>When the same command fails repeatedly with the same error, each retry re-injects the full error output and the model rarely finds a new angle. Interrupt, read the error yourself, and give the fix or the missing context in one prompt.</p></div></li><li id="A16"><span class="code">A16</span><div><h3>Hook overhead</h3><p class="when"><b>Fires when</b>hook time &gt; 10 % of turn time over recent turns.</p><p>Hooks run synchronously inside the turn. A slow PostToolUse or Stop hook adds its full duration to every tool call or turn. Make expensive hooks asynchronous, or narrow their matcher to the tools and paths they care about.</p></div></li><li id="A17"><span class="code">A17</span><div><h3>Oversized prefix</h3><p class="when"><b>Fires when</b>the fixed prefix is more than a quarter of the window.</p><p>The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills) is sent on every request. Even as a cache read it is billed, and it crowds out working context. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers you do not use in this project.</p></div></li><li id="A18"><span class="code">A18</span><div><h3>Missing hand-off</h3><p class="when"><b>Fires when</b>&gt; 3 h in one context with &gt; 70 % of the window used.</p><p>Long sessions accumulate stale context: superseded plans, old tool output, resolved errors. Past a natural boundary, a short hand-off note and a fresh session cost fewer tokens than carrying everything forward through compactions.</p></div></li></ul>
-  </div>
-</section>
-<nav class="pager" aria-label="Panels"><a href="events.html">← 8 Events</a><a href="../metrics.html">How each number is measured →</a></nav>
+<article class="entry" id="turn_number">
+<div class="mg">
+<h3>Turn</h3>
+<span class="reads">reads as<br><code>turn 14</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How many prompts you have sent this session. A resumed session counts from where it resumed.</dd>
+<dt class="act">What to do</dt><dd>Nothing to do — it's the reference every per-turn figure uses.</dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#turn_number">how</a></dd>
+</dl></article>
+<article class="entry" id="turn_elapsed">
+<div class="mg">
+<h3>Turn elapsed</h3>
+<span class="reads">reads as<br><code>02:31</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How long the current turn has been running, or how long the last one took.</dd>
+<dt class="act">What to do</dt><dd>If it keeps climbing with a ▶ tool beside it, look at the Turn panel for what the wait is made of.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A10">A10 Long foreground commands</a></dd>
+<dt>Measured</dt><dd class="meta">ms · from the transcript · exact · <a href="../metrics.html#turn_elapsed">how</a></dd>
+</dl></article>
+<article class="entry" id="effort">
+<div class="mg">
+<h3>Effort</h3>
+<span class="reads">reads as<br><code>auto · medium · Max</code></span>
+</div><dl>
+<dt>What it means</dt><dd>The reasoning effort Claude is currently using — low, medium or high. Higher means more thinking tokens per reply.</dd>
+<dt class="act">What to do</dt><dd>High effort on routine edits is billed thinking you rarely need; drop it for that kind of work and keep it for design and debugging.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A08">A08 Thinking share</a></dd>
+<dt>Measured</dt><dd class="meta">enum · from the transcript · exact · <a href="../metrics.html#effort">how</a></dd>
+</dl></article>
+<article class="entry" id="process_cpu">
+<div class="mg">
+<h3>CPU</h3>
+<span class="reads">reads as<br><code>3%</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How much of a CPU core the Claude Code process itself is using.</dd>
+<dt class="act">What to do</dt><dd>Mostly diagnostic. Sustained high CPU while the session is idle is worth reporting.</dd>
+<dt>Measured</dt><dd class="meta">% · from the process tree · exact · <a href="../metrics.html#process_cpu">how</a></dd>
+</dl></article>
+<article class="entry" id="process_rss">
+<div class="mg">
+<h3>Memory</h3>
+<span class="reads">reads as<br><code>412 MB</code></span>
+</div><dl>
+<dt>What it means</dt><dd>How much memory the Claude Code process holds.</dd>
+<dt class="act">What to do</dt><dd>A figure that only grows over a long session is a hint to end it at a natural boundary.</dd>
+<dt>Measured</dt><dd class="meta">bytes · from the process tree · exact · <a href="../metrics.html#process_rss">how</a></dd>
+</dl></article>
+<nav class="pager" aria-label="Panels"><a href="./">← Panel guide</a><a href="context.html">1 Context →</a></nav>
 <footer class="colophon">
   <a class="brand" href="../"><b>cctop</b></a>
   <div><nav aria-label="Footer"><a href="../">Home</a><a href="./">Panel guide</a><a href="../metrics.html">How each number is measured</a><a href="https://github.com/tomstagl/cctop">GitHub</a></nav><span>© 2026 Thomas Stagl</span></div>

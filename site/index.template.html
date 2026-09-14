@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cctop — see what Claude Code is doing</title>
-<meta name="description" content="A btop-style live dashboard for Claude Code internals: context, tokens, cost, rate limits, tools, agents and an Advisor — in a pane beside your session.">
+<meta name="description" content="A live, read-only dashboard for a running Claude Code session: context fill and the next compaction, tokens and cost, rate limits, what the turn is waiting on, which tools fill the context, and one concrete change to make — in a pane beside your session.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="assets/favicon.ico">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -24,99 +24,225 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="page">
 
-<header class="top">
-  <a href="./" aria-label="cctop home">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/cctop-lockup-horizontal-dark.svg">
-      <img src="assets/cctop-lockup-horizontal-light.svg" alt="cctop" width="90" height="36">
-    </picture>
+<header class="masthead">
+  <a class="brand" href="./" aria-label="cctop home">
+    <svg viewBox="0 0 256 256" aria-hidden="true"><g fill="#D97757"><path d="M128 111 C118 98 100 98 92 106 C87 111 91 118 98 116 C107 113 117 115 128 121 C139 115 149 113 158 116 C165 118 169 111 164 106 C156 98 138 98 128 111 Z"/><rect x="78" y="118" width="100" height="30" rx="2"/><rect x="84" y="155" width="88" height="22" rx="2"/><rect x="90" y="184" width="76" height="20" rx="2"/><path d="M96 211 H160 L156 230 L146 222 L136 240 L128 254 L120 240 L110 222 L100 230 Z"/></g><g><circle cx="88" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><circle cx="168" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><path d="M118 56 Q128 45 138 56" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M58 55 L42 51 M198 55 L214 51" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></g></svg>
+    <b>cctop</b><span>Operator's manual</span>
   </a>
-  <nav>
-    <a href="#panels">Panels</a>
+  <nav class="nav" aria-label="Sections">
+    <a href="#questions">What it answers</a>
+    <a href="#dashboard">The dashboard</a>
     <a href="#advisor">Advisor</a>
     <a href="#install">Install</a>
-    <a href="guide/">Guide</a>
-    <a href="metrics.html">Metrics</a>
+    <a href="guide/">Panel guide</a>
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>
 </header>
 
-<section class="hero">
-  <div class="eyebrow">for Claude Code · Rust · read-only</div>
-  <h1>@HEADLINE@</h1>
-  <p class="lede">@HERO@</p>
-  <div class="install">
-    <code id="install-line">brew install tomstagl/tap/cctop</code>
-    <button id="copy" type="button" hidden>copy</button>
+<section class="cover">
+  <div class="mg">
+    <span class="no">A plugin for<br>Claude Code</span>
+    <span class="lbl">Read-only · Rust · one binary · no network</span>
   </div>
-  <p class="subline">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></p>
-  <div class="demo">
-    <video muted loop playsinline preload="none" poster="assets/two-pane.webp" width="1280" height="640">
-      <source src="assets/demo.webm" type="video/webm">
-    </video>
-    <img class="still" src="assets/two-pane.webp" alt="Claude Code on the left, cctop attached in a right-hand pane" width="1280" height="640" loading="lazy">
-    <p class="cap">Claude Code keeps running on the left; cctop follows it from the right. Everything is live.</p>
+  <div class="body">
+    <h1>@HEADLINE@</h1>
+    <p class="lede">Claude Code shows you the conversation. cctop shows you what is underneath it: how full the context is and when it will be compacted, what each turn costs and why, how close you are to your usage limit, what the model is waiting on right now, which tools are filling the context — and one concrete change to make about it. Live, next to your session, without touching it.</p>
+    <ul class="spec">
+      <li><span>Opens with</span><span><code>/cctop</code> — docked inside Claude Code when the build allows it, otherwise as a split of your terminal beside it. One command; it decides.</span></li>
+      <li><span>Runs in</span><span>tmux, zellij, WezTerm, Kitty, iTerm2 — or no multiplexer at all in the docked panel.</span></li>
+      <li><span>Reads</span><span>What Claude Code already writes under <code>~/.claude</code>, plus the process tree. It changes nothing about your session.</span></li>
+      <li><span>Sends</span><span>Nothing. No account, no telemetry, no model call.</span></li>
+      <li><span>Install</span><span><span class="install"><code id="install-line">brew install tomstagl/tap/cctop</code><button id="copy" type="button" hidden>copy</button></span><span class="also">or <code>cargo install cctop</code> · then <code>claude plugin add tomstagl/cctop</code> and type <code>/cctop</code></span></span></li>
+    </ul>
+    <figure>
+      <div class="plate">
+        <video muted loop playsinline preload="none" poster="assets/two-pane.webp" width="1280" height="640">
+          <source src="assets/demo.webm" type="video/webm">
+        </video>
+        <img class="still" src="assets/two-pane.webp" alt="Claude Code working in the left pane; cctop's nine panels in the right pane" width="1280" height="640" loading="lazy">
+      </div>
+      <figcaption><b>Fig. 1</b>Claude Code keeps working on the left. cctop follows it on the right — every panel updates as the session runs.</figcaption>
+    </figure>
   </div>
 </section>
 
-<section id="screenshot">
-  <h2>One page, nine panels</h2>
-  <p><code>/cctop</code> picks one of two views automatically — it never asks you to choose.</p>
-  <h3>Terminal view</h3>
-  <div class="term"><pre>@MOCKUP@</pre></div>
-  <p class="cap">narrow layout · 60 columns · <code>cctop run</code> in a tmux/zellij/WezTerm/Kitty/iTerm2 split. At ≥ 100 columns the panels flow into two columns.</p>
-  <h3>Panel view</h3>
-  <div class="term"><pre>@PANEL_MOCKUP@</pre></div>
-  <p class="cap">On a Claude Code build with function hooks enabled, <code>/cctop</code> docks the same dashboard above the prompt, drawn in Claude Code's own frame and colour style — no multiplexer needed. Digits 1–6 switch views; falls back to the terminal view otherwise.</p>
-</section>
-
-<section id="panels">
-  <h2>What each panel answers</h2>
-  <p>Click a panel for what each of its metrics means, why it matters, and what to do about it — or read the <a href="guide/">full guide</a>.</p>
-  <div class="panels">@PANELS@</div>
-</section>
-
-<section id="advisor">
-  <h2>One recommendation at a time</h2>
-  <p>The Advisor turns what it sees into a single concrete change, ranked by what it saves. Eighteen deterministic rules; no model call, no network. Three examples from real sessions:</p>
-  <div class="advice">
-    <div class="adv"><span class="h">▸ `Bash ls -R` pushed 4.4k tokens into context, 2×</span><br><span class="a">Pipe through `head -50`, use Glob/Grep, or ask a subagent for a summary.</span> <span class="s">~8.8k/turn · A03</span></div>
-    <div class="adv"><span class="h">▸ Prompt cache expired before turn 12</span><br><span class="a">Batch your questions or keep the session warm; each cold turn re-writes the whole context (TTL 1 h on this session).</span> <span class="s">~396k · A02</span></div>
-    <div class="adv"><span class="h">▸ mcp:playwright has had no calls for 42:00</span><br><span class="a">Disable it for this project (.mcp.json) or rely on deferred tool loading.</span> <span class="s">~3.1k/turn · A07</span></div>
+<section class="sec" id="questions">
+  <div class="mg"><span class="no"><small>§</small>1</span><span class="lbl">What it answers</span>
+    <span class="note"><b>Rule of thumb</b>Green is fine, amber is worth a look, red is act now. Every gauge follows this.</span></div>
+  <div class="body">
+    <h2>Five questions you ask a Claude Code session, answered while it runs</h2>
+    <ul class="ruled qs">
+      <li><h3>Why did that turn take so long?</h3><p>The Turn panel splits the wait into model time, the tool that ran, the hooks that fired, and how long the model sat waiting for you to answer a permission prompt.</p><p class="ref"><a href="guide/turn.html">Panel 4 · Turn</a></p></li>
+      <li><h3>Why is this session so expensive — is the cache even working?</h3><p>Tokens &amp; Cost shows every token by price class and the cache-hit ratio. Below 80 % something is rewriting the prefix on every turn; the Advisor names the usual culprits.</p><p class="ref"><a href="guide/tokens-cost.html">Panel 2 · Tokens &amp; Cost</a> · <a href="guide/advisor.html#A01">Advisor A01</a></p></li>
+      <li><h3>Will I hit my limit before it resets?</h3><p>Limits draws the 5-hour and 7-day windows, the countdown to each reset, and a forecast from the last half hour of use — including whether you'd run out first.</p><p class="ref"><a href="guide/limits.html">Panel 3 · Limits</a></p></li>
+      <li><h3>What is filling up my context?</h3><p>Tools shows how many tokens each tool pushed into the context and names the single largest results. Files flags the reads that brought nothing new. Context forecasts the next compaction.</p><p class="ref"><a href="guide/tools.html">Panel 5 · Tools</a> · <a href="guide/files.html">Panel 7 · Files</a> · <a href="guide/context.html">Panel 1 · Context</a></p></li>
+      <li><h3>Fine — what should I change?</h3><p>The Advisor turns what it sees into one recommendation at a time: the evidence, the change, and what it saves per turn. Eighteen rules, no model call. Ask your session about any of them in plain words.</p><p class="ref"><a href="#advisor">§ 4 · The Advisor</a></p></li>
+    </ul>
   </div>
-  <p class="cap">Ask your session about any of them: the bundled <code>cctop-insights</code> skill answers from <code>cctop query</code>.</p>
 </section>
 
-<section id="install">
-  <h2>Install &amp; attach</h2>
-  <pre class="block">@INSTALL@</pre>
-  <h3>Optional: exact rate limits and tool timings</h3>
-  <p><code>cctop install</code> wraps your status line with a tiny shim and registers <code>cctop hook</code> for Claude Code's hook events. It shows a diff of <code>~/.claude/settings.json</code>, backs the file up to <code>~/.cctop/backups/</code>, and asks before writing. <code>cctop uninstall</code> restores the original. Without it, every panel still works from the transcript alone.</p>
-  <h3>Works in</h3>
-  <div class="hosts"><span>tmux</span><span>zellij</span><span>WezTerm</span><span>Kitty</span><span>iTerm2</span></div>
-  <p class="cap">Minimum useful pane: 40 columns. 45 % of a 132-column window gives 59, which fits the narrow layout.</p>
+<section class="sec" id="dashboard">
+  <div class="mg"><span class="no"><small>§</small>2</span><span class="lbl">The dashboard, annotated</span>
+    <span class="note"><b>See also</b>Each panel has its own page with every reading explained: <a href="guide/">the panel guide</a>.</span></div>
+  <div class="body">
+    <h2>One page, nine panels — and what each one is for</h2>
+    <p>The numbers in the frame titles are the panel numbers: the digit that shows or hides a panel, the number the guide uses, and the number the docked view carries. Below the figure, what each panel tells you and what you would do about it.</p>
+    <figure class="figrow">
+      <div class="term"><pre>@MOCKUP@</pre></div>
+      <div>
+        <p class="how"><b>How to read it</b>Top to bottom. The header says what state the session is in. Panels 1–4 are the numbers to watch: context, cost, limits, the turn. Panels 5–8 explain <em>why</em> they moved: tools, agents, files, the timeline. Panel 9 says what to change.</p>
+        <p class="how"><b>Colour</b>Green is fine, amber is worth a look, red is act now — the same three bands on every gauge.</p>
+        <figcaption><b>Fig. 2</b>Terminal view, narrow layout, from a real session. Wider than 100 columns the panels flow into two columns.</figcaption>
+      </div>
+    </figure>
+    <div class="two" style="margin-top:28px">
+    <ul class="ruled">
+      <li><span class="n k">top</span><div><h3>Header <small>the session at a glance</small></h3>
+        <p><code>●</code> <strong>BUSY</strong> means Claude is working, <strong>IDLE</strong> means it is your move, <strong>WAITING</strong> means a permission prompt is open, <strong>ENDED</strong> means the process is gone. Then the turn number, how long this turn has run, what the model is waiting on right now (<code>▶ Bash 0:48</code>), the folder and branch (<code>*</code> = uncommitted changes). The second line: permission mode, effort level, plan, session age, cost so far, and the Claude Code process's CPU and memory.</p>
+        <p class="do"><b>Do</b><span>WAITING and you didn't notice a prompt? Look at the session — nothing happens until you answer it.</span></p></div></li>
+      <li><span class="n">1</span><div><h3>Context</h3>
+        <p>How much of the model's window is in use. The gauge fills as the conversation grows; the figures split it into the fixed part (system prompt, CLAUDE.md, tool definitions — paid on every single turn), your messages with their tool results, and what is still free. The trend line shows the growth per turn and forecasts when Claude Code will compact — summarise — the history.</p>
+        <p class="do"><b>Do</b><span>At "autocompact in ~3 turns", finish the step you are on and write a short hand-off note. When the fixed part is a quarter of the window, trim CLAUDE.md and disable MCP servers this project doesn't use.</span></p></div></li>
+      <li><span class="n">2</span><div><h3>Tokens &amp; Cost</h3>
+        <p>Where every token went, by price: cache read (cheap, a tenth of the input price), cache write (dear — paid whenever the cached prefix changed or expired), fresh input (full price, usually a paste), output, and the share of output that was thinking. Then the cache-hit ratio, the session's cost and its burn rate per hour, and a sparkline of cost per turn.</p>
+        <p class="do"><b>Do</b><span>A hit ratio under 80 % means something is changing the prefix every turn — a hook or status line that prints the time is the usual suspect. A jump in burn rate is the moment to decide whether to keep going at that pace.</span></p></div></li>
+      <li><span class="n">3</span><div><h3>Limits</h3>
+        <p>Your account's rolling 5-hour and 7-day usage, the countdown to each reset, and — from the last thirty minutes — whether you would run out before the reset. These are account-wide: other sessions and subagents draw from the same pool.</p>
+        <p class="do"><b>Do</b><span>"exhausted in 2h 05m, after reset ✓" is fine. Projected <em>before</em> the reset? Move exploration and summaries to cheaper subagents, or pause the heavy work until the window clears.</span></p></div></li>
+      <li><span class="n">4</span><div><h3>Turn</h3>
+        <p>What this turn is doing right now: time elapsed, how many round-trips to the model, time to the first token and output speed, the tool that is running and for how long, how much time hooks added, and how long the model waited for a permission answer.</p>
+        <p class="do"><b>Do</b><span>A long <code>▶ Bash</code> is a build or test suite in the foreground — run those in the background. Long permission waits: allow that tool pattern in your settings. Heavy hook time: make the hook asynchronous or narrow what it matches.</span></p></div></li>
+    </ul>
+    <ul class="ruled">
+      <li><span class="n">5</span><div><h3>Tools</h3>
+        <p>Per tool: calls, errors, the typical (p50) and worst-case (p95) duration, how long since it was last used, and how many tokens its results pushed into the context. Below the table, the single largest results by name.</p>
+        <p class="do"><b>Do</b><span>Start with the biggest <em>tokens → ctx</em> entry — one oversized <code>ls -R</code> or a re-read file usually explains most of the growth. Narrow the command, or hand the exploration to a subagent that returns a summary. The same tool erroring repeatedly: interrupt and give the fix yourself.</span></p></div></li>
+      <li><span class="n">6</span><div><h3>Agents &amp; MCP</h3>
+        <p>Subagents — <code>◐</code> running, <code>✓</code> done, <code>✗</code> failed — with their task, runtime, tokens and model. MCP servers with process id, memory, call count and idle time. Background commands and their task numbers.</p>
+        <p class="do"><b>Do</b><span>A server with no calls and a long idle time still costs its tool definitions on every turn — disable it for this project. An Opus subagent doing search or summary work: point it at Sonnet or Haiku.</span></p></div></li>
+      <li><span class="n">7</span><div><h3>Files</h3>
+        <p>Every file the session read (<code>R</code>), edited (<code>E</code>) or wrote (<code>W</code>), the lines added and removed, and a <code>⚠</code> wherever a file was read three or more times without changing in between.</p>
+        <p class="do"><b>Do</b><span>Skim it before you commit. A <code>⚠</code> re-read put the whole file into the context again for nothing — ask for a narrower read, or for the model to keep notes.</span></p></div></li>
+      <li><span class="n">8</span><div><h3>Events</h3>
+        <p>The raw timeline every other panel is built from: tool calls starting and finishing, hooks firing, permission prompts opening and closing, compactions, and notes cctop records itself — such as "rate-limit 5h crossed 60 %".</p>
+        <p class="do"><b>Do</b><span>Find the moment a turn went slow or expensive, then open the numbered panel with the detail behind it.</span></p></div></li>
+      <li><span class="n">9</span><div><h3>Advisor</h3>
+        <p>One recommendation at a time, ranked by what it saves: the evidence it found, the change to make, and the estimated saving per remaining turn. <kbd>n</kbd> shows the next one, <kbd>Enter</kbd> the explanation.</p>
+        <p class="do"><b>Do</b><span>Make the change, or ask your session "why is my cache hit ratio low?" — the bundled skill answers from the same numbers.</span></p></div></li>
+      <li><span class="n k">keys</span><div><h3>Key line</h3>
+        <p><kbd>?</kbd> help · <kbd>1</kbd>–<kbd>9</kbd> show or hide a panel · <kbd>Tab</kbd> focus the next panel · <kbd>s</kbd> sort · <kbd>f</kbd> filter · <kbd>p</kbd> pause · <kbd>t</kbd> next theme · <kbd>a</kbd> ask · <kbd>L</kbd> switch session · <kbd>q</kbd> quit — which never touches the session.</p></div></li>
+    </ul>
+    </div>
+  </div>
 </section>
 
-<section id="themes">
-  <h2>Themes</h2>
-  <p>Six bundled, yours in <code>~/.config/cctop/themes/*.toml</code>, hot-reloaded. <code>t</code> cycles. Honours <code>NO_COLOR</code>; falls back to 16 colours and ASCII borders when the terminal needs it.</p>
-  <div class="themes">@THEMES@</div>
+<section class="sec" id="symbols">
+  <div class="mg"><span class="no"><small>§</small>3</span><span class="lbl">Reading the gauges</span></div>
+  <div class="body">
+    <h2>The marks and what they mean</h2>
+    <div class="syms">
+      <div class="sym"><code class="g">▇▇▇▇▇▁▁▁</code><span><b>Gauge.</b> Filled to the value. Green is fine, amber is worth a look, red is act now: context turns amber at 60 % and red at 80 %; limits at 60 % and 85 %.</span></div>
+      <div class="sym"><code class="a">cache hit 71 %</code><span><b>Cache hit.</b> The share of input served from cache. Green from 80 %, amber from 50 %, red below.</span></div>
+      <div class="sym"><code>▁▂▂▃▄▅▆▇</code><span><b>Sparkline.</b> The last dozen turns, oldest on the left — context growth, or cost per turn.</span></div>
+      <div class="sym"><code class="g">● BUSY</code><span><b>Status.</b> BUSY working · IDLE your move · WAITING a permission prompt is open · ENDED the process is gone.</span></div>
+      <div class="sym"><code>≈ $4.37</code><span><b>Estimate.</b> Worked out from the transcript or priced from the list table rather than reported exactly. <code>cctop install</code> makes most of these exact.</span></div>
+      <div class="sym"><code>↺ 1h 48m</code><span><b>Reset.</b> Time until a usage window clears.</span></div>
+      <div class="sym"><code class="c">▶ Bash 0:48</code><span><b>Running now.</b> The tool the turn is waiting on, and for how long.</span></div>
+      <div class="sym"><code>+9.4k/turn</code><span><b>Velocity.</b> Context growth per turn, averaged over recent turns. The compaction forecast divides the remaining room by it.</span></div>
+      <div class="sym"><code>◐ &nbsp;✓ &nbsp;✗</code><span><b>Subagent state.</b> Running, finished cleanly, failed — failed with nothing following for a minute is worth checking on.</span></div>
+      <div class="sym"><code class="a">re-read ⚠</code><span><b>Wasted read.</b> A file read three or more times without an edit in between.</span></div>
+      <div class="sym"><code>R×6 E×5 W×1</code><span><b>Touches.</b> How often a file was read, edited and written this session.</span></div>
+      <div class="sym"><code>p50 · p95</code><span><b>Durations.</b> Typical and worst-case time for a tool. A high p95 on a foreground command is one to run in the background.</span></div>
+      <div class="sym"><code>tokens→ctx</code><span><b>Context cost.</b> How many tokens a tool's results added to the context — the direct cause of growth.</span></div>
+      <div class="sym"><code class="a">▸ advice</code><span><b>Recommendation.</b> An Advisor finding: evidence, the change, the saving. <kbd>n</kbd> for the next.</span></div>
+      <div class="sym"><code>134k · 1.62 M</code><span><b>Counts.</b> k thousand, M million — tokens unless a unit says otherwise.</span></div>
+    </div>
+  </div>
 </section>
 
-<section id="privacy">
-  <h2>Local only</h2>
-  <p>cctop reads <code>~/.claude</code> (session registry, transcripts, hook events) and the process tree, and writes only under <code>~/.cctop</code> and <code>~/.config/cctop</code>. It sends nothing over the network. Cost figures for subscription plans are API-equivalent list prices, marked <code>≈</code>.</p>
+<section class="sec" id="advisor">
+  <div class="mg"><span class="no"><small>§</small>4</span><span class="lbl">The Advisor</span>
+    <span class="note"><b>All 18 rules</b>What triggers each one and what to do: <a href="guide/advisor.html">the Advisor reference</a>.</span></div>
+  <div class="body">
+    <h2>One recommendation at a time, with the evidence</h2>
+    <p>The Advisor watches the same numbers the other panels show and speaks only when a rule fires on this session's own evidence: what it found, the change to make, and what that change saves for the rest of the session. It ranks by the saving and shows the top one. Eighteen rules, all deterministic — no model call, no network. Three from real sessions:</p>
+    <div class="advice">
+      <div class="adv"><span class="h">▸ `Bash ls -R` pushed 4.4k tokens into context, 2×</span><br><span class="a">Pipe through `head -50`, use Glob/Grep, or ask a subagent for a summary.</span> <span class="s">~8.8k/turn · A03</span></div>
+      <div class="adv"><span class="h">▸ Prompt cache expired before turn 12</span><br><span class="a">Batch your questions or keep the session warm; each cold turn re-writes the whole context (TTL 1 h on this session).</span> <span class="s">~396k · A02</span></div>
+      <div class="adv"><span class="h">▸ mcp:playwright has had no calls for 42:00</span><br><span class="a">Disable it for this project (.mcp.json) or rely on deferred tool loading.</span> <span class="s">~3.1k/turn · A07</span></div>
+    </div>
+    <p>You don't have to read the panel to use it. Ask the session in plain words — <em>"why is my cache hit ratio low?"</em>, <em>"what is filling my context?"</em> — and the bundled <code>cctop-insights</code> skill answers from the same numbers, with one change to make.</p>
+  </div>
 </section>
 
-<footer>
-  <a href="https://github.com/tomstagl/cctop">GitHub</a>
-  <a href="https://github.com/tomstagl/cctop/releases">Releases</a>
-  <a href="guide/">Guide: what to do about it</a>
-  <a href="metrics.html">Every metric, explained</a>
-  <a href="https://github.com/tomstagl/cctop/blob/main/LICENSE">MIT</a>
-  <span>© 2026 Thomas Stagl</span>
+<section class="sec" id="views">
+  <div class="mg"><span class="no"><small>§</small>5</span><span class="lbl">Two ways to see it</span>
+    <span class="note"><b>Not sure which you got?</b><code>cctop pane status</code> lists every prerequisite and the fix for each.</span></div>
+  <div class="body">
+    <h2><code style="font-size:.9em">/cctop</code> picks one. It never asks you to choose.</h2>
+    <div class="views">
+      <div>
+        <span class="eyebrow">Docked panel</span>
+        <h3>Inside Claude Code, above the prompt</h3>
+        <p>On a Claude Code build with function hooks enabled, the dashboard docks inside Claude Code itself, drawn in its own frame and colours — no multiplexer needed. Six views: Overview (header and panels 1–4), then Tools, Agents, Files, Events and the Advisor. Click a view name in the top row, or give the pane the keyboard with <kbd>ctrl</kbd>+<kbd>x</kbd> <kbd>Tab</kbd>.</p>
+        <figure><div class="term"><pre>@PANEL_MOCKUP@</pre></div><figcaption><b>Fig. 3</b>The Overview of the docked panel: header, Context, Tokens &amp; Cost, Limits, Turn.</figcaption></figure>
+      </div>
+      <div>
+        <span class="eyebrow">Terminal split</span>
+        <h3>Beside Claude Code, in your terminal</h3>
+        <p>Everywhere else, <code>/cctop</code> opens the full nine-panel dashboard as its own process in a right-hand split of tmux, zellij, WezTerm, Kitty or iTerm2 — the view in Fig. 2. You keep working on the left. It needs 40 columns; 45 % of a 132-column window gives 59, which fits the narrow layout.</p>
+        <p>If neither can attach, <code>/cctop</code> prints exactly what is missing and how to fix it — or run <code>cctop run --session &lt;id&gt;</code> by hand in a second terminal.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="install">
+  <div class="mg"><span class="no"><small>§</small>6</span><span class="lbl">Install &amp; attach</span>
+    <span class="note"><b>Undo</b><code>cctop uninstall</code> restores your settings from the backup it made.</span></div>
+  <div class="body">
+    <h2>Four lines, then <code style="font-size:.9em">/cctop</code></h2>
+    <pre class="block">@INSTALL@</pre>
+    <h3>Optional: exact rate limits and tool timings</h3>
+    <p><code>cctop install</code> wraps your status line with a tiny shim and registers itself for Claude Code's hook events. It shows you the diff of <code>~/.claude/settings.json</code>, backs the file up to <code>~/.cctop/backups/</code>, and asks before writing anything. With it, the Limits panel shows your real rate limits and the timings drop their <code>≈</code>. Without it, every panel still works from the transcript alone.</p>
+    <h3>Works in</h3>
+    <ul class="hosts"><li>tmux</li><li>zellij</li><li>WezTerm</li><li>Kitty</li><li>iTerm2</li><li>docked panel — no multiplexer</li></ul>
+  </div>
+</section>
+
+<section class="sec" id="themes">
+  <div class="mg"><span class="no"><small>§</small>7</span><span class="lbl">Themes</span></div>
+  <div class="body">
+    <h2>Six bundled; yours hot-reloaded</h2>
+    <p>Drop a <code>.toml</code> into <code>~/.config/cctop/themes/</code> and it appears on the next <kbd>t</kbd>. Honours <code>NO_COLOR</code>; falls back to 16 colours and plain borders when the terminal needs it. The docked panel follows Claude Code's own light or dark theme instead.</p>
+    <div class="themes">@THEMES@</div>
+  </div>
+</section>
+
+<section class="sec" id="privacy">
+  <div class="mg"><span class="no"><small>§</small>8</span><span class="lbl">What it reads, what it writes</span></div>
+  <div class="body">
+    <h2>Local only</h2>
+    <p>cctop reads what Claude Code already writes under <code>~/.claude</code> — the session list, the transcript, hook events — and looks at the process tree for running commands and MCP servers. It writes only under <code>~/.cctop</code> and <code>~/.config/cctop</code>. It sends nothing over the network and never changes your session.</p>
+    <p>Cost figures on subscription plans have no per-token bill behind them; cctop shows what the same usage would cost at API list price, marked <code>≈</code>, so a session can still be compared with another.</p>
+  </div>
+</section>
+
+<footer class="colophon">
+  <a class="brand" href="./"><b>cctop</b></a>
+  <div>
+    <nav aria-label="Footer">
+      <a href="guide/">Panel guide</a>
+      <a href="guide/advisor.html">Advisor rules</a>
+      <a href="metrics.html">How each number is measured</a>
+      <a href="https://github.com/tomstagl/cctop">GitHub</a>
+      <a href="https://github.com/tomstagl/cctop/releases">Releases</a>
+      <a href="https://github.com/tomstagl/cctop/blob/main/LICENSE">MIT</a>
+    </nav>
+    <span>© 2026 Thomas Stagl · Not affiliated with Anthropic. Claude Code is a trademark of Anthropic.</span>
+  </div>
 </footer>
 </div>
 <script>
@@ -131,7 +257,7 @@
   // the one thing that can block the main thread on this page: start it only
   // once the page has loaded and gone idle AND half of it is in view (no
   // margin), so the first paint and interaction never wait for it.
-  var v=document.querySelector('.demo video');
+  var v=document.querySelector('.plate video');
   if(!v||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   var idle=function(fn){(window.requestIdleCallback||function(f){setTimeout(f,1)})(fn)};
   var ready=false,seen=false;
