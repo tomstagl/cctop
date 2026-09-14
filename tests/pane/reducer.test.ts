@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { RenderElement, SessionUsage, ToolCallResult } from 'claude-code';
-import { fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
+import { fakeElements, fakeEngine, fakeOn, paneRender, type FakeEngine } from './harness';
 // The engine as the tests see it: fullscreen at 160 columns, the pane docked 72 wide.
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { initialModel, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
+import { HISTORY_TURNS, initialModel, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
+import { renderOverview } from '../../plugin/hooks/views/overview';
 import { register } from '../../plugin/hooks/pane';
 
 const T0 = Date.UTC(2026, 8, 12, 12, 0, 0);
@@ -196,10 +197,10 @@ test('the pane draws the turn, the running tool and the usage rows', async () =>
   for (const columns of [50, 80]) {
     const tree = await dispatch<RenderElement>('ui.render', paneRender('cctop', columns));
     const rows = renderToText(tree, columns);
-    assert.ok(rows.some((r) => r.includes('● busy · turn 1 · 0:02')), JSON.stringify(rows));
+    assert.ok(rows.some((r) => r.includes('● BUSY  turn 1  0:02')), JSON.stringify(rows));
     assert.ok(rows.some((r) => r.includes('Bash 0:02')), JSON.stringify(rows));
     assert.ok(rows.some((r) => r.includes('396k / 1.0M (40 %)')), JSON.stringify(rows));
-    assert.ok(rows.some((r) => /5 h\s+42 %/.test(r)), JSON.stringify(rows));
+    assert.ok(rows.some((r) => /5 h\s+[▇▁]+\s+42 %/.test(r)), JSON.stringify(rows));
     assert.ok(rows.some((r) => /resets in\s+2h 29m/.test(r)), JSON.stringify(rows));
     assert.ok(rows.some((r) => /cost\s+\$9\.90/.test(r)), JSON.stringify(rows));
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
@@ -209,4 +210,27 @@ test('the pane draws the turn, the running tool and the usage rows', async () =>
   assert.ok(($.ui.invalidates['ui.render'] ?? 0) > before, 'model changes invalidate the open pane');
   const tree = await dispatch<RenderElement>('ui.render', paneRender('cctop', 80));
   assert.ok(!renderToText(tree, 80).some((r) => r.includes('Bash')), 'the tool goes once the call ends');
+});
+
+test('turn.complete records the context size for the sparkline, capped at HISTORY_TURNS', () => {
+  const usage = (tokens: number): SessionUsage => ({ context: { tokens, window: 200_000 }, rateLimits: [] });
+  let model = initialModel();
+  const turn = (tokens: number | undefined): void => {
+    model = reduce(model, { type: 'turn.start', at: T0 });
+    if (tokens !== undefined) model = reduce(model, { type: 'usage', usage: usage(tokens), at: T0 });
+    model = reduce(model, { type: 'turn.complete', at: T0 + 1000, durationMs: 1000, reason: 'answer' });
+  };
+  turn(undefined);
+  assert.deepEqual(model.contextHistory, [], 'no usage read yet: nothing recorded');
+  turn(1000);
+  turn(2500);
+  assert.deepEqual(model.contextHistory, [1000, 2500]);
+  for (let i = 0; i < HISTORY_TURNS + 5; i++) turn(3000 + i);
+  assert.equal(model.contextHistory.length, HISTORY_TURNS);
+  assert.equal(model.contextHistory.at(-1), 3000 + HISTORY_TURNS + 4);
+  // The Overview draws it in the accent before the velocity.
+  const withSummary = reduce(model, { type: 'query', verb: 'summary', data: fixture('summary') });
+  const lines = renderToText(renderOverview({ ...withSummary, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
+  const velocity = lines.find((r) => r.includes('velocity'));
+  assert.ok(velocity !== undefined && /velocity\s+[▁▂▃▄▅▆▇█]{4,12}\s+\+50k\/turn/.test(velocity), velocity);
 });

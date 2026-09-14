@@ -30,9 +30,13 @@ Restart Claude Code (or `/reload-plugins`) and type `/cctop`.
 
 ## The pane
 
-With function hooks enabled, `/cctop` docks the dashboard beside the
-transcript instead of opening a terminal split. It shows the same six views
-as the standalone TUI's panels:
+With function hooks enabled, `/cctop-pane` docks the dashboard beside the
+transcript instead of opening a terminal split. It is drawn the way the
+standalone TUI draws its panels — round frames titled `╭2 Tools ─ 257 calls╮`,
+gauges (`▇▇▇▁▁▁`) coloured by band, the status pill (`● BUSY`), a context
+sparkline once turns have run, dim secondary text — in Claude Code's own
+theme colours, so it follows light and dark. It shows the same six views as
+the TUI's panels:
 
 | Key | View | What it shows |
 |---|---|---|
@@ -45,7 +49,22 @@ as the standalone TUI's panels:
 
 `/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
 of `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or closes it;
-with no argument it toggles. Context, cost and rate limits come from the
+with no argument it toggles.
+
+### Switching views by key
+
+While the pane is docked, a one-line bar `cctop 1: Overview  2: Tools …` sits
+in the band above the prompt. **Type the digit into the empty prompt and pause
+a moment** (about half a second): the view switches and the digit is cleared.
+A second character typed within that moment cancels it, so a prompt that
+starts with a digit is safe to keep typing. Clicking a bar entry — above the
+prompt or at the top of the pane — switches too.
+
+That band is the only place Claude Code honours a Button's `hotkey`; keys
+pressed inside the docked pane never reach the plugin, whether or not it is
+focused (`ctrl+x tab`). If you would rather keep the digits for yourself,
+collapse the band with `ctrl+x ctrl+a` (`[-]`): the bar folds to one line and
+the hotkeys are off until you expand it again. Context, cost and rate limits come from the
 engine itself, so the pane is useful with nothing installed; once the `cctop`
 binary is found, the rest (tool timings, files, agents, the Advisor) is
 filled in from `cctop query`.

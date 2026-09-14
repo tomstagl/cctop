@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { at, stringAt } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
-import { line, row, type Cell } from './table';
+import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
 export const EVENT_ROWS = 50;
 const W = { clock: 8, kind: 7 };
@@ -38,14 +38,12 @@ function eventCells(e: unknown): Cell[] {
   ];
 }
 
-export function renderEvents(model: Model, el: ViewElements): RenderElement {
-  const { Box } = el;
-  if (model.binary === 'missing') return line(NEEDS_BINARY, el);
-  const events = Array.isArray(model.query.events) ? model.query.events.slice(-EVENT_ROWS) : [];
-  return (
-    <Box flexDirection="column">
-      {events.length === 0 && line('no events yet', el)}
-      {events.map((e) => row(eventCells(e), el))}
-    </Box>
-  );
+export function renderEvents(model: Model, el: ViewElements, columns: number): RenderElement {
+  const all = Array.isArray(model.query.events) ? model.query.events : [];
+  const p = { hotkey: '5', title: 'Events', summary: model.binary === 'missing' ? undefined : String(all.length) };
+  if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY)], columns, el);
+  const inner = bodyWidth(columns);
+  const events = all.slice(-EVENT_ROWS);
+  const rows: FrameRow[] = events.length === 0 ? [line('no events yet')] : events.map((e) => row(eventCells(e), inner));
+  return panel(p, rows, columns, el);
 }

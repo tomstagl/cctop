@@ -14,6 +14,42 @@ export function renderToText(tree: RenderNode | null | undefined, columns: numbe
   return rows === undefined ? lines : lines.slice(0, rows);
 }
 
+/** Whether a rendered line is a frame's top or bottom border (`╭…╮`, `╰…╯`), possibly two side by side. */
+export function isBorder(line: string): boolean {
+  return /^[╭╰]/.test(line) && /[╮╯]\s*$/.test(line);
+}
+
+/** The title runs of the frame tops in a rendered view: `2 Tools ─ 257 calls`. */
+export function frameTitles(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    if (!/^╭/.test(line)) continue;
+    for (const m of line.matchAll(/╭([^╮]*?) ─*╮/g)) out.push(m[1].replace(/ ─+$/, '').trim());
+  }
+  return out;
+}
+
+// The body rows of a framed view: the borders dropped and each `│ … │` row
+// stripped to what is between the bars, side-by-side frames joined with one
+// space. What a flat view drew before the frames, so the shape assertions
+// keep applying to the content.
+export function body(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    if (isBorder(line)) continue;
+    if (!line.startsWith('│')) {
+      out.push(line);
+      continue;
+    }
+    const cells = line
+      .split('│')
+      .slice(1, -1)
+      .map((c) => c.replace(/^ /, '').replace(/ $/, ''));
+    out.push(cells.join(' ').replace(/\s+$/, ''));
+  }
+  return out;
+}
+
 function num(v: unknown, fallback = 0): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }

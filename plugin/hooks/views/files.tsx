@@ -6,7 +6,7 @@ import type { RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { DASH, at, measured, stringAt } from './format';
 import { NEEDS_BINARY, type ViewElements } from './overview';
-import { MAX_ROWS, line, row, type Cell } from './table';
+import { MAX_ROWS, bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
 const W = { touches: 13, lines: 5, reread: 9 };
 const REREAD = 're-read ⚠';
@@ -51,15 +51,14 @@ const HEADER: Cell[] = [
   { text: '', width: W.reread },
 ];
 
-export function renderFiles(model: Model, el: ViewElements): RenderElement {
-  const { Box } = el;
-  if (model.binary === 'missing') return line(NEEDS_BINARY, el, { key: 'file_touches' });
-  const files = Array.isArray(model.query.files) ? model.query.files.slice(0, MAX_ROWS - 1) : [];
-  return (
-    <Box flexDirection="column">
-      {row(HEADER, el)}
-      {files.length === 0 && line('no files touched yet', el)}
-      {files.map((f) => row(fileCells(f), el, 'file_touches'))}
-    </Box>
-  );
+export function renderFiles(model: Model, el: ViewElements, columns: number): RenderElement {
+  const all = Array.isArray(model.query.files) ? model.query.files : [];
+  const p = { hotkey: '4', title: 'Files', summary: model.binary === 'missing' ? undefined : `${all.length} touched` };
+  if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'file_touches' })], columns, el);
+  const inner = bodyWidth(columns);
+  const files = all.slice(0, MAX_ROWS - 1);
+  const rows: FrameRow[] = [row(HEADER, inner)];
+  if (files.length === 0) rows.push(line('no files touched yet'));
+  for (const f of files) rows.push(row(fileCells(f), inner, 'file_touches'));
+  return panel(p, rows, columns, el);
 }

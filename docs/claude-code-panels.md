@@ -221,7 +221,39 @@ columns with the diff panel open:
 The engine emits no event for this. There is also no way for a plugin to read
 `replTab`; the only observable is whether renders arrive.
 
-### 5.5 Gates
+### 5.5 Hotkeys: only the band above the prompt
+
+`Button.hotkey` (one digit or lowercase letter) is honoured by exactly one
+site, the `AbovePrompt` band (`XRt`): it collects the hotkeys of the Buttons
+it drew (`hotkeysOf`) and runs a digit-press hook (`mh`) on the composer —
+when the input becomes that single digit it waits 400 ms, then clears the
+input and raises `ui.press` for the Button; any further keystroke inside the
+400 ms cancels it. While the band is focused (`ctrl+x tab`), digits and
+letters press on keydown. A collapsed band (`ctrl+x ctrl+a`) draws no
+Buttons, so its hotkeys are off.
+
+The docked `Pane` site (`pce`) never reads `hotkey`: its bindings are
+scroll, `tab`/`shift+tab` between focusables, `enter` press, `ctrl+x`
+arrows resize, `ctrl+x x` close. A plugin that wants keyboard switching
+therefore draws its Buttons in the band too (`on("ui.render", { component:
+"AbovePrompt" }, …)`), and the same `onPress` serves both.
+
+### 5.6 Drawing: what the terminal honours
+
+Plugin trees are checked before they draw (`kL`): Box props `borderStyle`
+(one of Ink's `single double round bold singleDouble doubleSingle classic
+arrow` plus `dashed quote`), `borderColor`, `borderDimColor`,
+`backgroundColor`, `display`, and the flex/size/margin/padding set; Text and
+Button props `color`, `backgroundColor`, `dimColor`, `bold`, `italic`,
+`underline`, `strikethrough`, `inverse`. A colour is "a theme key, a name, or
+hex" — theme keys (`text`, `inactive`, `subtle`, `suggestion`, `success`,
+`warning`, `error`, `claude`, `rate_limit_fill`, `diffAdded`, …) resolve to
+the person's Claude Code theme, which is how the cctop pane follows light and
+dark. Limits: 2000 nodes and depth 32 per tree, 10 000 characters per text,
+100 000 per tree. A Text may nest Texts for inline styling, so a whole row of
+segments is one truncating Text.
+
+### 5.7 Gates
 
 - Function hooks load when `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is set (any
   value the env parser reads as true) **or** GrowthBook `tengu_plugin_hooks_modules`

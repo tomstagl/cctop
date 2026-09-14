@@ -153,15 +153,18 @@ hooks are off or before its module is accepted.
    Claude Code version:
    Result: pending
 
-9. **Hotkeys gated by focus.** View-bar hotkeys `1`-`6` act only once the
-   pane has focus (`ctrl+x tab`), so they never steal digits from the
-   composer. Verified at 110, 144 and 200 columns.
-   Setup: pane open and docked, at each of 110/144/200 columns in turn.
-   Keys: press `2` while the composer (not the pane) has focus; then press
-   `ctrl+x tab` to move focus to the pane; then press `2` again.
-   Expected: the first `2` is typed into the composer / does nothing to the
-   pane; after `ctrl+x tab` the pane is focused and the second `2` switches
-   it to the Tools view.
+9. **Hotkeys from the composer.** View-bar hotkeys `1`-`6` act from the
+   empty composer through the band above the prompt (the docked pane's own
+   keys never reach the plugin, `docs/claude-code-panels.md` §5.5); a
+   collapsed band keeps the digits for typing. Verified at 110, 144 and 200
+   columns.
+   Setup: pane open and docked, at each of 110/144/200 columns in turn; the
+   band `cctop 1: Overview …` visible above the prompt.
+   Keys: type `2` into the empty composer and wait half a second; then
+   `ctrl+x ctrl+a` to collapse the band, type `1`, wait.
+   Expected: the first `2` switches the pane to the Tools view and clears the
+   composer; after the collapse the `1` stays in the composer and the pane
+   does not change; `ctrl+x ctrl+a` again re-arms the digits.
    Claude Code version:
    Result: pending
 
@@ -341,4 +344,26 @@ Observed, verbatim from the captures:
   their actions and exited 2.
 
 These are the agent's observations, not a person's `Result:` entries.
+
+### Run notes (automated, 2026-09-14, second pass: look & feel, hotkeys)
+
+Same setup at 140×45 (the maintainer's terminal width), `--plugin-dir
+./plugin`, plugin 0.2.2:
+
+- The pane draws the TUI's framed panels: `╭cctop ─ claude-opus-5 ─╮` with
+  the `○ IDLE  turn 0  —` pill, `╭Context╮╭Tokens & Cost╮` and
+  `╭Limits ─ 5h 3 % · 7d 11 %╮╭Turn╮` side by side and closing on one line,
+  gauges `▇▁▁▁▁▁▁▁▁▁   11 %` coloured by band; the ANSI capture shows dim
+  borders, bold titles and the `success` green from the Claude Code theme.
+  No `refused` line in the debug log.
+- Item 9 (hotkeys), resolved differently from the checklist's wording: the
+  docked pane's keys never reach the plugin (`docs/claude-code-panels.md`
+  §5.5). The bar now also sits in the band above the prompt; typing `1`, `5`,
+  `2` into the empty composer switched the view each time (debug log:
+  `ui.press cctop/overview in AbovePrompt from terminal: settled in 7.2ms`)
+  and cleared the digit. After `ctrl+x ctrl+a` the band read `▸ plugin panel
+  hidden · ctrl+x ctrl+a or click to show` and a typed `1` stayed in the
+  composer; expanding it again re-armed the digits.
+- `/reload-plugins` picked up the new module with the pane open; the view
+  bar, band and frames came back at once.
 

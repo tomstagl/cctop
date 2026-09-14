@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RenderElement, RenderNode } from 'claude-code';
 import { fakeElements, textOf } from './harness';
-import { renderToText } from './render';
+import { body, frameTitles, isBorder, renderToText } from './render';
 import { fixture } from './fixture';
 import { initialModel, reduce, type Action, type Binary, type Model, type QueryVerb, type View } from '../../plugin/hooks/model';
 import { NEEDS_BINARY } from '../../plugin/hooks/views/overview';
@@ -48,7 +48,12 @@ function draw(view: View, model: Model, columns: number): RenderElement {
   return renderView({ ...model, view }, el, columns, 'dock', NOW);
 }
 
+// The rows of a view as its frame holds them (`body` strips the borders and
+// the `│ … │`), so the assertions read the content the TUI would show.
 function rows(view: View, model: Model, columns: number): string[] {
+  return body(rawRows(view, model, columns));
+}
+function rawRows(view: View, model: Model, columns: number): string[] {
   return renderToText(draw(view, model, columns), columns);
 }
 
@@ -73,11 +78,26 @@ function walk(node: RenderNode | undefined, visit: (n: Node) => void): void {
 // Every Text with a colour, as `[text, color]`.
 function coloured(tree: RenderElement): [string, string][] {
   const out: [string, string][] = [];
-  walk(tree, (n) => {
-    if (n.type === 'Text' && typeof n.props?.color === 'string') out.push([textOf(n.children), n.props.color]);
-  });
+  const visit = (node: RenderNode | undefined): void => {
+    if (node === undefined || node === null || typeof node !== 'object' || node.type === 'engine') return;
+    const n = node as Node;
+    // A frame's top and bottom rows are chrome (the hotkey there is accent-coloured by design).
+    if (n.type === 'Text' && /^[╭╰]/.test(textOf(n.children))) return;
+    if (n.type === 'Text' && typeof n.props?.color === 'string') {
+      const text = textOf(n.children).trim();
+      // Bars and gauges are chrome too, not a coloured value.
+      if (text !== '' && !/^[│─▇▁]+$/.test(text)) out.push([text, ROLE[n.props.color] ?? n.props.color]);
+    }
+    for (const c of n.children ?? []) visit(c);
+  };
+  visit(tree);
   return out;
 }
+
+// The theme keys the views draw with, back to the TUI's roles the
+// assertions name (views/frame.tsx THEME).
+const ROLE: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
+const THEME_KEYS = new Set(Object.keys(ROLE));
 
 function colorOf(tree: RenderElement, text: string): string | undefined {
   return coloured(tree).find(([t]) => t === text)?.[1];
@@ -88,16 +108,17 @@ for (const columns of [50, 80]) {
     const lines = rows('tools', build(), columns);
     fits(lines, columns);
     has(lines, /^TOOL\s+N\s+ERR\s+p50\s+p95\s+→CTX$/);
+    assert.deepEqual(frameTitles(rawRows('tools', build(), columns)), ['2 Tools ─ 257 calls']);
     // The chrome MCP server: 214 calls, 2 errors, p50/p95 estimated, 22k tokens into the context.
-    has(lines, /^mcp:claude-in-ch.*\s214\s+2\s+≈1\.6s\s+≈25\.4s\s+≈22k$/);
+    has(lines, /^mcp:claude-i.*\s214\s+2\s+≈1\.6s\s+≈25\.4s\s+≈22k$/);
     has(lines, /^Bash ▶0:46\s+15\s+3\s+≈2\.0s\s+≈27\.2s\s+≈4k$/);
     has(lines, /^RemoteTrigger\s+16\s+0\s+≈4\.3s\s+≈10\.0s\s+≈9k$/);
     // The sort is the query's: by calls, descending.
-    const order = ['mcp:claude-in-ch', 'RemoteTrigger', 'Bash', 'ToolSearch'].map((t) => lines.findIndex((r) => r.startsWith(t)));
+    const order = ['mcp:claude-i', 'RemoteTrigger', 'Bash', 'ToolSearch'].map((t) => lines.findIndex((r) => r.startsWith(t)));
     assert.deepEqual([...order].sort((a, b) => a - b), order, JSON.stringify(lines));
     has(lines, 'top ctx');
     // The input is cut to the room left at 50 columns.
-    has(lines, /^Read\s+\/home\/user\/project\/src\/a3.*\s+t1\s+≈1k$/);
+    has(lines, /^Read\s+\/home\/user\/project\/s.*\s+t1\s+≈1k$/);
     has(lines, /^Bash\s+make check\s+t2\s+≈888$/);
     assert.equal(lines.filter((r) => /\st\d\s+≈\d+k?$/.test(r)).length, 5, 'five top consumers');
   });
@@ -105,9 +126,10 @@ for (const columns of [50, 80]) {
   test(`agents at ${columns} columns: the fixture agent and the missing MCP hint`, () => {
     const lines = rows('agents', build(), columns);
     fits(lines, columns);
-    has(lines, /^✓ fork\s+Check whether a setup.*\s0:42\s+549k$/);
+    has(lines, /^✓ fork\s+Check whether a set.*\s0:42\s+549k$/);
     has(lines, 'mcp: no live process (fixture)');
     assert.equal(lines.filter((r) => r !== '').length, 2, JSON.stringify(lines));
+    assert.deepEqual(frameTitles(rawRows('agents', build(), columns)), ['3 Agents & MCP ─ 0/1 agents']);
   });
 
   test(`files at ${columns} columns: paths, touches and no diff`, () => {
@@ -117,8 +139,9 @@ for (const columns of [50, 80]) {
     has(lines, /ad450c\.rs\s+W×1\s+—$/);
     has(lines, /fc57f7\.rs\s+R×1\s+—$/);
     // The path keeps its tail when cut.
-    if (columns === 50) has(lines, /^…src\/ad450c\.rs\s/);
+    if (columns === 50) has(lines, /^…ad450c\.rs\s/);
     assert.equal(lines.filter((r) => r !== '').length, 5, JSON.stringify(lines));
+    assert.deepEqual(frameTitles(rawRows('files', build(), columns)), ['4 Files ─ 4 touched']);
   });
 
   test(`events at ${columns} columns: the last 50, newest at the bottom`, () => {
@@ -140,8 +163,9 @@ for (const columns of [50, 80]) {
     const model = build({ query: { advice: [advice[0], second] } });
     const lines = rows('advisor', model, columns);
     fits(lines, columns);
-    has(lines, columns >= 80 ? /^\s+▸\s+A15\s+`Bash make check` failed 3× with the same input\s+~481\/turn$/ : /^\s+▸\s+A15\s+`Bash make check` failed 3×.*~481\/turn$/);
+    has(lines, columns >= 80 ? /^\s+▸\s+A15\s+`Bash make check` failed 3× with the same input\s+~481\/turn$/ : /^\s+▸\s+A15\s+`Bash make check` fail.*~481\/turn$/);
     has(lines, /^\s+2\.\s+A03\s+second headline\s+~12\/turn$/);
+    assert.deepEqual(frameTitles(rawRows('advisor', model, columns)), ['6 Advisor ─ 1 of 2']);
     const text = lines.join(' ').replace(/\s+/g, ' ');
     for (const field of ['evidence', 'action', 'saving', 'why']) has(lines, new RegExp(`^\\s+${field}\\s`));
     assert.ok(text.includes(advice[0].evidence), text);
@@ -224,7 +248,7 @@ test('agents: MCP servers, restarts and background tasks', () => {
     has(lines, /^✗ Explore\s+Broken\s+—\s+0$/);
     has(lines, /^mcp playwright\s+188 MB\s+7 calls\s+↻2$/);
     has(lines, /^mcp github\s+512 kB\s+0 calls$/);
-    has(lines, /^bg\s+bash\s+cargo build --.*\s1:58\s+b7f3a9c0 running$/);
+    has(lines, /^bg\s+bash\s+cargo bui.*\s1:58\s+b7f3a9c0 running$/);
     assert.ok(!lines.some((r) => r.includes('no live process')), 'the hint goes once mcp is a list');
   }
   const tree = draw('agents', model, 80);
@@ -256,7 +280,7 @@ test('files: lines ± when git knows them and the re-read marker', () => {
   assert.equal(colorOf(tree, 're-read ⚠'), 'yellow');
   const keys: string[] = [];
   walk(tree, (n) => {
-    if (n.type === 'Text' && n.props?.key === 'file_rereads' && textOf(n.children) !== '') keys.push(textOf(n.children));
+    if (n.type === 'Text' && n.props?.key === 'file_rereads' && textOf(n.children).trim() !== '') keys.push(textOf(n.children).trim());
   });
   assert.deepEqual(keys, ['re-read ⚠']);
   assert.deepEqual(rows('files', build({ query: { files: [] } }), 50).slice(1), ['no files touched yet']);
@@ -280,13 +304,14 @@ test('events: kinds carry the TUI colours', () => {
     ['perm', 'yellow'],
     ['away', 'yellow'],
   ]);
-  const lines = renderToText(tree, 80);
+  const lines = body(renderToText(tree, 80));
   assert.equal(lines[0], '12:00:00 tool    Read x ▶');
   assert.equal(lines[5], '12:00:05 away    idle');
+  assert.deepEqual(frameTitles(renderToText(tree, 80)), ['5 Events ─ 6']);
   assert.deepEqual(rows('events', build({ query: { events: [] } }), 50), ['no events yet']);
 });
 
-test('every view caps its tree at 400 rows: 1000 events draw 50, 1000 files 400', () => {
+test('every view caps its frame at MAX_ROWS rows: 1000 events draw 50, 1000 files MAX_ROWS', () => {
   const events = Array.from({ length: 1000 }, (_, i) => ({ at_ms: T0 + i * 1000, kind: 'tool', text: `event ${i}` }));
   const files = Array.from({ length: 1000 }, (_, i) => ({ path: `/p/f${i}.rs`, reads: 1, edits: 0, writes: 0, touches: { value: 1, unit: 'count', metric_id: 'file_touches', approx: false }, lines_added: { source: 'missing' }, lines_removed: { source: 'missing' }, reread_warning: false }));
   const tools = { tools: Array.from({ length: 1000 }, (_, i) => ({ tool: `t${i}`, calls: { value: 1, unit: 'count', metric_id: 'tool_calls', approx: false }, errors: { value: 0, unit: 'count', metric_id: 'tool_errors', approx: false }, p50: null, p95: null, tokens_to_ctx: { value: 1, unit: 'tokens', metric_id: 'tokens_to_ctx', approx: true } })), top_ctx: fixture<{ top_ctx: unknown[] }>('tools').top_ctx };
@@ -297,8 +322,10 @@ test('every view caps its tree at 400 rows: 1000 events draw 50, 1000 files 400'
   assert.equal(eventLines.length, EVENT_ROWS);
   assert.ok(eventLines[EVENT_ROWS - 1].endsWith('event 999'));
   for (const view of DETAIL) {
-    const lines = renderToText(draw(view, model, 80), 80);
-    assert.ok(lines.length <= MAX_ROWS, `${view}: ${lines.length} rows`);
+    const lines = rawRows(view, model, 80);
+    // The frame's two borders sit outside the cap.
+    assert.ok(lines.length <= MAX_ROWS + 2, `${view}: ${lines.length} rows`);
+    assert.ok(isBorder(lines[0]) && isBorder(lines[lines.length - 1]), view);
   }
   assert.equal(rows('files', model, 80).length, MAX_ROWS);
   assert.equal(rows('tools', model, 80).length, MAX_ROWS);
@@ -319,37 +346,49 @@ test('renderView dispatches on model.view and draws the Overview inline', () => 
   const first = new Map<View, string>();
   for (const view of [...DETAIL, 'overview'] as View[]) first.set(view, rows(view, model, 80)[0]);
   assert.equal(new Set(first.values()).size, 6, JSON.stringify([...first]));
-  assert.match(first.get('overview')!, /^● busy/);
+  assert.match(first.get('overview')!, /^● BUSY/);
   assert.match(first.get('tools')!, /^TOOL/);
   assert.match(first.get('events')!, /^\d\d:\d\d:\d\d /);
   for (const view of DETAIL) {
     const inline = renderToText(renderView({ ...model, view }, el, 80, 'inline', NOW), 80);
-    assert.match(inline[0], /^● busy/, view);
+    assert.match(inline[0], /^● BUSY/, view);
     assert.ok(inline.some((r) => r.includes('Limits')), view);
   }
   // The functions the dispatcher calls are the ones the views export.
-  assert.deepEqual(renderToText(renderTools(model, el, NOW), 80), rows('tools', model, 80));
-  assert.deepEqual(renderToText(renderAgents(model, el, NOW), 80), rows('agents', model, 80));
-  assert.deepEqual(renderToText(renderFiles(model, el), 80), rows('files', model, 80));
-  assert.deepEqual(renderToText(renderEvents(model, el), 80), rows('events', model, 80));
-  assert.deepEqual(renderToText(renderAdvisor(model, el, 80), 80), rows('advisor', model, 80));
+  assert.deepEqual(renderToText(renderTools(model, el, 80, NOW), 80), rawRows('tools', model, 80));
+  assert.deepEqual(renderToText(renderAgents(model, el, 80, NOW), 80), rawRows('agents', model, 80));
+  assert.deepEqual(renderToText(renderFiles(model, el, 80), 80), rawRows('files', model, 80));
+  assert.deepEqual(renderToText(renderEvents(model, el, 80), 80), rawRows('events', model, 80));
+  assert.deepEqual(renderToText(renderAdvisor(model, el, 80), 80), rawRows('advisor', model, 80));
 });
 
-test('every Text truncates, colours are palette names and keys are metric ids', () => {
+// Every row Text (a Box's child) truncates; a Text inside a Text is an
+// inline segment and inherits its row's wrap. Colours are theme keys.
+function auditTexts(tree: RenderElement, label: string): { texts: number; keys: Set<string> } {
+  let texts = 0;
+  const keys = new Set<string>();
+  const visit = (node: RenderNode | undefined, inText: boolean): void => {
+    if (node === undefined || node === null || typeof node !== 'object' || node.type === 'engine') return;
+    const n = node as Node;
+    if (typeof n.props?.key === 'string') keys.add(n.props.key);
+    if (n.type === 'Text') {
+      texts += 1;
+      if (!inText) assert.match(String(n.props?.wrap), /^truncate/, `${label}: ${JSON.stringify(n.props)}`);
+      const c = n.props?.color;
+      if (c !== undefined) assert.ok(THEME_KEYS.has(String(c)), `${label}: colour ${String(c)} is not a theme key`);
+    }
+    for (const child of n.children ?? []) visit(child, inText || n.type === 'Text');
+  };
+  visit(tree, false);
+  return { texts, keys };
+}
+
+test('every row Text truncates, colours are theme keys and keys are metric ids', () => {
   const doc = readFileSync(join(repo, 'docs', 'metrics.md'), 'utf8');
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));
   const model = build();
   for (const view of DETAIL) {
-    let texts = 0;
-    const keys = new Set<string>();
-    walk(draw(view, model, 80), (n) => {
-      if (typeof n.props?.key === 'string') keys.add(n.props.key);
-      if (n.type !== 'Text') return;
-      texts += 1;
-      assert.match(String(n.props?.wrap), /^truncate/, `${view}: ${JSON.stringify(n.props)}`);
-      const c = n.props?.color;
-      if (c !== undefined) assert.match(String(c), /^[a-z]+$/, `${view}: colour ${String(c)}`);
-    });
+    const { texts, keys } = auditTexts(draw(view, model, 80), view);
     assert.ok(texts > 3, `${view}: only ${texts} Texts`);
     // Events are a log, not metrics: the one view without a keyed element.
     assert.equal(keys.size > 0, view !== 'events', `${view}: ${keys.size} keyed elements`);

@@ -113,6 +113,9 @@ function markHidden($: EngineInterface): void {
   $.ui.status(HIDDEN_STATUS);
   statusPinned = true;
   updateMarker($);
+  // The band above the prompt drops its bar: its hotkeys would switch a
+  // view nobody can see.
+  $.ui.invalidate('ui.render');
 }
 
 function unpinStatus($: EngineInterface): void {
@@ -360,6 +363,8 @@ function paneClosed($: EngineInterface): void {
   unpinStatus($);
   persistPane($);
   updateMarker($);
+  // The band above the prompt drops its bar with the pane.
+  $.ui.invalidate('ui.render');
 }
 
 async function closePane($: EngineInterface): Promise<void> {
@@ -407,25 +412,41 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
   );
 }
 
-// The view bar: `1 Overview · 2 Tools · …` as plain Buttons whose hotkeys
-// act while the pane is focused. Buttons that do not fit on one line
-// continue on the next, so the bar never overflows a narrow pane.
-function viewBar($: EngineInterface, el: Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>, columns: number): RenderElement {
+// The view bar: `1: Overview  2: Tools  …` as plain Buttons, drawn in the
+// pane (a click switches) and in the band above the prompt (a click, or the
+// digit typed into the empty composer: the one site whose hotkeys the
+// engine honours). Buttons that do not fit on one line continue on the
+// next, so the bar never overflows a narrow pane. `lead` is a dim label
+// before the first Button (the band says whose bar it is).
+function viewBar(
+  $: EngineInterface,
+  el: Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>,
+  columns: number,
+  lead?: string,
+): RenderElement {
   const { Box, Text, Button } = el;
   const lines: RenderElement[][] = [[]];
   let used = 0;
+  if (lead !== undefined) {
+    lines[0].push(
+      <Text wrap="truncate" dimColor>
+        {lead}{' '}
+      </Text>,
+    );
+    used = lead.length + 1;
+  }
   VIEWS.forEach(({ view, label }, i) => {
     const hotkey = String(i + 1);
     // `1: Overview` on the engine; one more for the harness's `[1 Overview]`.
     const width = hotkey.length + 3 + label.length;
     const line = lines[lines.length - 1];
-    if (line.length > 0) {
-      if (used + 3 + width > columns) {
+    if (line.length > 0 && i > 0) {
+      if (used + 2 + width > columns) {
         lines.push([]);
         used = 0;
       } else {
-        line.push(<Text wrap="truncate"> · </Text>);
-        used += 3;
+        line.push(<Text wrap="truncate">{'  '}</Text>);
+        used += 2;
       }
     }
     lines[lines.length - 1].push(
@@ -443,6 +464,27 @@ function viewBar($: EngineInterface, el: Pick<ElementTable<'terminal'>, 'Box' | 
     </Box>
   );
 }
+
+// The band above the prompt while the pane is docked: the view bar again,
+// because the band is the one site whose Button hotkeys the engine honours
+// (docs/claude-code-panels.md §5.5): a digit typed into the empty composer
+// presses the Button 400 ms later (a second character within that cancels
+// it, so a prompt that starts with a digit is safe to keep typing), and the
+// person collapses the band with ctrl+x ctrl+a, which also disarms it. Not
+// drawn while the pane is closed, hidden, or itself inline above the prompt,
+// nor over a survey; what other plugins draw in the band stays beneath.
+async function buildBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, rest: RenderElement): Promise<RenderElement> {
+  const { Box } = $.ui.resolve(e);
+  const bar = viewBar($, $.ui.resolve(e), e.viewport?.columns ?? BAND_COLUMNS, 'cctop');
+  return (
+    <Box flexDirection="column">
+      {bar}
+      {rest}
+    </Box>
+  );
+}
+// The band's width when the surface has not measured it.
+const BAND_COLUMNS = 80;
 
 export const register: Register = (on) => {
   model = initialModel();
@@ -588,6 +630,16 @@ export const register: Register = (on) => {
     });
   }).catch(($, e, next) => {
     $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
+  // The composer's hotkeys live in the band above the prompt (buildBand).
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const rest = await next(e);
+    if (!model.open || model.visibility !== 'visible' || model.placement !== 'dock' || e.props.hasSurvey) return rest;
+    return buildBand($, e, rest);
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: band render failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
   });
 

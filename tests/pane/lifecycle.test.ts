@@ -173,7 +173,7 @@ test('store round-trip: an interactive session.start reopens the pane on the sav
   assert.ok(queries().length > 0, 'the poller starts with the restored pane');
   assert.deepEqual(stored($), { open: true, view: 'files' });
   const rows = renderToText(await render(80), 80);
-  assert.match(rows[1], /^FILE\s+TOUCHES/, JSON.stringify(rows));
+  assert.match(rows[2], /^│ FILE\s+TOUCHES/, JSON.stringify(rows));
 });
 
 test('store round-trip: no reopen for a closed pane, a -p run or an empty store', async () => {
@@ -292,7 +292,7 @@ test('a throwing view renders the error line above the previous tree, and the ho
   await settle();
   const good = await render(80);
   const goodRows = renderToText(good, 80);
-  assert.match(goodRows[1], /^TOOL\s+N\s+ERR/, JSON.stringify(goodRows));
+  assert.match(goodRows[2], /^│ TOOL\s+N\s+ERR/, JSON.stringify(goodRows));
 
   // The view bar's Button throws from now on: the view cannot build.
   const table = fakeElements(new Map()) as unknown as Record<string, unknown>;

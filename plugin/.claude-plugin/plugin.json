@@ -1,6 +1,6 @@
 {
   "name": "cctop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "btop-style live dashboard for Claude Code internals: /cctop opens it in a side pane, cctop-insights lets the session answer questions from its numbers",
   "author": { "name": "Thomas Stagl" },
   "homepage": "https://github.com/tomstagl/cctop",

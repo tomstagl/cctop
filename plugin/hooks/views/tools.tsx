@@ -7,7 +7,7 @@ import type { RenderElement } from 'claude-code';
 import { formatTokens, percentile, type Model } from '../model';
 import { DASH, at, formatDuration, formatShortMs, mark, measured, stringAt, tokensOf, type Measured } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
-import { MAX_ROWS, line, row, type Cell } from './table';
+import { MAX_ROWS, bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
 const TOP_CTX = 5;
 const W = { count: 4, ms: 7, tokens: 6, tool: 12, turn: 3 };
@@ -113,23 +113,26 @@ function topCells(c: TopCtx): Cell[] {
   ];
 }
 
-export function renderTools(model: Model, el: ViewElements, now: number): RenderElement {
-  const { Box, Text } = el;
-  if (model.binary === 'missing') return line(NEEDS_BINARY, el, { key: 'tool_calls' });
+/** `257 calls` for the frame's summary: the session total, else the listed tools' sum. */
+function callsSummary(model: Model): string | undefined {
+  const total = measured(model.query.summary, 'tool_calls');
+  if (total !== null) return `${total.value} calls`;
+  const listed = at(model.query.tools, 'tools');
+  if (!Array.isArray(listed) || listed.length === 0) return undefined;
+  return `${listed.reduce((n: number, t) => n + (measured(t, 'calls')?.value ?? 0), 0)} calls`;
+}
+
+export function renderTools(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
+  const p = { hotkey: '2', title: 'Tools', summary: callsSummary(model) };
+  if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'tool_calls' })], columns, el);
+  const inner = bodyWidth(columns);
   // The header, the `top ctx` title and its rows come out of the cap first.
-  const rows = toolRows(model, now).slice(0, MAX_ROWS - 2 - TOP_CTX);
+  const tools = toolRows(model, now).slice(0, MAX_ROWS - 2 - TOP_CTX);
   const top = topCtx(model);
-  return (
-    <Box flexDirection="column">
-      {row(HEADER, el)}
-      {rows.length === 0 && line('no tool calls yet', el)}
-      {rows.map((r) => row(toolCells(r), el, 'tool_calls'))}
-      {top.length > 0 && (
-        <Text wrap="truncate" dimColor>
-          top ctx
-        </Text>
-      )}
-      {top.map((c) => row(topCells(c), el, 'top_ctx'))}
-    </Box>
-  );
+  const rows: FrameRow[] = [row(HEADER, inner)];
+  if (tools.length === 0) rows.push(line('no tool calls yet'));
+  for (const r of tools) rows.push(row(toolCells(r), inner, 'tool_calls'));
+  if (top.length > 0) rows.push(line('top ctx'));
+  for (const c of top) rows.push(row(topCells(c), inner, 'top_ctx'));
+  return panel(p, rows, columns, el);
 }

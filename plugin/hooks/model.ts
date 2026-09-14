@@ -96,7 +96,12 @@ export type Model = {
   bodyColumns: number | null;
   /** `e.viewport.columns` of the last render: the whole screen's width; null where unmeasured. */
   viewportColumns: number | null;
+  /** The context size at the end of each turn (the last HISTORY_TURNS), for the Context sparkline. */
+  contextHistory: number[];
 };
+
+/** How many turn-end context sizes the model keeps for the sparkline. */
+export const HISTORY_TURNS = 24;
 
 export type Action =
   | { type: 'session.start'; at: number }
@@ -153,6 +158,7 @@ export function initialModel(): Model {
     renderedAt: null,
     bodyColumns: null,
     viewportColumns: null,
+    contextHistory: [],
   };
 }
 
@@ -171,9 +177,13 @@ export function reduce(model: Model, action: Action): Model {
         ...model,
         turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at, toolMs: 0 },
       };
-    case 'turn.complete':
+    case 'turn.complete': {
+      // The turn's closing context size, from the engine's last usage read.
+      const size = model.usage?.context.tokens;
+      const contextHistory = size === undefined ? model.contextHistory : [...model.contextHistory, size].slice(-HISTORY_TURNS);
       return {
         ...model,
+        contextHistory,
         turn: {
           ...model.turn,
           state: 'idle',
@@ -183,6 +193,7 @@ export function reduce(model: Model, action: Action): Model {
           runningTool: null,
         },
       };
+    }
     case 'tool.start':
       return { ...model, turn: { ...model.turn, runningTool: { name: action.name, startedAt: action.at } } };
     case 'tool.end': {

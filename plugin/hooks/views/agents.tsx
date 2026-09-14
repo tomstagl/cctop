@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { DASH, at, formatBytes, formatDuration, isMissing, measured, stringAt, tokensOf } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
-import { MAX_ROWS, line, row, type Cell } from './table';
+import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
 const W = { glyph: 10, prefix: 3, kind: 6, elapsed: 6, tokens: 6, rss: 7, calls: 9, restarts: 4, status: 16 };
 
@@ -56,16 +56,24 @@ function listAt(obj: unknown, key: string): unknown[] {
   return Array.isArray(v) ? v : [];
 }
 
-export function renderAgents(model: Model, el: ViewElements, now: number): RenderElement {
-  const { Box } = el;
-  if (model.binary === 'missing') return line(NEEDS_BINARY, el, { key: 'agent_state' });
+/** `0/1 agents` as the TUI's panel summary: running over listed. */
+function agentsSummary(data: unknown): string | undefined {
+  const agents = listAt(data, 'agents');
+  if (agents.length === 0) return undefined;
+  const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
+  return `${running}/${agents.length} agents`;
+}
+
+export function renderAgents(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
   const data = model.query.agents;
-  const rows: RenderElement[] = [];
-  for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a), el, 'agent_state'));
-  // MCP servers need a live process: the query says so when it has none.
-  if (isMissing(data, 'mcp')) rows.push(line(`mcp: ${stringAt(data, 'mcp', 'hint') ?? DASH}`, el, { key: 'mcp_rss' }));
-  for (const m of listAt(data, 'mcp')) rows.push(row(mcpCells(m), el, 'mcp_rss'));
-  for (const t of listAt(data, 'tasks')) rows.push(row(taskCells(t, now), el));
-  if (rows.length === 0) rows.push(line('no subagents, MCP servers or background tasks', el));
-  return <Box flexDirection="column">{rows.slice(0, MAX_ROWS)}</Box>;
+  const p = { hotkey: '3', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
+  if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
+  const inner = bodyWidth(columns);
+  const rows: FrameRow[] = [];
+  for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a), inner, 'agent_state'));
+  if (isMissing(data, 'mcp')) rows.push(line(`mcp: ${stringAt(data, 'mcp', 'hint') ?? DASH}`, { key: 'mcp_rss' }));
+  for (const m of listAt(data, 'mcp')) rows.push(row(mcpCells(m), inner, 'mcp_rss'));
+  for (const t of listAt(data, 'tasks')) rows.push(row(taskCells(t, now), inner));
+  if (rows.length === 0) rows.push(line('no subagents, MCP servers or background tasks'));
+  return panel(p, rows, columns, el);
 }

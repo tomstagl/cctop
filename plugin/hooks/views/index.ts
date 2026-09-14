@@ -14,13 +14,13 @@ export function renderView(model: Model, el: ViewElements, columns: number, plac
   if (placement === 'inline') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
     case 'tools':
-      return renderTools(model, el, now);
+      return renderTools(model, el, columns, now);
     case 'agents':
-      return renderAgents(model, el, now);
+      return renderAgents(model, el, columns, now);
     case 'files':
-      return renderFiles(model, el);
+      return renderFiles(model, el, columns);
     case 'events':
-      return renderEvents(model, el);
+      return renderEvents(model, el, columns);
     case 'advisor':
       return renderAdvisor(model, el, columns);
     case 'overview':

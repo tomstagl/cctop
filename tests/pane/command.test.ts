@@ -81,14 +81,15 @@ test('a view name opens the pane on that view', async () => {
   assert.deepEqual($.ui.opens, [{ id: 'cctop', title: 'cctop' }]);
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const { rows } = await render(80);
-  assert.match(rows[1], /^TOOL\s+N\s+ERR/, JSON.stringify(rows));
+  assert.match(rows[1], /^╭2 Tools/, JSON.stringify(rows));
+  assert.match(rows[2], /^│ TOOL\s+N\s+ERR/, JSON.stringify(rows));
 
   // A second view while open switches without a close; whitespace is ignored.
   const files = await run('  files ');
   assert.equal(files.text, `cctop pane on Files ${DOCKED}`);
   assert.deepEqual($.ui.closes, []);
   assert.deepEqual(stored($), { open: true, view: 'files' });
-  assert.match((await render(80)).rows[1], /^FILE\s+TOUCHES/);
+  assert.match((await render(80)).rows[2], /^│ FILE\s+TOUCHES/);
 });
 
 test('close closes the pane', async () => {
@@ -132,14 +133,14 @@ test('the view bar has six plain hotkeyed Buttons and a press switches the view'
       ['6', 'Advisor', true, 'advisor'],
     ],
   );
-  assert.equal(rows[0], '[1 Overview] · [2 Tools] · [3 Agents] · [4 Files] · [5 Events] · [6 Advisor]');
+  assert.equal(rows[0], '[1 Overview]  [2 Tools]  [3 Agents]  [4 Files]  [5 Events]  [6 Advisor]');
 
   const before = $.ui.invalidates['ui.render'] ?? 0;
   $.ui.press('tools');
   assert.equal($.ui.invalidates['ui.render'], before + 1);
   await settle();
   assert.deepEqual(stored($), { open: true, view: 'tools' });
-  assert.match((await render(80)).rows[1], /^TOOL\s+N\s+ERR/);
+  assert.match((await render(80)).rows[2], /^│ TOOL\s+N\s+ERR/);
 });
 
 test('the view bar wraps at narrow widths and never overflows', async () => {
@@ -160,7 +161,7 @@ test('inline placement draws the header, Context and Limits without the view bar
   await run('tools');
   const { tree, rows } = await render(80, 'inline');
   assert.deepEqual(buttons(tree), []);
-  assert.match(rows[0], /^○ idle · turn 0/, JSON.stringify(rows));
+  assert.match(rows[0], /^○ IDLE · turn 0/, JSON.stringify(rows));
   assert.ok(rows.some((r) => /(^|\s)Context(\s|$)/.test(r)), JSON.stringify(rows));
   assert.ok(rows.some((r) => /(^|\s)Limits(\s|$)/.test(r)), JSON.stringify(rows));
   assert.ok(

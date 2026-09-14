@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RenderElement, RenderNode, SessionUsage } from 'claude-code';
 import { fakeElements, textOf } from './harness';
-import { renderToText } from './render';
+import { body, frameTitles, renderToText } from './render';
 import { fixture } from './fixture';
 import { initialModel, reduce, type Action, type Binary, type Model } from '../../plugin/hooks/model';
 import { NEEDS_BINARY, renderOverview } from '../../plugin/hooks/views/overview';
@@ -33,9 +33,17 @@ function build(opts: Options = {}): Model {
   return actions.reduce(reduce, initialModel());
 }
 
-function rows(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock'): string[] {
+// The rendered lines; `rows` gives the frames' content (borders and `│`
+// stripped, side-by-side frames joined with a space), `raw` the screen.
+function raw(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock'): string[] {
   return renderToText(renderOverview(model, el, columns, placement, NOW), columns);
 }
+function rows(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock'): string[] {
+  return body(raw(model, columns, placement));
+}
+
+// The theme keys the views draw with (views/frame.tsx THEME) and the TUI roles they stand for.
+const THEME_KEYS: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
 
 function has(lines: string[], text: string | RegExp): void {
   const hit = lines.some((r) => (typeof text === 'string' ? r.includes(text) : text.test(r)));
@@ -51,7 +59,7 @@ function walk(node: RenderNode | undefined, visit: (n: Node) => void): void {
   for (const c of n.children ?? []) walk(c, visit);
 }
 
-// The text of every keyed row Box, by key.
+// The text of every keyed row Box, by key (the row that shows the metric).
 function keyed(tree: RenderElement): Map<string, string> {
   const out = new Map<string, string>();
   walk(tree, (n) => {
@@ -82,34 +90,52 @@ const EXPECTED = [
 
 for (const columns of [50, 60, 80]) {
   test(`overview at ${columns} columns shows the fixture values within the width`, () => {
+    const screen = raw(build(), columns);
+    for (const row of screen) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
+    // Every frame row is exactly as wide as its frame: the right border lands.
+    for (const row of screen) if (row.startsWith('│')) assert.ok(row.endsWith('│'), `open frame row: ${JSON.stringify(row)}`);
     const lines = rows(build(), columns);
-    for (const row of lines) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
     for (const text of EXPECTED) has(lines, text);
-    has(lines, /^● busy · turn 1 · 0:48/);
-    // The header truncates before the badges: the model name fits from 60, effort too from 80.
-    if (columns >= 60) has(lines, /· claude-so/);
-    if (columns >= 80) has(lines, /· claude-sonnet-5 · medium/);
-    has(lines, /bin shim hooks 2\.1\.270$/);
-    for (const title of ['Context', 'Tokens & Cost', 'Limits', 'Turn']) has(lines, new RegExp(`(^|\\s)${title.replace('&', '&')}(\\s|$)`));
+    // The header frame: the status pill, the turn and its elapsed; the model in the title.
+    has(lines, /^● BUSY  turn 1  0:48$/);
+    has(lines, /^auto · medium · \$9\.90\s+bin shim hooks 2\.1\.270$/);
+    const titles = frameTitles(screen);
+    assert.equal(titles[0], 'cctop ─ claude-sonnet-5');
+    for (const title of ['Context ─ 40 %', 'Tokens & Cost ─ 33.6M', 'Limits ─ 5h 42 % · 7d 17 %', 'Turn ─ 0:48']) {
+      assert.ok(titles.includes(title), `no frame ${title}: ${JSON.stringify(titles)}`);
+    }
   });
 
   test(`overview at ${columns} columns: two-column rows only from 60`, () => {
-    const lines = rows(build(), columns);
-    const paired = lines.some((r) => r.includes('Context') && r.includes('Tokens & Cost'));
-    assert.equal(paired, columns >= 60, JSON.stringify(lines));
-    if (columns < 60) {
-      const order = ['Context', 'Tokens & Cost', 'Limits', 'Turn'].map((t) => lines.findIndex((r) => r === t));
-      assert.deepEqual([...order].sort((a, b) => a - b), order, 'blocks stack in order');
+    const screen = raw(build(), columns);
+    const paired = screen.some((r) => r.includes('╭Context') && r.includes('╭Tokens & Cost'));
+    assert.equal(paired, columns >= 60, JSON.stringify(screen));
+    const order = ['Context', 'Tokens & Cost', 'Limits', 'Turn'].map((t) => screen.findIndex((r) => r.includes(`╭${t} `)));
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'blocks in order');
+    if (columns >= 60) {
+      // Paired frames close on the same line.
+      const closes = screen.filter((r) => /^╰.*╯╰.*╯$/.test(r));
+      assert.equal(closes.length, 2, JSON.stringify(screen));
     }
   });
 }
 
-test('values are right-aligned in one column per block', () => {
-  const lines = rows(build(), 50);
-  const tokens = lines.slice(lines.indexOf('Tokens & Cost') + 1, lines.indexOf('Limits'));
+test('values are right-aligned in one column per block, gauges between label and value', () => {
+  const screen = raw(build(), 50);
+  const start = screen.findIndex((r) => r.startsWith('╭Tokens & Cost'));
+  const end = screen.findIndex((r, i) => i > start && r.startsWith('╰'));
+  const tokens = body(screen.slice(start + 1, end));
   const ends = new Set(tokens.map((r) => r.length));
   assert.equal(ends.size, 1, `token rows end at different columns: ${JSON.stringify(tokens)}`);
-  assert.match(tokens[0], /^cache read\s+33\.0M$/);
+  assert.match(tokens[0], /^cache read\s+▇+\s+33\.0M$/);
+  assert.match(tokens[1], /^cache write\s+▁+\s+597k$/);
+  // The context gauge takes its own row above the bare figure, as the TUI's.
+  const context = rows(build(), 50);
+  const gaugeRow = context.findIndex((r) => /^▇+▁+$/.test(r));
+  assert.ok(gaugeRow >= 0, JSON.stringify(context));
+  assert.match(context[gaugeRow + 1], /^396k \/ 1\.0M \(40 %\)$/);
+  // Limits carry their gauge inline.
+  has(context, /^5 h\s+▇+▁+\s+42 %$/);
 });
 
 test('≈ marks exactly the values the fixture calls approx', () => {
@@ -144,18 +170,24 @@ test('every metric row is keyed by an id from docs/metrics.md', () => {
   for (const key of keys) assert.ok(ids.has(key), `row key ${key} is not a metric id`);
 });
 
-test('every Text truncates and colours are palette names only', () => {
+test('every row Text truncates and colours are theme keys only', () => {
   const tree = renderOverview(build({ advice: [{ severity: 'high', headline: 'x' }] }), el, 80, 'dock', NOW);
   let texts = 0;
-  walk(tree, (n) => {
-    if (n.type !== 'Text') return;
-    texts += 1;
-    assert.equal(n.props?.wrap, 'truncate', JSON.stringify(n.props));
-    for (const prop of ['color', 'backgroundColor']) {
-      const c = n.props?.[prop];
-      if (c !== undefined) assert.match(String(c), /^[a-z]+$/i, `${prop} ${String(c)} is not a palette name`);
+  const visit = (node: RenderNode | undefined, inText: boolean): void => {
+    if (node === undefined || typeof node === 'string' || node.type === 'engine') return;
+    const n = node as Node;
+    if (n.type === 'Text') {
+      texts += 1;
+      // A row Text truncates; the segments inside it inherit that.
+      if (!inText) assert.equal(n.props?.wrap, 'truncate', JSON.stringify(n.props));
+      for (const prop of ['color', 'backgroundColor']) {
+        const c = n.props?.[prop];
+        if (c !== undefined) assert.ok(String(c) in THEME_KEYS, `${prop} ${String(c)} is not a theme key`);
+      }
     }
-  });
+    for (const c of n.children ?? []) visit(c, inText || n.type === 'Text');
+  };
+  visit(tree, false);
   assert.ok(texts > 20, `only ${texts} Texts`);
   const dir = join(repo, 'plugin', 'hooks', 'views');
   for (const file of readdirSync(dir)) {
@@ -164,13 +196,22 @@ test('every Text truncates and colours are palette names only', () => {
   }
 });
 
-test('the header dims the badges that are off', () => {
-  const on = new Map<string, boolean>();
+test('the header dims the badges that are off and colours the ones on', () => {
+  const badges = new Map<string, { dim: boolean; color: unknown }>();
   walk(renderOverview(build(), el, 80, 'dock', NOW), (n) => {
-    if (n.type === 'Text' && typeof n.props?.key === 'string') on.set(n.props.key, n.props.dimColor !== true);
+    if (n.type !== 'Text') return;
+    const text = textOf(n.children).trim();
+    if (text === 'bin' || text === 'shim' || text.startsWith('hooks ')) badges.set(text.split(' ')[0], { dim: n.props?.dimColor === true, color: n.props?.color });
   });
   // The fixture summary has no shim (limits missing) and no hooks.
-  assert.deepEqual([...on.entries()], [['bin', true], ['shim', false], ['hooks', false]]);
+  assert.deepEqual(
+    [...badges.entries()],
+    [
+      ['bin', { dim: false, color: 'success' }],
+      ['shim', { dim: true, color: undefined }],
+      ['hooks', { dim: true, color: undefined }],
+    ],
+  );
 });
 
 test('a high-severity Advisor headline is the last row', () => {
@@ -181,6 +222,9 @@ test('a high-severity Advisor headline is the last row', () => {
   const last = lines.filter((r) => r !== '').at(-1)!;
   assert.ok(last.includes('`Bash make check` failed 3× with the same input'), last);
   assert.ok(!rows(build({ advice: [{ ...advice[0], severity: 'medium' }] }), 80).includes(last));
+  // In its own frame, the last one on the screen.
+  const titles = frameTitles(raw(build({ advice: [{ ...advice[0], severity: 'high' }] }), 80));
+  assert.equal(titles.at(-1), 'Advisor');
 });
 
 test('a missing binary draws one line per binary-backed section and keeps the engine rows', () => {
@@ -191,24 +235,28 @@ test('a missing binary draws one line per binary-backed section and keeps the en
     for (const text of ['396k / 1.0M (40 %)', '$9.90', '42 %', '17 %', '2h 29m', 'Bash 0:46']) has(lines, text);
     for (const gone of ['cache read', 'velocity', 'burn rate']) assert.ok(!lines.some((r) => r.includes(gone)), gone);
     has(lines, /bin shim hooks 2\.1\.270$/);
-    for (const row of lines) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
+    for (const row of raw(build({ binary: 'missing', summary: false }), columns)) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
   }
 });
 
 test('without any source the rows draw — and the header turn 0', () => {
-  const lines = renderToText(renderOverview(initialModel(), el, 50, 'dock', NOW), 50);
-  has(lines, /^○ idle · turn 0 · — · — · —/);
-  has(lines, /^context\s+—$/);
+  const lines = rows(initialModel(), 50);
+  has(lines, /^○ IDLE  turn 0  —$/);
+  // Effort and cost unknown, the badges still drawn; the bare context figure.
+  has(lines, /^— · —\s+bin shim hooks 2\.1\.270$/);
+  has(lines, /^—$/);
   has(lines, /^cache read\s+—$/);
   has(lines, /^5 h\s+—$/);
   has(lines, /^waiting on\s+—$/);
   assert.ok(!lines.some((r) => r.includes(NEEDS_BINARY)), 'unknown is not missing');
+  assert.deepEqual(frameTitles(raw(initialModel(), 50)), ['cctop ─ —', 'Context', 'Tokens & Cost', 'Limits', 'Turn']);
 });
 
-test('inline placement draws the header, Context and Limits only', () => {
-  const lines = rows(build(), 80, 'inline');
-  has(lines, /^● busy/);
-  has(lines, /(^|\s)Context(\s|$)/);
-  has(lines, /(^|\s)Limits(\s|$)/);
+test('inline placement draws the header, Context and Limits only, without frames', () => {
+  const lines = raw(build(), 80, 'inline');
+  has(lines, /^● BUSY · turn 1 · 0:48 · claude-sonnet-5 · medium\s+bin shim hooks 2\.1\.270$/);
+  has(lines, /^Context$/);
+  has(lines, /^Limits$/);
+  assert.ok(!lines.some((r) => /[╭╰│]/.test(r)), 'no frames in the band above the prompt');
   assert.ok(!lines.some((r) => r.includes('Tokens & Cost') || r.includes('cache read') || r.includes('waiting on')), JSON.stringify(lines));
 });
