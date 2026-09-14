@@ -123,6 +123,7 @@ pub fn state_from(transcript: &Path, info: SessionInfo) -> State {
         if let Some(v) = crate::claude_home::read() {
             state.apply_claude_home(&v);
         }
+        state.load_autocompact();
     }
     let mut hooks =
         crate::hooks::Watcher::new(&crate::status::cctop_dir(), &state.session.session_id);

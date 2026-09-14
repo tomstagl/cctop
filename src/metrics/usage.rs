@@ -146,6 +146,8 @@ pub struct Turn {
     /// whether any of them was estimated rather than measured.
     pub harness_tokens: u64,
     pub harness_approx: bool,
+    /// Characters of prose the model wrote this turn (text blocks).
+    pub prose_chars: usize,
 }
 
 impl Turn {
@@ -546,8 +548,10 @@ impl Aggregate {
             .filter(|b| matches!(b, crate::transcript::AssistantBlock::ToolUse { .. }))
             .count();
         t.last_at = a.timestamp.clone().or(t.last_at.take());
-        if a.text_chars() > 0 {
+        let prose = a.text_chars();
+        if prose > 0 {
             t.ended_with_question = a.ends_with_question();
+            t.prose_chars += prose;
         }
         if !self.seen_ids.insert(a.message.id.clone()) {
             return; // another block of a response already counted

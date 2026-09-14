@@ -304,6 +304,14 @@ impl Theme {
             "▇"
         }
     }
+    /// The alternate fill of a stacked bar's odd segments.
+    pub fn gauge_half(&self) -> &'static str {
+        if self.ascii {
+            "="
+        } else {
+            "▆"
+        }
+    }
     pub fn gauge_empty(&self) -> &'static str {
         if self.ascii {
             "-"

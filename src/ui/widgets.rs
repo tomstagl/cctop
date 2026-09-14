@@ -25,6 +25,42 @@ pub fn gauge(t: &Theme, ratio: f64, width: usize, style: Style) -> Vec<Span<'sta
     ]
 }
 
+/// A stacked bar of `width` cells: `parts` are `(tokens, style)` slices of
+/// `total`, drawn left to right; the rest of `total` is empty. Segments
+/// alternate the fill glyph with a dim fill so they read without colour.
+pub fn stacked_bar(
+    t: &Theme,
+    parts: &[(u64, Style)],
+    total: u64,
+    width: usize,
+) -> Vec<Span<'static>> {
+    let mut out = Vec::new();
+    let mut used = 0usize;
+    if total == 0 {
+        return vec![Span::styled(t.gauge_empty().repeat(width), t.dim())];
+    }
+    let mut acc = 0u64;
+    for (i, (tokens, style)) in parts.iter().enumerate() {
+        acc += tokens;
+        let end = ((acc as f64 / total as f64) * width as f64).round() as usize;
+        let cells = end.min(width).saturating_sub(used);
+        if cells == 0 {
+            continue;
+        }
+        let glyph = if i % 2 == 0 {
+            t.gauge_fill()
+        } else {
+            t.gauge_half()
+        };
+        out.push(Span::styled(glyph.repeat(cells), *style));
+        used += cells;
+    }
+    if used < width {
+        out.push(Span::styled(t.gauge_empty().repeat(width - used), t.dim()));
+    }
+    out
+}
+
 /// Sparkline of the last `width` values, scaled to their max.
 pub fn sparkline(t: &Theme, values: &[u64], width: usize) -> String {
     let chars = t.spark_chars();
@@ -52,6 +88,21 @@ mod tests {
         let g = gauge(&t, 0.5, 10, Style::default());
         assert_eq!(g[0].content, "▇▇▇▇▇");
         assert_eq!(g[1].content, "▁▁▁▁▁");
+        let s = stacked_bar(
+            &t,
+            &[
+                (20, Style::default()),
+                (30, Style::default()),
+                (0, Style::default()),
+            ],
+            100,
+            10,
+        );
+        assert_eq!(
+            s.iter().map(|x| x.content.as_ref()).collect::<Vec<_>>(),
+            ["▇▇", "▆▆▆", "▁▁▁▁▁"]
+        );
+        assert_eq!(stacked_bar(&t, &[], 0, 4)[0].content, "▁▁▁▁");
         assert_eq!(band_style(&t, 0.5, 0.6, 0.8).fg, Some(t.ok));
         assert_eq!(band_style(&t, 0.7, 0.6, 0.8).fg, Some(t.warn));
         assert_eq!(band_style(&t, 0.9, 0.6, 0.8).fg, Some(t.crit));

@@ -259,6 +259,10 @@ pub struct State {
     pub context_size_exact: Option<u64>,
     /// Autocompact threshold learned from an observed compaction, by model.
     pub learned_thresholds: std::collections::BTreeMap<String, u64>,
+    /// Autocompact overrides from settings and the claude process environment.
+    pub autocompact: crate::metrics::context::AutocompactConfig,
+    /// The allowlisted variables of the claude process (`—` when absent).
+    pub claude_env: std::collections::BTreeMap<String, String>,
     // -- ui
     /// Panel that receives keys; `None` = global.
     pub focused: Option<PanelId>,
@@ -1020,17 +1024,77 @@ impl State {
         self.agg.model.as_deref()
     }
 
+    /// The three bands of the context gauge for the current window.
+    pub fn bands(&self) -> crate::metrics::context::Bands {
+        crate::metrics::context::bands(self.context().window, &self.autocompact)
+    }
+
+    /// First turn after the last context boundary (1 when none).
+    pub fn since_boundary_turn(&self) -> usize {
+        self.agg
+            .boundaries
+            .last()
+            .map(|b| b.turn.max(1))
+            .unwrap_or(1)
+    }
+
+    /// What the context is made of since the last boundary.
+    pub fn anatomy(&self) -> crate::metrics::context::Anatomy {
+        let v = self.context();
+        crate::metrics::context::anatomy(
+            &self.agg,
+            &self.tools,
+            v.size,
+            v.prefix,
+            self.since_boundary_turn(),
+        )
+    }
+
+    /// Harness tokens per human turn since the last boundary.
+    pub fn harness_per_turn(&self) -> Option<(u64, bool)> {
+        let since = self.since_boundary_turn();
+        let turns: Vec<&crate::metrics::Turn> = self
+            .agg
+            .turns
+            .iter()
+            .filter(|t| t.number >= since && t.human)
+            .collect();
+        if turns.is_empty() {
+            return None;
+        }
+        let total: u64 = turns.iter().map(|t| t.harness_tokens).sum();
+        let approx = turns.iter().any(|t| t.harness_approx);
+        Some((total / turns.len() as u64, approx))
+    }
+
+    /// Read the autocompact overrides for a live session: settings.json and
+    /// the claude process environment.
+    pub fn load_autocompact(&mut self) {
+        let settings = crate::install::read_settings(&crate::install::settings_path());
+        if let Some(pid) = self.session.pid {
+            self.claude_env = crate::procenv::env_of(pid);
+        }
+        self.autocompact = crate::metrics::context::AutocompactConfig::from_sources(
+            Some(&settings),
+            &self.claude_env,
+        );
+    }
+
     /// Context-window view for the current model.
     pub fn context(&self) -> crate::metrics::ContextView {
         let learned = self
             .model()
             .and_then(|m| self.learned_thresholds.get(m).copied());
-        crate::metrics::context::view(
+        let mut v = crate::metrics::context::view(
             &self.agg,
             self.context_window_exact,
             self.context_size_exact,
             learned,
-        )
+        );
+        if !v.threshold_learned {
+            v.threshold = crate::metrics::context::bands(v.window, &self.autocompact).threshold;
+        }
+        v
     }
 
     pub fn is_hidden(&self, id: PanelId) -> bool {

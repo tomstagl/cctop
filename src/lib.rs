@@ -26,6 +26,7 @@ pub mod otel;
 pub mod pane;
 pub mod phase;
 pub mod prefix;
+pub mod procenv;
 pub mod procs;
 pub mod query;
 pub mod registry;

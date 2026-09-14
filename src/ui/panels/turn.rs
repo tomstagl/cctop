@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn turn_panel_on_fixture() {
         let app = fixture_app();
-        let out = render_to_string(&app, 80, 51);
+        let out = render_to_string(&app, 80, 60);
         // The session ended with an interrupt, which is not a turn: the
         // panel shows the last real turn (52 API calls, cut after 19:54).
         assert!(out.contains("4 Turn ─ 19:54"), "{out}");
@@ -208,7 +208,7 @@ mod tests {
             cmdline: "cargo test --workspace".into(),
             elapsed_s: 48,
         });
-        let out = render_to_string(&app, 64, 51);
+        let out = render_to_string(&app, 64, 60);
         assert!(
             out.contains("elapsed 0:50   api 1 calls · api 0:02"),
             "{out}"
@@ -224,12 +224,12 @@ mod tests {
         app.state.session.permission_pending = true;
         app.state.session.permission_waiting_since_ms =
             app.state.session.ended_at_ms.map(|t| t - 5_000);
-        let out = render_to_string(&app, 64, 51);
+        let out = render_to_string(&app, 64, 60);
         assert!(out.contains("◆ waiting for permission for 0:05"), "{out}");
         assert!(out.contains("permission waits 1 · 0:12"), "{out}");
         // Queued prompt.
         app.feed(Line::parse(r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-08-27T10:20:10Z"}"#).unwrap());
-        assert!(render_to_string(&app, 64, 51).contains("queued 1"));
+        assert!(render_to_string(&app, 64, 60).contains("queued 1"));
         // Turn 3 of the fixture had hooks: render with that turn current.
         let mut early = App::new(
             crate::ui::panels::all(),
@@ -246,7 +246,7 @@ mod tests {
             }
         }
         early.state.session.ended_at_ms = early.state.last_line_at_ms;
-        let out = render_to_string(&early, 64, 51);
+        let out = render_to_string(&early, 64, 60);
         assert!(out.contains("hooks 1 runs · 60ms"), "{out}");
     }
 }

@@ -7,8 +7,9 @@ expression: text
 | auto · medium · — · $9.90 · cpu —                        |
 +----------------------------------------------------------+
 +1 Context - 40 % est -------------------------------------+
-| ######################---------------------------------- |
-| 396k / 1.00M est   prefix 60k · msgs 335k · free 603k    |
+| #############==#######---------------------------------- |
+| 396k / 1.00M est   prefix 60k · inputs ≈1.4k · results ≈1|
+| 59% until auto-compact  harness ≈647/turn                |
 | .::----=+#  +50k/turn → autocompact in ~12 turns est     |
 | compactions 0                                            |
 +----------------------------------------------------------+
@@ -39,7 +40,6 @@ expression: text
 |   Interrupt and give the fix or the…  ~481/turn · n next |
 +----------------------------------------------------------+
 +8 Events - 539 -------------------------------------------+
-| 10:08:01 tool   mcp:claude-in-chrome computer lorem ipsu…|
 | 10:08:02 tool   mcp:claude-in-chrome ✓ 118               |
 | 10:08:04 tool   mcp:claude-in-chrome ✓ 68                |
 | 10:17:27 note   interrupted after 125 calls              |
