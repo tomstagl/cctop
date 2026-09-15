@@ -431,11 +431,18 @@ mod tests {
         let home = std::env::temp_dir().join(format!("cctop-shim-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         store_in(&home, PAYLOAD.as_bytes()).unwrap(); // warm: creates the dir
-        let start = std::time::Instant::now();
-        for _ in 0..20 {
-            store_in(&home, PAYLOAD.as_bytes()).unwrap();
-        }
-        let per = start.elapsed() / 20;
+                                                      // The best of five batches: the shim's own cost, not a shared CI
+                                                      // runner's scheduling hiccup (one batch measured 6.9 ms there).
+        let per = (0..5)
+            .map(|_| {
+                let start = std::time::Instant::now();
+                for _ in 0..20 {
+                    store_in(&home, PAYLOAD.as_bytes()).unwrap();
+                }
+                start.elapsed() / 20
+            })
+            .min()
+            .unwrap();
         assert!(
             per < std::time::Duration::from_millis(3),
             "{per:?} per store"
