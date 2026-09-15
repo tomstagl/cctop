@@ -181,14 +181,17 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
-11. **Advisor matches the CLI.** The pane's Advisor view's top row matches
-    what the binary itself reports.
+11. **Advisor matches the CLI.** The pane's Advisor view's top row is the
+    coach's slot occupant, the same one the binary reports.
     Setup: pane open, `cctop` binary present, a session with at least one
-    Advisor recommendation.
+    nudge (the TUI dashboard running in a split makes the occupant the
+    running dashboard's, persisted in `~/.cctop/<session>.advisor.json`).
     Keys: `/cctop-pane advisor`; separately, in a shell, run
     `cctop query advice --session <id>`.
     Expected: the pane's top Advisor row (headline / evidence) matches
-    `advice[0]` of the CLI's JSON output for the same session id.
+    `primary` of the CLI's schema-2 JSON for the same session id, and the
+    rows below it are `items` in order; with a TUI running beside it, the
+    TUI's Advisor row and its dashboard nudge name the same rule.
     Claude Code version:
     Result: pending
 

@@ -1,6 +1,6 @@
 # PRD: cctop pane — the dashboard inside Claude Code's own TUI
 
-**Status:** Draft v1.1 · 2026-09-12 (v1 reviewed against the generated `plugin/.claude/types/claude-code.d.ts` of 2.1.269 and the binary; corrections marked *v1.1*)
+**Status:** v1.2 · 2026-09-15 — shipped (plugin 0.4.0 with cctop 0.3.0); §11 amends the view set, the poller and the engine surfaces for the coach (v1 reviewed against the generated `plugin/.claude/types/claude-code.d.ts` of 2.1.269 and the binary; corrections marked *v1.1*; the coach amendment marked *v1.2*)
 **Target:** Claude Code CLI ≥ 2.1.269 on macOS and Linux, fullscreen renderer (`/tui fullscreen`) with graceful behaviour in the classic renderer. Windows is out of scope.
 **Depends on:** Claude Code *function hooks* (early access, `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, tracked in [anthropics/claude-code#91870](https://github.com/anthropics/claude-code/issues/91870)).
 
@@ -275,3 +275,46 @@ Automated criteria are what an agent checks; **live** criteria are collected in 
 7. **GA timing:** Anthropic says function hooks ship "on the scale of weeks"; if the flag disappears or the API changes before then, which parts of this PRD need a re-check (US-001, placement rules, the trust flow)?
 
 *Answered in v1.1:* dock width — the engine persists `pluginPanes: { dockColumns, inlineRows }` to settings when the user resizes with `ctrl+x` arrows; no default needs setting.
+
+*Answered in the live checks (2026-09-14):* question 1 — the engine reserves `/cctop` for the skill, so the native command is `/cctop-pane` (`plugin/hooks/pane.tsx`, `COMMAND`); question 2 — a skill invocation raises no `command.run`, so the `skill.prompt` degrade of FR-12 stands; question 3 — the poller's payload is fine at the verbs below, no combined `cctop query pane` verb was needed.
+
+## 11. Amendment v1.2 — the coach (2026-09-15)
+
+The coach PRD (`tasks/prd-cctop-coach.md`, US-010 and US-013) changes what the pane draws and which engine surfaces it may use. This section supersedes US-005, US-006's Advisor line, US-007's view bar and FR-5/FR-6 where they differ; the plan is `tasks/plan-cctop-coach.md` Phase 4 and the sync sheet of the design canvas (`tasks/design-coach/`).
+
+**Views.** The view bar is `Coach · Overview · Tools · Agents · Files · Events · Advisor` (`VIEWS` in `pane.tsx`; `/cctop-pane <view>` accepts `coach`). Two views draw an object the binary owns, verbatim:
+
+| View | Draws | Verb | Notes |
+|---|---|---|---|
+| Overview | the dashboard object (direction B): the header line, the four tiles (the coach's lights as block digits, `frame.tsx` `bigDigits`), the nudge line, the nine ledger rows as `Button`s — a row's digit opens its view (5–9) or unfolds its block beneath it (1–4) | `cctop query dashboard` | the tiles two a row from 50 body columns (`TILES_MIN`), the coach's L1 line below that, L2 below 40; before the binary answers, `engineTiles` draws the context tile from the engine's own usage read and `—` for the rest |
+| Coach | the coach object: the state line, the four light rows, the one nudge (two lines, class, fire point, queue depth), `next` with its promotion condition, `snoozed`; the buttons `[1 fill]` `[2 snooze]` `[3 why]`; the detail frame of the highest light (or the one chosen by its button) | `cctop query coach` | lines are cut at 52 cells inside the binary, so the pane and the TUI's `c` view are row-identical (`tests/pane/coach.test.ts` and the Rust `coach_view` snapshots read the same `tests/pane/fixtures/coach-<moment>.json`) |
+| Advisor | the slot's occupant first (`primary`), then `items` | `cctop query advice` (schema 2) | the pane never ranks: the occupant is whatever the running dashboard holds, persisted in `~/.cctop/<session>.advisor.json` |
+
+**Poller.** `QUERY_VERBS` gains `dashboard` and `coach`; the busy tick (2 s) runs every verb but `advice`, which waits for the idle tick (10 s) (`IDLE_ONLY_VERBS`); every call carries `--surface pane`, so a fire recorded by a reader is stamped with the surface that showed it. The marker file is unchanged.
+
+**Engine surfaces the module may use for the coach.**
+
+| Surface | Use | Rule |
+|---|---|---|
+| `$.ui.status` | the coach's one-line form — L0 at ≥ 80 body columns, L1 below, L2 when even that does not fit — computed by `statusLine()` from the coach object | reserved for the coach; set again only when a light's level or the occupant changes (`model.coachStatus`); cleared on close; the `/diff`-hidden notice takes the line while the pane is not drawn |
+| `$.ui.toast` | a NOW-class nudge taking the slot | once per fire (`coachToasted` key = rule + fire time), at most once per human turn; never for NEXT/LATER; also the snooze confirmation and the "prompt box is busy" notice |
+| `$.prompt.fill` | `[1 fill]` writes the nudge's action text into the prompt box when `action_kind` is `prompt` or `slash` | the person presses Enter; the pane never submits |
+| `$.process.run` | `cctop query coach --snooze <id>` for `[2 snooze]`; the request is queued for a running TUI in `<session>.advisor.requests`, or applied directly when none runs | from the button's handler, never from `tool.call`, `turn.step` or `ui.render` |
+| `$.ui.log` | failures of the above | — |
+
+Forbidden, as the coach PRD's non-goals say: `$.prompt.submit`, `$.command.run` as an action on the person's behalf, `$.turn.abort`, `prompt.context` or any injection of coach text into the model; `additionalContext` stays untouched.
+
+**Pane-native sources per family.** US-013 of the coach PRD asks, per family, which engine event could feed it natively. Today every family is binary-backed through `cctop query coach` (one implementation, three surfaces — the plan's §3 contract), and the module registers no new hooks for the coach; the table records the native candidates so a later version can shorten the path where the binary lags the engine.
+
+| Family | Engine surface that carries the same fact | Status |
+|---|---|---|
+| context-reset (A23 / A42), post-compaction (A06) | `command.run` for `/clear` and `/compact` (the acted signal); `session.compact` with `trigger = precompute`; `config.set` on `autoCompactEnabled` / `autoCompactWindow` | binary-backed (`continued-in`, `compact_boundary`); `session.compact` counted for the Context block only |
+| warm-switch (A21), cold-switch (A21b) | `command.run` for `/model` and `/fast`; `classic.PreModelSwitch` when the classic hook is installed | binary-backed (the spooled `PreModelSwitch` hook, else the history.jsonl `/model` row) |
+| waiting (A41), cache-countdown (A19) | `turn.complete` with `reason`; the `Spinner.mode`; `classic.Notification` | binary-backed (transcript `AskUserQuestion` without a result, spooled `Notification`) |
+| turn-died (A47) | `turn.complete` with `reason = refusal` or an error | binary-backed (`isApiErrorMessage` lines); `reason = refusal` has no family yet (coach PRD §13 q7) |
+| explore-delegate (A25), subagent-model (A14) | `agent.spawn` before the spawn (the acted signal; the model rewrite is guard mode, out of scope) | binary-backed (transcript `Agent` calls) |
+| denial-streak (A45), permission-wait (A09) | `tool.check` with the rule that decided; `$.ui.notice(tool_use_id, …)` on the open permission dialog | binary-backed (`toolDenialKind`, spooled `permission_suggestions`); `$.ui.notice` unused |
+| correction-streak (A36), instruction-drift (A46), plan-first (A34) | `$.session.messages()` for the interrupt and steer markers; `prompt.suggest` for the restated prompt | binary-backed (transcript markers); `prompt.suggest` unused — the coach PRD's non-goal on prompt injection stands |
+| verify-gap (A32), commit-unchecked (A33), review-before-merge (A40), failure-cascade (A38), destructive-git (A43), stale-collision (A44) | `tool.call` results (`isError`, the Bash command) | binary-backed (`toolUseResult`, `gitOperation`, `edited_text_file`) |
+
+**Verification.** `docs/verification/pane.md` item 11 now reads against `primary` of `cctop query advice` (schema 2) and item 11a holds the Coach view against `cctop query coach`; both are live checks of the dogfood week that started with cctop 0.3.0.
