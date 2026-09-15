@@ -2,6 +2,16 @@
 
 Written 2026-09-15 at the end of the implementation session (`main` at `4e53bfc`).
 
+> **Status, later the same day** (`main` at `c27683c`): items 1–3 of the list
+> below are done — cctop 0.3.0 is released (`v0.3.0`, all four targets, the
+> tap at 0.3.0, brew's 0.3.0 on PATH here, plugin 0.4.0 installed, `coach =
+> "auto"` in the config; the pane loads at the next Claude Code restart),
+> the PRDs are reconciled (coach v1.3, pane v1.2), and A11 reads the paste
+> from history.jsonl. The plan's Progress paragraph has the details and two
+> findings (hashed pastes; a paste is a cache write, not `input_tokens`).
+> Dogfood is the open item: run every session with the coach for a working
+> week, work the verification items of step 1, then step 4 after two weeks.
+
 ## Where things stand
 
 Phases 0–7 of `tasks/plan-cctop-coach.md` are implemented and committed; the
