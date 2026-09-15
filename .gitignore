@@ -4,6 +4,9 @@ brand/contact-sheet.png
 brand/contact-sheet.svg
 .DS_Store
 plugin/.claude/types/claude-code-mcp.d.ts
+# /plugin-types on 2.1.272+ also writes the enabled plugins' contracts: this machine's, like the MCP file.
+plugin/.claude/types/claude-code-plugins.d.ts
+plugin/.claude/types/claude-code-plugins/
 .test-build/
 node_modules/
 ralph/.last-branch

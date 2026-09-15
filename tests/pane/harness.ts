@@ -317,7 +317,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       keys: async () => [...storeMap.keys()],
     },
     clock: {
-      now: () => now,
+      // A Promise, as Claude Code answers it since 2.1.271 (`clock.now` is a
+      // host event; issue #3): the value is the manual clock's at the call.
+      now: () => Promise.resolve(now),
       sleep: (ms: number) => new Promise<void>((resolve) => arm(ms, resolve, false)),
       after: (ms: number, fn: () => void) => arm(ms, fn, false),
       every: (ms: number, fn: () => void) => arm(ms, fn, true),
@@ -517,6 +519,8 @@ export function paneRender(
       bodyColumns: extra.bodyColumns ?? columns,
       placement: extra.placement ?? 'dock',
       scroll: { offset: 0, bodyRows: rows },
+      // The main conversation in view (2.1.272: `agentId` names an agent's).
+      view: {},
     },
   };
 }

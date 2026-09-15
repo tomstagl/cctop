@@ -75,10 +75,13 @@ let usageTimer: Timer | null = null;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
-// The redraw throttle: when the last invalidate was, and the timer holding
-// the trailing one back while changes come faster than RENDER_MIN_MS.
+// The redraw throttle: when the last invalidate was, the timer holding the
+// trailing one back while changes come faster than RENDER_MIN_MS, and
+// whether a request is reading the clock right now (changes that land
+// meanwhile fold into it).
 let invalidatedAt: number | null = null;
 let renderTimer: Timer | null = null;
+let renderPending = false;
 // Visibility watch: the timer that calls the pane hidden when an invalidate
 // draws no render, and the resolvers of opens waiting for their first render.
 let hiddenTimer: Timer | null = null;
@@ -86,10 +89,19 @@ let renderWaiters: (() => void)[] = [];
 // Whether HIDDEN_STATUS is pinned under the prompt right now.
 let statusPinned = false;
 
-function invalidateNow($: EngineInterface): void {
-  invalidatedAt = $.clock.now();
+// Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
+// due time) and arms the hidden watch.
+function invalidateAt($: EngineInterface, now: number): void {
+  invalidatedAt = now;
   $.ui.invalidate('ui.render');
   watchForRender($);
+}
+
+// An unthrottled redraw (an open, a view switch). `$.clock.now()` is a host
+// round trip since Claude Code 2.1.271 (issue #3), so this resolves once the
+// request is made.
+function invalidateNow($: EngineInterface): Promise<void> {
+  return $.clock.now().then((now) => invalidateAt($, now));
 }
 
 // Arms (or re-arms) the hidden watch: if the engine asks for no tree within
@@ -128,11 +140,11 @@ function unpinStatus($: EngineInterface): void {
 
 // A render arrived: the pane is drawn, here and this wide. Settles every
 // open waiting on it and lifts the hidden status if it was pinned.
-function noteRender($: EngineInterface, e: RenderInput<'Pane'>): void {
+function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): void {
   const wasHidden = model.visibility === 'hidden';
   model = reduce(model, {
     type: 'render',
-    at: $.clock.now(),
+    at: now,
     placement: e.props.placement,
     bodyColumns: e.props.bodyColumns,
     viewportColumns: e.viewport?.columns ?? null,
@@ -169,17 +181,29 @@ function awaitRender($: EngineInterface): Promise<void> {
 
 // Asks for a redraw at most every RENDER_MIN_MS: a change inside the gap
 // arms one trailing call for the end of it, later changes fold into that.
-function requestRender($: EngineInterface): void {
-  if (renderTimer !== null) return;
-  const waited = invalidatedAt === null ? RENDER_MIN_MS : $.clock.now() - invalidatedAt;
-  if (waited >= RENDER_MIN_MS) {
-    invalidateNow($);
-    return;
+// Runs under every model change, and the gap is measured on the host's
+// clock, a round trip: `renderPending` is set before the first await, so the
+// changes that land while one request reads the clock fold into it instead
+// of each arming a timer. The trailing timer fires at the gap's end by
+// construction, so it needs no second reading.
+async function requestRender($: EngineInterface): Promise<void> {
+  if (renderTimer !== null || renderPending) return;
+  renderPending = true;
+  try {
+    const now = await $.clock.now();
+    const waited = invalidatedAt === null ? RENDER_MIN_MS : now - invalidatedAt;
+    if (waited >= RENDER_MIN_MS) {
+      invalidateAt($, now);
+      return;
+    }
+    const due = now + RENDER_MIN_MS - waited;
+    renderTimer = $.clock.after(RENDER_MIN_MS - waited, () => {
+      renderTimer = null;
+      invalidateAt($, due);
+    });
+  } finally {
+    renderPending = false;
   }
-  renderTimer = $.clock.after(RENDER_MIN_MS - waited, () => {
-    renderTimer = null;
-    invalidateNow($);
-  });
 }
 
 function stopRenderTimer(): void {
@@ -190,7 +214,7 @@ function stopRenderTimer(): void {
 function replaceModel($: EngineInterface, next: Model): void {
   const before = model;
   model = next;
-  if (model.open) requestRender($);
+  if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
 }
 
@@ -367,9 +391,8 @@ function followSession($: EngineInterface): void {
 }
 
 function readUsage($: EngineInterface): void {
-  $.session
-    .usage()
-    .then((usage) => apply($, { type: 'usage', usage, at: $.clock.now() }))
+  Promise.all([$.session.usage(), $.clock.now()])
+    .then(([usage, at]) => apply($, { type: 'usage', usage, at }))
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
 }
 
@@ -414,11 +437,12 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   await $.ui.open({ id: PANE_ID, title: 'cctop' });
   const opened = model.open;
   const label = view === undefined ? undefined : VIEWS.find((v) => v.view === view)?.label;
+  const openedAt = opened ? model.openedAt : await $.clock.now();
   model = {
     ...model,
     open: true,
     view: view ?? model.view,
-    openedAt: opened ? model.openedAt : $.clock.now(),
+    openedAt,
     visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
   };
   persistPane($);
@@ -432,7 +456,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
     updateMarker($);
   }
   const rendered = awaitRender($);
-  invalidateNow($);
+  await invalidateNow($);
   await rendered;
   updateMarker($);
   return outcomeText(model, label);
@@ -468,17 +492,17 @@ async function closePane($: EngineInterface): Promise<void> {
 function selectView($: EngineInterface, view: View): void {
   model = { ...model, view };
   persistPane($);
-  invalidateNow($);
+  invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
 }
 
 // The pane's tree for one render. Inline (the classic renderer's few rows
 // above the prompt): the header and the Context and Limits lines only, no
 // view bar. Docked: the view bar, the view, then the state of the binary and
-// its query verbs beneath it.
-function buildPane($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
+// its query verbs beneath it. `now` is the render hook's one clock reading,
+// for the elapsed times and countdowns.
+function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): RenderElement {
   const el = $.ui.resolve(e);
   const { Box, Text } = el;
-  const now = $.clock.now();
   const columns = e.props.bodyColumns;
   if (e.props.placement === 'inline') {
     return (
@@ -573,29 +597,30 @@ export const register: Register = (on) => {
   renderWaiters = [];
   statusPinned = false;
   invalidatedAt = null;
+  renderPending = false;
   poller?.stop();
   poller = null;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.
-  on('session.start', ($, e, next) => {
-    apply($, { type: 'session.start', at: $.clock.now() });
+  // Every hook below reads the clock through the host (one round trip, the
+  // cost of the hook's own dispatch again) before its `next(e)`: the
+  // timestamps are the engine's, so the pane and the marker agree with it.
+  on('session.start', async ($, e, next) => {
+    apply($, { type: 'session.start', at: await $.clock.now() });
     poller = makePoller($);
-    return $.command
-      .register({
-        name: COMMAND,
-        description: 'Open the cctop dashboard pane',
-        argumentHint: '[view|close]',
-        immediate: true,
-      })
-      .then(() => next(e))
-      .then((result) => {
-        readModelName($);
-        readVersion($);
-        noteSession($);
-        void detectBinary($).then(() => restorePane($, e.isInteractive));
-        return result;
-      });
+    await $.command.register({
+      name: COMMAND,
+      description: 'Open the cctop dashboard pane',
+      argumentHint: '[view|close]',
+      immediate: true,
+    });
+    const result = await next(e);
+    readModelName($);
+    readVersion($);
+    noteSession($);
+    void detectBinary($).then(() => restorePane($, e.isInteractive));
+    return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: session.start failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
@@ -603,8 +628,8 @@ export const register: Register = (on) => {
 
   // While the pane is closed the turn and tool hooks keep the books and
   // follow the session id, nothing else: no timer, no poll, no usage read.
-  on('turn.start', ($, e, next) => {
-    apply($, { type: 'turn.start', at: $.clock.now() });
+  on('turn.start', async ($, e, next) => {
+    apply($, { type: 'turn.start', at: await $.clock.now() });
     if (model.open) startUsageTimer($);
     poller?.reschedule();
     followSession($);
@@ -614,14 +639,13 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on('turn.complete', ($, e, next) => {
-    apply($, { type: 'turn.complete', at: $.clock.now(), durationMs: e.durationMs, reason: e.reason });
+  on('turn.complete', async ($, e, next) => {
+    apply($, { type: 'turn.complete', at: await $.clock.now(), durationMs: e.durationMs, reason: e.reason });
     stopUsageTimer();
     poller?.reschedule();
-    return next(e).then((result) => {
-      if (model.open) readUsage($);
-      return result;
-    });
+    const result = await next(e);
+    if (model.open) readUsage($);
+    return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
@@ -639,7 +663,7 @@ export const register: Register = (on) => {
   // `isError` and text length after. The result itself passes through
   // untouched; a call that throws beneath us is recorded as an error.
   on('tool.call', async ($, e, next) => {
-    const startedAt = $.clock.now();
+    const startedAt = await $.clock.now();
     apply($, { type: 'tool.start', name: e.tool, at: startedAt });
     let result: ToolCallResult | undefined;
     try {
@@ -650,7 +674,7 @@ export const register: Register = (on) => {
         type: 'tool.end',
         name: e.tool,
         startedAt,
-        at: $.clock.now(),
+        at: await $.clock.now(),
         isError: result === undefined || result.isError === true,
         resultChars: result?.text?.length ?? 0,
       });
@@ -715,12 +739,14 @@ export const register: Register = (on) => {
 
   // A view that throws must not take the pane down: the error is drawn in
   // one line above the last tree that built, kept in the model for that.
-  on('ui.render', { component: 'Pane' }, ($, e, next) => {
+  // The clock is read once per render, before the tree: the frame's time.
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE_ID) return next(e);
-    noteRender($, e);
+    const now = await $.clock.now();
+    noteRender($, e, now);
     const { Box, Text } = $.ui.resolve(e);
     try {
-      const tree = buildPane($, e);
+      const tree = buildPane($, e, now);
       model = { ...model, lastTree: tree };
       return tree;
     } catch (err) {

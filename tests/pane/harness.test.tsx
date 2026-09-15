@@ -3,17 +3,22 @@ import assert from 'node:assert/strict';
 import type { EngineInterface, On } from 'claude-code';
 import { fakeEngine, fakeOn, textOf } from './harness';
 
-test('clock: every/after fire on tick in due order and cancel', () => {
+test('clock: every/after fire on tick in due order and cancel; now resolves the time of the call', async () => {
   const $ = fakeEngine({ now: 1000 });
   const fired: string[] = [];
-  const every = $.clock.every(1000, () => fired.push(`every@${$.clock.now()}`));
-  $.clock.after(1500, () => fired.push(`after@${$.clock.now()}`));
+  // `now` is a Promise (2.1.271+), read at the moment the timer fires.
+  const stamp = (label: string) => void $.clock.now().then((at) => fired.push(`${label}@${at}`));
+  const every = $.clock.every(1000, () => stamp('every'));
+  $.clock.after(1500, () => stamp('after'));
   $.clock.tick(2500);
+  assert.deepEqual(fired, [], 'the readings land after the tick, not inside it');
+  await Promise.resolve();
   assert.deepEqual(fired, ['every@2000', 'after@2500', 'every@3000']);
-  assert.equal($.clock.now(), 3500);
+  assert.equal(await $.clock.now(), 3500);
   assert.equal($.clock.pending(), 1);
   every.cancel();
   $.clock.tick(5000);
+  await Promise.resolve();
   assert.equal(fired.length, 3);
   assert.equal($.clock.pending(), 0);
 });

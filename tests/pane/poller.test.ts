@@ -72,12 +72,13 @@ function bootPoller(process: Record<string, ProcessScript> = binaryScripts(), fr
       model = next;
     },
   );
-  const busy = () => {
-    model = reduce(model, { type: 'turn.start', at: $.clock.now() });
+  // The turn hooks as pane.tsx runs them: the clock read (a Promise) first.
+  const busy = async () => {
+    model = reduce(model, { type: 'turn.start', at: await $.clock.now() });
     poller.reschedule();
   };
-  const idle = () => {
-    model = reduce(model, { type: 'turn.complete', at: $.clock.now(), durationMs: 1, reason: 'answer' });
+  const idle = async () => {
+    model = reduce(model, { type: 'turn.complete', at: await $.clock.now(), durationMs: 1, reason: 'answer' });
     poller.reschedule();
   };
   // Advances the clock in `step` slices so each due tick can settle before the next.
@@ -132,12 +133,12 @@ test('cadence: 2 s while busy, 10 s idle, re-evaluated on each turn change', asy
   await advance(10000);
   assert.equal(queries($, 'summary').length, 3);
 
-  busy();
+  await busy();
   assert.equal($.clock.pending(), 1, 'the idle timer is replaced, not added to');
   await advance(6000);
   assert.equal(queries($, 'summary').length, 6, 'one tick per 2 s while busy');
 
-  idle();
+  await idle();
   await advance(8000);
   assert.equal(queries($, 'summary').length, 6, 'back to 10 s once idle');
   await advance(2000);
@@ -145,8 +146,8 @@ test('cadence: 2 s while busy, 10 s idle, re-evaluated on each turn change', asy
 
   poller.stop();
   assert.equal($.clock.pending(), 0);
-  idle();
-  busy();
+  await idle();
+  await busy();
   assert.equal($.clock.pending(), 0, 'reschedule arms nothing once stopped');
   await advance(20000);
   assert.equal(queries($, 'summary').length, 7);
@@ -156,7 +157,7 @@ test('a slow summary blocks further ticks: one process at a time, no overlap', a
   const scripts = binaryScripts();
   scripts[`cctop query summary --session ${SESSION} --surface pane`] = () => new Promise<ProcessRunResult>(() => {});
   const { $, poller, busy, advance, model } = bootPoller(scripts);
-  busy();
+  await busy();
   poller.start();
   await settle();
   assert.equal(queries($).length, 1, 'summary started');

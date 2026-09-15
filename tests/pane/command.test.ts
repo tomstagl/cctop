@@ -149,8 +149,9 @@ test('the view bar names the views, the current one inverse, and a press switche
 
   const before = $.ui.invalidates['ui.render'] ?? 0;
   $.ui.press('tools');
-  assert.equal($.ui.invalidates['ui.render'], before + 1);
+  // The redraw is asked for once the clock (a Promise) has answered.
   await settle();
+  assert.equal($.ui.invalidates['ui.render'], before + 1);
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const after = await render(80);
   assert.match(after.rows[2], /^│ TOOL\s+N\s+ERR/);

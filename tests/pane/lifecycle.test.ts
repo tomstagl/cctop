@@ -100,6 +100,22 @@ test('20 model changes in 1 s produce at most 4 invalidates plus one trailing', 
   assert.equal(invalidates() - base, burst + 1, 'nothing more without a change');
 });
 
+test('two changes in one tick, while the clock is being read, ask for one redraw', async () => {
+  const { $, start, command, compact, invalidates } = boot({ binary: false });
+  await start();
+  await settle();
+  await command();
+  await settle();
+  $.clock.tick(1000);
+  const before = invalidates();
+  // Neither dispatch is awaited before the other starts: both reach the
+  // throttle before the clock (a Promise) has answered the first request.
+  await Promise.all([compact(), compact()]);
+  assert.equal(invalidates(), before + 1, 'the second change folds into the first request');
+  await settle();
+  assert.equal($.clock.pending(), 0, 'no trailing call: nothing changed inside the gap');
+});
+
 test('no invalidate while the pane is closed', async () => {
   const { $, start, compact, turnStart, invalidates } = boot({ binary: false });
   await start();

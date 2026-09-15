@@ -13,6 +13,7 @@ import type { EngineInterface, Timer } from 'claude-code';
 import { IDLE_ONLY_VERBS, QUERY_VERBS, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
 
 export type PollerEngine = {
+  /** `now` resolves a Promise: a host round trip since Claude Code 2.1.271 (issue #3). */
   clock: Pick<EngineInterface['clock'], 'now' | 'every'>;
   process: EngineInterface['process'];
   session: Pick<EngineInterface['session'], 'id'>;
@@ -77,13 +78,14 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
   if (model.sessionId === null) return;
   const home = await $.home();
   if (home === undefined) return;
+  const now = await $.clock.now();
   const marker = {
     version: model.version,
     sessionId: model.sessionId,
     loaded: true,
     loadedAt: model.loadedAt === null ? null : new Date(model.loadedAt).toISOString(),
     openedAt: model.openedAt === null ? null : new Date(model.openedAt).toISOString(),
-    heartbeatAt: new Date($.clock.now()).toISOString(),
+    heartbeatAt: new Date(now).toISOString(),
     open: model.open,
     // Where the engine drew it last and whether it still does; `unknown`
     // before the first render after an open (docs/claude-code-panels.md §5.4).
@@ -107,9 +109,9 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
 
   const dispatch = (action: Action): void => setModel(reduce(getModel(), action));
 
-  const updateStale = (): void => {
-    const model = getModel();
-    dispatch({ type: 'stale', stale: $.clock.now() - (model.queryAt ?? startedAt) > STALE_AFTER_MS });
+  const updateStale = async (): Promise<void> => {
+    const now = await $.clock.now();
+    dispatch({ type: 'stale', stale: now - (getModel().queryAt ?? startedAt) > STALE_AFTER_MS });
   };
 
   const readVerbs = async (): Promise<readonly QueryVerb[] | null> => {
@@ -164,7 +166,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       // again; stale is judged from here, the new session having had no
       // success yet.
       failing.clear();
-      startedAt = $.clock.now();
+      startedAt = await $.clock.now();
       $.ui.log(`cctop: session ${before.sessionId} rotated to ${id}: following it`);
     }
     dispatch({ type: 'session.id', id });
@@ -191,8 +193,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       called += 1;
       if (!(await query(verb, sessionId))) ok = false;
     }
-    dispatch({ type: 'tick', at: $.clock.now(), ok: ok && called > 0 });
-    updateStale();
+    dispatch({ type: 'tick', at: await $.clock.now(), ok: ok && called > 0 });
+    await updateStale();
     await writeMarker($, getModel());
   };
 
@@ -200,9 +202,16 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     start() {
       if (active) return;
       active = true;
-      startedAt = $.clock.now();
       poller.reschedule();
-      void poller.tick();
+      // The first round follows the start time, which `stale` is judged
+      // against until the first success; a stop meanwhile ends it there.
+      void $.clock
+        .now()
+        .then((now) => {
+          startedAt = now;
+          return active ? poller.tick() : undefined;
+        })
+        .catch((err: unknown) => $.ui.log(`cctop: poll failed: ${err instanceof Error ? err.message : String(err)}`));
     },
     stop() {
       active = false;
@@ -224,9 +233,9 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       if (timer !== null && timerMs === ms) return;
       timer?.cancel();
       timerMs = ms;
-      // Stale is judged before the tick so a hung query still flips it.
+      // Stale is judged beside the tick so a hung query still flips it.
       timer = $.clock.every(ms, () => {
-        updateStale();
+        void updateStale().catch((err: unknown) => $.ui.log(`cctop: clock failed: ${err instanceof Error ? err.message : String(err)}`));
         void poller.tick();
       });
     },
