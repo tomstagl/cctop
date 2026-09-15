@@ -586,9 +586,54 @@ impl Rule for ThinkingShare {
     }
 }
 
-/// A11 — a turn whose first API call carried > 5 k uncached input tokens
-/// (a paste), within the last three human turns.
+/// A11 — a paste of ≥ 20 k characters or ≥ 200 lines in history.jsonl
+/// matched to one of the last three human turns (a queued steer's paste
+/// lands inside the turn that absorbed it), or a turn whose first API call
+/// carried > 5 k uncached `input_tokens` (sessions without a prompt cache).
+/// The paste's size comes from history.jsonl — inline characters, or the
+/// composer's `+N lines` placeholder for a hashed paste — never its text.
+/// On a cached session the paste is not `input_tokens` at all: Claude Code
+/// writes the new prompt into the cache, so it lands in the first call's
+/// `cache_creation_input_tokens` with the previous turn's tail, which is
+/// why the size is read from the history and not from the usage.
 pub struct FreshInputSpike;
+
+/// A paste is billed at ~one token per four characters; when only its
+/// line count is known, ~25 tokens a line (code and logs sit at 10–50).
+const PASTE_CHARS_PER_TOKEN: usize = 4;
+const PASTE_TOKENS_PER_LINE: usize = 25;
+/// A paste this large is a fresh-input spike on its own (≈ 5 k tokens).
+const PASTE_SPIKE_CHARS: usize = 5_000 * PASTE_CHARS_PER_TOKEN;
+const PASTE_SPIKE_LINES: usize = 5_000 / PASTE_TOKENS_PER_LINE;
+
+/// The paste that came with turn `i`: submitted from two seconds before the
+/// turn's first line up to the same margin before the next turn's (a queued
+/// steer absorbed mid-turn sits inside that span).
+fn paste_for(state: &State, i: usize) -> Option<&crate::history::Paste> {
+    let turns = &state.agg.turns;
+    let start = |t: &crate::metrics::Turn| {
+        t.started_at
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms)
+    };
+    let from = start(turns.get(i)?)? - 2_000;
+    let to = turns
+        .get(i + 1)
+        .and_then(start)
+        .map(|t| t - 2_000)
+        .unwrap_or(i64::MAX);
+    state.history.paste_between(from, to)
+}
+
+/// A paste's tokens: exact-ish from its characters, `≈` from its lines.
+fn paste_tokens(p: &crate::history::Paste) -> (u64, bool) {
+    if p.chars > 0 {
+        ((p.chars / PASTE_CHARS_PER_TOKEN) as u64, false)
+    } else {
+        ((p.lines * PASTE_TOKENS_PER_LINE) as u64, true)
+    }
+}
+
 impl Rule for FreshInputSpike {
     fn id(&self) -> &'static str {
         "A11"
@@ -600,27 +645,55 @@ impl Rule for FreshInputSpike {
         Urgency::Later
     }
     fn evaluate(&self, state: &State) -> Option<Advice> {
-        let t = state
+        let (t, fresh, approx, paste) = state
             .agg
             .turns
             .iter()
-            .filter(|t| {
-                t.human && t.first_call_input > 5_000 && human_turns_since(state, t.number) < 3
+            .enumerate()
+            .filter(|(_, t)| t.human && human_turns_since(state, t.number) < 3)
+            .filter_map(|(i, t)| {
+                let paste = paste_for(state, i);
+                let (pasted, approx) = paste.map_or((0, false), paste_tokens);
+                let spike = t.first_call_input > 5_000
+                    || paste.is_some_and(|p| {
+                        p.chars >= PASTE_SPIKE_CHARS
+                            || (p.chars == 0 && p.lines >= PASTE_SPIKE_LINES)
+                    });
+                let fresh = t.first_call_input.max(pasted);
+                spike.then_some((t, fresh, approx && pasted > t.first_call_input, paste))
             })
-            .max_by_key(|t| t.first_call_input)?;
+            .max_by_key(|(_, fresh, _, _)| *fresh)?;
         let mut a = Advice::new("A11", "fresh-input", Urgency::Later);
-        a.headline = format!(
-            "Turn {} sent ~{} tokens of uncached input{}",
-            t.number,
-            fmt::tokens(t.first_call_input),
-            usd_label(state, t.first_call_input, PriceKind::Input)
-        );
-        a.evidence = format!(
-            "the prompt itself (a paste, {} images) was billed fresh on the turn's first call and stays in context",
-            t.prompt_images
-        );
+        a.headline = match paste {
+            Some(p) => format!(
+                "Turn {} pasted {}{} tokens ({} lines){}",
+                t.number,
+                if approx { "≈" } else { "~" },
+                fmt::tokens(fresh),
+                p.lines,
+                usd_label(state, fresh, PriceKind::Input)
+            ),
+            None => format!(
+                "Turn {} sent ~{} tokens of uncached input{}",
+                t.number,
+                fmt::tokens(fresh),
+                usd_label(state, fresh, PriceKind::Input)
+            ),
+        };
+        a.evidence = match paste {
+            Some(p) if p.chars > 0 => format!(
+                "a {}-line paste ({} chars) was written to the cache on the turn's first call and is re-read by every later one",
+                p.lines,
+                fmt::tokens(p.chars as u64)
+            ),
+            Some(_) => "the paste (sized from its +N lines placeholder) was written to the cache on the turn's first call and is re-read by every later one".into(),
+            None => format!(
+                "the prompt itself (a paste, {} images) was billed fresh on the turn's first call and stays in context",
+                t.prompt_images
+            ),
+        };
         a.action = "for files, give the path and let Claude read the relevant range; for logs, paste the last 100 lines".into();
-        a.saving = Saving::OneOff(t.first_call_input.saturating_sub(1_000));
+        a.saving = Saving::OneOff(fresh.saturating_sub(1_000));
         a.window_turns = 3;
         Some(a)
     }
@@ -1184,6 +1257,110 @@ mod tests {
         }
         assert!(FreshInputSpike.evaluate(&sum).is_none());
         assert!(FreshInputSpike.evaluate(&fixture_state()).is_none());
+    }
+
+    #[test]
+    fn a11_names_the_paste_history_jsonl_recorded_for_the_turn() {
+        use crate::history::Paste;
+        let t = |ts: &str| crate::metrics::cost::parse_ts_ms(ts).unwrap();
+        // The paste row lands at the prompt's own timestamp (here 300 ms
+        // before the transcript line): it is the turn's. On a cached session
+        // the first call shows it as a cache write, not as input_tokens, so
+        // the size comes from the history and the headline names the paste.
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&response("f1", "2026-01-01T00:00:01Z", 2, 9_800, 50_000));
+        s.history.pastes.push(Paste {
+            at_ms: t("2026-01-01T00:00:00Z") - 300,
+            chars: 38_000,
+            lines: 412,
+        });
+        let a = FreshInputSpike.evaluate(&s).expect("fires");
+        assert!(
+            a.headline
+                .starts_with("Turn 1 pasted ~9.5k tokens (412 lines)"),
+            "{}",
+            a.headline
+        );
+        assert_eq!(
+            a.evidence,
+            "a 412-line paste (38k chars) was written to the cache on the turn's first call and is re-read by every later one"
+        );
+        assert_eq!(a.saving, Saving::OneOff(8_500));
+        // A hashed paste (its text in paste-cache, pruned later) is sized by
+        // the composer's placeholder alone: ≈ 25 tokens a line from 200 lines.
+        let mut hashed = State::new(Pricing::bundled());
+        hashed.apply(&prompt("2026-01-01T00:00:00Z"));
+        hashed.apply(&response("h1", "2026-01-01T00:00:01Z", 2, 6_000, 50_000));
+        hashed.history.pastes.push(Paste {
+            at_ms: t("2026-01-01T00:00:00Z") - 100,
+            chars: 0,
+            lines: 199,
+        });
+        assert!(
+            FreshInputSpike.evaluate(&hashed).is_none(),
+            "under 200 lines"
+        );
+        hashed.history.pastes[0].lines = 412;
+        let a = FreshInputSpike
+            .evaluate(&hashed)
+            .expect("fires on the placeholder");
+        assert!(
+            a.headline
+                .starts_with("Turn 1 pasted ≈10k tokens (412 lines)"),
+            "{}",
+            a.headline
+        );
+        assert!(
+            a.evidence.contains("+N lines placeholder"),
+            "{}",
+            a.evidence
+        );
+        // A paste queued mid-turn is the turn's from 20k chars, priced at
+        // chars / 4; below that, with a small first call, nothing fires.
+        let mut queued = State::new(Pricing::bundled());
+        queued.apply(&prompt("2026-01-01T00:00:00Z"));
+        queued.apply(&response("q1", "2026-01-01T00:00:01Z", 400, 0, 50_000));
+        queued.apply(&response("q2", "2026-01-01T00:00:40Z", 7_000, 0, 50_000));
+        queued.history.pastes.push(Paste {
+            at_ms: t("2026-01-01T00:00:20Z"),
+            chars: 19_999,
+            lines: 150,
+        });
+        assert!(
+            FreshInputSpike.evaluate(&queued).is_none(),
+            "under 20k chars"
+        );
+        queued.history.pastes[0].chars = 24_000;
+        let a = FreshInputSpike
+            .evaluate(&queued)
+            .expect("the steer's paste fires");
+        assert!(
+            a.headline
+                .starts_with("Turn 1 pasted ~6.0k tokens (150 lines)"),
+            "{}",
+            a.headline
+        );
+        assert_eq!(a.saving, Saving::OneOff(5_000));
+        // Another turn's paste never counts for this one: the window closes
+        // two seconds before the next turn's first line.
+        let mut other = State::new(Pricing::bundled());
+        other.apply(&prompt("2026-01-01T00:00:00Z"));
+        other.apply(&response("o1", "2026-01-01T00:00:01Z", 400, 0, 50_000));
+        other.apply(&prompt("2026-01-01T00:05:00Z"));
+        other.apply(&response("o2", "2026-01-01T00:05:01Z", 400, 0, 50_000));
+        other.history.pastes.push(Paste {
+            at_ms: t("2026-01-01T00:05:00Z") - 500,
+            chars: 30_000,
+            lines: 300,
+        });
+        let a = FreshInputSpike.evaluate(&other).expect("turn 2's paste");
+        assert!(
+            a.headline
+                .starts_with("Turn 2 pasted ~7.5k tokens (300 lines)"),
+            "{}",
+            a.headline
+        );
     }
 
     #[test]

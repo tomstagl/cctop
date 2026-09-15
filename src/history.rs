@@ -3,8 +3,12 @@
 //! cctop reads it for the slash commands only — a `/model`, `/fast`,
 //! `/effort`, `/clear`, `/compact`, `/loop`, `/goal` or `/rewind` row is a
 //! habit signal the transcript does not carry the same way — and for the
-//! size of a paste. Prompt text is never kept: a row that is not a slash
-//! command survives as its timestamp and paste size alone.
+//! size of a paste. A paste is either inline (`pastedContents[].content`,
+//! small ones) or a `contentHash` whose text lives in `paste-cache/` (pruned
+//! after a while); the composer's placeholder `[Pasted text #1 +N lines]`
+//! in `display` is the durable size, so lines come from it and characters
+//! only when the text is inline. Prompt text is never kept: a row that is
+//! not a slash command survives as its timestamp and paste size alone.
 
 use std::io::{BufRead, Seek};
 use std::path::{Path, PathBuf};
@@ -25,8 +29,26 @@ pub struct Row {
     pub command: Option<String>,
     /// The first argument of a kept command (`sonnet`, `medium`, `5m`).
     pub arg: Option<String>,
-    /// Characters pasted with the row (`pastedContents`), never their text.
+    /// Characters pasted inline with the row (`pastedContents[].content`),
+    /// never their text; 0 when the paste is only a `contentHash`.
     pub pasted_chars: usize,
+    /// Lines pasted: the composer's `[Pasted text #1 +N lines]` placeholders
+    /// summed, else the inline text's lines.
+    pub pasted_lines: usize,
+}
+
+/// The `+N lines` of every `[Pasted text #k +N lines]` placeholder in a
+/// `display`, summed.
+fn placeholder_lines(display: &str) -> usize {
+    display
+        .split("[Pasted text #")
+        .skip(1)
+        .filter_map(|rest| {
+            let (head, _) = rest.split_once(" lines]")?;
+            let (_, n) = head.rsplit_once(" +")?;
+            n.parse::<usize>().ok()
+        })
+        .sum()
 }
 
 /// Parse one line; prompt text is reduced to its paste size.
@@ -46,20 +68,24 @@ pub fn parse_row(line: &str) -> Option<Row> {
     } else {
         (None, None)
     };
-    let pasted_chars = v
+    let (pasted_chars, inline_lines, pastes) = v
         .get("pastedContents")
         .and_then(Value::as_object)
         .map(|m| {
-            m.values()
-                .map(|p| {
-                    p.get("content")
-                        .and_then(Value::as_str)
-                        .map(|s| s.chars().count())
-                        .unwrap_or(0)
-                })
-                .sum()
+            m.values().fold((0, 0, 0), |(c, l, n), p| {
+                match p.get("content").and_then(Value::as_str) {
+                    Some(s) => (c + s.chars().count(), l + s.lines().count(), n + 1),
+                    None => (c, l, n + 1),
+                }
+            })
         })
-        .unwrap_or(0);
+        .unwrap_or((0, 0, 0));
+    let pasted_lines = match placeholder_lines(display) {
+        0 => inline_lines,
+        n => n,
+    };
+    // A hashed paste has a size only through its placeholder.
+    let _ = pastes;
     Some(Row {
         at_ms: v.get("timestamp").and_then(Value::as_i64)?,
         session_id: v
@@ -75,8 +101,21 @@ pub fn parse_row(line: &str) -> Option<Row> {
         command,
         arg,
         pasted_chars,
+        pasted_lines,
     })
 }
+
+/// One paste of this session: when, how big — never what.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Paste {
+    pub at_ms: i64,
+    /// Inline characters; 0 when only the placeholder's line count is known.
+    pub chars: usize,
+    pub lines: usize,
+}
+
+/// Pastes kept per session (a session rarely has a dozen).
+const PASTES_KEPT: usize = 64;
 
 pub fn default_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude/history.jsonl"))
@@ -145,8 +184,9 @@ pub struct History {
     pub project_clears: usize,
     /// `/compact` rows in this project, all sessions.
     pub project_compacts: usize,
-    /// The last paste of this session: `(at_ms, chars)`.
-    pub last_paste: Option<(i64, usize)>,
+    /// This session's pastes in row order, the newest last (A11 matches
+    /// them to turns by time).
+    pub pastes: Vec<Paste>,
 }
 
 impl History {
@@ -163,8 +203,15 @@ impl History {
                 }
             }
             if r.session_id == session_id {
-                if r.pasted_chars > 0 {
-                    self.last_paste = Some((r.at_ms, r.pasted_chars));
+                if r.pasted_chars > 0 || r.pasted_lines > 0 {
+                    if self.pastes.len() == PASTES_KEPT {
+                        self.pastes.remove(0);
+                    }
+                    self.pastes.push(Paste {
+                        at_ms: r.at_ms,
+                        chars: r.pasted_chars,
+                        lines: r.pasted_lines,
+                    });
                 }
                 if r.command.is_some() {
                     self.commands.push(r.clone());
@@ -179,6 +226,16 @@ impl History {
             .iter()
             .rev()
             .find(|r| r.command.as_deref() == Some(command))
+    }
+
+    /// The largest paste submitted in `(from_ms, to_ms]` — a prompt's own
+    /// paste lands at the prompt's timestamp, a queued steer's inside the
+    /// turn it was absorbed by.
+    pub fn paste_between(&self, from_ms: i64, to_ms: i64) -> Option<&Paste> {
+        self.pastes
+            .iter()
+            .filter(|p| p.at_ms > from_ms && p.at_ms <= to_ms)
+            .max_by_key(|p| p.chars)
     }
 
     /// This session's `/model` and `/fast` rows after `since_ms`.
@@ -199,22 +256,29 @@ mod tests {
     const LINES: &str = concat!(
         r#"{"display":"/model sonnet","pastedContents":{},"timestamp":1000,"project":"/p","sessionId":"s1"}"#,
         "\n",
-        r#"{"display":"fix the parser please","pastedContents":{"1":{"id":1,"type":"text","content":"aaaa bbbb"}},"timestamp":2000,"project":"/p","sessionId":"s1"}"#,
+        r#"{"display":"fix the parser please","pastedContents":{"1":{"id":1,"type":"text","content":"aaaa\nbbbb"},"2":{"id":2,"type":"text","content":"cc"}},"timestamp":2000,"project":"/p","sessionId":"s1"}"#,
         "\n",
         r#"{"display":"/clear","pastedContents":{},"timestamp":3000,"project":"/p","sessionId":"s2"}"#,
         "\n",
         r#"{"display":"/loop 5m check ci","pastedContents":{},"timestamp":4000,"project":"/q","sessionId":"s1"}"#,
+        "\n",
+        r#"{"display":"why does this fail [Pasted text #1 +412 lines] and this [Pasted text #2 +3 lines]","pastedContents":{"1":{"id":1,"type":"text","contentHash":"6eabe73e91f32fde"},"2":{"id":2,"type":"text","contentHash":"0000000000000001"}},"timestamp":4500,"project":"/p","sessionId":"s1"}"#,
         "\n",
     );
 
     #[test]
     fn rows_keep_commands_and_paste_sizes_never_text() {
         let rows: Vec<Row> = LINES.lines().filter_map(parse_row).collect();
-        assert_eq!(rows.len(), 4);
+        assert_eq!(rows.len(), 5);
         assert_eq!(rows[0].command.as_deref(), Some("/model"));
         assert_eq!(rows[0].arg.as_deref(), Some("sonnet"));
         assert_eq!(rows[1].command, None);
-        assert_eq!(rows[1].pasted_chars, 9);
+        assert_eq!((rows[1].pasted_chars, rows[1].pasted_lines), (11, 3));
+        assert_eq!(
+            (rows[4].pasted_chars, rows[4].pasted_lines),
+            (0, 415),
+            "a hashed paste is sized by its placeholders alone"
+        );
         assert_eq!(rows[3].arg.as_deref(), Some("5m"));
         let debug = format!("{rows:?}");
         assert!(!debug.contains("fix the parser") && !debug.contains("aaaa"));
@@ -230,7 +294,27 @@ mod tests {
             2,
             "/model and /loop (the /loop is in another project but this session)"
         );
-        assert_eq!(h.last_paste, Some((2000, 9)));
+        assert_eq!(
+            h.pastes,
+            vec![
+                Paste {
+                    at_ms: 2000,
+                    chars: 11,
+                    lines: 3
+                },
+                Paste {
+                    at_ms: 4500,
+                    chars: 0,
+                    lines: 415
+                }
+            ]
+        );
+        assert_eq!(h.paste_between(1500, 2000).map(|p| p.chars), Some(11));
+        assert_eq!(h.paste_between(2000, 9000).map(|p| p.lines), Some(415));
+        assert!(
+            h.paste_between(4500, 9000).is_none(),
+            "the window is (from, to]"
+        );
         assert_eq!(h.last("/loop").unwrap().at_ms, 4000);
         assert_eq!(h.switches_since(500).len(), 1);
     }
@@ -242,7 +326,7 @@ mod tests {
         let path = dir.join("history.jsonl");
         std::fs::write(&path, LINES).unwrap();
         let mut t = Tailer::new(&path);
-        assert_eq!(t.poll().len(), 4);
+        assert_eq!(t.poll().len(), 5);
         assert!(t.poll().is_empty(), "nothing new");
         let mut f = std::fs::OpenOptions::new()
             .append(true)

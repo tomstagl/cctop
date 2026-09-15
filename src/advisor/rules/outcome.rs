@@ -1580,6 +1580,7 @@ mod tests {
             command: Some("/rewind".into()),
             arg: None,
             pasted_chars: 0,
+            pasted_lines: 0,
         });
         pair.history = h;
         assert!(CorrectionStreak.acted(&pair, &a));
