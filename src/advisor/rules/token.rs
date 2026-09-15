@@ -284,7 +284,7 @@ impl Rule for Rereads {
                 .tools
                 .calls
                 .iter()
-                .filter(|c| c.name == "Read" && c.paths.iter().any(|p| *p == tail))
+                .filter(|c| c.name == "Read" && c.paths.contains(&tail))
                 .map(|c| c.result_tokens_est)
                 .max()
                 .unwrap_or(1_000)

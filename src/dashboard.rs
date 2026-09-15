@@ -666,7 +666,7 @@ fn row_tools(state: &State) -> Row {
         .into_values()
         .filter(|t| t.name != "Bash")
         .collect();
-    by_name.sort_by(|a, b| b.calls.cmp(&a.calls));
+    by_name.sort_by_key(|a| std::cmp::Reverse(a.calls));
     for t in by_name.iter().take(3) {
         parts.push(vec![fg(format!("{} {}", t.name, t.calls))]);
     }

@@ -512,7 +512,7 @@ impl Stats {
             m.entry(k.label()).or_insert((k, 0)).1 += 1;
         }
         let mut v: Vec<(ErrorClass, usize)> = m.into_values().collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|a| std::cmp::Reverse(a.1));
         v
     }
 
@@ -528,7 +528,7 @@ impl Stats {
             }
         }
         let mut v: Vec<_> = m.into_values().collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|a| std::cmp::Reverse(a.1));
         v
     }
 

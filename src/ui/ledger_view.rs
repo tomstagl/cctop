@@ -143,7 +143,7 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
     // The turn's own row of facts, above its calls.
     if let Some(r) = ledger::rows(state).into_iter().find(|r| r.turn == turn) {
         let mut facts = vec![
-            format!("{}", if r.human { "human" } else { "machine" }),
+            (if r.human { "human" } else { "machine" }).to_string(),
             format!("prompt {} chars", r.prompt_chars),
             format!("{} calls · {} errors", r.tool_calls, r.tool_errors),
             format!("harness {}", fmt::tokens(r.harness_tokens)),

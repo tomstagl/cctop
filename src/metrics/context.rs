@@ -446,20 +446,16 @@ impl Bands {
     /// `Context low (N% remaining) · Run /compact to compact & continue` in
     /// the warn band; `N% context used` when the threshold will not fire.
     pub fn footer(&self, size: u64) -> String {
-        let pct_used = if self.effective_window == 0 {
-            0
-        } else {
-            (size * 100 / self.effective_window).min(100)
-        };
+        let pct_used = (size * 100)
+            .checked_div(self.effective_window)
+            .map_or(0, |p| p.min(100));
         if self.disabled {
             return format!("{pct_used}% context used");
         }
         let remaining = self.threshold.saturating_sub(size);
-        let pct_left = if self.threshold == 0 {
-            0
-        } else {
-            (remaining * 100 / self.threshold).min(100)
-        };
+        let pct_left = (remaining * 100)
+            .checked_div(self.threshold)
+            .map_or(0, |p| p.min(100));
         match self.band(size) {
             Band::Ok => format!("{pct_left}% until auto-compact"),
             Band::Warn => {
