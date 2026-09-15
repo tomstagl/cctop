@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build site/guide/*.html — one page per panel, hand-authored "what it
 means / what to do" text over the readings from docs/metrics.md and the
-Advisor rules from src/advisor/rules.rs. Run via `make site`.
+coach's rules from src/advisor/rules/*.rs. Run via `make site`.
 
 The registry's identifiers and source codes never reach the page as text:
 an identifier becomes the entry's anchor, a source code becomes words.
@@ -15,7 +15,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 FONTS_CSS = (ROOT / "site/fonts.css").read_text().strip().replace("url(assets/", "url(../assets/")
 SITE_CSS = (ROOT / "site/site.css").read_text().strip()
 
-# ---- parse docs/metrics.md into {section: [(id, name, unit, sources, estimate), ...]} ----
+# ---- parse docs/metrics.md into {section: [(id, name, unit, sources, estimate, how), ...]} ----
 md = (ROOT / "docs/metrics.md").read_text()
 sections = {}
 cur = None
@@ -30,7 +30,15 @@ for line in md.splitlines():
         m = re.match(r"\*\*(.+?)\*\* <a id=\"(.+?)\"></a> `(.+?)`", cells[0])
         if m:
             name, mid, _ = m.groups()
-            sections[cur].append((mid, name, cells[1], cells[3], cells[5]))
+            sections[cur].append((mid, name, cells[1], cells[3], cells[5], cells[2].replace("\\|", "|")))
+# a formula may name another reading by its identifier; the page spells it out
+NAMES = {mid: name.lower() for rows in sections.values() for mid, name, *_ in rows}
+def spell(cell):
+    parts = cell.split("`")  # identifiers inside backticks are transcript fields, left alone
+    for i in range(0, len(parts), 2):
+        for mid, name in NAMES.items():
+            parts[i] = re.sub(rf"\b{mid}\b", name, parts[i])
+    return "`".join(parts)
 
 SOURCES = {
     "D1": "the session list", "D2": "the transcript", "D2a": "the subagent's transcript",
@@ -51,19 +59,39 @@ EXACT = {
     "est until a compaction has been observed": "≈ until the first compaction has been seen",
 }
 
-# ---- parse Advisor rules from src/advisor/rules.rs -------------------------
-rules_src = (ROOT / "src/advisor/rules.rs").read_text()
-triggers = dict(re.findall(r'/// (A\d\d) — (.+(?:\n///.*)*?)\n(?=pub struct)', rules_src))
-triggers = {k: re.sub(r"\n/// ?", " ", v).strip() for k, v in triggers.items()}
-explains = dict(re.findall(r'"(A\d\d)" => "(.+?)",\n', rules_src))
+# ---- parse the coach's rules from src/advisor/rules/{token,events,outcome}.rs ----
+# Each rule's doc comment (`/// A32 — …` up to its `pub struct`) is the trigger;
+# the `explain` table in rules/mod.rs is the "what to do" text. A21b's comment
+# opens with "A21's cold half".
+rules_src = "\n".join((ROOT / "src/advisor/rules" / f).read_text() for f in ("token.rs", "events.rs", "outcome.rs"))
+triggers = {}
+for code, cold, text in re.findall(r"/// (A\d\d)('s cold half)? — (.+(?:\n///.*)*?)\n(?=pub struct)", rules_src):
+    triggers[code + ("b" if cold else "")] = re.sub(r"\n/// ?", " ", text).strip()
+explains = dict(re.findall(r'"(A\d\d[a-z]?)" => "(.+?)",\n', (ROOT / "src/advisor/rules/mod.rs").read_text()))
+explains = {k: v.replace('\\"', '"') for k, v in explains.items()}
 RULE_NAMES = {
     "A01": "Cache misses", "A02": "Cache expiry", "A03": "Runaway tool results",
-    "A04": "Re-reads", "A05": "Exploring in the main context", "A06": "Compaction churn",
-    "A07": "Idle MCP servers", "A08": "Thinking share", "A09": "Permission waits",
-    "A10": "Long foreground commands", "A11": "Pasted input", "A12": "Chatty turns",
-    "A13": "Rate-limit pacing", "A14": "Subagent model choice", "A15": "Error loops",
-    "A16": "Hook overhead", "A17": "Oversized prefix", "A18": "Missing hand-off",
+    "A04": "Re-reads", "A06": "Compaction churn", "A07": "Idle MCP servers and plugins",
+    "A08": "Thinking share", "A09": "Permission waits", "A10": "Long foreground commands",
+    "A11": "Pasted input", "A12": "Chatty turns", "A13": "Rate-limit pacing",
+    "A14": "Subagent model choice", "A16": "Hook overhead", "A17": "Oversized prefix",
+    "A19": "Cache countdown", "A21": "Warm model switch", "A21b": "Cold switch",
+    "A23": "Cost of continuing", "A25": "Exploring in the main context", "A27": "Loop armed",
+    "A30": "Cold resume", "A32": "Verification gap", "A33": "Commit without a check",
+    "A34": "Plan first", "A36": "Correction streak", "A38": "Failure cascade",
+    "A40": "Review before merge", "A41": "Waiting on you", "A42": "Natural boundary",
+    "A43": "Destructive git", "A44": "Stale collision", "A45": "Denial streak",
+    "A46": "Instruction drift", "A47": "Turn died",
 }
+# The class a rule fires in, from its `Advice::new(id, family, Urgency::…)`;
+# A34 and A46 never take the slot (`next_row_only` unconditionally).
+RULE_CLASS = {code: {"Now": "NOW", "Next": "NEXT", "Later": "LATER"}[urg]
+              for code, urg in re.findall(r'Advice::new\("(A\d\d[a-z]?)", "[^"]+", Urgency::(\w+)\)', rules_src)}
+RULE_CLASS.update({"A34": "next row only", "A46": "next row only"})
+missing_names = sorted(set(explains) - set(RULE_NAMES))
+if missing_names:
+    raise SystemExit(f"build-guide: rules without a name: {missing_names}")
+RULE_COUNT = len(explains)
 
 def esc(s):
     return html.escape(s, quote=False)
@@ -95,15 +123,15 @@ GUIDE = {
     "context_prefix": ("The fixed cost paid on every single turn regardless of task: system prompt, CLAUDE.md, tool definitions, skills. A bloated prefix taxes the whole session, forever.",
         "Trim CLAUDE.md, move rarely-used rules into skills, and disable MCP servers this project doesn't use.", ["A17"]),
     "context_velocity": ("How fast the remaining headroom is being burned — a leading indicator that context size alone can't give you.",
-        "A high velocity late in a session is the cue to hand exploration off to a subagent, or to wrap up before the next compaction.", ["A05"]),
+        "A high velocity late in a session is the cue to hand exploration off to a subagent, or to wrap up before the next compaction.", ["A25"]),
     "turns_until_compaction": ("A forecast of when the session's history gets summarised — and how much detail that summary will drop.",
-        "If this is low and you're mid-task, write a short hand-off note now rather than after the compaction happens.", ["A18"]),
+        "If this is low and you're mid-task, write a short hand-off note now rather than after the compaction happens.", ["A42", "A23"]),
     "compactions": ("Each compaction spends output tokens on a summary and loses detail the model then has to re-derive.",
-        "Two or more compactions in one session usually means it would have been cheaper to end the session at a natural boundary and start fresh.", ["A06", "A18"]),
+        "Two or more compactions in one session usually means it would have been cheaper to end the session at a natural boundary and start fresh.", ["A06", "A42"]),
     "cache_read": ("The cheap tokens — read at roughly a tenth of the input price. The bigger this is as a share of the total, the less the session costs.",
         "Read this next to the cache-hit ratio, not on its own — it's the numerator, not the whole health check.", []),
     "cache_write": ("Written at 1.25×–2× the input price, and it happens whenever the prefix changed or the cache entry expired.",
-        "A big or repeated cache-write bill points straight at cache misses or cache expiry — check the Advisor.", ["A01", "A02"]),
+        "A big or repeated cache-write bill points straight at cache misses or cache expiry — check the coach.", ["A01", "A02", "A21"]),
     "fresh_input": ("Uncached tokens billed in full, almost always a large paste or genuinely new content introduced this turn.",
         "A spike here is usually a paste that could have been a file reference instead.", ["A11"]),
     "output": ("What you pay for the model's replies, thinking tokens included.",
@@ -113,7 +141,7 @@ GUIDE = {
     "cache_hit_ratio": ("The single best proxy for whether this session is using prompt caching well. Green from 80 %, amber from 50 %, red below.",
         "Sustained below 60 %? Something in the prefix is changing every turn — a hook or status line printing the time is the usual suspect.", ["A01"]),
     "cache_ttl": ("Your real budget for how long you can pause mid-session before the next request pays a full cold rewrite.",
-        "Pace batched questions to land inside this window rather than trickling them out past it.", ["A02"]),
+        "Pace batched questions to land inside this window rather than trickling them out past it.", ["A02", "A19", "A30"]),
     "cost": ("What this session would cost at API list price, even on a subscription plan with no per-token bill.",
         "Watch it alongside burn rate if you're trying to keep a session inside a budget.", []),
     "cost_by_model": ("Splits spend by model — the number that matters once subagents are running on something other than the main thread's model.",
@@ -143,13 +171,13 @@ GUIDE = {
     "hook_ms": ("The total time hooks added to this turn, on top of the model's own response time.",
         "A slow hook after tool calls or at the end of a turn should run asynchronously, or match only the tools and paths it actually cares about.", ["A16"]),
     "permission_wait": ("Time the model sat completely idle waiting on a permission decision from you.",
-        "A tool pattern approved the same way repeatedly is a candidate for the allow-list in your settings, which removes the prompt entirely.", ["A09"]),
+        "A tool pattern approved the same way repeatedly is a candidate for the allow-list in your settings, which removes the prompt entirely.", ["A09", "A45"]),
     "queued_prompts": ("Prompts you typed while the model was still working on the previous one.",
         "Informational — a growing queue late in a task can mean it's time to interrupt instead of keep queuing.", []),
     "tool_calls": ("Which tools actually dominate this session's activity, by call count.",
         "A tool called far more than the task seems to need can indicate retrying or inefficient exploration.", []),
     "tool_errors": ("Errors are billed and re-injected into context exactly like successes are.",
-        "The same tool failing with the same input repeatedly is the signal to interrupt and hand the model the fix directly instead of letting it keep retrying.", ["A15"]),
+        "The same tool failing with the same input repeatedly is the signal to interrupt and hand the model the fix directly instead of letting it keep retrying.", ["A38", "A47"]),
     "tool_p50": ("The typical duration for this tool — the number to expect on a normal call.",
         "Read alongside p95 rather than alone; a high median usually means the tool itself is just slow.", []),
     "tool_p95": ("The tail latency — what occasionally makes a turn feel much slower than usual.",
@@ -157,7 +185,7 @@ GUIDE = {
     "tool_last_call": ("How long since this tool was last used — staleness, not activity.",
         "A tool or MCP server that hasn't been called in a while is still paying for its definitions on every turn; pairs with the MCP call count in Agents &amp; MCP.", ["A07"]),
     "tokens_to_ctx": ("Exactly how much context each tool's results added — the direct, measurable cause of context growth.",
-        "The biggest single contributor here is almost always the right fix target: narrow the command, delegate to a subagent, or stop re-reading it.", ["A03", "A04", "A05"]),
+        "The biggest single contributor here is almost always the right fix target: narrow the command, delegate to a subagent, or stop re-reading it.", ["A03", "A04", "A25"]),
     "top_ctx": ("The single largest results by context cost, named individually rather than summed by tool.",
         "Start with the top entry, not the tool average — one oversized result usually explains most of the growth.", ["A03"]),
     "agent_state": ("At a glance: is a subagent still running, finished cleanly, or stuck.",
@@ -174,13 +202,21 @@ GUIDE = {
         "A file with disproportionate churn relative to the stated task is worth a second look before commit.", []),
     "file_rereads": ("Re-reading a file that hasn't changed re-injects the whole thing into context for zero new information.",
         "Three or more re-reads is flagged ⚠ — point the model at a narrower range, or ask it to keep its own notes instead.", ["A04"]),
-    "advice_saving": ("What following a recommendation saves for every remaining turn of the session — tokens, or seconds for the timing rules. It is also the ranking: the Advisor shows the biggest saving first.",
+    "advice_saving": ("What following a recommendation saves for every remaining turn of the session — tokens, or seconds for the timing rules. Inside a class (NOW, NEXT, LATER) it decides which candidate takes the slot.",
         "Treat it as an order of magnitude, not an invoice. When two recommendations are close, take the one that's easier to act on.", []),
+    "coach_context": ("How much of the window this session's every call re-reads, and whether Claude Code is about to compact it. The light is not a fixed percentage: a deliberate 1M-window session sits at ◐ for most of its life, ● only when the next request lands in the autocompact band or when a clean stop would let you reset cheaply.",
+        "At ◐, keep going and let the nudge pick the moment. At ●, take the clean stop the nudge names: <code>/compact &lt;focus&gt;</code> if the task continues, a hand-off note and <code>/clear</code> if it is done.", ["A23", "A42", "A46", "A06"]),
+    "coach_cache": ("How long the cache entry that holds your context stays warm. While it is warm, every request re-reads the context at a tenth of the input price; once it expires, the next request re-writes it all. ◐ means the countdown is inside its last minutes while something waits on you; ● means one reply now saves a re-write of 50k tokens or more.",
+        "Answer the pending question, or end the task, before the countdown reaches zero. If the entry is already cold, the next call re-writes the context whatever you do — that is the cheap moment to switch models or effort.", ["A19", "A02", "A21", "A30", "A41"]),
+    "coach_limits": ("Your account's 5-hour usage window — account-wide, shared by every session and subagent. ◐ means the exhaustion fit lands before the reset, or the window is past 80 %; ● means a rate-limit or spend-limit error already stopped a turn.",
+        "At ◐ with a long time to the reset, move exploration to cheaper subagents or a cheaper model. At ●, the reset time is the number that matters; re-sending into the same error costs the wait again. A <code>—</code> means <code>cctop install</code> has not added the status line yet.", ["A13", "A47"]),
+    "coach_rework": ("The open issues in the way the work is going: calls failing in a row, corrections you had to make, calls Claude Code blocked — or, when none of those, how many source edits have piled up since the last test run. It is the outcome axis of the coach: not what the session costs, but whether it is converging.",
+        "● is the coach's strongest signal and the nudge beside it says what to do: interrupt a cascade with the missing fact, restore to a checkpoint after a correction streak, add the allow rule for a denial streak, run the check before the commit. ◐ is the ordinary reminder to verify before the edits pile up.", ["A32", "A33", "A36", "A38", "A45", "A43", "A44", "A40"]),
 }
 
 # How each reading shows on screen, taken from the dashboard in the README.
 READS = {
-    "session_status": "● BUSY", "turn_number": "turn 14", "turn_elapsed": "02:31",
+    "session_status": "○ IDLE · 0s", "turn_number": "turn 14", "turn_elapsed": "52:41",
     "effort": "auto · medium · Max", "process_cpu": "3%", "process_rss": "412 MB",
     "context_size": "134k / 200k", "context_window": "/ 200k", "context_prefix": "sys+tools 28k",
     "context_velocity": "+9.4k/turn", "turns_until_compaction": "autocompact in ~3 turns est",
@@ -200,16 +236,23 @@ READS = {
     "mcp_rss": "mcp playwright  188 MB", "mcp_calls": "9 calls · p95 2.1s",
     "file_touches": "R×6  E×5", "file_lines": "+210 −31", "file_rereads": "re-read ⚠",
     "advice_saving": "~4k/turn",
+    "coach_context": "◐ context  396k ▇▇▇▇▁▁▁▁▁▁ 40% · ≈$.08/call",
+    "coach_cache": "○ cache    warm 50m (1h) ≈",
+    "coach_limits": "○ limits   — no status line",
+    "coach_rework": "● rework   4 blocked · edits 3 ✓ none 18m",
 }
 
 # slug, number, name, blurb, metrics.md section, margin note (html)
 PANELS = [
     ("header", "top", "Header",
-     "The two lines above the panels: the session at a glance — its state, the turn, what it is waiting on, where it runs, and what it has cost so far.",
+     "The line above the tiles: the session at a glance — its model, the turn, how long it has run, the phase it is in and what it is waiting on.",
      "Header", "The header is drawn in every view, terminal and docked."),
+    ("coach", "c", "Coach",
+     "The four lights the dashboard's tiles enlarge — context, cache, limits, rework — and the one nudge the coach keeps beside them.",
+     "Coach", "○ quiet · ◐ watch · ● act. <kbd>c</kbd> opens the card; the tiles are the same four lights."),
     ("context", "1", "Context",
      "How full the context window is, how fast it's filling, and how many turns are left before the next compaction rewrites it.",
-     "Context", "Amber from 60 % of the window, red from 80 %."),
+     "Context", "Amber inside Claude Code's own warn band (20k under the autocompact threshold), red at the block."),
     ("tokens-cost", "2", "Tokens & Cost",
      "Where every token went — cache read, cache write, fresh input, output and thinking — and what the session costs, live.",
      "Tokens & Cost", "Cache hit is green from 80 %, amber from 50 %, red below."),
@@ -233,6 +276,9 @@ ORDER = [p[0] for p in PANELS] + ["events", "advisor"]
 TITLES = {p[0]: (p[1], p[2]) for p in PANELS}
 TITLES["events"] = ("8", "Events")
 TITLES["advisor"] = ("9", "Advisor")
+# the guide's numbers: the panel digits, and `c` for the coach card
+def key_label(num):
+    return num.isdigit() or num == "c"
 
 MARK = '<svg viewBox="0 0 256 256" aria-hidden="true"><g fill="#D97757"><path d="M128 111 C118 98 100 98 92 106 C87 111 91 118 98 116 C107 113 117 115 128 121 C139 115 149 113 158 116 C165 118 169 111 164 106 C156 98 138 98 128 111 Z"/><rect x="78" y="118" width="100" height="30" rx="2"/><rect x="84" y="155" width="88" height="22" rx="2"/><rect x="90" y="184" width="76" height="20" rx="2"/><path d="M96 211 H160 L156 230 L146 222 L136 240 L128 254 L120 240 L110 222 L100 230 Z"/></g><g><circle cx="88" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><circle cx="168" cy="60" r="30" fill="#3A3F47" stroke="currentColor" stroke-width="9"/><path d="M118 56 Q128 45 138 56" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M58 55 L42 51 M198 55 L214 51" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></g></svg>'
 
@@ -283,7 +329,7 @@ def pager(slug):
     nxt = ORDER[i + 1] if i + 1 < len(ORDER) else None
     def label(slug):
         num, name = TITLES[slug]
-        return f"{esc(num)} {esc(name)}" if num.isdigit() else esc(name)
+        return f"{esc(num)} {esc(name)}" if key_label(num) else esc(name)
     left = f'<a href="{prev}.html">← {label(prev)}</a>' if prev else '<a href="./">← Panel guide</a>'
     right = f'<a href="{nxt}.html">{label(nxt)} →</a>' if nxt else '<a href="../metrics.html">How each number is measured →</a>'
     return f'<nav class="pager" aria-label="Panels">{left}{right}</nav>\n'
@@ -294,7 +340,7 @@ def page(slug, title, desc, body, crumb=None):
     (OUT / f"{slug}.html").write_text(out)
 
 def opener(num, name, blurb, note, h1=None, extra=""):
-    no = f'<small>§</small>{esc(num)}' if num.isdigit() else esc(num)
+    no = f'<small>§</small>{esc(num)}' if key_label(num) else esc(num)
     return f"""<section class="sec first">
   <div class="mg"><span class="no">{no}</span><span class="lbl">{esc(name)}</span>{f'<span class="note"><b>Note</b>{note}</span>' if note else ''}</div>
   <div class="body">
@@ -304,8 +350,10 @@ def opener(num, name, blurb, note, h1=None, extra=""):
 </section>
 """
 
-def entry(mid, name, unit, sources, estimate):
+def entry(mid, name, unit, sources, estimate, how):
     why, do, codes = GUIDE.get(mid, ("", "", []))
+    if not why:  # no hand-written text yet: the registry's own description, spelled out
+        why = code_md(spell(how))
     reads = READS.get(mid)
     src = " · ".join(SOURCES.get(s, s) for s in sources.split())
     exact = EXACT.get(estimate, estimate)
@@ -325,14 +373,14 @@ def entry(mid, name, unit, sources, estimate):
 
 # ---- index -------------------------------------------------------------
 rows = "\n".join(
-    f'<li><a href="{slug}.html"><span class="n">{esc(num) if num.isdigit() else "—"}</span><span class="t"><b>{esc(name)}</b><span>{esc(blurb)}</span></span></a></li>'
+    f'<li><a href="{slug}.html"><span class="n">{esc(num) if key_label(num) else "—"}</span><span class="t"><b>{esc(name)}</b><span>{esc(blurb)}</span></span></a></li>'
     for slug, num, name, blurb, _, _ in PANELS
 ) + (
     '\n<li><a href="events.html"><span class="n">8</span><span class="t"><b>Events</b><span>The chronological stream of tool, hook, permission and compaction events behind every other panel.</span></span></a></li>'
-    '\n<li><a href="advisor.html"><span class="n">9</span><span class="t"><b>Advisor</b><span>All 18 rules the Advisor checks, what triggers each one, and what to do about it.</span></span></a></li>'
+    f'\n<li><a href="advisor.html"><span class="n">9</span><span class="t"><b>Advisor</b><span>All {RULE_COUNT} rules the coach checks, the class each fires in, what triggers it, and what to do about it.</span></span></a></li>'
 )
-index_body = opener("Guide", "Panel by panel", "What each of the nine panels shows, what every reading on it means, and what to actually do when it moves. Each entry says how the reading appears on screen, what it tells you, the change to make, and where the number comes from.",
-    'The numbers are the panel digits on screen: <kbd>1</kbd>–<kbd>9</kbd> show or hide each one.', h1="Every reading, explained",
+index_body = opener("Guide", "Panel by panel", "What the four lights, the nudge and each of the nine panels show, what every reading means, and what to actually do when it moves. Each entry says how the reading appears on screen, what it tells you, the change to make, and where the number comes from.",
+    'The numbers are the ledger digits on screen: <kbd>1</kbd>–<kbd>9</kbd> open a panel full-screen, <kbd>c</kbd> the coach card.', h1="Every reading, explained",
     extra=f'\n    <ul class="toc">{rows}</ul>')
 page("index", "Panel guide", "What every cctop panel and reading means, why it matters, and what to do about it.", index_body)
 
@@ -347,39 +395,55 @@ events_body = opener("8", "Events", "The chronological stream every other panel 
     "The newest line is at the bottom; <kbd>f</kbd> filters by kind.") + """<article class="entry" id="events">
 <div class="mg"><h3>The timeline</h3><span class="reads">reads as<br><code>20:41:17 perm   Bash allowed (auto)</code></span></div>
 <dl>
-<dt>What it means</dt><dd>The other panels show you totals and rates; Events shows you the order things happened in. That's what you need to reconstruct why one particular turn was slow or expensive, rather than just knowing that it was. Each line is a time, a kind — <code>tool</code>, <code>hook</code>, <code>perm</code>, <code>agent</code>, <code>compact</code>, <code>api</code>, <code>note</code>, <code>away</code> — and what happened.</dd>
+<dt>What it means</dt><dd>The other panels show you totals and rates; Events shows you the order things happened in. That's what you need to reconstruct why one particular turn was slow or expensive, rather than just knowing that it was. Each line is a time, a kind — <code>tool</code>, <code>hook</code>, <code>perm</code>, <code>agent</code>, <code>compact</code>, <code>api</code>, <code>note</code>, <code>away</code>, <code>coach</code> (a nudge fired, was acted on, expired or was snoozed), <code>cost</code> (a priced moment: a named cache miss, a cold write, a model switch, a loop fire) — and what happened.</dd>
 <dt class="act">What to do</dt><dd>Use it to find the exact moment things went sideways — a run of tool errors, a compaction, a long permission wait — then switch to the relevant numbered panel for the detail behind that moment.</dd>
 </dl></article>
 <article class="entry" id="notes">
 <div class="mg"><h3>Notes</h3><span class="reads">reads as<br><code>20:41:39 note   rate-limit 5h crossed 60 %</code></span></div>
 <dl>
-<dt>What it means</dt><dd>Lines cctop writes itself when a threshold is crossed: context past 80 % of the window, a compaction projected within two turns, the 5-hour limit past 60, 80 or 95 %, the limit projected to run out before its reset, a cache-hit ratio under 50 % over five turns, a tool running longer than a minute, a permission prompt open longer than half a minute, an MCP server that exited, or time spent on API retries. Each also shows briefly as a toast, and with <code>--notify</code> the critical ones reach your desktop.</dd>
+<dt>What it means</dt><dd>Lines cctop writes itself when a threshold is crossed: the context entering Claude Code's warn band, the 5-hour limit past 60, 80 or 95 %, the limit projected to run out before its reset, a tool running longer than a minute, an MCP server that exited, time spent on API retries, a turn that died on an API error, Claude waiting on you for half a minute, and the cache countdown while a question waits. Each also shows briefly as a toast, and with <code>--notify</code> the three critical ones reach your desktop.</dd>
 <dt class="act">What to do</dt><dd>Treat them as the moments worth a glance at the dashboard; the panel the note names has the detail.</dd>
 </dl></article>
 """ + pager("events")
 page("events", "Events", "What the Events panel shows and how to use it.", events_body, crumb="Events")
 
 # ---- Advisor: the saving, then the full rule reference --------------------
-rule_items = []
-for code in sorted(explains, key=lambda c: int(c[1:])):
-    trig = triggers.get(code, "")
-    rule_items.append(
-        f'<li id="{code}"><span class="code">{code}</span><div><h3>{esc(RULE_NAMES.get(code, ""))}</h3>'
-        f'<p class="when"><b>Fires when</b>{esc(trig)}</p>'
-        f'<p>{code_md(explains[code])}</p></div></li>'
-    )
-advisor_body = opener("9", "Advisor", "Eighteen deterministic rules over the same data the other eight panels show — no model call, no network. Each rule fires on a concrete threshold from this session's own evidence, names what it found, and estimates what following it saves for the rest of the session. The panel shows one recommendation at a time, ranked by that estimate; <kbd>n</kbd> shows the next, <kbd>Enter</kbd> the explanation below.",
-    'Ask a running session about any of them — the bundled <code>cctop-insights</code> skill answers from the same numbers — or run <code>cctop advise</code>.') \
+def rule_key(code):
+    return (int(code[1:3]), code[3:])
+CLASSES = [
+    ("NOW", "Interrupts: the slot changes the moment the event happens, and the nudge retires at the end of the turn."),
+    ("NEXT", "Waits for the turn to end: shown when Claude stops, retires at your next prompt."),
+    ("LATER", "Takes the slot only when nothing more urgent holds it; at most one every two turns, and it keeps for three."),
+    ("next row only", "Never takes the slot: it appears in the card's <em>next</em> row and nowhere else."),
+]
+class_sections = []
+for cls, what in CLASSES:
+    items = []
+    for code in sorted((c for c in explains if RULE_CLASS.get(c) == cls), key=rule_key):
+        items.append(
+            f'<li id="{code}"><span class="code">{code}</span><div><h3>{esc(RULE_NAMES[code])}</h3>'
+            f'<p class="when"><b>Fires when</b>{esc(triggers.get(code, ""))}</p>'
+            f'<p>{code_md(explains[code])}</p></div></li>'
+        )
+    class_sections.append(f'''
+<section class="sec">
+  <div class="mg"><span class="lbl">{esc(cls)} · {len(items)} rules</span><span class="note"><b>When it shows</b>{what}</span></div>
+  <div class="body">
+    <ul class="rules">{"".join(items)}</ul>
+  </div>
+</section>''')
+advisor_body = opener("9", "Advisor", f"{RULE_COUNT} deterministic rules over the same data the other panels show — no model call, no network, never a keyword in your prompt. Each rule fires on a concrete threshold from this session's own evidence (a tool result, a denial kind, an interrupt marker, an API-error line, a git operation) and says what it found and the change to make. The coach keeps one nudge in a slot by class — NOW interrupts, NEXT waits for the turn's end, LATER waits for a free slot — with a fixed lifetime per class, a cooldown per rule, and an <em>acted</em> test that retires the nudge the moment you did the thing. <kbd>x</kbd> snoozes it for five turns, <kbd>X</kbd> for the session; three snoozes in a row and the rule stays quiet on its own. The Advisor panel lists the slot's occupant first, then what is queued behind it.",
+    'Ask a running session about any of them — the bundled <code>cctop-insights</code> skill answers from the same numbers — or run <code>cctop advise</code>. <code>cctop coach-stats</code> shows how often each rule fired, was acted on or snoozed.') \
     + "\n".join(entry(*row) for row in sections.get("Advisor", [])) \
     + f"""
 <section class="sec">
-  <div class="mg"><span class="lbl">The 18 rules</span><span class="note"><b>Cross-references</b>Every panel page links the rules that watch its readings.</span></div>
+  <div class="mg"><span class="lbl">The {RULE_COUNT} rules</span><span class="note"><b>Cross-references</b>Every panel page links the rules that watch its readings.</span></div>
   <div class="body">
     <h2>What each rule watches, and what to do when it fires</h2>
-    <ul class="rules">{"".join(rule_items)}</ul>
+    <p>Grouped by the class the rule fires in. The token-axis rules (A01–A30) watch what the session costs; the outcome rules (A32–A47) watch whether the work is converging.</p>
   </div>
 </section>
-""" + pager("advisor")
-page("advisor", "Advisor", "All 18 Advisor rules: what triggers each one and what to do about it.", advisor_body, crumb="Advisor")
+""" + "".join(class_sections) + pager("advisor")
+page("advisor", "Advisor", f"All {RULE_COUNT} coach rules: the class each fires in, what triggers it and what to do about it.", advisor_body, crumb="Advisor")
 
-print(f"site/guide/*.html written ({len(PANELS) + 3} pages)")
+print(f"site/guide/*.html written ({len(PANELS) + 3} pages, {RULE_COUNT} rules)")

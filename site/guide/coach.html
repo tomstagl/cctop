@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Header — cctop panel guide</title>
-<meta name="description" content="What the Header panel shows in cctop, what each reading means, and what to do about it.">
+<title>Coach — cctop panel guide</title>
+<meta name="description" content="What the Coach panel shows in cctop, what each reading means, and what to do about it.">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="../assets/favicon.ico">
 <link rel="preload" href="../assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -271,79 +271,55 @@ tr:target td{background:var(--spot-soft)}
     <a href="https://github.com/tomstagl/cctop">GitHub</a>
   </nav>
 </header>
-<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Header</p>
+<p class="crumbs"><a href="../">cctop</a> / <a href="./">Panel guide</a> / Coach</p>
 <section class="sec first">
-  <div class="mg"><span class="no">top</span><span class="lbl">Header</span><span class="note"><b>Note</b>The header is drawn in every view, terminal and docked.</span></div>
+  <div class="mg"><span class="no"><small>§</small>c</span><span class="lbl">Coach</span><span class="note"><b>Note</b>○ quiet · ◐ watch · ● act. <kbd>c</kbd> opens the card; the tiles are the same four lights.</span></div>
   <div class="body">
-    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Header</h1>
-    <p>The line above the tiles: the session at a glance — its model, the turn, how long it has run, the phase it is in and what it is waiting on.</p>
+    <h1 style="font-size:clamp(30px,3.6vw,44px);line-height:1.02;margin-bottom:14px">Coach</h1>
+    <p>The four lights the dashboard's tiles enlarge — context, cache, limits, rework — and the one nudge the coach keeps beside them.</p>
   </div>
 </section>
-<article class="entry" id="session_status">
+<article class="entry" id="coach_context">
 <div class="mg">
-<h3>Status</h3>
-<span class="reads">reads as<br><code>○ IDLE · 0s</code></span>
+<h3>Context light</h3>
+<span class="reads">reads as<br><code>◐ context  396k ▇▇▇▇▁▁▁▁▁▁ 40% · ≈$.08/call</code></span>
 </div><dl>
-<dt>What it means</dt><dd>Whether Claude is working (BUSY), waiting for your next prompt (IDLE), waiting for you to answer a permission prompt (WAITING), or gone (ENDED — the process exited, the transcript is still readable).</dd>
-<dt class="act">What to do</dt><dd>WAITING is the one to act on: nothing happens until you answer. If you keep missing prompts, allow the tool pattern in your settings instead.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A09">A09 Permission waits</a></dd>
-<dt>Measured</dt><dd class="meta">enum · from the session list · hook events (after cctop install) · exact · <a href="../metrics.html#session_status">how</a></dd>
+<dt>What it means</dt><dd>How much of the window this session's every call re-reads, and whether Claude Code is about to compact it. The light is not a fixed percentage: a deliberate 1M-window session sits at ◐ for most of its life, ● only when the next request lands in the autocompact band or when a clean stop would let you reset cheaply.</dd>
+<dt class="act">What to do</dt><dd>At ◐, keep going and let the nudge pick the moment. At ●, take the clean stop the nudge names: <code>/compact &lt;focus&gt;</code> if the task continues, a hand-off note and <code>/clear</code> if it is done.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A23">A23 Cost of continuing</a> · <a href="advisor.html#A42">A42 Natural boundary</a> · <a href="advisor.html#A46">A46 Instruction drift</a> · <a href="advisor.html#A06">A06 Compaction churn</a></dd>
+<dt>Measured</dt><dd class="meta">percent · from the session list · the status line (after cctop install) · ≈ when the window is the model default · <a href="../metrics.html#coach_context">how</a></dd>
 </dl></article>
-<article class="entry" id="turn_number">
+<article class="entry" id="coach_cache">
 <div class="mg">
-<h3>Turn</h3>
-<span class="reads">reads as<br><code>turn 14</code></span>
+<h3>Cache light</h3>
+<span class="reads">reads as<br><code>○ cache    warm 50m (1h) ≈</code></span>
 </div><dl>
-<dt>What it means</dt><dd>How many prompts you have sent this session. A resumed session counts from where it resumed.</dd>
-<dt class="act">What to do</dt><dd>Nothing to do — it's the reference every per-turn figure uses.</dd>
-<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#turn_number">how</a></dd>
+<dt>What it means</dt><dd>How long the cache entry that holds your context stays warm. While it is warm, every request re-reads the context at a tenth of the input price; once it expires, the next request re-writes it all. ◐ means the countdown is inside its last minutes while something waits on you; ● means one reply now saves a re-write of 50k tokens or more.</dd>
+<dt class="act">What to do</dt><dd>Answer the pending question, or end the task, before the countdown reaches zero. If the entry is already cold, the next call re-writes the context whatever you do — that is the cheap moment to switch models or effort.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A19">A19 Cache countdown</a> · <a href="advisor.html#A02">A02 Cache expiry</a> · <a href="advisor.html#A21">A21 Warm model switch</a> · <a href="advisor.html#A30">A30 Cold resume</a> · <a href="advisor.html#A41">A41 Waiting on you</a></dd>
+<dt>Measured</dt><dd class="meta">minutes or tokens · from the session list · the status line (after cctop install) · ≈ without the status-line shim · <a href="../metrics.html#coach_cache">how</a></dd>
 </dl></article>
-<article class="entry" id="turn_elapsed">
+<article class="entry" id="coach_limits">
 <div class="mg">
-<h3>Turn elapsed</h3>
-<span class="reads">reads as<br><code>52:41</code></span>
+<h3>Limits light</h3>
+<span class="reads">reads as<br><code>○ limits   — no status line</code></span>
 </div><dl>
-<dt>What it means</dt><dd>How long the current turn has been running, or how long the last one took.</dd>
-<dt class="act">What to do</dt><dd>If it keeps climbing with a ▶ tool beside it, look at the Turn panel for what the wait is made of.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A10">A10 Long foreground commands</a></dd>
-<dt>Measured</dt><dd class="meta">ms · from the transcript · exact · <a href="../metrics.html#turn_elapsed">how</a></dd>
+<dt>What it means</dt><dd>Your account's 5-hour usage window — account-wide, shared by every session and subagent. ◐ means the exhaustion fit lands before the reset, or the window is past 80 %; ● means a rate-limit or spend-limit error already stopped a turn.</dd>
+<dt class="act">What to do</dt><dd>At ◐ with a long time to the reset, move exploration to cheaper subagents or a cheaper model. At ●, the reset time is the number that matters; re-sending into the same error costs the wait again. A <code>—</code> means <code>cctop install</code> has not added the status line yet.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A13">A13 Rate-limit pacing</a> · <a href="advisor.html#A47">A47 Turn died</a></dd>
+<dt>Measured</dt><dd class="meta">percent · from the status line (after cctop install) · the session list · exact · <a href="../metrics.html#coach_limits">how</a></dd>
 </dl></article>
-<article class="entry" id="effort">
+<article class="entry" id="coach_rework">
 <div class="mg">
-<h3>Effort</h3>
-<span class="reads">reads as<br><code>auto · medium · Max</code></span>
+<h3>Rework light</h3>
+<span class="reads">reads as<br><code>● rework   4 blocked · edits 3 ✓ none 18m</code></span>
 </div><dl>
-<dt>What it means</dt><dd>The reasoning effort Claude is currently using — low, medium or high. Higher means more thinking tokens per reply.</dd>
-<dt class="act">What to do</dt><dd>High effort on routine edits is billed thinking you rarely need; drop it for that kind of work and keep it for design and debugging.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A08">A08 Thinking share</a></dd>
-<dt>Measured</dt><dd class="meta">enum · from the transcript · the status line (after cctop install) · exact · <a href="../metrics.html#effort">how</a></dd>
+<dt>What it means</dt><dd>The open issues in the way the work is going: calls failing in a row, corrections you had to make, calls Claude Code blocked — or, when none of those, how many source edits have piled up since the last test run. It is the outcome axis of the coach: not what the session costs, but whether it is converging.</dd>
+<dt class="act">What to do</dt><dd>● is the coach's strongest signal and the nudge beside it says what to do: interrupt a cascade with the missing fact, restore to a checkpoint after a correction streak, add the allow rule for a denial streak, run the check before the commit. ◐ is the ordinary reminder to verify before the edits pile up.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A32">A32 Verification gap</a> · <a href="advisor.html#A33">A33 Commit without a check</a> · <a href="advisor.html#A36">A36 Correction streak</a> · <a href="advisor.html#A38">A38 Failure cascade</a> · <a href="advisor.html#A45">A45 Denial streak</a> · <a href="advisor.html#A43">A43 Destructive git</a> · <a href="advisor.html#A44">A44 Stale collision</a> · <a href="advisor.html#A40">A40 Review before merge</a></dd>
+<dt>Measured</dt><dd class="meta">count · from the session list · git · exact · <a href="../metrics.html#coach_rework">how</a></dd>
 </dl></article>
-<article class="entry" id="plan_tier">
-<div class="mg">
-<h3>Plan</h3>
-</div><dl>
-<dt>What it means</dt><dd><code>oauthAccount.userRateLimitTier</code> (else <code>organizationRateLimitTier</code>) from <code>~/.claude.json</code></dd>
-<dt>Measured</dt><dd class="meta">enum · from D12 · exact · <a href="../metrics.html#plan_tier">how</a></dd>
-</dl></article>
-<article class="entry" id="process_cpu">
-<div class="mg">
-<h3>CPU</h3>
-<span class="reads">reads as<br><code>3%</code></span>
-</div><dl>
-<dt>What it means</dt><dd>How much of a CPU core the Claude Code process itself is using.</dd>
-<dt class="act">What to do</dt><dd>Mostly diagnostic. Sustained high CPU while the session is idle is worth reporting.</dd>
-<dt>Measured</dt><dd class="meta">% · from the process tree · exact · <a href="../metrics.html#process_cpu">how</a></dd>
-</dl></article>
-<article class="entry" id="process_rss">
-<div class="mg">
-<h3>Memory</h3>
-<span class="reads">reads as<br><code>412 MB</code></span>
-</div><dl>
-<dt>What it means</dt><dd>How much memory the Claude Code process holds.</dd>
-<dt class="act">What to do</dt><dd>A figure that only grows over a long session is a hint to end it at a natural boundary.</dd>
-<dt>Measured</dt><dd class="meta">bytes · from the process tree · exact · <a href="../metrics.html#process_rss">how</a></dd>
-</dl></article>
-<nav class="pager" aria-label="Panels"><a href="./">← Panel guide</a><a href="coach.html">c Coach →</a></nav>
+<nav class="pager" aria-label="Panels"><a href="header.html">← Header</a><a href="context.html">1 Context →</a></nav>
 <footer class="colophon">
   <a class="brand" href="../"><b>cctop</b></a>
   <div><nav aria-label="Footer"><a href="../">Home</a><a href="./">Panel guide</a><a href="../metrics.html">How each number is measured</a><a href="https://github.com/tomstagl/cctop">GitHub</a></nav><span>© 2026 Thomas Stagl</span></div>

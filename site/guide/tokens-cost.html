@@ -111,6 +111,7 @@ figcaption b::after{content:" —";color:var(--ink-3)}
 .term .t{color:var(--term-acc);font-weight:600}
 .term .co{display:inline-block;width:1ch;line-height:1.3;background:var(--spot);color:#0E1318;font-weight:700;text-align:center;border-radius:2px}
 .term .d{color:var(--term-dim)}
+.term .nudge{font-weight:700}
 .co-inline{display:inline-block;min-width:1.55em;height:1.55em;line-height:1.55em;text-align:center;background:var(--spot);color:#0E1318;font:700 12px/1.55em var(--mono);border-radius:2px;vertical-align:1px}
 
 .figrow{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:36px;align-items:end}
@@ -293,8 +294,8 @@ tr:target td{background:var(--spot-soft)}
 <span class="reads">reads as<br><code>cache write ▇▇▇  148k</code></span>
 </div><dl>
 <dt>What it means</dt><dd>Written at 1.25×–2× the input price, and it happens whenever the prefix changed or the cache entry expired.</dd>
-<dt class="act">What to do</dt><dd>A big or repeated cache-write bill points straight at cache misses or cache expiry — check the Advisor.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A01">A01 Cache misses</a> · <a href="advisor.html#A02">A02 Cache expiry</a></dd>
+<dt class="act">What to do</dt><dd>A big or repeated cache-write bill points straight at cache misses or cache expiry — check the coach.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A01">A01 Cache misses</a> · <a href="advisor.html#A02">A02 Cache expiry</a> · <a href="advisor.html#A21">A21 Warm model switch</a></dd>
 <dt>Measured</dt><dd class="meta">tokens · from the transcript · exact · <a href="../metrics.html#cache_write">how</a></dd>
 </dl></article>
 <article class="entry" id="fresh_input">
@@ -343,8 +344,36 @@ tr:target td{background:var(--spot-soft)}
 </div><dl>
 <dt>What it means</dt><dd>Your real budget for how long you can pause mid-session before the next request pays a full cold rewrite.</dd>
 <dt class="act">What to do</dt><dd>Pace batched questions to land inside this window rather than trickling them out past it.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A02">A02 Cache expiry</a></dd>
-<dt>Measured</dt><dd class="meta">enum · from the transcript · exact · <a href="../metrics.html#cache_ttl">how</a></dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A02">A02 Cache expiry</a> · <a href="advisor.html#A19">A19 Cache countdown</a> · <a href="advisor.html#A30">A30 Cold resume</a></dd>
+<dt>Measured</dt><dd class="meta">enum · from the status line (after cctop install) · the transcript · ≈ without the shim · <a href="../metrics.html#cache_ttl">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_warm">
+<div class="mg">
+<h3>Cache warm</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.warm</code> from the status line; else whether the last API call is younger than the observed TTL</dd>
+<dt>Measured</dt><dd class="meta">bool · from the status line (after cctop install) · the transcript · ≈ without the shim · <a href="../metrics.html#cache_warm">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_expires_in">
+<div class="mg">
+<h3>Cache expires in</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.expires_at</code> − now, clock-driven between status rewrites; else last API call + observed TTL − now</dd>
+<dt>Measured</dt><dd class="meta">ms · from the status line (after cctop install) · the transcript · ≈ without the shim, or when the status file is stale · <a href="../metrics.html#cache_expires_in">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_recache_if_cold">
+<div class="mg">
+<h3>Re-cache if cold</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.recache_tokens_if_cold</code>: what the next call re-writes if the cache expires first</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_recache_if_cold">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_misses">
+<div class="mg">
+<h3>Cache misses</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.misses</code> with <code>miss_causes</code> (model_changed, tools_changed, messages_rewritten, ttl_expired_1h/5m, likely_server_side…) and <code>expected_rebuilds</code></dd>
+<dt>Measured</dt><dd class="meta">count · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_misses">how</a></dd>
 </dl></article>
 <article class="entry" id="cost">
 <div class="mg">
@@ -363,6 +392,48 @@ tr:target td{background:var(--spot-soft)}
 <dt class="act">What to do</dt><dd>If a cheap search or summarise task is running on your priciest model, point that subagent at a smaller one.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A14">A14 Subagent model choice</a></dd>
 <dt>Measured</dt><dd class="meta">USD · from Claude Code's own cost record · the price table · ≈ when any part of it is estimated · <a href="../metrics.html#cost_by_model">how</a></dd>
+</dl></article>
+<article class="entry" id="cost_per_call">
+<div class="mg">
+<h3>Cost per call</h3>
+</div><dl>
+<dt>What it means</dt><dd>context × cache-read price + median output × output price, at the current context; at the cache-write price of the observed TTL when the cache is cold</dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · the status line (after cctop install) · the price table · always an estimate, priced from the list table · <a href="../metrics.html#cost_per_call">how</a></dd>
+</dl></article>
+<article class="entry" id="cost_per_turn">
+<div class="mg">
+<h3>Cost per turn</h3>
+</div><dl>
+<dt>What it means</dt><dd>cost per call × the session's own median calls per turn (turns with ≥ 1 call), also given at 100 k of context; <code>next 30 calls</code> = cost per call × 30</dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · the price table · always an estimate, priced from the list table · <a href="../metrics.html#cost_per_turn">how</a></dd>
+</dl></article>
+<article class="entry" id="attribution">
+<div class="mg">
+<h3>Where the tokens went</h3>
+</div><dl>
+<dt>What it means</dt><dd>Input tokens of API responses by their <code>attributionSkill</code> / <code>attributionPlugin</code> / <code>attributionAgent</code> / <code>attributionMcpServer</code> owner, machine-originated turns under <code>idle</code>, the subagents' own usage under <code>agents</code>; shares of all input tokens</dd>
+<dt>Measured</dt><dd class="meta">ratio · from the transcript · D6 · exact · <a href="../metrics.html#attribution">how</a></dd>
+</dl></article>
+<article class="entry" id="agents_cost">
+<div class="mg">
+<h3>Agents cost</h3>
+</div><dl>
+<dt>What it means</dt><dd>Priced usage of every subagent transcript (incl. <code>subagents/workflows/**</code>) and its share of the session's total</dd>
+<dt>Measured</dt><dd class="meta">USD · from D6 · the price table · ≈ (priced from the table) · <a href="../metrics.html#agents_cost">how</a></dd>
+</dl></article>
+<article class="entry" id="limit_weight">
+<div class="mg">
+<h3>Limit weight</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>/usage</code>'s weight of a call: (cached + uncached × 10 + cache-create × 12.5 + output × 50) × tier (fable 10, opus 5, sonnet 3, haiku 1)</dd>
+<dt>Measured</dt><dd class="meta">ratio · from the transcript · D12 · exact · <a href="../metrics.html#limit_weight">how</a></dd>
+</dl></article>
+<article class="entry" id="behaviour_flags">
+<div class="mg">
+<h3>Behaviour flags</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>/usage</code>'s five flags as shares of the weighted usage: cache_miss (requests with &gt; 100 k uncached tokens), long_context (&gt; 150 k context), subagent_heavy, high_parallel (≥ 4 live sessions), cron (active ≥ 8 h); shown with Claude Code's own tip text at ≥ 10 %</dd>
+<dt>Measured</dt><dd class="meta">% · from the transcript · the session list · D12 · exact · <a href="../metrics.html#behaviour_flags">how</a></dd>
 </dl></article>
 <article class="entry" id="burn_rate">
 <div class="mg">

@@ -36,16 +36,19 @@ for path in sorted(glob.glob("themes/*.toml")):
     sw = "".join(f'<i style="background:{kv[k]}"></i>' for k in ("accent", "ok", "warn", "crit"))
     bar = f'<span class="bar" style="color:{kv["accent"]}">▇▇▇▇▇<span style="color:{kv["dim"]}">▁▁▁</span></span>'
     themes.append(f'<div class="theme" style="background:{kv["bg"]};color:{kv["fg"]};border-color:{kv["border"]}">{kv["name"]}{bar}{sw}</div>')
-# mockup: the fenced block after "## What it looks like" (the terminal view),
-# with each panel's digit turned into a callout that the legend below repeats
+# mockup: the fenced block after "## What it looks like" (the terminal view):
+# the ledger's digits become callouts that the legend below repeats, the four
+# lights' names and the nudge are marked, the key line is dimmed
 m = re.search(r"## What it looks like\n\n```\n(.*?)\n```", readme, re.S)
 mockup = html.escape(m.group(1)) if m else ""
-mockup = re.sub(r"─(\d) ((?:[A-Za-z]|&amp;| )+?)(?= ─)", r'─<b class="co">\1</b> <span class="t">\2</span>', mockup)
-mockup = re.sub(r"^(└.*┘)$", r'<span class="d">\1</span>', mockup, flags=re.M)
+mockup = re.sub(r"^ (\d) ([A-Z][a-z]+) ", r' <b class="co">\1</b> <span class="t">\2</span> ', mockup, flags=re.M)
+mockup = re.sub(r"([○◐●◆]) (context|cache|limits|rework)\b", r'\1 <span class="t">\2</span>', mockup)
+mockup = re.sub(r"^( ▸ .*)$", r'<b class="nudge">\1</b>', mockup, flags=re.M)
+mockup = re.sub(r"^( \?help .*)$", r'<span class="d">\1</span>', mockup, flags=re.M)
 # panel mockup: the fenced block under "**Panel view.**" in the same section
 m = re.search(r"\*\*Panel view\.\*\*.*?\n```\n(.*?)\n```", readme, re.S)
 panel_mockup = html.escape(m.group(1)) if m else ""
-panel_mockup = re.sub(r"╭(cctop|Context|Tokens &amp; Cost|Limits|Turn)", r'╭<span class="t">\1</span>', panel_mockup)
+panel_mockup = re.sub(r"╭(coach|[○◐●] \w+)", r'╭<span class="t">\1</span>', panel_mockup)
 
 # The demo block needs assets produced by `make demo`; drop it until they exist.
 if not pathlib.Path("site/assets/two-pane.png").exists():

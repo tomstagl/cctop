@@ -32,33 +32,39 @@ Restart Claude Code (or `/reload-plugins`) and type `/cctop`.
 
 With function hooks enabled, `/cctop-pane` docks the dashboard beside the
 transcript instead of opening a terminal split. It is drawn the way the
-standalone TUI draws its panels — round frames titled `╭5 Tools ─ 257 calls╮`,
-gauges (`▇▇▇▁▁▁`) coloured by band, the status pill (`● BUSY`), a context
-sparkline once turns have run, dim secondary text — in Claude Code's own
-theme colours, so it follows light and dark. It shows the same six views as
-the TUI's panels:
+standalone TUI draws it — the four block-digit tiles, the nudge, the nine-row
+ledger, round frames titled `╭5 Tools ─ 257 calls╮` in the other views,
+gauges (`▇▇▇▁▁▁`) coloured by band, dim secondary text — in Claude Code's own
+theme colours, so it follows light and dark. It shows the same views as the
+TUI:
 
-| View | TUI panels | What it shows |
+| View | TUI | What it shows |
 |---|---|---|
-| Overview | header, 1–4 | Header, Context, Tokens & Cost, Limits, Turn — the TUI's top half |
+| Coach | `c` | The 56-column card: the state line, the four lights, the one nudge with `[1 fill]` `[2 snooze]` `[3 why]`, what is next and what is snoozed, the detail frame of the highest light |
+| Overview | the dashboard | Header, the four tiles, the nudge, the nine-row ledger — a row's digit opens its view |
 | Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
 | Agents | 6 | Subagents, MCP servers, background tasks |
 | Files | 7 | Touched files, edits, re-reads |
-| Events | 8 | Tool / hook / permission / compaction stream |
-| Advisor | 9 | Ranked, evidence-backed recommendations |
+| Events | 8 | Tool / hook / permission / compaction / coach / cost stream |
+| Advisor | 9 | The slot's occupant, then what is queued and what is snoozed |
 
-The frames inside a view carry the TUI's panel digits (`╭5 Tools ─ 257
-calls╮`), the same numbers the guide and `cctop query` use, so the pane and
-the terminal read alike.
+The Coach and Overview views draw `cctop query coach` and `cctop query
+dashboard` verbatim — the same objects the TUI draws — so the pane and the
+terminal show the same nudge at the same moment. The frames inside the other
+views carry the TUI's panel digits (`╭5 Tools ─ 257 calls╮`), the same
+numbers the guide and `cctop query` use. `[1 fill]` writes a prompt-class
+action into the prompt box (`$.prompt.fill`) and never submits it; the
+coach's one-line form sits under the prompt (`$.ui.status`) and changes only
+when a light's level or the nudge changes.
 
 `/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
-of `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or closes it;
-with no argument it toggles.
+of `coach`, `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or
+closes it; with no argument it toggles.
 
 ### Switching views
 
-The bar `cctop  Overview  Tools  Agents  Files  Events  Advisor` is the pane's
-first row, the current view drawn inverse. Click another name to switch, or
+The bar `cctop  Coach  Overview  Tools  Agents  Files  Events  Advisor` is the
+pane's first row, the current view drawn inverse. Click another name to switch, or
 give the pane the keyboard with `ctrl+x tab`, move with `tab` / `shift+tab`,
 press `enter`, and leave with `esc`. `/cctop-pane <view>` switches without
 either. Nothing is drawn above the prompt: Claude Code honours a Button's
@@ -67,7 +73,8 @@ the pane has no digit hotkeys — a digit typed into the composer is yours.
 
 Context, cost and rate limits come from the engine itself, so the pane is
 useful with nothing installed; once the `cctop` binary is found, the rest
-(tool timings, files, agents, the Advisor) is filled in from `cctop query`.
+(the lights, the nudge, tool timings, files, agents, the Advisor) is filled in
+from `cctop query`.
 
 Every open answers with where the pane went, so the state is never a guess:
 

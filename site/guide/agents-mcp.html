@@ -111,6 +111,7 @@ figcaption b::after{content:" —";color:var(--ink-3)}
 .term .t{color:var(--term-acc);font-weight:600}
 .term .co{display:inline-block;width:1ch;line-height:1.3;background:var(--spot);color:#0E1318;font-weight:700;text-align:center;border-radius:2px}
 .term .d{color:var(--term-dim)}
+.term .nudge{font-weight:700}
 .co-inline{display:inline-block;min-width:1.55em;height:1.55em;line-height:1.55em;text-align:center;background:var(--spot);color:#0E1318;font:700 12px/1.55em var(--mono);border-radius:2px;vertical-align:1px}
 
 .figrow{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:36px;align-items:end}
@@ -313,8 +314,36 @@ tr:target td{background:var(--spot-soft)}
 </div><dl>
 <dt>What it means</dt><dd>How much an MCP server is actually used, in raw call count.</dd>
 <dt class="act">What to do</dt><dd>Cross-reference with last call: a server whose definitions sit in every turn but shows no recent calls is pure overhead worth disabling.</dd>
-<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A07">A07 Idle MCP servers</a></dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A07">A07 Idle MCP servers and plugins</a></dd>
 <dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#mcp_calls">how</a></dd>
+</dl></article>
+<article class="entry" id="agent_workflows">
+<div class="mg">
+<h3>Workflow runs</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>subagents/workflows/&lt;run&gt;/journal.jsonl</code>: agents launched, finished (<code>result</code>) and <code>failed</code> per run; the run's agents are scanned like the top-level ones</dd>
+<dt>Measured</dt><dd class="meta">count · from the subagent's transcript · exact · <a href="../metrics.html#agent_workflows">how</a></dd>
+</dl></article>
+<article class="entry" id="agent_depth">
+<div class="mg">
+<h3>Spawn depth</h3>
+</div><dl>
+<dt>What it means</dt><dd>Deepest <code>spawnDepth</code> among the agents (Claude Code caps it at 3)</dd>
+<dt>Measured</dt><dd class="meta">count · from the subagent's transcript · exact · <a href="../metrics.html#agent_depth">how</a></dd>
+</dl></article>
+<article class="entry" id="teammates">
+<div class="mg">
+<h3>Teammates</h3>
+</div><dl>
+<dt>What it means</dt><dd>Members of <code>~/.claude/teams/&lt;team&gt;/config.json</code> when this session leads the team</dd>
+<dt>Measured</dt><dd class="meta">list · from D12 · exact · <a href="../metrics.html#teammates">how</a></dd>
+</dl></article>
+<article class="entry" id="mcp_auth">
+<div class="mg">
+<h3>MCP needs auth</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>deferred_tools_delta.needsAuthMcpServers</code> / <code>failedMcpServers</code> from the transcript</dd>
+<dt>Measured</dt><dd class="meta">list · from the transcript · exact · <a href="../metrics.html#mcp_auth">how</a></dd>
 </dl></article>
 <nav class="pager" aria-label="Panels"><a href="tools.html">← 5 Tools</a><a href="files.html">7 Files →</a></nav>
 <footer class="colophon">

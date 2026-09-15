@@ -61,9 +61,9 @@
         <video muted loop playsinline preload="none" poster="assets/two-pane.webp" width="1280" height="640">
           <source src="assets/demo.webm" type="video/webm">
         </video>
-        <img class="still" src="assets/two-pane.webp" alt="Claude Code working in the left pane; cctop's nine panels in the right pane" width="1280" height="640" loading="lazy">
+        <img class="still" src="assets/two-pane.webp" alt="Claude Code working in the left pane; cctop's dashboard — four lights, the nudge, the nine-row ledger — in the right pane" width="1280" height="640" loading="lazy">
       </div>
-      <figcaption><b>Fig. 1</b>Claude Code keeps working on the left. cctop follows it on the right — every panel updates as the session runs.</figcaption>
+      <figcaption><b>Fig. 1</b>Claude Code keeps working on the left. cctop follows it on the right — the lights, the nudge and every row update as the session runs.</figcaption>
     </figure>
   </div>
 </section>
@@ -78,7 +78,7 @@
       <li><h3>Why is this session so expensive — is the cache even working?</h3><p>Tokens &amp; Cost shows every token by price class and the cache-hit ratio. Below 80 % something is rewriting the prefix on every turn; the Advisor names the usual culprits.</p><p class="ref"><a href="guide/tokens-cost.html">Panel 2 · Tokens &amp; Cost</a> · <a href="guide/advisor.html#A01">Advisor A01</a></p></li>
       <li><h3>Will I hit my limit before it resets?</h3><p>Limits draws the 5-hour and 7-day windows, the countdown to each reset, and a forecast from the last half hour of use — including whether you'd run out first.</p><p class="ref"><a href="guide/limits.html">Panel 3 · Limits</a></p></li>
       <li><h3>What is filling up my context?</h3><p>Tools shows how many tokens each tool pushed into the context and names the single largest results. Files flags the reads that brought nothing new. Context forecasts the next compaction.</p><p class="ref"><a href="guide/tools.html">Panel 5 · Tools</a> · <a href="guide/files.html">Panel 7 · Files</a> · <a href="guide/context.html">Panel 1 · Context</a></p></li>
-      <li><h3>Fine — what should I change?</h3><p>The Advisor turns what it sees into one recommendation at a time: the evidence, the change, and what it saves per turn. Eighteen rules, no model call. Ask your session about any of them in plain words.</p><p class="ref"><a href="#advisor">§ 4 · The Advisor</a></p></li>
+      <li><h3>Fine — what should I change?</h3><p>The coach turns what it sees into one nudge at a time: the evidence, the change, and what it saves. Thirty-five rules, every trigger structural — a tool result, a denial, an interrupt, an API error, a git operation — never a keyword in your prompt, and no model call. Ask your session about any of them in plain words.</p><p class="ref"><a href="#advisor">§ 4 · The coach</a></p></li>
     </ul>
   </div>
 </section>
@@ -87,21 +87,27 @@
   <div class="mg"><span class="no"><small>§</small>2</span><span class="lbl">The dashboard, annotated</span>
     <span class="note"><b>See also</b>Each panel has its own page with every reading explained: <a href="guide/">the panel guide</a>.</span></div>
   <div class="body">
-    <h2>One page, nine panels — and what each one is for</h2>
-    <p>The numbers in the frame titles are the panel numbers: the digit that shows or hides a panel, the number the guide uses, and the number the docked view carries. Below the figure, what each panel tells you and what you would do about it.</p>
+    <h2>Four lights, one nudge, nine rows — and what each one is for</h2>
+    <p>Four levels of type. The header says what state the session is in. Four tiles — context, cache, limits, rework — are the coach's lights drawn as block digits: <code>○</code> quiet, <code>◐</code> worth a look, <code>●</code> act. Under them, the one nudge the coach keeps. Then a nine-row ledger: two lines per panel, and the digit opens that panel full-screen. Below the figure, what each row tells you and what you would do about it.</p>
     <figure class="figrow">
       <div class="term"><pre>@MOCKUP@</pre></div>
       <div>
-        <p class="how"><b>How to read it</b>Top to bottom. The header says what state the session is in. Panels 1–4 are the numbers to watch: context, cost, limits, the turn. Panels 5–8 explain <em>why</em> they moved: tools, agents, files, the timeline. Panel 9 says what to change.</p>
-        <p class="how"><b>Colour</b>Green is fine, amber is worth a look, red is act now — the same three bands on every gauge.</p>
-        <figcaption><b>Fig. 2</b>Terminal view, narrow layout, from a real session. Wider than 100 columns the panels flow into two columns.</figcaption>
+        <p class="how"><b>How to read it</b>Top to bottom. The tiles are the four things that can go wrong: the context filling, the cache going cold, the limit running out, the work not converging. The nudge is the one change to make now. Rows 1–4 are the numbers behind the tiles; rows 5–8 explain <em>why</em> they moved: tools, agents, files, the timeline. Row 9 lists what the coach has queued.</p>
+        <p class="how"><b>Colour</b>Green is fine, amber is worth a look, red is act now — the same three bands on every light, gauge and figure.</p>
+        <figcaption><b>Fig. 2</b>Terminal view at 100 columns, from a real session. From 120 columns the four tiles sit in one row.</figcaption>
       </div>
     </figure>
     <div class="two" style="margin-top:28px">
     <ul class="ruled">
       <li><span class="n k">top</span><div><h3>Header <small>the session at a glance</small></h3>
-        <p><code>●</code> <strong>BUSY</strong> means Claude is working, <strong>IDLE</strong> means it is your move, <strong>WAITING</strong> means a permission prompt is open, <strong>ENDED</strong> means the process is gone. Then the turn number, how long this turn has run, what the model is waiting on right now (<code>▶ Bash 0:48</code>), the folder and branch (<code>*</code> = uncommitted changes). The second line: permission mode, effort level, plan, session age, cost so far, and the Claude Code process's CPU and memory.</p>
-        <p class="do"><b>Do</b><span>WAITING and you didn't notice a prompt? Look at the session — nothing happens until you answer it.</span></p></div></li>
+        <p>The model, the turn number, how long the session has run, <strong>ENDED</strong> and the time when the process is gone — then the phase the turn is in: <strong>EXPLORING</strong>, <strong>IMPLEMENTING</strong>, <strong>VERIFYING</strong>, <strong>COMMITTING</strong>, <strong>PLANNING</strong>, <strong>DELEGATING</strong>, <strong>BROWSING</strong>, <strong>OPS</strong>, <strong>IDLE</strong> or <code>◆</code> <strong>WAITING</strong> when a question or a permission prompt is open — with the run length in calls, how long the model has been silent, and whether a steer window is open.</p>
+        <p class="do"><b>Do</b><span>WAITING and you didn't notice? Look at the session — nothing happens until you answer, and the cache entry keeps expiring on its clock.</span></p></div></li>
+      <li><span class="n k">tiles</span><div><h3>The four lights</h3>
+        <p><strong>context</strong>: the size and the cost per call at it — amber from 150k, red inside Claude Code's own autocompact band or when a clean stop would let you reset cheaply. <strong>cache</strong>: how long the entry that holds your context stays warm, and the misses so far — amber in the last minutes while something waits on you, red when one reply now saves a 50k re-write. <strong>limits</strong>: the 5-hour window — amber when the trend runs out before the reset, red on a rate-limit error. <strong>rework</strong>: calls failing in a row, corrections, blocked calls — or, when none, the source edits since the last test run.</p>
+        <p class="do"><b>Do</b><span>Read the reds first; the nudge under the tiles is usually about one of them. <kbd>c</kbd> opens the coach card with the same four lights and the why behind each.</span></p></div></li>
+      <li><span class="n k">▸</span><div><h3>The nudge</h3>
+        <p>One line, sometimes two: what the coach found and the change to make, with its class — <strong>NOW</strong> interrupts, <strong>NEXT</strong> waits for the turn's end, <strong>LATER</strong> waits for a free slot — and the turn it fired on. It retires on its own when you did the thing, when its class's lifetime runs out, or when you snooze it.</p>
+        <p class="do"><b>Do</b><span><kbd>Enter</kbd> acts on it, <kbd>x</kbd> snoozes it for five turns, <kbd>X</kbd> for the session, <kbd>e</kbd> explains it. Snooze the wrong ones: three in a row and the rule stays quiet.</span></p></div></li>
       <li><span class="n">1</span><div><h3>Context</h3>
         <p>How much of the model's window is in use. The gauge fills as the conversation grows; the figures split it into the fixed part (system prompt, CLAUDE.md, tool definitions — paid on every single turn), your messages with their tool results, and what is still free. The trend line shows the growth per turn and forecasts when Claude Code will compact — summarise — the history.</p>
         <p class="do"><b>Do</b><span>At "autocompact in ~3 turns", finish the step you are on and write a short hand-off note. When the fixed part is a quarter of the window, trim CLAUDE.md and disable MCP servers this project doesn't use.</span></p></div></li>
@@ -129,10 +135,10 @@
         <p>The raw timeline every other panel is built from: tool calls starting and finishing, hooks firing, permission prompts opening and closing, compactions, and notes cctop records itself — such as "rate-limit 5h crossed 60 %".</p>
         <p class="do"><b>Do</b><span>Find the moment a turn went slow or expensive, then open the numbered panel with the detail behind it.</span></p></div></li>
       <li><span class="n">9</span><div><h3>Advisor</h3>
-        <p>One recommendation at a time, ranked by what it saves: the evidence it found, the change to make, and the estimated saving per remaining turn. <kbd>n</kbd> shows the next one, <kbd>Enter</kbd> the explanation.</p>
+        <p>What the coach holds: the slot's occupant first, then what is queued behind it and what would promote it, then what is snoozed. Full-screen, every candidate with its evidence, the change to make and the estimated saving; <kbd>n</kbd> shows the next one, <kbd>Enter</kbd> the explanation.</p>
         <p class="do"><b>Do</b><span>Make the change, or ask your session "why is my cache hit ratio low?" — the bundled skill answers from the same numbers.</span></p></div></li>
       <li><span class="n k">keys</span><div><h3>Key line</h3>
-        <p><kbd>?</kbd> help · <kbd>1</kbd>–<kbd>9</kbd> show or hide a panel · <kbd>Tab</kbd> focus the next panel · <kbd>s</kbd> sort · <kbd>f</kbd> filter · <kbd>p</kbd> pause · <kbd>t</kbd> next theme · <kbd>a</kbd> ask · <kbd>L</kbd> switch session · <kbd>q</kbd> quit — which never touches the session.</p></div></li>
+        <p><kbd>?</kbd> help · <kbd>1</kbd>–<kbd>9</kbd> open a panel full-screen, <kbd>Esc</kbd> back · <kbd>c</kbd> the coach card · <kbd>Enter</kbd> act on the nudge · <kbd>x</kbd> / <kbd>X</kbd> snooze it · <kbd>s</kbd> sort · <kbd>f</kbd> filter · <kbd>p</kbd> pause · <kbd>t</kbd> next theme · <kbd>a</kbd> ask · <kbd>L</kbd> switch session · <kbd>q</kbd> quit — which never touches the session.</p></div></li>
     </ul>
     </div>
   </div>
@@ -143,7 +149,8 @@
   <div class="body">
     <h2>The marks and what they mean</h2>
     <div class="syms">
-      <div class="sym"><code class="g">▇▇▇▇▇▁▁▁</code><span><b>Gauge.</b> Filled to the value. Green is fine, amber is worth a look, red is act now: context turns amber at 60 % and red at 80 %; limits at 60 % and 85 %.</span></div>
+      <div class="sym"><code class="g">▇▇▇▇▇▁▁▁</code><span><b>Gauge.</b> Filled to the value. Green is fine, amber is worth a look, red is act now: context turns amber inside Claude Code's warn band (20k under the autocompact threshold) and red at the block; limits at 60 % and 85 %.</span></div>
+      <div class="sym"><code class="a">○ ◐ ●</code><span><b>Light.</b> The coach's levels on the four tiles and the card: quiet, worth a look, act. <code>◆</code> marks WAITING — Claude needs an answer from you.</span></div>
       <div class="sym"><code class="a">cache hit 71 %</code><span><b>Cache hit.</b> The share of input served from cache. Green from 80 %, amber from 50 %, red below.</span></div>
       <div class="sym"><code>▁▂▂▃▄▅▆▇</code><span><b>Sparkline.</b> The last dozen turns, oldest on the left — context growth, or cost per turn.</span></div>
       <div class="sym"><code class="g">● BUSY</code><span><b>Status.</b> BUSY working · IDLE your move · WAITING a permission prompt is open · ENDED the process is gone.</span></div>
@@ -156,24 +163,25 @@
       <div class="sym"><code>R×6 E×5 W×1</code><span><b>Touches.</b> How often a file was read, edited and written this session.</span></div>
       <div class="sym"><code>p50 · p95</code><span><b>Durations.</b> Typical and worst-case time for a tool. A high p95 on a foreground command is one to run in the background.</span></div>
       <div class="sym"><code>tokens→ctx</code><span><b>Context cost.</b> How many tokens a tool's results added to the context — the direct cause of growth.</span></div>
-      <div class="sym"><code class="a">▸ advice</code><span><b>Recommendation.</b> An Advisor finding: evidence, the change, the saving. <kbd>n</kbd> for the next.</span></div>
+      <div class="sym"><code class="a">▸ NOW · NEXT · LATER</code><span><b>Nudge.</b> The coach's one finding and its class: NOW interrupts, NEXT waits for the turn's end, LATER for a free slot. <kbd>Enter</kbd> acts, <kbd>x</kbd> snoozes, <kbd>n</kbd> shows what is queued.</span></div>
+      <div class="sym"><code>IMPLEMENTING · 30c +8.4k</code><span><b>Phase.</b> What the turn is doing, from the shape of its last calls, with the run length in calls and the tokens they added.</span></div>
       <div class="sym"><code>134k · 1.62 M</code><span><b>Counts.</b> k thousand, M million — tokens unless a unit says otherwise.</span></div>
     </div>
   </div>
 </section>
 
 <section class="sec" id="advisor">
-  <div class="mg"><span class="no"><small>§</small>4</span><span class="lbl">The Advisor</span>
-    <span class="note"><b>All 18 rules</b>What triggers each one and what to do: <a href="guide/advisor.html">the Advisor reference</a>.</span></div>
+  <div class="mg"><span class="no"><small>§</small>4</span><span class="lbl">The coach</span>
+    <span class="note"><b>All 35 rules</b>The class each fires in, what triggers it and what to do: <a href="guide/advisor.html">the rule reference</a>.</span></div>
   <div class="body">
-    <h2>One recommendation at a time, with the evidence</h2>
-    <p>The Advisor watches the same numbers the other panels show and speaks only when a rule fires on this session's own evidence: what it found, the change to make, and what that change saves for the rest of the session. It ranks by the saving and shows the top one. Eighteen rules, all deterministic — no model call, no network. Three from real sessions:</p>
+    <h2>One nudge at a time, with the evidence</h2>
+    <p>The coach watches the same numbers the tiles and rows show and speaks only when a rule fires on this session's own evidence: what it found, the change to make, and what that change saves. It keeps one nudge in a slot by class — <strong>NOW</strong> interrupts, <strong>NEXT</strong> waits for the turn to end, <strong>LATER</strong> waits for a free slot — with a fixed lifetime per class, a cooldown per rule, and an <em>acted</em> test that retires the nudge the moment you did the thing. Thirty-five rules on two axes: what the session costs (cache misses, the countdown, a cold resume, a warm model switch, the cost of continuing past 300k, an armed loop, exploration in the main context) and whether the work is converging (edits with no test run, a commit without a check, a correction streak, a failure cascade, a denial streak with the allow rule, a turn that died on an API error, Claude waiting on you). Every trigger is structural — never a keyword in your prompt — and there is no model call. Three from real sessions:</p>
     <div class="advice">
-      <div class="adv"><span class="h">▸ `Bash ls -R` pushed 4.4k tokens into context, 2×</span><br><span class="a">Pipe through `head -50`, use Glob/Grep, or ask a subagent for a summary.</span> <span class="s">~8.8k/turn · A03</span></div>
-      <div class="adv"><span class="h">▸ Prompt cache expired before turn 12</span><br><span class="a">Batch your questions or keep the session warm; each cold turn re-writes the whole context (TTL 1 h on this session).</span> <span class="s">~396k · A02</span></div>
-      <div class="adv"><span class="h">▸ mcp:playwright has had no calls for 42:00</span><br><span class="a">Disable it for this project (.mcp.json) or rely on deferred tool loading.</span> <span class="s">~3.1k/turn · A07</span></div>
+      <div class="adv"><span class="h">▸ rm is denied by your rules</span><br><span class="a">tell Claude the alternative — it cannot run this</span> <span class="s">NOW · A45</span></div>
+      <div class="adv"><span class="h">▸ Edited 1 src file, no test/build run yet</span><br><span class="a">queue: 'run make check, fix failures' or /goal</span> <span class="s">NEXT · A32</span></div>
+      <div class="adv"><span class="h">▸ ctx 333k → ≈$.18/call, ≈$6.3/turn (was ≈$2.2)</span><br><span class="a">clean stop: /compact &lt;focus&gt;, or hand-off + /clear</span> <span class="s">NEXT · A23</span></div>
     </div>
-    <p>You don't have to read the panel to use it. Ask the session in plain words — <em>"why is my cache hit ratio low?"</em>, <em>"what is filling my context?"</em> — and the bundled <code>cctop-insights</code> skill answers from the same numbers, with one change to make.</p>
+    <p>You don't have to read the card to use it. Ask the session in plain words — <em>"why is my cache hit ratio low?"</em>, <em>"what should I do next?"</em> — and the bundled <code>cctop-insights</code> skill answers from the same numbers, with one change to make. <code>cctop coach-stats</code> shows, per rule, how often it fired, was acted on or snoozed, so a rule that is wrong for you demotes itself.</p>
   </div>
 </section>
 
@@ -186,13 +194,13 @@
       <div>
         <span class="eyebrow">Docked panel</span>
         <h3>Inside Claude Code, above the prompt</h3>
-        <p>On a Claude Code build with function hooks enabled, the dashboard docks inside Claude Code itself, drawn in its own frame and colours — no multiplexer needed. Six views: Overview (header and panels 1–4), then Tools, Agents, Files, Events and the Advisor. Click a view name in the top row, or give the pane the keyboard with <kbd>ctrl</kbd>+<kbd>x</kbd> <kbd>Tab</kbd>.</p>
-        <figure><div class="term"><pre>@PANEL_MOCKUP@</pre></div><figcaption><b>Fig. 3</b>The Overview of the docked panel: header, Context, Tokens &amp; Cost, Limits, Turn.</figcaption></figure>
+        <p>On a Claude Code build with function hooks enabled, the dashboard docks inside Claude Code itself, drawn in its own frame and colours — no multiplexer needed. Seven views: the Overview (the dashboard of Fig. 2), the Coach, then Tools, Agents, Files, Events and the Advisor. The Coach view is the same card the terminal's <kbd>c</kbd> shows, with buttons: <code>fill</code> writes the nudge's action into your prompt box — nothing is ever submitted for you — <code>snooze</code> and <code>why</code> do what the keys do. The coach's one-line form sits under the prompt. Click a view name in the top row, or give the pane the keyboard with <kbd>ctrl</kbd>+<kbd>x</kbd> <kbd>Tab</kbd>.</p>
+        <figure><div class="term"><pre>@PANEL_MOCKUP@</pre></div><figcaption><b>Fig. 3</b>The Coach view of the docked panel: the state line, four lights, the nudge with its buttons, and the detail frame of the highest light.</figcaption></figure>
       </div>
       <div>
         <span class="eyebrow">Terminal split</span>
         <h3>Beside Claude Code, in your terminal</h3>
-        <p>Everywhere else, <code>/cctop</code> opens the full nine-panel dashboard as its own process in a right-hand split of tmux, zellij, WezTerm, Kitty or iTerm2 — the view in Fig. 2. You keep working on the left. It needs 40 columns; 45 % of a 132-column window gives 59, which fits the narrow layout.</p>
+        <p>Everywhere else, <code>/cctop</code> opens the same dashboard as its own process in a right-hand split of tmux, zellij, WezTerm, Kitty or iTerm2 — the view in Fig. 2. You keep working on the left. It needs 40 columns; 45 % of a 132-column window gives 59, which fits the two-tiles-a-row layout.</p>
         <p>If neither can attach, <code>/cctop</code> prints exactly what is missing and how to fix it — or run <code>cctop run --session &lt;id&gt;</code> by hand in a second terminal.</p>
       </div>
     </div>
@@ -235,7 +243,7 @@
   <div>
     <nav aria-label="Footer">
       <a href="guide/">Panel guide</a>
-      <a href="guide/advisor.html">Advisor rules</a>
+      <a href="guide/advisor.html">The coach's rules</a>
       <a href="metrics.html">How each number is measured</a>
       <a href="https://github.com/tomstagl/cctop">GitHub</a>
       <a href="https://github.com/tomstagl/cctop/releases">Releases</a>

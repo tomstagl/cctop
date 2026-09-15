@@ -76,44 +76,46 @@ from `cctop split` directly. See [Install & attach](#install--attach).
 
 **Panel view.** On a Claude Code build with function hooks enabled, `/cctop`
 docks the same dashboard *inside* Claude Code, above the prompt, drawn in
-Claude Code's own frame and colour style — no multiplexer needed:
+Claude Code's own frame and colour style — no multiplexer needed. Its
+Overview is the dashboard above; its Coach view is the card the TUI's `c`
+shows, with buttons:
 
 ```
-╭cctop ─ claude-sonnet-5 ──────────────────────────────────╮
-│ ● BUSY  turn 1  0:48                                     │
-│ auto · medium · $9.90             bin shim hooks 2.1.270 │
+╭coach ─ opus-5 · turn 5 ──────────────────────────────────╮
+│ PLANNING · 5c +490 · silent 13m · ▸ steer window         │
+│ ──────────────────────────────────────────────────────── │
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call              │
+│ ○ cache    warm 1h00 (1h) ≈                              │
+│ ○ limits   — no status line                              │
+│ ● rework   4 blocked · edits 3 ✓ none 18m                │
+│ ──────────────────────────────────────────────────────── │
+│ ▸ rm is denied by your rules                             │
+│   tell Claude the alternative — it cannot run this       │
+│   NOW · fired at call 6 · +4 queued (n)                  │
+│                                                          │
+│ next     context-reset → next-row only · ctx 720k →…     │
+│ snoozed  —                                               │
 ╰──────────────────────────────────────────────────────────╯
-╭Context ─ 40 % ─────────────╮╭Tokens & Cost ─ 33.6M ──────╮
-│ ▇▇▇▇▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ ││ cache read  ▇▇▇▇▇    33.0M │
-│ 396k / 1.0M (40 %)         ││ cache write ▁▁▁▁▁     597k │
-│ velocity         +50k/turn ││ fresh input ▁▁▁▁▁      286 │
-│ autocompact in    ≈9 turns ││ output      ▁▁▁▁▁      67k │
-│ compactions              0 ││ └ thinking  ▁▁▁▁▁      31k │
-│                            ││ cache hit             98 % │
-│                            ││ cache TTL               1h │
-│                            ││ cost                 $9.90 │
-│                            ││ burn rate         ≈$26.0/h │
-╰────────────────────────────╯╰────────────────────────────╯
-╭Limits ─ 5h 42 % · 7d 17 % ─╮╭Turn ─ 0:48 ────────────────╮
-│ 5 h          ▇▇▇▁▁▁   42 % ││ state                 busy │
-│ 7 d          ▇▁▁▁▁▁   17 % ││ elapsed               0:48 │
-│ resets in           2h 29m ││ api / tools   ≈0:02 / 0:46 │
-│ exhausted in             — ││ waiting on       Bash 0:46 │
-│                            ││ permission w…            — │
-│                            ││ queued                   0 │
-╰────────────────────────────╯╰────────────────────────────╯
+[1 fill] [2 snooze] [3 why]
+╭● rework ─ transcript ────────────────────────────────────╮
+│ last check `python3 - lorem_i lorem…` ok 19m ago         │
+│ fails: Denied 4 · Other 2                                │
+│ rewind 1 checkpoints this turn                           │
+╰──────────────────────────────────────────────────────────╯
+[◐ context] [○ cache] [○ limits]  ● rework
 ```
 
-This is the Overview; the view bar switches to the Coach, Tools, Agents,
-Files, Events or the Advisor, the same way `c`/`s`/`f`/`p` work in the
-terminal view. The Coach view draws the same 56-column card as the TUI's
-`c` view — the state line, four lights, the one nudge — with `[1 fill]`
-(writes a prompt-class action into the prompt box; nothing is ever
-submitted), `[2 snooze]` and `[3 why]`, and pins the coach's one-line form
-under the prompt. It needs `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the
-`env` block of `~/.claude/settings.json` and `/tui fullscreen`; `cctop pane
-status` tells you which prerequisite is missing. The `/diff` panel and the
-cctop panel share one dock, so hide one to see the other — see
+The view bar switches between the Overview, the Coach, Tools, Agents, Files,
+Events and the Advisor, the same way `c`/`s`/`f`/`p` work in the terminal
+view. The Coach view is the same 56-column card as the TUI's `c` view — the
+state line, four lights, the one nudge — with `[1 fill]` (writes a
+prompt-class action into the prompt box; nothing is ever submitted),
+`[2 snooze]` and `[3 why]`, a detail frame that follows the highest light,
+and the coach's one-line form pinned under the prompt. It needs
+`"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of
+`~/.claude/settings.json` and `/tui fullscreen`; `cctop pane status` tells you
+which prerequisite is missing. The `/diff` panel and the cctop panel share one
+dock, so hide one to see the other — see
 [`docs/claude-code-panels.md`](docs/claude-code-panels.md). Falls back to the
 terminal view automatically when function hooks are off.
 

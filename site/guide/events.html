@@ -111,6 +111,7 @@ figcaption b::after{content:" —";color:var(--ink-3)}
 .term .t{color:var(--term-acc);font-weight:600}
 .term .co{display:inline-block;width:1ch;line-height:1.3;background:var(--spot);color:#0E1318;font-weight:700;text-align:center;border-radius:2px}
 .term .d{color:var(--term-dim)}
+.term .nudge{font-weight:700}
 .co-inline{display:inline-block;min-width:1.55em;height:1.55em;line-height:1.55em;text-align:center;background:var(--spot);color:#0E1318;font:700 12px/1.55em var(--mono);border-radius:2px;vertical-align:1px}
 
 .figrow{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:36px;align-items:end}
@@ -281,13 +282,13 @@ tr:target td{background:var(--spot-soft)}
 <article class="entry" id="events">
 <div class="mg"><h3>The timeline</h3><span class="reads">reads as<br><code>20:41:17 perm   Bash allowed (auto)</code></span></div>
 <dl>
-<dt>What it means</dt><dd>The other panels show you totals and rates; Events shows you the order things happened in. That's what you need to reconstruct why one particular turn was slow or expensive, rather than just knowing that it was. Each line is a time, a kind — <code>tool</code>, <code>hook</code>, <code>perm</code>, <code>agent</code>, <code>compact</code>, <code>api</code>, <code>note</code>, <code>away</code> — and what happened.</dd>
+<dt>What it means</dt><dd>The other panels show you totals and rates; Events shows you the order things happened in. That's what you need to reconstruct why one particular turn was slow or expensive, rather than just knowing that it was. Each line is a time, a kind — <code>tool</code>, <code>hook</code>, <code>perm</code>, <code>agent</code>, <code>compact</code>, <code>api</code>, <code>note</code>, <code>away</code>, <code>coach</code> (a nudge fired, was acted on, expired or was snoozed), <code>cost</code> (a priced moment: a named cache miss, a cold write, a model switch, a loop fire) — and what happened.</dd>
 <dt class="act">What to do</dt><dd>Use it to find the exact moment things went sideways — a run of tool errors, a compaction, a long permission wait — then switch to the relevant numbered panel for the detail behind that moment.</dd>
 </dl></article>
 <article class="entry" id="notes">
 <div class="mg"><h3>Notes</h3><span class="reads">reads as<br><code>20:41:39 note   rate-limit 5h crossed 60 %</code></span></div>
 <dl>
-<dt>What it means</dt><dd>Lines cctop writes itself when a threshold is crossed: context past 80 % of the window, a compaction projected within two turns, the 5-hour limit past 60, 80 or 95 %, the limit projected to run out before its reset, a cache-hit ratio under 50 % over five turns, a tool running longer than a minute, a permission prompt open longer than half a minute, an MCP server that exited, or time spent on API retries. Each also shows briefly as a toast, and with <code>--notify</code> the critical ones reach your desktop.</dd>
+<dt>What it means</dt><dd>Lines cctop writes itself when a threshold is crossed: the context entering Claude Code's warn band, the 5-hour limit past 60, 80 or 95 %, the limit projected to run out before its reset, a tool running longer than a minute, an MCP server that exited, time spent on API retries, a turn that died on an API error, Claude waiting on you for half a minute, and the cache countdown while a question waits. Each also shows briefly as a toast, and with <code>--notify</code> the three critical ones reach your desktop.</dd>
 <dt class="act">What to do</dt><dd>Treat them as the moments worth a glance at the dashboard; the panel the note names has the detail.</dd>
 </dl></article>
 <nav class="pager" aria-label="Panels"><a href="files.html">← 7 Files</a><a href="advisor.html">9 Advisor →</a></nav>
