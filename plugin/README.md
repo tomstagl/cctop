@@ -96,6 +96,19 @@ the marker file of the old id says `open: false` while the new id gets its
 own. Before 0.3.1 the pane kept the first id and every query then failed with
 `no session matches` for the rest of the process (issue #2).
 
+### Claude Code 2.1.271 and the clock
+
+Claude Code 2.1.271 turned `$.clock.now()` from a number into a host event
+that resolves a Promise. Plugin 0.4.0 did arithmetic on it, so on 2.1.271
+and later every hook failed — `marker write failed: RangeError: Invalid
+Date` at the start of every session, every light on `waiting for cctop`
+once the pane was open, and `cctop pane status` reporting the hooks module
+as not loaded (issue #3). Plugin 0.4.1 awaits every reading and runs on
+2.1.270 and 2.1.272 alike; the header's `hooks 2.1.272` light names the
+Claude Code version the module's contract was generated from. Update with
+`claude plugin marketplace update cctop && claude plugin update
+cctop@cctop`, then restart Claude Code.
+
 ### The `/diff` panel and the pane share one dock
 
 Claude Code's built-in `/diff` panel and a plugin pane occupy the same
@@ -116,7 +129,7 @@ otherwise:
 
 ```
 cctop pane status · session ab339470
-  ✓ Claude Code 2.1.270 (function hooks need 2.1.269 or newer)
+  ✓ Claude Code 2.1.272 (function hooks need 2.1.269 or newer)
   ✗ function hooks off → add "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" to the "env" block of ~/.claude/settings.json (or export it in the shell), then restart Claude Code
   ✗ installed cctop plugin 0.1.0 has no hooks module (skills only; 0.2.0 or newer ships it) → `claude plugin update cctop@cctop` (or start with `claude --plugin-dir <checkout>/plugin`), then restart Claude Code
   ✓ fullscreen renderer (tui = "fullscreen" in ~/.claude/settings.json)
@@ -159,7 +172,10 @@ runs on every change and is green. On 2026-09-14 an agent drove a real
 Claude Code 2.1.270 in a 162×45 tmux window (see the run notes in
 [`docs/verification/pane.md`](../docs/verification/pane.md)): the pane docked,
 `/diff` hid it and the status line said so, `/diff` again brought it back.
-The `Result:` lines below are still for a person to fill in:
+On 2026-09-15 the headless load check ran on Claude Code 2.1.272 with plugin
+0.4.1 (issue #3): the module loaded, no hook failed, and the marker was
+written for a session whose pane was never opened. The `Result:` lines
+below are still for a person to fill in:
 
 1. `/cctop-pane` listed in the slash menu with its description
 2. pane docks at 144 columns in `/tui fullscreen`
@@ -192,6 +208,9 @@ The `Result:` lines below are still for a person to fill in:
 24. `/clear` under an open pane: the next turn's queries run for the new
     session id, the old id's marker says `open: false`, the new id's
     `open: true`, and no `no session matches` line appears in the debug log
+25. on Claude Code 2.1.272, a session with the pane never opened logs no
+    `cctop:` failure, its marker says `loaded: true`, `cctop pane status`
+    shows the module ✓, and `/cctop` fills every light within one poll
 
 See the checklist for the exact setup, keys and expected observation for each.
 

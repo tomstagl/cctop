@@ -63,7 +63,7 @@ reserves `/cctop` for the plugin's own skill (`/cctop:cctop`) and refuses
 question 1 of `tasks/prd-cctop-pane.md`: the native command is `cctop-pane`,
 and `/cctop` keeps resolving to the skill, which is the fallback path.
 
-Last automated run: 2026-09-12, Claude Code 2.1.269, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line.
+Last automated run: 2026-09-15, Claude Code 2.1.272, plugin 0.4.1 (issue #3), by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, and `~/.cctop/pane/<session>.json` written with `loaded: true`, `open: false` and ISO timestamps (`loadedAt` and `heartbeatAt` 15 ms apart: two clock round trips) for a session whose pane was never opened — the case of issue #3's comment. Earlier: 2026-09-12, Claude Code 2.1.269, the same result.
 Claude Code version:
 Result: pending
 
@@ -353,6 +353,26 @@ hooks are off or before its module is accepted.
     line; `~/.cctop/pane/<old id>.json` reads `open: false`,
     `~/.cctop/pane/<new id>.json` reads `open: true` with a fresh
     `heartbeatAt`; `!cctop pane status` reports the pane open.
+    Claude Code version:
+    Result: pending
+
+25. **The clock is a Promise on Claude Code ≥ 2.1.271** (issue #3). 2.1.271
+    turned `$.clock.now()` into a host event; plugin 0.4.1 awaits every
+    reading. A session with the pane never opened must be silent and must
+    still write its marker, and an opened pane must fill.
+    Setup: Claude Code 2.1.272, plugin 0.4.1 (`claude plugin marketplace
+    update cctop && claude plugin update cctop@cctop`, then a restart),
+    function hooks on, `cctop` binary installed, `--debug`; note the session
+    id (`ls -t ~/.cctop/pane | head -1` after the first prompt).
+    Keys: one short prompt (`say ok`) with the pane closed; `!cctop pane
+    status`; then `/cctop`; wait one poll (≤ 10 s).
+    Expected: the transcript shows no `cctop:` line at start-up and the
+    debug log no `hook failed`, `Invalid Date` or `takes a non-negative
+    number of milliseconds` line; `~/.cctop/pane/<session id>.json` exists
+    with `loaded: true`, `open: false` and ISO timestamps; `!cctop pane
+    status` shows the hooks-module line ✓; `/cctop` docks the pane, its
+    header reads `hooks 2.1.272`, and every light is filled within one poll
+    (no `waiting for cctop`).
     Claude Code version:
     Result: pending
 

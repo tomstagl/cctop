@@ -11,6 +11,10 @@ Written 2026-09-15 at the end of the implementation session (`main` at `4e53bfc`
 > findings (hashed pastes; a paste is a cache write, not `input_tokens`).
 > Dogfood is the open item: run every session with the coach for a working
 > week, work the verification items of step 1, then step 4 after two weeks.
+> Claude Code 2.1.271 then broke the pane (`$.clock.now()` a Promise, issue
+> #3; `tasks/handoff-issue-3-clock.md`): plugin 0.4.1 (`7f3a85a`) fixes it,
+> so the pane half of the dogfood resumes once the live check (pane item
+> 25) passes; the TUI half was never affected.
 
 ## Where things stand
 

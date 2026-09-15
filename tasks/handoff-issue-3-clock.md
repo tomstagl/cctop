@@ -5,6 +5,18 @@ https://github.com/tomstagl/cctop/issues/3 (read it first — it has the root
 cause, the bundle diff and every call site; this note adds what the repo
 knows that the issue does not).
 
+> **Status, later the same day** (`7f3a85a`, plugin 0.4.1): fixed as
+> suggested below — the contract regenerated against 2.1.272, every
+> `$.clock.now()` awaited, `requestRender` async with a `renderPending`
+> flag (a new lifecycle test dispatches two changes in one tick and asserts
+> one redraw), the fake engine's clock a Promise, `TESTED_WITH = '2.1.272'`.
+> `npm test` 120 passed, `make check` 292 passed, `make check-types` green
+> (the `harness_facts` warning stands, a separate re-verification),
+> `claude plugin validate --strict` passed. The headless load check on
+> 2.1.272 passed, marker included (`docs/verification/pane.md` §A). Open:
+> the person's live check (item 25), the plugin update on this machine,
+> closing #3, and the backwards-compatibility follow-up issue.
+
 ## Where things stand
 
 - cctop **0.3.0** is released (tag `v0.3.0`, the tap at 0.3.0); plugin
