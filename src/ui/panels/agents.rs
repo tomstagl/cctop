@@ -115,9 +115,12 @@ impl Panel for Agents {
                 .next()
                 .unwrap_or("")
                 .to_string();
+            // A fork's inherited context: the cache read of its first own
+            // call (`fork-context-ref.contextLength` is not tokens).
             let inherited = a
-                .inherited_context_len
-                .map(|n| format!(" ↰{}", fmt::tokens(n)))
+                .first_own_call
+                .filter(|_| a.is_fork)
+                .map(|u| format!(" ↰{}", fmt::tokens(u.cache_read)))
                 .unwrap_or_default();
             lines.push(Line::from(vec![
                 Span::styled(format!(" {glyph} "), style),
@@ -279,6 +282,9 @@ mod tests {
             "{out}"
         );
         assert!(out.contains("sonnet"), "{out}");
+        // The fork's inherited context is its first own call's cache read
+        // (62 690), not `fork-context-ref.contextLength` (32).
+        assert!(out.contains("sonnet ↰62k"), "{out}");
     }
 
     #[test]

@@ -52,8 +52,15 @@ pub struct Agent {
     pub model: String,
     pub spawn_depth: u32,
     pub is_fork: bool,
-    /// Context inherited from the parent (`fork-context-ref.contextLength`).
+    /// `fork-context-ref.contextLength`: not tokens (32 and 789 on the two
+    /// forks measured, against parent contexts of 62k and 280k) — roughly
+    /// the parent's line count. The inherited context in tokens is the
+    /// cache read of the fork's first own call, `first_own_call`.
     pub inherited_context_len: Option<u64>,
+    /// Usage of the agent's first counted API call (a fork's first call
+    /// after the parent's replayed message): its cache read is the context
+    /// the fork inherited; `cache_write > cache_read` is a cold start.
+    pub first_own_call: Option<Usage>,
     /// The workflow run this agent belongs to (`subagents/workflows/<run>/`).
     pub workflow: Option<String>,
     pub started_at: Option<i64>,
@@ -99,6 +106,7 @@ impl Agent {
             spawn_depth: meta.spawn_depth,
             is_fork: meta.is_fork,
             inherited_context_len: None,
+            first_own_call: None,
             workflow: None,
             started_at: None,
             finished_at: None,
@@ -169,6 +177,7 @@ impl Agent {
                 if v.get("type").and_then(|t| t.as_str()) == Some("fork-context-ref") =>
             {
                 self.inherited_context_len = v.get("contextLength").and_then(|c| c.as_u64());
+                self.is_fork = true;
                 self.expect_parent_message = true;
             }
             Line::Assistant(a) if self.is_parent_message(&a.message.id) => {}
@@ -190,6 +199,9 @@ impl Agent {
                         }
                     }
                     _ => {}
+                }
+                if self.api_calls == 1 {
+                    self.first_own_call = self.last_message.as_ref().map(|(_, u)| *u);
                 }
                 let mut uses = 0;
                 for b in &a.message.content {
@@ -530,7 +542,7 @@ impl AgentWatcher {
                 if !m.agent_type.is_empty() {
                     a.agent_type = m.agent_type;
                     a.description = m.description;
-                    a.is_fork = m.is_fork;
+                    a.is_fork |= m.is_fork;
                     a.spawn_depth = m.spawn_depth;
                     if a.model.is_empty() {
                         a.model = m.model;
@@ -646,6 +658,11 @@ mod tests {
         assert_eq!(a.usage.output, 304);
         assert_eq!(a.usage.cache_read, 473_013);
         assert_eq!(
+            a.first_own_call.map(|u| (u.cache_read, u.output)),
+            Some((62_690, 118)),
+            "the inherited context is the first own call's cache read; its usage is the message's last line"
+        );
+        assert_eq!(
             a.tool_calls, 6,
             "6 of its own; the `Agent` launch was the parent's"
         );
@@ -758,6 +775,11 @@ mod tests {
         assert_eq!(a.usage.cache_read, 60000);
         assert_eq!(a.model, "claude-opus-5");
         assert_eq!(a.inherited_context_len, Some(32));
+        assert!(
+            a.is_fork,
+            "a `fork-context-ref` line marks a fork without its meta"
+        );
+        assert_eq!(a.first_own_call.map(|u| u.cache_read), Some(60000));
 
         // Without `fork-context-ref` nothing is skipped.
         let mut b = Agent::new("s", Meta::default());
