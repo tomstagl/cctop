@@ -1,4 +1,4 @@
-.PHONY: build demo site check check-types check-contract
+.PHONY: build demo site check check-types check-contract check-facts
 build:
 	cargo build --release
 site:
@@ -18,3 +18,5 @@ check-types:
 	fi
 check-contract:
 	./scripts/check-contract.sh
+check-facts:
+	python3 scripts/check-harness-facts.py

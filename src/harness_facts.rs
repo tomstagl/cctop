@@ -5,12 +5,16 @@
 //! older transcripts instead of misreading them.
 //!
 //! `scripts/check-plugin-types.sh` warns when the installed `claude` is newer
-//! than [`READ_FROM`]: the numbers below are then unverified, not wrong.
+//! than [`READ_FROM`] and fails past `FACTS_MAX_LAG` releases: the numbers
+//! below are then unverified, not wrong. `scripts/check-harness-facts.py`
+//! re-reads the binary's constants from the installed bundle (each by a
+//! stable anchor, never a minified name) and the team facts from the newest
+//! team directory, and prints what differs; the bump is then mechanical.
 
 use std::cmp::Ordering;
 
 /// The Claude Code version these facts were recovered from.
-pub const READ_FROM: &str = "2.1.270";
+pub const READ_FROM: &str = "2.1.273";
 
 /// A `major.minor.patch` Claude Code version, comparable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -156,7 +160,8 @@ pub mod task_notification {
 }
 
 /// Autocompact arithmetic (recovered from the 2.1.269 binary and the debug
-/// log's `autocompact: tokens=… effectiveWindow=…` line).
+/// log's `autocompact: tokens=… effectiveWindow=…` line; re-read from the
+/// 2.1.273 bundle by `scripts/check-harness-facts.py`).
 pub mod autocompact {
     /// The threshold is the effective window minus this.
     pub const BUFFER_TOKENS: u64 = 13_000;
@@ -164,18 +169,24 @@ pub mod autocompact {
     pub const WARN_TOKENS: u64 = 20_000;
     /// Requests are blocked this far below the window itself.
     pub const BLOCK_TOKENS: u64 = 3_000;
-    /// Precomputed compaction arms at this share of the window.
+    /// Precomputed compaction arms at this share of the window (the
+    /// default `precomputeBufferFraction` is 1 − this; a per-window table
+    /// can override it).
     pub const PRECOMPUTE_RATIO: f64 = 0.80;
+    /// The effective window is the nominal one less
+    /// `min(model max output tokens, this)`. Every model in the 2.1.273
+    /// catalog but Claude 3.x defaults to 32 000 or 64 000 output tokens,
+    /// so this is what comes off every window: 980 000 on 1M, 180 000 on
+    /// 200 k. (Until 2.1.273 was re-read this was taken as a 1M-only
+    /// special case; the 200 k figures were 20 000 high.)
+    pub const OUTPUT_RESERVE_TOKENS: u64 = 20_000;
 
     /// Effective window Claude Code reasons with, by nominal window.
     pub fn effective_window(nominal: u64) -> u64 {
-        match nominal {
-            1_000_000 => 980_000,
-            n => n,
-        }
+        nominal.saturating_sub(OUTPUT_RESERVE_TOKENS)
     }
 
-    /// `effective window − 13 000`: 967 000 on native-1M models, 187 000 on
+    /// `effective window − 13 000`: 967 000 on native-1M models, 167 000 on
     /// 200 k windows.
     pub fn threshold(nominal: u64) -> u64 {
         effective_window(nominal).saturating_sub(BUFFER_TOKENS)
@@ -188,18 +199,19 @@ pub mod usage_weight {
     pub const UNCACHED: f64 = 10.0;
     pub const CACHE_CREATE: f64 = 12.5;
     pub const OUTPUT: f64 = 50.0;
+    /// Tier multiplier by the family named in the model id, first match.
+    pub const TIERS: &[(&str, f64)] = &[("fable", 10.0), ("opus", 5.0), ("haiku", 1.0)];
+    /// Sonnet, and any model naming none of the families (Claude Code's
+    /// own fall-through; until 2.1.273 was re-read cctop took it as 1).
+    pub const TIER_DEFAULT: f64 = 3.0;
 
     /// Tier multiplier by model family.
     pub fn tier(model: &str) -> f64 {
-        if model.contains("fable") {
-            10.0
-        } else if model.contains("opus") {
-            5.0
-        } else if model.contains("sonnet") {
-            3.0
-        } else {
-            1.0
-        }
+        let model = model.to_ascii_lowercase();
+        TIERS
+            .iter()
+            .find(|(family, _)| model.contains(family))
+            .map_or(TIER_DEFAULT, |(_, tier)| *tier)
     }
 }
 
@@ -216,24 +228,37 @@ pub mod context_suggestions {
     pub const CONTEXT_SHARE: f64 = 0.80;
 }
 
-/// `effort_cost_index` per model family, by effort level: what a level costs
-/// relative to `high`.
+/// `effort_cost_index` per model in Claude Code's catalog (2.1.273; the
+/// same in 2.1.270): what a level costs relative to `high`, as
+/// `[low, medium, high, xhigh, max]`. Models without an entry there (Haiku
+/// 4.5, Sonnet ≤ 4.6, Opus ≤ 4.7, Mythos 5) have none here either. Matched
+/// by the longest id contained in the model name, so `claude-fable-5-1`
+/// does not read as Fable 5.
+pub const EFFORT_COST_INDEX: &[(&str, [f64; 5])] = &[
+    ("claude-sonnet-5", [0.47, 0.74, 1.0, 2.41, 5.59]),
+    ("claude-opus-4-8", [0.72, 0.9, 1.0, 1.65, 1.88]),
+    ("claude-opus-5", [0.67, 0.76, 1.0, 1.6, 1.7]),
+    ("claude-fable-5", [0.6, 0.77, 1.0, 1.74, 1.91]),
+    ("claude-fable-5-1", [0.75, 0.86, 1.0, 1.38, 1.74]),
+    ("claude-mythos-5-1", [0.75, 0.86, 1.0, 1.38, 1.74]),
+];
+
+/// `effort_cost_index` for a model and level; None when the catalog has no
+/// entry for the model or the level is not one of the five.
 pub fn effort_cost_index(model: &str, level: &str) -> Option<f64> {
-    let fable = model.contains("fable");
-    let sonnet = model.contains("sonnet");
-    Some(match (level, fable, sonnet) {
-        ("low", true, _) => 0.75,
-        ("medium", true, _) => 0.86,
-        ("high", true, _) => 1.0,
-        ("xhigh", true, _) => 1.38,
-        ("max", true, _) => 1.74,
-        ("low", _, true) => 0.47,
-        ("medium", _, true) => 0.74,
-        ("high", _, true) => 1.0,
-        ("xhigh", _, true) => 2.41,
-        ("max", _, true) => 5.59,
+    let i = match level {
+        "low" => 0,
+        "medium" => 1,
+        "high" => 2,
+        "xhigh" => 3,
+        "max" => 4,
         _ => return None,
-    })
+    };
+    EFFORT_COST_INDEX
+        .iter()
+        .filter(|(id, _)| model.contains(id))
+        .max_by_key(|(id, _)| id.len())
+        .map(|(_, table)| table[i])
 }
 
 #[cfg(test)]
@@ -261,13 +286,48 @@ mod tests {
 
     #[test]
     fn autocompact_threshold_matches_the_docs() {
+        assert_eq!(autocompact::effective_window(1_000_000), 980_000);
+        assert_eq!(autocompact::effective_window(200_000), 180_000);
         assert_eq!(autocompact::threshold(1_000_000), 967_000);
-        assert_eq!(autocompact::threshold(200_000), 187_000);
+        assert_eq!(autocompact::threshold(200_000), 167_000);
         assert_eq!(usage_weight::tier("claude-opus-5"), 5.0);
         assert_eq!(usage_weight::tier("claude-haiku-4-5-20251001"), 1.0);
+        assert_eq!(usage_weight::tier("claude-sonnet-5"), 3.0);
+        assert_eq!(usage_weight::tier(""), 3.0, "Claude Code's fall-through");
         assert_eq!(effort_cost_index("claude-fable-5-1", "max"), Some(1.74));
+        assert_eq!(
+            effort_cost_index("claude-fable-5", "max"),
+            Some(1.91),
+            "Fable 5 is not Fable 5.1"
+        );
         assert_eq!(effort_cost_index("claude-sonnet-5", "low"), Some(0.47));
-        assert_eq!(effort_cost_index("claude-opus-5", "high"), None);
+        assert_eq!(effort_cost_index("claude-opus-5", "high"), Some(1.0));
+        assert_eq!(effort_cost_index("claude-opus-5", "medium"), Some(0.76));
+        assert_eq!(effort_cost_index("claude-opus-4-8", "max"), Some(1.88));
+        assert_eq!(effort_cost_index("claude-haiku-4-5-20251001", "high"), None);
+        assert_eq!(effort_cost_index("claude-opus-5", "turbo"), None);
+    }
+
+    #[test]
+    fn the_reverification_script_reads_these_tables() {
+        // scripts/check-harness-facts.py parses the consts and tables by
+        // their spelling; a rename here must rename its probes too.
+        let script = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/check-harness-facts.py"),
+        )
+        .unwrap();
+        for name in [
+            "READ_FROM",
+            "OUTPUT_RESERVE_TOKENS",
+            "EFFORT_COST_INDEX",
+            "TIERS",
+            "TIER_DEFAULT",
+            "TOOL_WINDOW_SHARE",
+            "LIVENESS_KEY",
+            "NAME_PREFIX",
+        ] {
+            assert!(script.contains(name), "the script probes {name}");
+        }
     }
 
     #[test]

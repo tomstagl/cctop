@@ -30,10 +30,22 @@ echo "check-plugin-types: $dts matches claude $claude_version"
 
 # The binary's constants (src/harness_facts.rs) carry the Claude Code
 # version they were read from; a newer claude means they are unverified.
+# A warning while the lag is small, a failure past FACTS_MAX_LAG patch
+# releases (Claude Code ships about one a day): the re-verification is
+# `scripts/check-harness-facts.py` (`make check-facts`), then the bump.
+FACTS_MAX_LAG=${FACTS_MAX_LAG:-5}
 facts=src/harness_facts.rs
 facts_version=$(grep -oE 'READ_FROM: &str = "[0-9]+\.[0-9]+\.[0-9]+"' "$facts" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 if [ -n "$facts_version" ] && [ "$(printf '%s\n%s\n' "$facts_version" "$claude_version" | sort -V | tail -1)" != "$facts_version" ]; then
-  echo "check-plugin-types: warning: $facts was read from Claude Code $facts_version, this machine has $claude_version — re-verify the constants (autocompact buffer, /usage weights, /context thresholds, the first-seen map, the teams module: docs/teams.md)" >&2
+  # The lag in patch releases when major.minor agree, else "many".
+  facts_patch=${facts_version##*.}; claude_patch=${claude_version##*.}
+  if [ "${facts_version%.*}" = "${claude_version%.*}" ]; then lag=$((claude_patch - facts_patch)); else lag=999; fi
+  what="re-verify the constants: python3 scripts/check-harness-facts.py (autocompact arithmetic, /usage weights, /context thresholds, the model catalog's effort_cost_index, the teams module: docs/teams.md), re-read the first-seen map against the corpus, then bump READ_FROM"
+  if [ "$lag" -gt "$FACTS_MAX_LAG" ]; then
+    echo "check-plugin-types: $facts was read from Claude Code $facts_version, this machine has $claude_version ($lag releases behind, more than $FACTS_MAX_LAG) — $what" >&2
+    exit 1
+  fi
+  echo "check-plugin-types: warning: $facts was read from Claude Code $facts_version, this machine has $claude_version ($lag release(s) behind; fails past $FACTS_MAX_LAG) — $what" >&2
 else
   echo "check-plugin-types: $facts read from claude $facts_version (installed $claude_version)"
 fi
