@@ -775,7 +775,10 @@ impl TeamWatcher {
             let tx = self.event_tx.clone();
             self.watcher =
                 notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                    if res.is_ok() {
+                    // inotify reports every open and close of a watched
+                    // directory's files (the tailers' own reads): only a
+                    // file appearing, going or being rewritten is news.
+                    if res.is_ok_and(|e| !matches!(e.kind, notify::EventKind::Access(_))) {
                         let _ = tx.send(());
                     }
                 })
@@ -811,8 +814,9 @@ impl TeamWatcher {
                         dir_seen: true,
                     });
                     t.apply_config(&cfg, &self.pricing, now_ms);
-                    // A live team's directory: membership and liveness.
-                    if let Some(dir) = path.parent() {
+                    // A live team's directory: membership and liveness. A
+                    // fixture's team file (no `watch`) never changes.
+                    if let (Some(dir), true) = (path.parent(), self.layout.watch.is_some()) {
                         self.watch_dir(dir);
                     }
                 }
