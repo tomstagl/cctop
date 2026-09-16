@@ -1297,7 +1297,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "crit"
           },
           {
-            "text": "    ",
+            "text": "     ",
             "tone": "dim"
           },
           {
@@ -1323,7 +1323,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1349,7 +1349,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "  ",
+            "text": "   ",
             "tone": "dim"
           },
           {
@@ -1375,7 +1375,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1401,7 +1401,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1427,7 +1427,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1453,7 +1453,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1479,7 +1479,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1505,7 +1505,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1531,7 +1531,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1557,7 +1557,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1583,7 +1583,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1609,7 +1609,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "crit"
           },
           {
-            "text": "    ",
+            "text": "     ",
             "tone": "dim"
           },
           {
@@ -1635,6 +1635,10 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
+            "text": " ",
+            "tone": "dim"
+          },
+          {
             "text": "compacted auto 567k → 230k in 1:20",
             "tone": "fg"
           }
@@ -1657,7 +1661,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1683,7 +1687,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "crit"
           },
           {
-            "text": "    ",
+            "text": "     ",
             "tone": "dim"
           },
           {
@@ -1709,7 +1713,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1735,7 +1739,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1761,7 +1765,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1787,7 +1791,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1813,7 +1817,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1839,7 +1843,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1865,7 +1869,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1891,7 +1895,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1917,7 +1921,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1943,7 +1947,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1969,7 +1973,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "warn"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -1995,7 +1999,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2021,7 +2025,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2047,7 +2051,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2073,7 +2077,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2099,7 +2103,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2125,7 +2129,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2151,7 +2155,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2177,7 +2181,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2203,7 +2207,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2229,7 +2233,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2255,7 +2259,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2281,7 +2285,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {
@@ -2307,7 +2311,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "accent"
           },
           {
-            "text": "   ",
+            "text": "    ",
             "tone": "dim"
           },
           {

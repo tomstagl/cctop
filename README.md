@@ -31,39 +31,33 @@ Claude Code as a panel when the build supports it, otherwise attached as a
 ## What it looks like
 
 ```
- cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED…  ● COMMITTING · 4c +180 · silent 3:09 · ▸ steer …
-  ▄█ █ █   ○ context                              █▀▀ █▀█   ○ cache
-   █ ▀▀█   142k of 1.00M                          ▀▀█ ▀▀█   warm · 59m (1h) TTL
-   ▀   ▀ % ≈$.03/call                             ▀▀▀ ▀▀▀ m misses 0
-
-       ○ limits                                    ▄█   ● rework
- ▀▀▀   no status line                               █   1 · correction
-     %                                              ▀   edits 3 ✓ none 9h00
- ▸ Fixed prefix 49k tokens ≈$0.15/turn at 15 calls — trim CLAUDE.md, move rarely-use… LATER · turn 6
- 1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 · results ≈180 · thi…
-             +146k/turn · autocompact 567k · 425k left · compactions 1 · since clear 23:29 · re-rea…
- 2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
-             $18.7 · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · skill:admit 1 %
- 3 Limits    no status line · weight ×3 (sonnet) · long_context 89 %
-             89% of your usage was at >150k context
- 4 Turn      COMMITTING · 4c +180 · silent 3:09 · ▸ steer window · api ≈3:48 · tools 8h 35m
-             elapsed 8h 40m · 4 api calls · 4 tool calls
- 5 Tools     140 calls · 6 err · explore 39 (3 ✗) · commit 8 · test 8 · Read 30 · Edit 29 · AskUser…
-             Denied 4 · Other 2
- 6 Agents    —
-
- 7 Files     44 touched · 40cde3.md E×1 · c1c889.rs E×2 IDE edit · commit 0:00 ago
-
- 8 Events    23:29 api cost-state $18.75 · api 22:14 · retries… · 23:29 note /clear · continued in …
-             23:28 tool Bash ✓ 49 · 23:28 tool Bash git commit -m "$(cat lorem_i lorem… · 23:27 too…
- 9 Advisor   LATER A17 · next long-foreground → when the slot frees · `c… · snoozed —
-             LATER A10 `cd lorem_ipsum_dolor_sit_amet…` blocke…
-
-
- ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
+   builds and test suites longer than a …  LATER · turn 6
+─── events ─────────────────────────────────────────────────── 0: home  ·  ? keys ───
+  23:29  api     cost-state $18.75 · api 22:14 · retries 0:00
+  23:29  note    /clear · continued in a new session
+  23:28  coach   LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…
+  23:28  tool    Bash ✓ 49
+  23:28  tool    Bash git commit -m "$(cat lorem_i lorem lore lor lorem_i lorem_ip l…
+  23:27  tool    Bash ✓ 16
+  23:27  tool    Bash git push lorem_ lore 2>&1 ▶
+  23:27  tool    Bash ✓ 32
+  23:27  cost    model opus-5 → sonnet-5
+  23:27  tool    Bash git commit -m "$(cat lorem_i lorem_ipsu lorem_i lore cctop lor…
+  23:25  tool    AskUserQuestion ✓ 83
+  14:49  tool    AskUserQuestion ▶
+  14:49  api     API error: invalid_request 400
+  14:49  compact compacted auto 567k → 230k in 1:20
+  14:48  note    interrupted after 6 calls
+  14:47  api     API error: request failed
+  14:46  tool    TaskUpdate ✓ 5
+  14:46  tool    TaskUpdate completed ▶
 ```
 
-Claude Code keeps running in the left pane; `cctop` attaches to it from the right. Four levels of type: the header line, four tiles (the coach's lights — context, cache, limits, rework — as block digits), the one nudge, and a nine-row ledger whose digit opens that panel full-screen (`Esc` back). Inside panels 1 and 2, `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
+Claude Code keeps running in the left pane; `cctop` attaches to it from the right. A header that never moves and one body that fills the rest: the identity line with the phase cell (`● COMMITTING 8h 40m`) at the right; six cells — context, limits, cache, spend, work, tools — three per row from 80 columns and two below, each a target whose digit opens its body in place; the act line, the coach's slot, wrapped rather than cut, `a` for the advisor; the rule line naming the open body, `0` the way home, `?` its key map; then the body — `1` above opens the context body, the five slices of the window as bars in order of what you can do about them, the counters and what the light says; `4` the spend with its provenance and the token mix; `6` the by-tool table with the agents and the team. `Enter` opens the body's full-screen panel (`Esc` back), and inside a panel the digits `1`–`9` still switch panels: inside panels 1 and 2 `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
 
 ## Two ways to see it
 
@@ -77,8 +71,9 @@ from `cctop split` directly. See [Install & attach](#install--attach).
 **Panel view.** On a Claude Code build with function hooks enabled, `/cctop`
 docks the same dashboard *inside* Claude Code, above the prompt, drawn in
 Claude Code's own frame and colour style — no multiplexer needed. Its
-Overview is the dashboard above; its Coach view is the card the TUI's `c`
-shows, with buttons:
+Overview is Console above, row for row — the cells, the act line and
+`0: home` are the engine's own clickable chrome, the digit each draws being
+its hotkey; its Coach view is the card the TUI's `c` shows, with buttons:
 
 ```
 ╭coach ─ opus-5 · turn 5 ──────────────────────────────────╮
@@ -119,20 +114,21 @@ dock, so hide one to see the other — see
 [`docs/claude-code-panels.md`](docs/claude-code-panels.md). Falls back to the
 terminal view automatically when function hooks are off.
 
-## Panels
+## Bodies
+
+The nine panels of the terminal view collapse into eight bodies on Console; every panel stays reachable with `Enter`.
 
 <!-- panels:start -->
-| # | Panel | Answers |
-|---|---|---|
-| 1 | **Context** | How full is the window, how fast is it filling, how many turns until autocompact |
-| 2 | **Tokens & Cost** | Cache read / write / fresh / output / thinking, cache-hit ratio, $ and burn rate |
-| 3 | **Limits** | 5 h and 7 d usage, reset countdown, will I run out before the reset |
-| 4 | **Turn** | What the turn is doing right now, API vs tool time, hook overhead, permission waits |
-| 5 | **Tools** | Calls, errors, p50/p95, and tokens each tool pushed into context |
-| 6 | **Agents & MCP** | Subagents, MCP server processes, background tasks |
-| 7 | **Files** | Blast radius and wasted re-reads |
-| 8 | **Events** | Tool / hook / permission / compaction / note stream |
-| 9 | **Advisor** | One evidence-backed recommendation at a time, ranked by tokens saved |
+| key | Body | Answers | `Enter` opens |
+|---|---|---|---|
+| `1` | **context** | How full is the window, what it is made of and which part you can move, how many turns until autocompact | panel 1 Context |
+| `2` | **limits** | 5 h and 7 d usage as meters, reset countdown, the model's weight, will I run out before the reset | panel 3 Limits |
+| `3` | **cache** | The countdown while the entry is warm, misses, the hit ratio, the re-write at stake if it goes cold | panel 2 Tokens & Cost |
+| `4` | **cost** | The session's spend with its provenance (ledger, since, agents, team), the token mix, burn rate, the cost of continuing, who spent it | panel 2 Tokens & Cost |
+| `5` | **work** | The last check, the rework light, files touched and re-read, git, the turn's counters | panel 7 Files |
+| `6` | **tools** | Calls, errors, p50 and tokens each tool pushed into context; what is running; the agents, the team, MCP servers | panel 5 Tools |
+| `a` | **advisor** | The nudge whole — headline, action, evidence, class — what is next and what is snoozed | the coach view |
+| `0` | **events** | Tool / hook / permission / compaction / coach / note stream — the way home | panel 8 Events |
 <!-- panels:end -->
 
 The Advisor is rule-based (36 rules today, no model call). On the token axis: named cache misses, cache expiry, the cache countdown while a question waits, runaway tool results, re-reads, exploration runs in the main context, post-compaction re-triggers, idle MCP servers and plugins, thinking share, permission waits, long foreground commands, pasted input, chatty turns, rate-limit pacing, subagent model choice, agents whose work did not come back, hook overhead, oversized prefix, a warm model switch, a cold resume, the context cost past 200 k, an armed loop. On the outcome axis: the turn that died on an API error, Claude waiting on you, a failure cascade, a denial streak (with the allow rule), a correction streak (Esc Esc), a commit without a check, source edits with no test run, a natural boundary to /clear at, a PR without a review pass, destructive git on a dirty tree, an IDE/Claude edit collision; plan-first and long-context drift sit in the next row only. Every trigger is structural (a tool result, a denial kind, an interrupt marker, an API-error line, a git operation), never a keyword in your prompt. Its engine keeps one nudge in a slot by class (NOW › NEXT › LATER), with hard TTLs, cooldowns, an `acted` predicate per rule and persistent snoozes (`x` five turns, `X` the session), and the coach view (`c`) shows that slot beside four lights: context, cache, limits, rework.

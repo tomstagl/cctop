@@ -8,41 +8,41 @@ expression: text
  5: ✓ none rework 1 open      6: 257 calls 5 err
  ▸ Edited 1 src file, no test/build run yet
 ─── events ────────────────────────── 0: home  ·  ? keys ───
-  10:17  coach  NEXT A32 fired · Edited 1 src file, no test…
-  10:17  api    cost-state $9.90 · api 18:45 · retries 0:02
-  10:17  note   interrupted after 125 calls
-  10:08  tool   mcp:claude-in-chrome ✓ 68
-  10:08  tool   mcp:claude-in-chrome ✓ 118
-  10:08  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:08  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome ✓ 68
-  10:07  tool   mcp:claude-in-chrome ✓ 118
-  10:07  tool   mcp:claude-in-chrome ✓ 118
-  10:07  tool   mcp:claude-in-chrome ✓ 121
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lore ▶
-  10:07  tool   mcp:claude-in-chrome navigate lorem ipsum d…
-  10:07  tool   mcp:claude-in-chrome ✓ 69
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome ✓ 69
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome ✓ 69
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome ✓ 119
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:07  tool   mcp:claude-in-chrome ✓ 69
-  10:06  tool   mcp:claude-in-chrome ✓ 119
-  10:06  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:06  tool   mcp:claude-in-chrome computer lorem ipsu ▶
-  10:06  tool   mcp:claude-in-chrome ✓ 69
+  10:17  coach   NEXT A32 fired · Edited 1 src file, no tes…
+  10:17  api     cost-state $9.90 · api 18:45 · retries 0:02
+  10:17  note    interrupted after 125 calls
+  10:08  tool    mcp:claude-in-chrome ✓ 68
+  10:08  tool    mcp:claude-in-chrome ✓ 118
+  10:08  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:08  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome ✓ 68
+  10:07  tool    mcp:claude-in-chrome ✓ 118
+  10:07  tool    mcp:claude-in-chrome ✓ 118
+  10:07  tool    mcp:claude-in-chrome ✓ 121
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lore ▶
+  10:07  tool    mcp:claude-in-chrome navigate lorem ipsum …
+  10:07  tool    mcp:claude-in-chrome ✓ 69
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome ✓ 69
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome ✓ 69
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome ✓ 119
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:07  tool    mcp:claude-in-chrome ✓ 69
+  10:06  tool    mcp:claude-in-chrome ✓ 119
+  10:06  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:06  tool    mcp:claude-in-chrome computer lorem ipsu ▶
+  10:06  tool    mcp:claude-in-chrome ✓ 69

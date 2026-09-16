@@ -1631,7 +1631,8 @@ fn body_events(state: &State, engine: &Engine) -> Body {
                     _ => Tone::Accent,
                 },
             ));
-            at(&mut l, 16);
+            // The widest kind (`compact`) is seven cells from column 9.
+            at(&mut l, 17);
             l.push(fg(e.text.clone()));
             l
         })

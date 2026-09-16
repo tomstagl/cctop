@@ -10,12 +10,17 @@ Set Theme "Catppuccin Mocha"
 Type "CCTOP_FAKE_NOW=1787824000000 cctop run --session fixtures/session-a"
 Enter
 Sleep 2s
-Type "Tab"
+Type "1"
+Sleep 2s
+Type "4"
+Sleep 2s
+Type "6"
 Sleep 1s
 Type "Enter"
 Sleep 2s
 Escape
-Type "i"
+Type "a"
 Sleep 2s
-Escape
+Type "0"
+Sleep 1s
 Type "q"

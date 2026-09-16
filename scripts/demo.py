@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Render the demo assets from the fixture session with a fixed clock.
 
-  two-pane.png       Claude Code pane (fixture text) + cctop at 60x51
+  two-pane.png       Claude Code pane (fixture text) + cctop at 60x36, the context body
   theme-<name>.png   cctop at 60x30 per bundled theme
-  demo.webm / .gif   frames as the fixture session progresses
+  demo.webm / .gif   frames as the fixture session progresses, then the
+                     context, cost and tools bodies
 
-Needs: the cctop binary, Google Chrome (headless screenshots), ffmpeg.
+Needs: the cctop binary, Google Chrome (headless screenshots), ffmpeg, cwebp;
+Chrome and ffmpeg are also found in Playwright's cache (a container), and
+CCTOP / CHROME / FFMPEG override the paths.
 """
 import os, re, subprocess, sys, html, pathlib, shutil, tempfile
 
@@ -14,9 +17,19 @@ CCTOP = os.environ.get("CCTOP", str(ROOT / "target/release/cctop"))
 FIXTURE = str(ROOT / "fixtures/session-a.jsonl")
 OUT = ROOT / "site/assets"
 FAKE_NOW = "1787824000000"  # 2026-08-27 09:46:40 UTC, mid-session
+import glob
+# Chrome and ffmpeg: on PATH, the Mac app, or Playwright's cache (a Claude
+# Code web container ships both there, off PATH); `FFMPEG` overrides like `CCTOP`.
+_PW = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", os.path.expanduser("~/.cache/ms-playwright"))
 CHROME = next((p for p in [
+    os.environ.get("CHROME"),
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     shutil.which("google-chrome"), shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("chrome"),
+    *sorted(glob.glob(f"{_PW}/chromium-*/chrome-linux/chrome")),
+] if p and os.path.exists(p)), None)
+FFMPEG = next((p for p in [
+    os.environ.get("FFMPEG"), shutil.which("ffmpeg"),
+    *sorted(glob.glob(f"{_PW}/ffmpeg-*/ffmpeg-linux")),
 ] if p and os.path.exists(p)), None)
 
 ANSI = re.compile(r"\x1b\[([0-9;]*)m")
@@ -79,31 +92,33 @@ def shoot(html_text, path, w, h):
                     "--screenshot=" + str(path), "file://" + tmp], check=True, capture_output=True)
     os.unlink(tmp)
 
-def two_pane(path, lines=None, theme="default-dark"):
-    args = ["--size", "60x36", "--theme", theme] + (["--lines", str(lines)] if lines else [])
+def two_pane(path, lines=None, theme="default-dark", keys=None):
+    args = ["--size", "60x36", "--theme", theme] + (["--lines", str(lines)] if lines else []) + (["--keys", keys] if keys else [])
     right = ansi_to_html(cctop(args))
     left = '<pre class="l">' + html.escape((ROOT / "site/demo/claude-pane.txt").read_text()) + "</pre>"
     shoot(PAGE.format(w=1280, h=640, fs=12, left=left, right=right), path, 1280, 640)
 
 def main():
     if not CHROME: sys.exit("demo: Google Chrome / Chromium not found")
-    if not shutil.which("ffmpeg"): sys.exit("demo: ffmpeg not found")
+    if not FFMPEG: sys.exit("demo: ffmpeg not found (set FFMPEG=/path/to/ffmpeg)")
     if not os.path.exists(CCTOP): sys.exit(f"demo: {CCTOP} not built (cargo build --release)")
     OUT.mkdir(parents=True, exist_ok=True)
-    two_pane(OUT / "two-pane.png")
+    two_pane(OUT / "two-pane.png", keys="1")
     # the site uses the WebP (≈40% of the PNG) as the video poster
     subprocess.run(["cwebp", "-quiet", "-q", "82", str(OUT / "two-pane.png"), "-o", str(OUT / "two-pane.webp")], check=True)
     for theme in ["default-dark", "default-light", "btop", "nord", "gruvbox", "catppuccin-mocha"]:
-        right = ansi_to_html(cctop(["--size", "60x30", "--theme", theme]))
+        right = ansi_to_html(cctop(["--size", "60x30", "--theme", theme, "--keys", "1"]))
         shoot(PAGE.format(w=560, h=560, fs=12, left="", right=right), OUT / f"theme-{theme}.png", 560, 560)
     # Frames: the session as it unfolds.
     frames = tempfile.mkdtemp(prefix="cctop-frames-")
-    steps = [120, 260, 420, 600, 800, 1000, 1200, 1463]
-    for i, n in enumerate(steps):
-        two_pane(pathlib.Path(frames) / f"f{i:03d}.png", lines=n)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "1", "-i", f"{frames}/f%03d.png",
+    # The session as it unfolds on Console's home, then the context, cost
+    # and tools bodies at the end (`--keys`), as a person would press them.
+    steps = [(120, None), (260, None), (420, None), (600, None), (800, None), (1000, None), (1200, None), (1463, None), (1463, "1"), (1463, "4"), (1463, "6")]
+    for i, (n, key) in enumerate(steps):
+        two_pane(pathlib.Path(frames) / f"f{i:03d}.png", lines=n, keys=key)
+    subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-framerate", "1", "-i", f"{frames}/f%03d.png",
                     "-c:v", "libvpx-vp9", "-b:v", "600k", "-pix_fmt", "yuv420p", str(OUT / "demo.webm")], check=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "1", "-i", f"{frames}/f%03d.png",
+    subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-framerate", "1", "-i", f"{frames}/f%03d.png",
                     "-vf", "scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer",
                     str(OUT / "demo.gif")], check=True)
     shutil.rmtree(frames)

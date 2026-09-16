@@ -100,7 +100,9 @@ export function fit(line: Line, cells: number): Line {
       push(s);
       used += w;
     } else {
-      push({ ...s, text: clip(s.text, room) });
+      // A text the binary already clipped (`…`) grows no second ellipsis
+      // when the cut lands on its first, as the TUI's `cut` collapses it.
+      push({ ...s, text: clip(s.text, room).replace(/……$/, '…') });
       used = cells;
     }
   }

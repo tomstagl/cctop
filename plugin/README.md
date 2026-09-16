@@ -32,16 +32,18 @@ Restart Claude Code (or `/reload-plugins`) and type `/cctop`.
 
 With function hooks enabled, `/cctop-pane` docks the dashboard beside the
 transcript instead of opening a terminal split. It is drawn the way the
-standalone TUI draws it — the four block-digit tiles, the nudge, the nine-row
-ledger, round frames titled `╭5 Tools ─ 257 calls╮` in the other views,
-gauges (`▇▇▇▁▁▁`) coloured by band, dim secondary text — in Claude Code's own
-theme colours, so it follows light and dark. It shows the same views as the
-TUI:
+standalone TUI draws it — Console: the header, six cells, the act line, the
+rule line and one body, row for row; round frames titled `╭5 Tools ─ 257
+calls╮` in the other views, gauges (`▇▇▇▁▁▁`) coloured by band, dim secondary
+text — in Claude Code's own theme colours, so it follows light and dark. The
+cells, the act line and `0: home` are Claude Code's own clickable chrome: a
+plain Button per part, the digit it draws being the hotkey, the whole cell
+lit and pressed as one area. It shows the same views as the TUI:
 
 | View | TUI | What it shows |
 |---|---|---|
 | Coach | `c` | The 56-column card: the state line, the four lights, the one nudge with `[1 fill]` `[2 snooze]` `[3 why]`, what is next and what is snoozed, the detail frame of the highest light |
-| Overview | the dashboard | Header, the four tiles, the nudge, the nine-row ledger — a row's digit opens its view |
+| Overview | the dashboard | Console: the header, the six cells (`1`–`6`), the act line (`a`), the rule line (`0` home, `? keys`), the open body in place — every figure the TUI's nine panels carry, one body at a time |
 | Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
 | Agents | 6 | Subagents, MCP servers, background tasks |
 | Files | 7 | Touched files, edits, re-reads |
