@@ -33,7 +33,7 @@ echo "check-plugin-types: $dts matches claude $claude_version"
 facts=src/harness_facts.rs
 facts_version=$(grep -oE 'READ_FROM: &str = "[0-9]+\.[0-9]+\.[0-9]+"' "$facts" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 if [ -n "$facts_version" ] && [ "$(printf '%s\n%s\n' "$facts_version" "$claude_version" | sort -V | tail -1)" != "$facts_version" ]; then
-  echo "check-plugin-types: warning: $facts was read from Claude Code $facts_version, this machine has $claude_version — re-verify the constants (autocompact buffer, /usage weights, /context thresholds, the first-seen map)" >&2
+  echo "check-plugin-types: warning: $facts was read from Claude Code $facts_version, this machine has $claude_version — re-verify the constants (autocompact buffer, /usage weights, /context thresholds, the first-seen map, the teams module: docs/teams.md)" >&2
 else
   echo "check-plugin-types: $facts read from claude $facts_version (installed $claude_version)"
 fi

@@ -1265,8 +1265,15 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn watcher_and_load_agree_on_fixture_d() {
+    fn nap(ms: u64) {
+        std::thread::sleep(Duration::from_millis(ms));
+    }
+
+    #[test]
+    fn watcher_and_load_agree_on_fixture_d() {
+        let _serial = crate::tail::TEST_TAILERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let (lead, spawns, now) = lead_d();
         let layout = Layout::for_transcript(&lead.transcript, Some("session-afd065d3"), None);
         let loaded = load(&lead, &layout, &spawns, None, &Pricing::bundled(), now).unwrap();
@@ -1285,7 +1292,7 @@ mod tests {
             if done {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            nap(50);
         }
         let team = team.expect("the watcher found the team");
         assert_eq!(team.source, Source::Config);
@@ -1315,8 +1322,160 @@ mod tests {
         assert_eq!(w.stats, WatchStats::default());
     }
 
-    #[tokio::test]
-    async fn watcher_finds_a_team_that_appears_and_notes_the_directory_going() {
+    /// A 20-member team under a temp dir: fixture D's two transcripts
+    /// copied ten times each under fresh names and session ids, with a
+    /// config naming every member `isActive`. Returns the root, the lead
+    /// and the layout.
+    fn twenty_member_team(tag: &str) -> (PathBuf, Lead, Layout, Vec<PathBuf>) {
+        let root = std::env::temp_dir().join(format!("cctop-team-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let projects = root.join("projects/-Users-me-code-one");
+        let teams = root.join("teams");
+        std::fs::create_dir_all(&projects).unwrap();
+        std::fs::create_dir_all(teams.join("session-deadbeef")).unwrap();
+        let lead_id = "deadbeef-2222-4000-8000-000000000000";
+        let lead_path = projects.join(format!("{lead_id}.jsonl"));
+        std::fs::write(&lead_path, "{\"type\":\"mode\"}\n").unwrap();
+        let sources: Vec<PathBuf> =
+            std::fs::read_dir(fixture("session-d").with_extension("").join("teammates"))
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .collect();
+        let mut members = Vec::new();
+        let mut files = Vec::new();
+        for i in 0..20 {
+            let name = format!("m{i:02}");
+            let sid = format!("cafe{i:04}-0000-4000-8000-000000000000");
+            let src = &sources[i % sources.len()];
+            let text = std::fs::read_to_string(src).unwrap();
+            let mut out = String::new();
+            for line in text.lines() {
+                let mut v: serde_json::Value = serde_json::from_str(line).unwrap();
+                if v.get("agentName").is_some() {
+                    v["agentName"] = serde_json::Value::String(name.clone());
+                    v["teamName"] = serde_json::Value::String("session-deadbeef".into());
+                }
+                if v.get("sessionId").is_some() {
+                    v["sessionId"] = serde_json::Value::String(sid.clone());
+                }
+                out.push_str(&serde_json::to_string(&v).unwrap());
+                out.push('\n');
+            }
+            let path = projects.join(format!("{sid}.jsonl"));
+            std::fs::write(&path, out).unwrap();
+            files.push(path);
+            members.push(format!(
+                r#"{{"agentId":"{name}@session-deadbeef","name":"{name}","agentType":"general-purpose","backendType":"tmux","model":"haiku","cwd":"/Users/me/code/one","joinedAt":1000,"isActive":true}}"#
+            ));
+        }
+        std::fs::write(
+            teams.join("session-deadbeef/config.json"),
+            format!(
+                r#"{{"name":"session-deadbeef","leadSessionId":"{lead_id}","members":[{{"name":"team-lead","agentType":"team-lead","backendType":"in-process"}},{}]}}"#,
+                members.join(",")
+            ),
+        )
+        .unwrap();
+        let lead = Lead {
+            session_id: lead_id.into(),
+            transcript: lead_path.clone(),
+            started_at_ms: None,
+            alive: true,
+        };
+        let layout = Layout::live(&lead_path, Some("session-deadbeef"), Some(&teams));
+        (root, lead, layout, files)
+    }
+
+    #[test]
+    fn twenty_teammates_cost_no_reads_when_quiet_and_drain_an_append_at_once() {
+        let _serial = crate::tail::TEST_TAILERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // US-005: with 20 members tailed, a poll with no new lines reads no
+        // transcript (the tailers hold their offsets; the head scan has
+        // nothing new to look at), and 1 000 lines appended across the
+        // files arrive through one poll once the tailers have read them.
+        let (root, lead, layout, files) = twenty_member_team("budget");
+        let mut w = TeamWatcher::watch(
+            lead,
+            layout,
+            Some(root.join("projects")),
+            Pricing::bundled(),
+        );
+        let mut team = None;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            w.poll(&mut team, &[], 0);
+            let ready = team.as_ref().is_some_and(|t: &Team| {
+                t.members.len() == 20
+                    && t.members
+                        .values()
+                        .all(|m| m.path.is_some() && m.agg.api_calls() >= 8)
+            });
+            if ready {
+                break;
+            }
+            nap(50);
+        }
+        let t = team.as_ref().expect("the team");
+        assert_eq!(t.members.len(), 20);
+        assert_eq!(t.read(), 20);
+        assert_eq!(t.source, Source::Config);
+        assert!(t.missing(0, true).is_empty());
+        assert_eq!(w.stats.head_reads, 20, "each transcript's head read once");
+        // Quiet: several polls across a scan interval, no transcript
+        // opened, no line delivered; the directory scans and the config
+        // are the whole cost.
+        w.stats = WatchStats::default();
+        w.last_scan = Some(Instant::now() - SCAN_INTERVAL);
+        w.last_config = Some(Instant::now() - SCAN_INTERVAL);
+        for _ in 0..3 {
+            w.poll(&mut team, &[], 0);
+            nap(20);
+        }
+        assert_eq!(w.stats.head_reads, 0, "{:?}", w.stats);
+        assert_eq!(w.stats.lines, 0, "{:?}", w.stats);
+        assert!(w.stats.dir_reads <= 2, "{:?}", w.stats);
+        assert!(w.stats.config_reads <= 2, "{:?}", w.stats);
+        // 1 000 lines appended, 50 per file: one poll drains them once the
+        // tailers have read them (their own poll interval is one second).
+        let line = r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","teamName":"session-deadbeef","agentName":"x","message":{"id":"append","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"x"}],"usage":{"output_tokens":1}}}"#;
+        for f in &files {
+            use std::io::Write;
+            let mut fh = std::fs::OpenOptions::new().append(true).open(f).unwrap();
+            for i in 0..50 {
+                writeln!(fh, "{}", line.replace("\"append\"", &format!("\"a{i}\""))).unwrap();
+            }
+        }
+        w.stats = WatchStats::default();
+        nap(1_500);
+        let mut polls = 0;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while w.stats.lines < 1_000 && Instant::now() < deadline {
+            w.poll(&mut team, &[], 0);
+            polls += 1;
+            if w.stats.lines < 1_000 {
+                nap(200);
+            }
+        }
+        assert_eq!(w.stats.lines, 1_000, "{:?} after {polls} polls", w.stats);
+        assert_eq!(polls, 1, "one poll drained the append: {:?}", w.stats);
+        assert_eq!(
+            w.stats.head_reads, 0,
+            "an append is no new file: {:?}",
+            w.stats
+        );
+        let t = team.as_ref().unwrap();
+        assert!(t.members.values().all(|m| m.agg.api_calls() >= 8 + 50));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn watcher_finds_a_team_that_appears_and_notes_the_directory_going() {
+        let _serial = crate::tail::TEST_TAILERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("cctop-team-live-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let projects = dir.join("projects/-Users-me-code-one");
@@ -1367,7 +1526,7 @@ mod tests {
             }) {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            nap(50);
         }
         let t = team.as_ref().expect("found");
         assert_eq!(t.source, Source::Config);
@@ -1387,7 +1546,7 @@ mod tests {
             {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            nap(50);
         }
         let t = team.as_ref().unwrap();
         assert_eq!(t.source, Source::Transcripts);
