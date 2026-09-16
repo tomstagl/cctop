@@ -49,6 +49,30 @@ Console swaps its body. Underlined text inside a terminal is a click target.
 by driving every click handler at both widths and re-measuring after each state
 change — see the commit that added them for the harness.
 
+## The clickable prototype
+
+`prototype.html` is a standalone page — open it from a clone (`open
+tasks/design-dashboard-v2/prototype.html`) or from the published link in the
+commit that added it. It needs no build step and no canvas runtime, unlike the
+`.dc.html` files above, which are canvas sources and render only inside the
+published artifact.
+
+Tabs switch direction, chips switch 122 / 78 columns, underlined text inside
+the terminal is a click target, and the digit keys, `Esc`, `w` and `s` work.
+
+Rebuild it after editing a renderer:
+
+```
+python3 build-prototype.py     # proto/*.js + prototype.shell.html -> prototype.html
+node drive-protos.mjs          # drives every click target at both widths
+```
+
+- `proto/terminal.js` — the character-grid renderer: segments, column stops,
+  bars, and the cut that mirrors `dashboard::cut`.
+- `proto/views.js` — the five view bodies (context, cost, tools, files,
+  events) that all three directions share, so what you compare is the chrome.
+- `proto/directions.js` — one screen function per direction.
+
 ## Scripts
 
 - `node series-ramp.mjs` — derives the sequential series ramp from each bundled
