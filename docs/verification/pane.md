@@ -437,8 +437,8 @@ hooks are off or before its module is accepted.
     digit anywhere in the row; the three (two below 80 body columns) cells
     of a row sit at the same column stops as the TUI's at the same width
     (`cctop run --once --session <id> --size 67x24`, the same characters).
-    Claude Code version:
-    Result: pending
+    Claude Code version: 2.1.273
+    Result: pass, 2026-09-16, Claude Code 2.1.273, plugin 0.7.0
 
 29. **The hover scope lights a Button whose label is only spaces**
     (Console). A cell's padding is a Button of spaces so that the whole
@@ -453,8 +453,8 @@ hooks are off or before its module is accepted.
     padding swaps the body exactly as a click on the digit does (the rule
     line reads `─── context …`); the act line lights and presses as one
     area too, `a: advisor` included.
-    Claude Code version:
-    Result: pending
+    Claude Code version: 2.1.273
+    Result: fail, 2026-09-16, Claude Code 2.1.273, plugin 0.7.0 — each Button inverts on its own, not the cell
 
 30. **Six Buttons in one band each claim a bare digit** (Console, FR-15).
     The cells carry `hotkey` `1`–`6`, the act line `a`, home `0`; the
@@ -615,10 +615,12 @@ UTC) and the marker from inside that session. Observed, verbatim:
   "bodyColumns":73, "viewportColumns":147}` with ISO timestamps;
   `loadedAt` 21:46:50.784, `openedAt` 21:46:50.953 (169 ms apart),
   `heartbeatAt` moving.
-- Item 31's arithmetic, a third reading: `dockColumns` 74 → `min(221 − 70,
-  max(24, 74))` = 74, body 73 (`dock − 1`), viewport 147 (`columns − dock`)
-  — the same two rules as the hand-off's 137 and 81 readings. The default
-  ladder is still unread (the key was set).
+- Item 31's arithmetic, a third and a fourth reading: `dockColumns` 74 →
+  `min(221 − 70, max(24, 74))` = 74, body 73 (`dock − 1`), viewport 147
+  (`columns − dock`); after a `ctrl+x` resize in the same session,
+  `dockColumns` 133 → 133, body 132, viewport 88 — the same two rules as
+  the hand-off's 137 and 81 readings, four for four. The default ladder is
+  still unread (the key was set throughout).
 - Items 28–30's pointer half: fourteen `ui.press cctop/… in Pane from
   terminal` lines settled in 0.4–3.8 ms — the view bar (`tools`, `agents`,
   `files`, `events`, `coach`, `overview`), five cells (`cell-context`,
