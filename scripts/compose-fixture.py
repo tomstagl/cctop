@@ -315,8 +315,9 @@ def splice(spine, segments, session_id, cwd, deltas=None):
         seg = [json.loads(json.dumps(o)) for o in seg]  # deep copy
         first_ts = next((ts(o) for o in seg if ts(o)), None)
         base = last_ts + dt.timedelta(seconds=GAP_S)
-        if first_ts:
-            deltas.append(base - first_ts)
+        # One entry per segment, so `deltas[i]` is segment i's shift even
+        # when an earlier segment (a bare `continued-in` line) has no time.
+        deltas.append(base - first_ts if first_ts else dt.timedelta(0))
         starts_turn = any(o.get("type") == "user" and not has_tool_result(o) and not o.get("isMeta") for o in seg)
         for j, o in enumerate(seg):
             if ts(o) and first_ts:

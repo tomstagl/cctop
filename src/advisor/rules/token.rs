@@ -880,7 +880,14 @@ impl Rule for AgentsWaste {
         a.action = "open the agents view (6, Enter) and see which launches did not pay off before launching more".into();
         a.action_text = "6 Enter".into();
         a.action_kind = ActionKind::Key;
-        a.saving = Saving::OneOff((t.waste_usd / 5.0 * 1e6) as u64);
+        // The tokens the wasted agents spent: what not launching them
+        // would have kept.
+        let wasted_tokens: u64 = rows
+            .iter()
+            .filter(|r| r.waste.is_some())
+            .map(|r| r.tokens)
+            .sum();
+        a.saving = Saving::OneOff(wasted_tokens.max(1));
         a.retires_on = "the view opened or the waste share under 10 %";
         a.mark = state.agents_view_opens;
         Some(a)

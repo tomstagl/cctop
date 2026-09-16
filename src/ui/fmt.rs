@@ -11,6 +11,17 @@ pub fn tokens(n: u64) -> String {
     }
 }
 
+/// `claude-opus-5` → `opus`, `claude-haiku-4-5-20251001` → `haiku`: the
+/// family alone, as Panel 6 and the agents view print it.
+pub fn model_family(model: &str) -> String {
+    model
+        .trim_start_matches("claude-")
+        .split('-')
+        .next()
+        .unwrap_or("")
+        .to_string()
+}
+
 /// `claude-opus-5` → `opus-5`, `claude-haiku-4-5-20251001` → `haiku-4-5`.
 pub fn model_short(model: &str) -> String {
     let m = model.trim_start_matches("claude-");

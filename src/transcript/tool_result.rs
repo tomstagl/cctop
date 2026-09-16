@@ -182,11 +182,16 @@ impl ToolUseDetail {
                 is_async: b("isAsync"),
                 total_tool_use_count: n("totalToolUseCount"),
                 usage: usage.map(|u| crate::metrics::Usage::from_api(&u)),
-                result_chars: o
-                    .get("content")
-                    .and_then(Value::as_str)
-                    .map(|c| c.chars().count())
-                    .unwrap_or(0),
+                // A string, or blocks (`[{type: text, text}]`) on newer shapes.
+                result_chars: match o.get("content") {
+                    Some(Value::String(c)) => c.chars().count(),
+                    Some(Value::Array(blocks)) => blocks
+                        .iter()
+                        .filter_map(|b| b.get("text").and_then(Value::as_str))
+                        .map(|t| t.chars().count())
+                        .sum(),
+                    _ => 0,
+                },
             });
         }
         ToolUseDetail::Other

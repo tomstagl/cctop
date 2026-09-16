@@ -103,6 +103,12 @@ pub struct Agent {
     /// than post events means a tool is still running (a 10-minute build
     /// is not an idle agent).
     pub hook_pre_calls: usize,
+    /// Tool calls the spool saw start and not finish: up on `PreToolUse`,
+    /// down on a post event, and back to 0 when the transcript writes a
+    /// line after the last pre event (the call's result landed; a denial
+    /// fires no post event).
+    hook_open_calls: usize,
+    last_hook_pre_at: Option<i64>,
     /// Tool calls by display name, from the agent's own transcript.
     pub tools_by_name: std::collections::BTreeMap<String, usize>,
     // -- derived-state inputs
@@ -151,6 +157,8 @@ impl Agent {
             hook_tool_ms: 0,
             hook_tool_errors: 0,
             hook_pre_calls: 0,
+            hook_open_calls: 0,
+            last_hook_pre_at: None,
             tools_by_name: Default::default(),
             pending_tool_uses: 0,
             last_was_error_result: false,
@@ -169,14 +177,20 @@ impl Agent {
         self.started_at = self.started_at.or(Some(at_ms));
         self.last_line_at = Some(self.last_line_at.unwrap_or(at_ms).max(at_ms));
         match event {
-            "PreToolUse" => self.hook_pre_calls += 1,
+            "PreToolUse" => {
+                self.hook_pre_calls += 1;
+                self.hook_open_calls += 1;
+                self.last_hook_pre_at = Some(at_ms);
+            }
             "PostToolUse" => {
                 self.hook_tool_calls += 1;
+                self.hook_open_calls = self.hook_open_calls.saturating_sub(1);
                 self.hook_tool_ms += duration_ms.unwrap_or(0);
             }
             "PostToolUseFailure" => {
                 self.hook_tool_calls += 1;
                 self.hook_tool_errors += 1;
+                self.hook_open_calls = self.hook_open_calls.saturating_sub(1);
                 self.hook_tool_ms += duration_ms.unwrap_or(0);
             }
             _ => {}
@@ -203,9 +217,12 @@ impl Agent {
             _ => None,
         }
         .and_then(parse_ts_ms);
-        if at.is_some() {
-            self.started_at = self.started_at.or(at);
-            self.last_line_at = at;
+        if let Some(at) = at {
+            self.started_at = self.started_at.or(Some(at));
+            self.last_line_at = Some(at);
+            if self.last_hook_pre_at.is_some_and(|pre| at > pre) {
+                self.hook_open_calls = 0;
+            }
         }
         match line {
             Line::Unknown(v)
@@ -215,8 +232,8 @@ impl Agent {
                 self.is_fork = true;
                 self.expect_parent_message = true;
             }
-            Line::Assistant(a) if self.is_parent_message(&a.message.id) => {}
             Line::Assistant(a) if a.is_api_error() => {}
+            Line::Assistant(a) if self.is_parent_message(a) => {}
             Line::Assistant(a) => {
                 let usage = Usage::from_api(&a.message.usage);
                 match &mut self.last_message {
@@ -285,18 +302,48 @@ impl Agent {
     /// The first assistant message after `fork-context-ref` is the parent's
     /// launching response (same `message.id` as in the parent transcript,
     /// carrying the `Agent` tool_use whose id is the meta's `toolUseId`);
-    /// every line of it is skipped.
-    fn is_parent_message(&mut self, id: &str) -> bool {
+    /// every line of it is skipped. When the meta named the tool use, the
+    /// message must carry it — a version that stops replaying the parent
+    /// would otherwise lose the fork's real first call.
+    fn is_parent_message(&mut self, a: &crate::transcript::AssistantLine) -> bool {
         if self.expect_parent_message {
             self.expect_parent_message = false;
-            self.parent_message_id = Some(id.to_string());
+            let carries_launch = match &self.tool_use_id {
+                Some(want) => a.message.content.iter().any(|b| {
+                    matches!(b, AssistantBlock::ToolUse { id, name, .. } if id == want && name == "Agent")
+                }),
+                None => true,
+            };
+            if carries_launch {
+                self.parent_message_id = Some(a.message.id.clone());
+            }
         }
-        self.parent_message_id.as_deref() == Some(id)
+        self.parent_message_id.as_deref() == Some(a.message.id.as_str())
     }
 
-    /// Tool calls the hook spool saw start and not finish.
+    /// Tool calls the hook spool saw start and not finish (a denied call
+    /// gets no post event, but its error result lands in the transcript
+    /// and settles it).
     pub fn hook_pending(&self) -> usize {
-        self.hook_pre_calls.saturating_sub(self.hook_tool_calls)
+        self.hook_open_calls
+    }
+
+    /// What the spool knows about this agent, carried onto a fresh copy of
+    /// it (the watcher re-reads the transcript, the spool does not replay).
+    pub fn carry_hook_state(&mut self, from: &Agent) {
+        self.hook_open_calls = from.hook_open_calls;
+        self.last_hook_pre_at = from.last_hook_pre_at;
+        if self
+            .last_line_at
+            .is_some_and(|at| from.last_hook_pre_at.is_some_and(|pre| at > pre))
+        {
+            self.hook_open_calls = 0;
+        }
+    }
+
+    /// Tool calls the agent's own transcript shows issued and not answered.
+    pub fn transcript_pending(&self) -> usize {
+        self.pending_tool_uses
     }
 
     /// The agent's first own API call (a fork's first after the parent's
@@ -853,6 +900,75 @@ mod tests {
         b.push(&asst("first", 9, text));
         assert_eq!(b.api_calls, 1);
         assert_eq!(b.usage.output, 9);
+
+        // The meta names the launching tool use: a first message without
+        // it is the fork's own (a version that stopped replaying the
+        // parent), and an API-error line is never the parent's message.
+        let meta = Meta {
+            tool_use_id: Some("toolu_1".into()),
+            ..Default::default()
+        };
+        let mut c = Agent::new("f", meta.clone());
+        c.push(&fork_ref);
+        c.push(&asst("parent", 1200, launch));
+        c.push(&asst("own", 7, text));
+        assert_eq!(c.api_calls, 1, "the parent's message carries toolu_1");
+        let mut d = Agent::new("f", meta.clone());
+        d.push(&fork_ref);
+        d.push(&asst("own", 7, text));
+        assert_eq!(d.api_calls, 1, "no replay: the first message is the fork's");
+        assert_eq!(d.usage.output, 7);
+        let mut e = Agent::new("f", meta);
+        e.push(&fork_ref);
+        e.push(
+            &Line::parse(
+                r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","isApiErrorMessage":true,"message":{"id":"err","model":"<synthetic>","content":[{"type":"text","text":"rate limit"}],"usage":{"output_tokens":0}}}"#,
+            )
+            .unwrap(),
+        );
+        e.push(&asst("parent", 1200, launch));
+        e.push(&asst("own", 7, text));
+        assert_eq!(
+            e.api_calls, 1,
+            "the error line did not take the parent's place"
+        );
+        assert_eq!(e.usage.output, 7);
+    }
+
+    #[test]
+    fn hook_pending_needs_a_pre_event_newer_than_the_transcript() {
+        let t0 = parse_ts_ms("2026-01-01T00:00:00Z").unwrap();
+        let mut a = Agent::new("x", Meta::default());
+        a.push(
+            &Line::parse(
+                r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"m1","model":"m","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}],"stop_reason":"tool_use","usage":{"output_tokens":1}}}"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(a.transcript_pending(), 1);
+        a.note_hook("PreToolUse", None, t0 + 100);
+        assert_eq!(
+            a.hook_pending(),
+            1,
+            "started after the last line, not finished"
+        );
+        // The result lands in the transcript (a denial fires no post event).
+        a.push(
+            &Line::parse(
+                r#"{"type":"user","timestamp":"2026-01-01T00:00:05Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"denied","is_error":true}]}}"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            a.hook_pending(),
+            0,
+            "the pre event is older than the transcript now"
+        );
+        assert_eq!(a.transcript_pending(), 0);
+        a.note_hook("PreToolUse", None, t0 + 10_000);
+        assert_eq!(a.hook_pending(), 1);
+        a.note_hook("PostToolUse", Some(3), t0 + 10_003);
+        assert_eq!(a.hook_pending(), 0);
     }
 
     #[test]

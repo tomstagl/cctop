@@ -151,6 +151,14 @@ impl Panel for Tokens {
                     ));
                 }
             }
+            // Agents on a model the table does not know are in no dollar
+            // figure: say so beside the ones that are.
+            if b.agents.is_some() && b.unpriced_agent_tokens > 0 {
+                l.push(Span::styled(
+                    format!(" · unpriced {}", fmt::tokens(b.unpriced_agent_tokens)),
+                    dim,
+                ));
+            }
             lines.push(Line::from(l));
         }
 
@@ -389,6 +397,15 @@ mod tests {
         let out = render_to_string(&app, 72, 51);
         assert!(out.contains(" main ≈$"), "{out}");
         assert!(out.contains(" · agents ≈$0.13 (1 %)"), "{out}");
+        // An agent on a model the table does not know is named by its
+        // tokens beside the priced ones, never folded into a dollar figure.
+        let mut odd = app.state.agents["a9a92645226d3a561"].clone();
+        odd.id = "odd".into();
+        odd.model = "claude-unknown-9".into();
+        app.state.agents.insert("odd".into(), odd);
+        let out = render_to_string(&app, 90, 51);
+        assert!(out.contains("agents ≈$0.13 (1 %) · unpriced 485k"), "{out}");
+        app.state.agents.remove("odd");
         // No agents: the line is not drawn and nothing else moves (FR-6).
         app.state.agents.clear();
         let out = render_to_string(&app, 72, 51);

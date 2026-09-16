@@ -26,6 +26,7 @@ pub enum WasteReason {
     Killed,
     /// `completed` with an absent or empty `<result>`; or a synchronous
     /// result with no content.
+    #[serde(rename = "no_ret")]
     NoReturn,
     /// No notification, still running, no line for `IDLE_MS`, and no tool
     /// the hook spool saw start and not finish.
@@ -156,6 +157,16 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
         }
     }
     runs.sort();
+    // A notification whose `Workflow` launch was not seen (a cut prefix, a
+    // resumed session) is keyed by its task id; it can only be the run's
+    // when there is exactly one of each.
+    let unkeyed: Vec<&crate::transcript::TaskNotification> = state
+        .workflow_notifications
+        .iter()
+        .filter(|(k, _)| !runs.contains(k))
+        .map(|(_, n)| n)
+        .collect();
+    let lone = (runs.len() == 1 && unkeyed.len() == 1).then(|| unkeyed[0]);
     runs.into_iter()
         .map(|run| {
             let journal = state.workflow_journals.iter().find(|j| j.run == run);
@@ -177,6 +188,7 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
                 empty_result: state
                     .workflow_notifications
                     .get(&run)
+                    .or(lone)
                     .and_then(|n| n.workflow)
                     .map(|w| w.empty_result),
                 launched: journal.map_or(members.len(), |j| j.launched),
@@ -234,10 +246,13 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         },
     };
     let status = a.notified.as_ref().map(|n| n.status.clone());
-    let journal_failed = state
-        .workflow_journals
-        .iter()
-        .any(|j| j.failed_ids.contains(&a.id));
+    // The journal's `failed` entry counts while Claude Code has not said
+    // otherwise: a notification that says `completed` is the later word.
+    let journal_failed = status.is_none()
+        && state
+            .workflow_journals
+            .iter()
+            .any(|j| j.failed_ids.contains(&a.id));
     let heuristic = a.state(now);
     let agent_state = match &status {
         Some(TaskStatus::Completed) => AgentState::Done,
@@ -245,12 +260,22 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         _ if journal_failed => AgentState::Failed,
         _ => heuristic,
     };
-    let returned_tokens = a
+    let result_chars = a
         .notified
         .as_ref()
         .and_then(|n| n.result_chars)
-        .or(a.sync_result_chars)
-        .map(|c| (c / 4) as u64);
+        .or(a.sync_result_chars);
+    let returned_tokens = result_chars.map(|c| (c / 4) as u64);
+    // A finished agent's time is what the notification measured, else the
+    // span of its transcript; only a running one is timed to the clock.
+    let elapsed_ms = match &a.notified {
+        Some(n) => n.duration_ms.map(|d| d as i64).or_else(|| {
+            a.started_at
+                .zip(a.last_line_at)
+                .map(|(s, l)| (l - s).max(0))
+        }),
+        None => a.elapsed_ms(now),
+    };
     let idle_for = a
         .last_line_at
         .map(|t| now.saturating_sub(t))
@@ -262,7 +287,7 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         Some(WasteReason::Failed)
     } else if matches!(status, Some(TaskStatus::Killed)) {
         Some(WasteReason::Killed)
-    } else if matches!(status, Some(TaskStatus::Completed)) && returned_tokens.unwrap_or(0) == 0
+    } else if matches!(status, Some(TaskStatus::Completed)) && result_chars.unwrap_or(0) == 0
         || a.sync_result_chars == Some(0)
     {
         Some(WasteReason::NoReturn)
@@ -270,7 +295,11 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         && heuristic == AgentState::Running
         && idle_for.is_some()
         && a.hook_pending() == 0
+        && a.transcript_pending() == 0
     {
+        // Silent for IDLE_MS with nothing in flight on either side: no
+        // tool the spool saw start, none the transcript shows unanswered
+        // (a long build without hooks is not idle either).
         Some(WasteReason::Idle)
     } else {
         None
@@ -305,7 +334,7 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         is_fork: a.is_fork,
         workflow: a.workflow.clone(),
         started_at: a.started_at,
-        elapsed_ms: a.elapsed_ms(now),
+        elapsed_ms,
         tokens: a.usage.total(),
         output_tokens: a.usage.output,
         cost,
@@ -571,27 +600,122 @@ mod tests {
     }
 
     #[test]
-    fn idle_needs_silence_and_no_pending_hook_call() {
-        // Running (a tool call pending), last line at T0.
-        let mut a = agent("00000000000000011", 2, false, true);
-        a.note_hook("PreToolUse", None, parse_ts_ms(T0).unwrap());
-        let busy = state_with(vec![a.clone()], "2026-01-01T00:10:00Z");
-        assert_eq!(
-            rows(&busy, Sort::Spend, false)[0].waste,
-            None,
-            "a tool the spool saw start and not finish is not idle"
-        );
-        a.note_hook("PostToolUse", Some(5), parse_ts_ms(T0).unwrap() + 5);
+    fn idle_needs_silence_and_nothing_in_flight() {
+        // A tool call the transcript shows unanswered: a long build is not
+        // idle, hooks or no hooks.
+        let building = agent("00000000000000011", 2, false, true);
+        let s = state_with(vec![building], "2026-01-01T00:10:00Z");
+        assert_eq!(rows(&s, Sort::Spend, false)[0].waste, None);
+
+        // The tool answered, the next API call never came: running with
+        // nothing in flight, silent since T0 + 10 s.
+        let mut a = agent("00000000000000012", 2, false, true);
+        let answered = Line::parse(
+            r#"{"type":"user","timestamp":"2026-01-01T00:00:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"}]}}"#,
+        )
+        .unwrap();
+        a.push(&answered);
+        assert_eq!(a.state(i64::MAX), AgentState::Running);
+        assert_eq!(a.transcript_pending(), 0);
         let idle = state_with(vec![a.clone()], "2026-01-01T00:10:00Z");
         let w = rows(&idle, Sort::Spend, false)[0].waste.unwrap();
         assert_eq!(w.reason, WasteReason::Idle);
         assert!(w.idle_ms.unwrap() >= IDLE_MS);
-        let fresh = state_with(vec![a], "2026-01-01T00:04:00Z");
+        let fresh = state_with(vec![a.clone()], "2026-01-01T00:04:00Z");
         assert_eq!(
             rows(&fresh, Sort::Spend, false)[0].waste,
             None,
             "under IDLE_MS"
         );
+        // A tool the spool saw start after the last line and not finish.
+        a.note_hook(
+            "PreToolUse",
+            None,
+            parse_ts_ms("2026-01-01T00:00:11Z").unwrap(),
+        );
+        let busy = state_with(vec![a.clone()], "2026-01-01T00:10:00Z");
+        assert_eq!(
+            rows(&busy, Sort::Spend, false)[0].waste,
+            None,
+            "{:?}",
+            a.hook_pending()
+        );
+        a.note_hook(
+            "PostToolUse",
+            Some(5),
+            parse_ts_ms("2026-01-01T00:00:12Z").unwrap(),
+        );
+        let idle = state_with(vec![a], "2026-01-01T00:10:00Z");
+        assert_eq!(
+            rows(&idle, Sort::Spend, false)[0].waste.unwrap().reason,
+            WasteReason::Idle
+        );
+    }
+
+    #[test]
+    fn a_short_result_is_a_return_and_a_finished_agent_stops_its_clock() {
+        let mut s = state_with(
+            vec![
+                agent("00000000000000016", 2, false, false),
+                agent("00000000000000017", 2, false, true),
+            ],
+            "2026-01-01T00:00:00Z",
+        );
+        s.apply(&notify(&notification(
+            "00000000000000016",
+            "completed",
+            Some("ok."),
+        )));
+        s.apply(&notify(&notification(
+            "00000000000000017",
+            "killed",
+            Some(""),
+        )));
+        // The clock is far ahead: a notified agent's time does not follow it.
+        s.now_ms = parse_ts_ms("2026-01-10T00:00:00Z").unwrap();
+        let rs = rows(&s, Sort::Spend, false);
+        let short = rs.iter().find(|r| r.id == "00000000000000016").unwrap();
+        assert_eq!(short.returned_tokens, Some(0), "3 chars ÷ 4");
+        assert_eq!(short.waste, None, "three characters came back");
+        let killed = rs.iter().find(|r| r.id == "00000000000000017").unwrap();
+        assert_eq!(
+            killed.elapsed_ms,
+            Some(1_000),
+            "its transcript's span, not the clock"
+        );
+        // With `<duration_ms>` in the notification, that figure wins.
+        let with_duration = Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"{T0}","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string("<task-notification><task-id>00000000000000017</task-id><status>killed</status><summary>s</summary><usage><subagent_tokens>1</subagent_tokens><tool_uses>1</tool_uses><duration_ms>81000</duration_ms></usage></task-notification>").unwrap()
+        ))
+        .unwrap();
+        s.apply(&with_duration);
+        let rs = rows(&s, Sort::Spend, false);
+        let killed = rs.iter().find(|r| r.id == "00000000000000017").unwrap();
+        assert_eq!(killed.elapsed_ms, Some(81_000));
+    }
+
+    #[test]
+    fn the_notification_outranks_the_journal() {
+        let mut s = state_with(vec![agent("00000000000000018", 2, false, false)], T0);
+        s.workflow_journals.push(crate::agents::WorkflowJournal {
+            run: "wf_1".into(),
+            failed: 1,
+            failed_ids: vec!["00000000000000018".into()],
+            ..Default::default()
+        });
+        assert_eq!(
+            rows(&s, Sort::Spend, false)[0].waste.unwrap().reason,
+            WasteReason::Failed
+        );
+        s.apply(&notify(&notification(
+            "00000000000000018",
+            "completed",
+            Some("four"),
+        )));
+        let r = &rows(&s, Sort::Spend, false)[0];
+        assert_eq!(r.state, AgentState::Done);
+        assert_eq!(r.waste, None, "Claude Code's later word wins");
     }
 
     #[test]
