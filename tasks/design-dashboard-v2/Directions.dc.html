@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 32px 38px; display: flex; flex-direction: column; gap: 24px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 7px">
+    <div style="font-size: 23px; font-weight: 600; color: #D6DEE8">Three directions, and what settles between them</div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 920px; text-wrap: pretty">The dogfood answered the question the last round left open, and it split the verdict cleanly in two.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 7px; padding: 16px 18px; border-radius: 7px; background: #0F1A15; border: 1px solid #1D3327"><div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5FC77E">validated — do not touch</div><div style="font-size: 14.5px; line-height: 1.5; color: #C3CDDA; text-wrap: pretty"><strong>The data changed your behaviour.</strong> Which readings are shown, what they measure, and the thresholds behind them are now evidence-backed rather than asserted. No direction below adds, removes or redefines a single number.</div></div>
+    <div style="display: flex; flex-direction: column; gap: 7px; padding: 16px 18px; border-radius: 7px; background: #1A1217; border: 1px solid #45252C"><div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #E5605E">the actual defect</div><div style="font-size: 14.5px; line-height: 1.5; color: #C3CDDA; text-wrap: pretty"><strong>It is ugly in the panel.</strong> Not wrong, not missing — ugly, and specifically in the pane, where <span class="m">tileRows</span> is unconditionally two per row and the tile block costs seven rows of a short viewport before anything else is drawn.</div></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 4px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">what k9s actually comes down to</div>
+    <div style="font-size: 14px; line-height: 1.5; color: #8FA0B4; max-width: 920px; text-wrap: pretty">Ten borrowable keybindings was the wrong summary. Strip the mechanics away and three commitments are left, plus one thing it got wrong that is worth more than the rest.</div>
+    <div style="display: flex; flex-direction: column; gap: 1px; margin-top: 4px"><sc-for list="{{lessons}}" as="l" hint-placeholder-count="4"><div style="display: grid; grid-template-columns: 26px 210px minmax(0, 1fr); gap: 16px; padding: 13px 15px; border-radius: 5px; background: {{l.bg}}; align-items: baseline"><span class="m" style="font-size: 13px; font-weight: 600; color: {{l.tone}}">{{l.n}}</span><span style="font-size: 14.5px; font-weight: 600; color: #D6DEE8; text-wrap: pretty">{{l.head}}</span><span style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{l.body}}</span></div></sc-for></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; padding: 17px 19px; border-radius: 7px; background: #121820; margin-top: 4px">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #4CC2C2">the colour findings do not wait for this decision</div>
+    <div style="font-size: 14px; line-height: 1.55; color: #A6B4C4; text-wrap: pretty">Nothing on the Colour page depends on which direction wins. The series ramp, the <span class="m" style="color: #C3CDDA">stacked_bar</span> glyph fix and the four reserved roles are properties of the theme and one widget — they land on today's dashboard and every direction inherits them. Ship them first, on their own, and judge the layouts against a screen whose colours already mean one thing.</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px"><sc-for list="{{colour}}" as="c" hint-placeholder-count="4"><span class="m" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: #0A0E12; color: {{c.tone}}">{{c.label}}</span></sc-for></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 4px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">the three, and the axis each one bets on</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px"><sc-for list="{{dirs}}" as="d" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-radius: 7px; background: #121820; border-top: 3px solid {{d.tone}}"><div style="display: flex; align-items: baseline; gap: 10px"><span class="m" style="font-size: 11px; color: {{d.tone}}">{{d.n}}</span><span style="font-size: 17px; font-weight: 600; color: #D6DEE8">{{d.name}}</span></div><div class="m" style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: {{d.tone}}">{{d.axis}}</div><div style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{d.body}}</div><div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; margin-top: 4px; padding-top: 10px; border-top: 1px solid #1E2731"><span class="m" style="font-size: 10.5px; color: #5D6B7D">k9s</span><span style="font-size: 13px; line-height: 1.45; color: #8FA0B4">{{d.leans}}</span></div><div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px"><span class="m" style="font-size: 10.5px; color: #5D6B7D">size</span><span style="font-size: 13px; line-height: 1.45; color: #8FA0B4">{{d.size}}</span></div></div></sc-for></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 7px; background: #0E1A1C; border: 1px solid #1B3338; margin-top: 4px">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #4CC2C2">what I would do</div>
+    <div style="font-size: 15px; line-height: 1.55; color: #C3CDDA; text-wrap: pretty"><strong>Console</strong>, because the complaint is the pane and it is the only one of the three that stops fighting the pane's shape. The other two make a summary of fourteen things prettier; Console decides the pane cannot hold a summary of fourteen things and stops trying — which is the same call k9s made, and the reason its body never feels cramped.</div>
+    <div style="font-size: 14px; line-height: 1.55; color: #96A5B7; text-wrap: pretty">The honest counter: it is the biggest behavioural change, and if what actually changed your behaviour was glancing at several readings <em>together</em>, Console breaks exactly that and Instrument preserves it for a fraction of the work. That is the question worth answering before any PRD gets written — and it is answerable by looking at the three screens above rather than by building anything.</div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1160,"height":1360}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      lessons: [
+        { n: '1', tone: '#5FC77E', bg: '#101820', head: 'One body, done properly',
+          body: 'k9s never summarises everything. It shows one table of one kind of thing at full height, and the count rides in the title — Pods(default)[12] — so the body never has to summarise itself. That title trick is what pays for the single body. cctop already does it on panel frames and then ignores it on the overview, where nine things compete for a viewport that fits one.' },
+        { n: '2', tone: '#5FC77E', bg: '#0E141B', head: 'Chrome is negotiable',
+          body: 'Ctrl-E hides the header, Ctrl-G the breadcrumb. The person decides how much frame they are paying for. Every row of cctop’s chrome is mandatory, and the seven the tiles take are the seven the pane cannot spare — which is the complaint, stated as a number.' },
+        { n: '3', tone: '#5FC77E', bg: '#101820', head: 'Colour is state, and it must be written down',
+          body: 'Issue #381 is k9s failing its own rule: orange meant both Terminating and CrashLoopBackOff, the definitions lived only in skin.yml, and the request was for documentation. cctop starts ahead — four named roles in themes/*.toml — and spends them on categories in the one bar where it matters.' },
+        { n: '✕', tone: '#E2B04A', bg: '#141109', head: 'Never reorder on severity',
+          body: 'Issue #3589 asked for failing pods to sort to the top during incidents. Declined. In a layout you have learned, a row that moves when something breaks costs you the position you navigate by, exactly when you can least afford it. Sorting is a key the person presses; it is never a decision the layout makes for them. Direction 2 is the only one that offers the severity view at all, and it offers it as a keypress.' }
+      ],
+      colour: [
+        { label: 'Theme::series(n) from the theme’s own accent', tone: '#7EF0F0' },
+        { label: 'stacked_bar alternates on emitted segments', tone: '#7EF0F0' },
+        { label: 'ok / warn / crit reserved for thresholds', tone: '#5FC77E' },
+        { label: 'three slices on the glance, five behind 1', tone: '#69AAAA' }
+      ],
+      dirs: [
+        { n: 'DIRECTION 1', name: 'Instrument', tone: '#5FC77E', axis: 'restraint',
+          body: 'Strip the ornament. No bars, no block digits — numbers right-aligned in one column, dim units, a rule between groups. Colour appears twice on the whole screen.',
+          leans: 'Colour in one column only, taken to its conclusion.',
+          size: 'Smallest. No new widget, four rows instead of seven.' },
+        { n: 'DIRECTION 2', name: 'Ledger', tone: '#E2B04A', axis: 'uniformity',
+          body: 'One row type for every reading — name, value, denominator, fill, percent, note — sortable and filterable, with the count in the title.',
+          leans: 'The titled table, literally. Sort by a key, not by severity.',
+          size: 'Largest. A real table widget across every reading.' },
+        { n: 'DIRECTION 3', name: 'Console', tone: '#4CC2C2', axis: 'focus',
+          body: 'Three header rows that never move carry the glance; one body takes every remaining row and shows one thing properly. A digit swaps the body.',
+          leans: 'The structure k9s actually has: hideable header, one full body.',
+          size: 'Middle to build, biggest to get used to.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
