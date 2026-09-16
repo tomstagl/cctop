@@ -15,6 +15,29 @@ pub fn m(value: impl Into<Value>, unit: &str, metric_id: &str, approx: bool) -> 
     json!({"value": value.into(), "unit": unit, "metric_id": metric_id, "approx": approx})
 }
 
+/// A dollar value with its provenance (`source`: ledger / priced / mixed /
+/// unpriced — agent PRD §4.1), the shape `m` gives plus `source`.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct CostValue {
+    pub value: f64,
+    pub unit: &'static str,
+    pub metric_id: &'static str,
+    pub approx: bool,
+    pub source: cost::Source,
+}
+
+impl CostValue {
+    pub fn new(c: cost::Cost, metric_id: &'static str) -> CostValue {
+        CostValue {
+            value: c.usd,
+            unit: "USD",
+            metric_id,
+            approx: c.approx,
+            source: c.source,
+        }
+    }
+}
+
 /// An optional source that is not on disk.
 pub fn missing(hint: &str) -> Value {
     json!({"source": "missing", "hint": hint})
@@ -28,6 +51,13 @@ pub fn summary(state: &State) -> Value {
     let rates = cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
     let cost_v = match state.cost.current() {
         Some(c) => m(c.usd, "USD", "cost", c.approx),
+        None => missing("no priced model or cost-state yet"),
+    };
+    // `cost` keeps today's meaning (the ledger plus the main responses
+    // after it) for one release; `cost_combined` adds the agents' calls
+    // after the ledger's moment and says where the figure comes from.
+    let cost_combined = match state.cost.combined(state.agents.values()) {
+        Some(c) => serde_json::to_value(CostValue::new(c, "cost_combined")).unwrap_or(Value::Null),
         None => missing("no priced model or cost-state yet"),
     };
     let limits = match &state.limits {
@@ -84,6 +114,7 @@ pub fn summary(state: &State) -> Value {
             "cache_ttl": state.agg.observed_ttl.map(|t| format!("{t:?}")),
         },
         "cost": cost_v,
+        "cost_combined": cost_combined,
         "cost_by_model": state.cost.by_model(),
         "cost_gradient": state.gradient().map(|g| json!({
             "per_call": m(g.per_call, "USD", "cost_per_call", true),

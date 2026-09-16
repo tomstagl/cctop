@@ -45,13 +45,22 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
     }
 
     out.push_str("\n## Cost\n\n");
-    match state.cost.current() {
+    // The session's whole spend: the ledger, the main responses after it
+    // and the agents' calls after it (agent PRD §4.2).
+    match state.cost.combined(state.agents.values()) {
         Some(c) => out.push_str(&format!(
             "- total {}{}\n",
             if c.approx { "≈ " } else { "" },
             fmt::usd(c.usd)
         )),
         None => out.push_str("- total — (no priced model)\n"),
+    }
+    if let Some((usd, share)) = state.agents_cost() {
+        out.push_str(&format!(
+            "- agents ≈{} ({:.0} % of the total; a fork's replayed parent message and the ledger's own copy of the agents' earlier calls are not counted twice)\n",
+            fmt::usd(usd),
+            share * 100.0
+        ));
     }
     let by = state.cost.by_model();
     if !by.is_empty() {

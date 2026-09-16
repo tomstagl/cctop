@@ -194,6 +194,13 @@ expression: "serde_json::to_string_pretty(&summary(&s)).unwrap()"
     "claude-haiku-4-5-20251001": 0.001946,
     "claude-sonnet-5": 9.901552600000011
   },
+  "cost_combined": {
+    "approx": true,
+    "metric_id": "cost_combined",
+    "source": "mixed",
+    "unit": "USD",
+    "value": 10.03055170000001
+  },
   "cost_gradient": {
     "calls_per_turn": 8.0,
     "cold": false,

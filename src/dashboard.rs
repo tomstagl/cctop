@@ -160,6 +160,8 @@ pub struct Dashboard {
     pub session_mode: crate::advisor::SessionMode,
     /// The coach's one-line forms, for the narrow tiles (L1 / L2).
     pub lines: coach::StatusLines,
+    /// The session's whole spend (`cost_combined`), with its provenance.
+    pub cost_combined: Option<crate::query::CostValue>,
 }
 
 /// The whole object.
@@ -209,6 +211,10 @@ pub fn snapshot(state: &State, engine: &Engine) -> Dashboard {
         rows,
         session_mode: engine.session_mode,
         lines: c.lines.clone(),
+        cost_combined: state
+            .cost
+            .combined(state.agents.values())
+            .map(|c| crate::query::CostValue::new(c, "cost_combined")),
     }
 }
 
@@ -447,11 +453,11 @@ fn row_tokens(state: &State) -> Row {
     }
     let values = joined(parts);
     let mut detail: Vec<Line> = Vec::new();
-    if let Some(c) = state.cost.current() {
+    if let Some(b) = state.cost_breakdown() {
         detail.push(vec![fg(format!(
             "{}{}",
-            if c.approx { "≈" } else { "" },
-            fmt::usd(c.usd)
+            if b.headline.approx { "≈" } else { "" },
+            fmt::usd(b.headline.usd)
         ))]);
     }
     let rates = crate::metrics::cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
@@ -475,7 +481,7 @@ fn row_tokens(state: &State) -> Row {
     }
     if let Some((usd, share)) = state.agents_cost() {
         detail.push(vec![fg(format!(
-            "agents {} ({:.0} %)",
+            "agents ≈{} ({:.0} %)",
             fmt::usd(usd),
             share * 100.0
         ))]);

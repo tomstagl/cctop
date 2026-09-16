@@ -91,16 +91,23 @@ impl Panel for Tokens {
             None => l6.push(Span::styled("—", dim)),
         }
         l6.push(Span::styled("  ·  ", dim));
-        match state.cost.current() {
-            Some(c) => {
-                let approx = if c.approx { "≈ " } else { "" };
-                l6.push(Span::raw(format!("{approx}{}", fmt::usd(c.usd))));
+        // The headline is the session's whole spend — the ledger, the main
+        // responses after it and the agents' calls after it — main-only
+        // with `a` off (agent PRD §4.2).
+        let breakdown = state.cost_breakdown();
+        match breakdown {
+            Some(b) => {
+                let approx = if b.headline.approx { "≈ " } else { "" };
+                l6.push(Span::raw(format!("{approx}{}", fmt::usd(b.headline.usd))));
             }
             None => l6.push(Span::styled("cost —", dim)),
         }
+        let any_agents = breakdown.is_some_and(|b| b.any_agents);
         let rates = cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
         if let Some(h) = rates.usd_per_hour {
-            l6.push(Span::styled(format!(" ({}/h)", fmt::usd(h)), dim));
+            // The rate is the main transcript's: agents have no turn.
+            let suffix = if any_agents { " main" } else { "" };
+            l6.push(Span::styled(format!(" ({}/h{suffix})", fmt::usd(h)), dim));
         }
         l6.push(Span::styled("  ·  ", dim));
         l6.push(Span::raw(format!(
@@ -108,6 +115,44 @@ impl Panel for Tokens {
             fmt::tokens(rates.input_tokens_per_min as u64)
         )));
         lines.push(Line::from(l6));
+
+        // Where the headline comes from, when agents spent anything: the
+        // first two figures add up to it; `agents` is the whole session's
+        // agent spend as a share of the combined figure.
+        if let Some(b) = breakdown.filter(|b| b.any_agents) {
+            let mut l = vec![Span::raw(" ")];
+            match b.ledger {
+                Some(ledger) => {
+                    l.push(Span::raw(format!("ledger {}", fmt::usd(ledger))));
+                    if let Some(since) = b.since {
+                        l.push(Span::styled(" · ", dim));
+                        l.push(Span::raw(format!("since ≈{}", fmt::usd(since.usd))));
+                    }
+                }
+                None => {
+                    let main = state.cost.current().map(|c| c.usd).unwrap_or(0.0);
+                    l.push(Span::raw(format!("main ≈{}", fmt::usd(main))));
+                }
+            }
+            match b.agents {
+                Some(a) => {
+                    l.push(Span::styled(" · ", dim));
+                    l.push(Span::raw(format!(
+                        "agents ≈{} ({:.0} %)",
+                        fmt::usd(a.usd),
+                        b.agents_share * 100.0
+                    )));
+                }
+                None => {
+                    l.push(Span::styled(" · ", dim));
+                    l.push(Span::styled(
+                        format!("agents — {}", fmt::tokens(state.agents_usage().total())),
+                        dim,
+                    ));
+                }
+            }
+            lines.push(Line::from(l));
+        }
 
         // per-turn sparkline + last turn
         let per_turn: Vec<u64> = state
@@ -139,8 +184,11 @@ impl Panel for Tokens {
                 Some(state.agg.total.total() as f64 / turns),
                 b.tokens_per_turn,
             );
+            // The baseline's cost per turn is `cost-state ÷ turns`, and the
+            // ledger holds the agents' calls, so the live side is the
+            // combined figure whatever `a` says.
             let usd = crate::baseline::Baseline::multiplier(
-                state.cost.current().map(|c| c.usd / turns),
+                breakdown.map(|c| c.combined.usd / turns),
                 b.cost_per_turn,
             );
             let mut parts = Vec::new();
@@ -237,13 +285,6 @@ impl Panel for Tokens {
                 .collect();
             l10.push(Span::styled(format!("where: {}", parts.join(" · ")), dim));
         }
-        if let Some((usd, share)) = state.agents_cost() {
-            l10.push(Span::raw(format!(
-                "  agents {} ({:.0} %)",
-                fmt::usd(usd),
-                share * 100.0
-            )));
-        }
         let flags = state.behaviour_flags();
         if let Some(m) = state.model() {
             l10.push(Span::styled(
@@ -292,18 +333,67 @@ mod tests {
     fn tokens_panel_on_fixture() {
         let mut app = fixture_app();
         app.state.open = Some(2);
-        let out = render_to_string(&app, 60, 51);
+        let out = render_to_string(&app, 72, 51);
         // Main + the fork subagent's usage.
         assert!(out.contains("2 Tokens & Cost ─ 3"), "{out}");
         assert!(out.contains("cache read  ▇"), "{out}");
         assert!(out.contains("output"), "{out}");
         assert!(out.contains("└ thinking"), "{out}");
         assert!(out.contains("cache hit 9"), "{out}");
-        assert!(out.contains("$9.9"), "{out}");
-        assert!(out.contains("/h)"), "{out}");
+        // The headline is combined: the ledger ($9.90) plus the fork's 7
+        // own calls, which post-date the ledger's moment on this fixture
+        // (its fork was taken from a later session), so it is `≈`.
+        assert!(out.contains("≈ $10.0 ("), "{out}");
+        assert!(out.contains("/h main)"), "{out}");
         assert!(out.contains("in ") && out.contains("/min"), "{out}");
+        assert!(
+            out.contains("ledger $9.90 · since ≈$0.13 · agents ≈$0.13 (1 %)"),
+            "{out}"
+        );
         assert!(out.contains("per turn ▁"), "{out}");
         assert!(out.contains("last turn "), "{out}");
+        assert!(
+            !out.contains("  agents $"),
+            "the fragment left line 10: {out}"
+        );
+        // With `a` off the headline is the ledger plus the main responses
+        // after it, exact here; the breakdown line's `since` is main-only.
+        app.state.tokens_include_agents = false;
+        let out = render_to_string(&app, 72, 51);
+        assert!(out.contains("  $9.90 ("), "{out}");
+        assert!(out.contains("ledger $9.90 · agents ≈$0.13 (1 %)"), "{out}");
+        assert!(out.contains("main only"), "{out}");
+    }
+
+    #[test]
+    fn breakdown_line_without_a_ledger_and_without_agents() {
+        // Before the fixture's cost-state: every part is priced and the
+        // line names main and agents.
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path)
+            .unwrap()
+            .into_iter()
+            .take_while(|l| !matches!(l, crate::transcript::Line::CostState(_)))
+        {
+            app.feed(l);
+        }
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.state.agents = crate::agents::load(&path.with_extension(""));
+        app.state.open = Some(2);
+        let out = render_to_string(&app, 72, 51);
+        assert!(out.contains(" main ≈$"), "{out}");
+        assert!(out.contains(" · agents ≈$0.13 (1 %)"), "{out}");
+        // No agents: the line is not drawn and nothing else moves (FR-6).
+        app.state.agents.clear();
+        let out = render_to_string(&app, 72, 51);
+        assert!(!out.contains("main ≈$") && !out.contains("agents"), "{out}");
+        assert!(out.contains("/h)  ·  in "), "no `main` suffix: {out}");
     }
 
     #[test]
@@ -331,7 +421,13 @@ mod tests {
         });
         let out = render_to_string(&app, 72, 70);
         assert!(out.contains("· 7d ×"), "{out}");
-        assert!(out.contains("×2.1$"), "{out}");
+        // The 7-day baseline's cost per turn is `cost-state ÷ turns` and
+        // the ledger holds the agents' calls, so the live side is the
+        // combined figure: $10.03 over 14 turns against $0.33.
+        assert!(out.contains("×2.2$"), "{out}");
+        app.state.tokens_include_agents = false;
+        let out = render_to_string(&app, 72, 70);
+        assert!(out.contains("×2.2$"), "combined whatever `a` says: {out}");
     }
 
     #[test]

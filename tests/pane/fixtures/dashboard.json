@@ -1,4 +1,11 @@
 {
+  "cost_combined": {
+    "approx": true,
+    "metric_id": "cost_combined",
+    "source": "mixed",
+    "unit": "USD",
+    "value": 10.03055170000001
+  },
   "exposed": true,
   "header": {
     "cwd": "/home/user/project",
@@ -89,7 +96,7 @@
     {
       "detail": [
         {
-          "text": "$9.90",
+          "text": "≈$10.0",
           "tone": "fg"
         },
         {
@@ -129,7 +136,7 @@
           "tone": "dim"
         },
         {
-          "text": "agents $0.13 (1 %)",
+          "text": "agents ≈$0.13 (1 %)",
           "tone": "fg"
         },
         {

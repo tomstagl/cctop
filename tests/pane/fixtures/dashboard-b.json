@@ -1,4 +1,11 @@
 {
+  "cost_combined": {
+    "approx": false,
+    "metric_id": "cost_combined",
+    "source": "ledger",
+    "unit": "USD",
+    "value": 18.745904999999997
+  },
   "exposed": true,
   "header": {
     "cwd": "/home/user/project",
