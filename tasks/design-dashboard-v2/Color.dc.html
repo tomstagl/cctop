@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 34px 40px; display: flex; flex-direction: column; gap: 24px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 22px; font-weight: 600; color: #D6DEE8">Why is thinking red?</div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 880px; text-wrap: pretty">Because I picked five colours that were easy to tell apart and stopped thinking. That is the whole reason — and it is a bug, not a scheme. Here is what it costs, and what the bar should say instead.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 8px; background: #1A1217; border: 1px solid #45252C">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #E5605E">the rule it breaks</div>
+    <div style="font-size: 15px; line-height: 1.55; color: #C3CDDA; text-wrap: pretty">cctop already has a colour language, declared once in <span class="m" style="color: #D6DEE8">themes/*.toml</span> and used on every other row: <span class="m" style="color: #5FC77E">ok</span> = fine, <span class="m" style="color: #E2B04A">warn</span> = a threshold crossed, <span class="m" style="color: #E5605E">crit</span> = act now, <span class="m" style="color: #4CC2C2">accent</span> = a key you can press. The context bar spends those same four on <em>categories</em> — which slice is which — four rows away from where they mean state. A status colour used as a series colour is the one thing every visualization guide forbids, and this is why: the reader has to hold two contradictory dictionaries at once.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #E5605E">what it says today</div>
+      <div style="border-radius: 7px; border: 1px solid #1A222B; padding: 14px 16px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 19px"><sc-for list="{{before}}" as="row" hint-placeholder-count="7"><div class="r"><sc-for list="{{row}}" as="s" hint-placeholder-count="10"><span style="color: {{s.c}}; font-weight: {{s.w}}">{{s.t}}</span></sc-for></div></sc-for></div>
+      <div style="display: flex; flex-direction: column; gap: 7px"><sc-for list="{{misreads}}" as="x" hint-placeholder-count="4"><div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 11px; align-items: baseline"><span class="m" style="font-size: 12px; color: {{x.tone}}">{{x.slice}}</span><span style="font-size: 13.5px; line-height: 1.45; color: #96A5B7; text-wrap: pretty">{{x.reads}}</span></div></sc-for></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #5FC77E">what it should say</div>
+      <div style="border-radius: 7px; border: 1px solid #1A222B; padding: 14px 16px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 19px"><sc-for list="{{after}}" as="row" hint-placeholder-count="7"><div class="r"><sc-for list="{{row}}" as="s" hint-placeholder-count="10"><span style="color: {{s.c}}; font-weight: {{s.w}}">{{s.t}}</span></sc-for></div></sc-for></div>
+      <div style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">One hue. Lightness carries the order, and the order is <strong style="color: #C3CDDA">how much you can do about it</strong>. The dim end is fixed cost; the bright end is the part you can move this afternoon. No second dictionary, and it still reads with the colour off — the segments alternate <span class="m" style="color: #C3CDDA">▇</span> and <span class="m" style="color: #C3CDDA">▆</span>, which <span class="m" style="color: #C3CDDA">stacked_bar()</span> already does.</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 4px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">measured, not eyeballed</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px"><sc-for list="{{checks}}" as="c" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 7px; padding: 14px 16px; border-radius: 6px; background: #121820; border-left: 3px solid {{c.tone}}"><div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px"><span style="font-size: 14.5px; font-weight: 600; color: #D6DEE8">{{c.head}}</span><span class="m" style="font-size: 11px; color: {{c.tone}}">{{c.verdict}}</span></div><div class="m" style="font-size: 12px; line-height: 1.55; color: #8FA0B4; white-space: pre-wrap">{{c.detail}}</div></div></sc-for></div>
+    <div style="font-size: 13px; line-height: 1.5; color: #7E8FA3; text-wrap: pretty">Five slices sit at ΔE 5.4–9.9 whatever hue you choose — too close for colour alone. Three slices clear the ≥ 15 bar on five of the six bundled themes, and <span class="m">default-light</span> lands at 13.7, inside the band where the alternating glyph makes it legal. So the overview carries <strong style="color: #C3CDDA">three</strong> and panel 1 keeps all five, where every slice has its own labelled row and identity never rides on colour at all.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 4px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">the ramp, derived from each theme's own accent</div>
+    <div style="display: flex; flex-direction: column; gap: 4px"><sc-for list="{{ramps}}" as="r" hint-placeholder-count="6"><div style="display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: center; padding: 8px 12px; border-radius: 5px; background: {{r.bg}}"><span class="m" style="font-size: 12px; color: {{r.fg}}">{{r.name}}</span><div style="display: flex; gap: 2px"><sc-for list="{{r.steps}}" as="s" hint-placeholder-count="3"><div style="flex: {{s.grow}}; display: flex; align-items: center; padding: 5px 9px; border-radius: 3px; background: {{s.hex}}"><span class="m" style="font-size: 11px; font-weight: 600; color: {{r.bg}}">{{s.label}}</span></div></sc-for></div></div></sc-for></div>
+    <div style="font-size: 13px; line-height: 1.5; color: #7E8FA3; text-wrap: pretty">No new keys in <span class="m">themes/*.toml</span>. A theme that sets <span class="m">accent</span> gets its ramp for free, and a user-authored theme does too — the near end is solved against that theme's own background until it clears 3.2:1, so black-background <span class="m">btop</span> and the light theme both land inside the band.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px; padding: 20px 22px; border-radius: 8px; background: #0F1A15; border: 1px solid #1D3327">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #5FC77E">the learning, from the other side of the screen</div>
+    <div style="font-size: 16px; line-height: 1.5; color: #D6DEE8; text-wrap: pretty">The context bar is not a pie chart of what happened. It is a list of levers, and four of the five are bolted down.</div>
+    <div style="display: flex; flex-direction: column; gap: 1px; margin-top: 2px"><sc-for list="{{levers}}" as="l" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 96px 62px 92px minmax(0, 1fr); gap: 14px; padding: 10px 12px; border-radius: 4px; background: #0A1410; align-items: baseline"><span class="m" style="font-size: 12.5px; color: {{l.tone}}">{{l.slice}}</span><span class="m" style="font-size: 12.5px; color: #D6DEE8; text-align: right">{{l.n}}</span><span class="m" style="font-size: 11px; color: {{l.tone}}">{{l.agency}}</span><span style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{l.what}}</span></div></sc-for></div>
+    <div style="font-size: 14px; line-height: 1.55; color: #B9C4D1; margin-top: 4px; text-wrap: pretty">Today the colour says the opposite of all that. The biggest slice you control is <span style="color: #5FC77E">green</span> — which four rows up means <em>nothing to do</em> — and the slice you can do nothing about is <span style="color: #E5605E">red</span>, which four rows up means <em>act now</em>. Someone who learns the dashboard's colours from the meters then reads this bar backwards.</div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1720}}'>
+var P = { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644' };
+function sg(t, c, b) { return { t: String(t), c: c, w: b ? '600' : '400' }; }
+function pad(n) { return { t: ' '.repeat(n), c: P.dim, w: '400' }; }
+
+class Component extends DCLogic {
+  renderVals() {
+    // 350k of 1.00M = 35 % of a 30-cell bar = 11 filled cells.
+    // today: prefix 44k, results 82k, inputs 49k, thinking 42k, harness 21k (238k of the fill)
+    var beforeBar = [pad(1),
+      sg('▇▇', P.accent), sg('▆▆▆▆', P.ok), sg('▇▇', P.warn), sg('▆▆', P.crit), sg('▇', P.dim),
+      sg('▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁', P.border), sg(' 35 %', P.fg, true)];
+    var afterBar = [pad(1),
+      sg('▇▇▇', '#516A69'), sg('▆▆', '#69AAAA'), sg('▇▇▇▇▇▇', '#7EF0F0'),
+      sg('▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁', P.border), sg(' 35 %', P.fg, true)];
+    return {
+      before: [
+        [pad(1), sg('1 context', P.fg, true), pad(3), sg('350k/1.00M', P.fg)],
+        beforeBar,
+        [],
+        [pad(1), sg('prefix ', P.dim), sg('44k', P.accent), sg('  results ', P.dim), sg('≈82k', P.ok), sg('  inputs ', P.dim), sg('≈49k', P.warn)],
+        [pad(1), sg('thinking ', P.dim), sg('42k', P.crit), sg('  harness ', P.dim), sg('≈21k', P.dim)],
+        [],
+        [pad(1), sg('4 status colours doing category work', P.crit)]
+      ],
+      after: [
+        [pad(1), sg('1 context', P.fg, true), pad(3), sg('350k/1.00M', P.fg)],
+        afterBar,
+        [],
+        [pad(1), sg('fixed ', P.dim), sg('65k', '#516A69', true), sg('   transient ', P.dim), sg('42k', '#69AAAA', true), sg('   yours ', P.dim), sg('≈131k', '#7EF0F0', true)],
+        [pad(1), sg('press ', P.dim), sg('1', P.accent, true), sg(' for the five-way split', P.dim)],
+        [],
+        [pad(1), sg('one hue · dim = fixed · bright = the lever', P.ok)]
+      ],
+      misreads: [
+        { slice: 'thinking', tone: '#E5605E', reads: 'Red is the rework light going critical. Here it means 42k of retained reasoning that gets dropped at the next boundary anyway — nothing is wrong and there is nothing to do.' },
+        { slice: 'inputs', tone: '#E2B04A', reads: 'Amber is a threshold crossed. No threshold exists for this slice; it is just the text Claude wrote to call tools.' },
+        { slice: 'results', tone: '#5FC77E', reads: 'Green is all clear. This is the largest slice and the only one you can meaningfully shrink today — the one thing on the bar that deserves attention reads as the one thing that does not.' },
+        { slice: 'prefix', tone: '#4CC2C2', reads: 'Accent is reserved for a key you can press. Nothing here is pressable, so the one cue that means "interactive" gets spent on a static block.' }
+      ],
+      checks: [
+        { head: 'Status colours as series', tone: '#E5605E', verdict: '4 FAILS',
+          detail: 'lightness band   3 of 5 outside\nchroma floor     dim reads gray (0.033)\nCVD separation   warn↔ok ΔE 5.6 protan\nnormal vision    ok↔accent ΔE 9.9 — below 15' },
+        { head: 'Green beside teal, full colour vision', tone: '#E5605E', verdict: 'HARD FAIL',
+          detail: 'results ↔ prefix  ΔE 9.9  (floor 15)\nThese two are adjacent in the bar.\nNot excusable by secondary encoding —\nthe skill calls this one a hard fail.' },
+        { head: 'Sequential ramp, five slices', tone: '#E2B04A', verdict: 'TOO TIGHT',
+          detail: 'adjacent ΔE   5.4 – 9.9 across themes\nmonotonic     PASS\ncontrast      3.2:1 min   PASS\nLegal only with secondary encoding.' },
+        { head: 'Sequential ramp, three slices', tone: '#5FC77E', verdict: 'PASS',
+          detail: 'adjacent ΔE   15.0 – 21.9 on 5 themes\n              13.7 on default-light\nmonotonic     PASS (all six)\ncontrast      3.21:1 min   PASS' }
+      ],
+      ramps: [
+        { name: 'default-dark', bg: '#0E1318', fg: '#D6DEE8', steps: [{ hex: '#516A69', label: 'fixed', grow: '2' }, { hex: '#69AAAA', label: 'transient', grow: '1' }, { hex: '#7EF0F0', label: 'yours', grow: '3' }] },
+        { name: 'default-light', bg: '#F1F3F6', fg: '#1A212C', steps: [{ hex: '#768B8D', label: 'fixed', grow: '2' }, { hex: '#316569', label: 'transient', grow: '1' }, { hex: '#003F46', label: 'yours', grow: '3' }] },
+        { name: 'nord', bg: '#2E3440', fg: '#D8DEE9', steps: [{ hex: '#768488', label: 'fixed', grow: '2' }, { hex: '#95B7C1', label: 'transient', grow: '1' }, { hex: '#B4EEFE', label: 'yours', grow: '3' }] },
+        { name: 'gruvbox', bg: '#282828', fg: '#EBDBB2', steps: [{ hex: '#6F7774', label: 'fixed', grow: '2' }, { hex: '#92A89F', label: 'transient', grow: '1' }, { hex: '#B7DBCD', label: 'yours', grow: '3' }] },
+        { name: 'catppuccin-mocha', bg: '#1E1E2E', fg: '#CDD6F4', steps: [{ hex: '#5E7275', label: 'fixed', grow: '2' }, { hex: '#83B4BD', label: 'transient', grow: '1' }, { hex: '#A7FBFF', label: 'yours', grow: '3' }] },
+        { name: 'btop', bg: '#000000', fg: '#EEEEEE', steps: [{ hex: '#615A71', label: 'fixed', grow: '2' }, { hex: '#A591CC', label: 'transient', grow: '1' }, { hex: '#EFCDFF', label: 'yours', grow: '3' }] }
+      ],
+      levers: [
+        { slice: 'prefix', n: '44k', agency: 'fixed', tone: '#6E8A89', what: 'System prompt, CLAUDE.md, tool schemas — written at the first call and re-read on every one after. You cannot shrink it mid-session; between sessions, trim CLAUDE.md and drop MCP servers you are not using.' },
+        { slice: 'harness', n: '≈21k', agency: 'not yours', tone: '#6E8A89', what: 'Reminders, injected files and listings that Claude Code adds per turn. Nothing you can do from here.' },
+        { slice: 'thinking', n: '42k', agency: 'transient', tone: '#69AAAA', what: 'Retained reasoning. Dropped at the next context boundary whether you act or not — which is exactly why painting it red is a lie.' },
+        { slice: 'inputs', n: '≈49k', agency: 'yours', tone: '#7EF0F0', what: 'The text Claude wrote to call tools. Bash command text dominates it — 15.7 % of all token-calls across the 81 sessions in the coach PRD.' },
+        { slice: 'results', n: '≈82k', agency: 'the lever', tone: '#7EF0F0', what: 'What tools returned, and the biggest slice here. rg -c instead of cat; an Explore subagent returns a p50 of 71 tokens where the same run in the main thread adds 48.7k for good.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

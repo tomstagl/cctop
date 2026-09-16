@@ -1,0 +1,477 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+  </style>
+</helmet>
+<div style="min-height: 100%; box-sizing: border-box; padding: 28px 32px 34px; display: flex; flex-direction: column; gap: 18px; background: {{t.page}}">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+    <div style="font-size: 21px; font-weight: 600; letter-spacing: 0.01em; color: {{t.ink}}">cctop — redesigned overview</div>
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: {{t.mute}}">{{caption}}</div>
+  </div>
+
+  <div style="display: flex; gap: 22px; flex-wrap: wrap; align-items: center">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: {{t.mute}}">width</span>
+      <div style="display: flex; gap: 6px"><sc-for list="{{widthBtns}}" as="b" hint-placeholder-count="3"><button onClick="{{ b.pick }}" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 6px 12px; border-radius: 5px; cursor: pointer; border: 1px solid {{b.bd}}; background: {{b.bg}}; color: {{b.fg}}">{{b.label}}</button></sc-for></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: {{t.mute}}">screen</span>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{viewBtns}}" as="b" hint-placeholder-count="5"><button onClick="{{ b.pick }}" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 6px 12px; border-radius: 5px; cursor: pointer; border: 1px solid {{b.bd}}; background: {{b.bg}}; color: {{b.fg}}">{{b.label}}</button></sc-for></div>
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: center">
+    <div style="border-radius: 8px; border: 1px solid {{t.chrome}}; overflow: hidden; box-shadow: 0 18px 44px rgba(0,0,0,0.34)">
+      <div style="display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: {{t.chrome}}">
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: #E5605E"></span>
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: #E2B04A"></span>
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: #5FC77E"></span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: {{t.mute}}; margin-left: 6px">{{termTitle}}</span>
+      </div>
+      <div style="padding: 14px 16px; background: {{t.bg}}; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 19px; width: max-content"><sc-for list="{{rows}}" as="row" hint-placeholder-count="28"><div class="r"><sc-for list="{{row}}" as="s" hint-placeholder-count="10"><span style="color: {{s.c}}; font-weight: {{s.w}}">{{s.t}}</span></sc-for></div></sc-for></div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 2px"><sc-for list="{{notes}}" as="n" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: 6px; background: {{t.card}}; border-left: 2px solid {{n.accent}}"><div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: {{n.accent}}">{{n.kicker}}</div><div style="font-size: 14px; line-height: 1.45; color: {{t.ink}}; text-wrap: pretty">{{n.body}}</div></sc-for></div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["default-dark","default-light","nord","gruvbox","catppuccin-mocha","btop"],"default":"default-dark","section":"Look"},"alert":{"editor":"enum","options":["quiet","nudge","blocked"],"default":"quiet","section":"State"},"$preview":{"width":1180,"height":900}}'>
+var PALETTES = {
+  'default-dark':    { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644' },
+  'default-light':   { bg:'#F1F3F6', fg:'#1A212C', dim:'#5A6577', accent:'#177F86', ok:'#2F8F58', warn:'#C7911E', crit:'#C9403F', border:'#D5DAE2' },
+  'nord':            { bg:'#2E3440', fg:'#D8DEE9', dim:'#4C566A', accent:'#88C0D0', ok:'#A3BE8C', warn:'#EBCB8B', crit:'#BF616A', border:'#434C5E' },
+  'gruvbox':         { bg:'#282828', fg:'#EBDBB2', dim:'#7C6F64', accent:'#83A598', ok:'#B8BB26', warn:'#FABD2F', crit:'#FB4934', border:'#504945' },
+  'catppuccin-mocha':{ bg:'#1E1E2E', fg:'#CDD6F4', dim:'#6C7086', accent:'#89DCEB', ok:'#A6E3A1', warn:'#F9E2AF', crit:'#F38BA8', border:'#45475A' },
+  'btop':            { bg:'#000000', fg:'#EEEEEE', dim:'#555555', accent:'#C2A0FF', ok:'#5AD08D', warn:'#F5B347', crit:'#FF5C57', border:'#4E4E4E' }
+};
+
+function sg(text, role, bold) { return { t: String(text), r: role || 'fg', b: !!bold }; }
+function lw(line) { var n = 0; for (var i = 0; i < line.length; i++) n += Array.from(line[i].t).length; return n; }
+function at(line, col, role) { var n = col - lw(line); if (n > 0) line.push(sg(' '.repeat(n), role || 'dim')); return line; }
+function spread(line, right, cols) {
+  var n = cols - lw(line) - lw(right);
+  line.push(sg(' '.repeat(n > 0 ? n : 1), 'dim'));
+  for (var i = 0; i < right.length; i++) line.push(right[i]);
+  return line;
+}
+// The terminal's own truncation: cut at `cols`, ellipsis on the segment that crosses.
+function fit(line, cols) {
+  var out = [], used = 0;
+  for (var i = 0; i < line.length; i++) {
+    if (used >= cols) break;
+    var a = Array.from(line[i].t);
+    if (used + a.length <= cols) { out.push(line[i]); used += a.length; }
+    else { out.push({ t: a.slice(0, Math.max(0, cols - used - 1)).join('') + '…', r: line[i].r, b: line[i].b }); used = cols; }
+  }
+  return out;
+}
+function clip(s, n) { var a = Array.from(String(s)); return a.length <= n ? String(s) : a.slice(0, Math.max(0, n - 1)).join('') + '…'; }
+function bar(pct, w, fillRole, emptyRole) {
+  var f = Math.max(0, Math.min(w, Math.round(pct / 100 * w)));
+  if (f === 0 && pct > 0) f = 1;              // 4 % must not draw as empty
+  if (f === w && pct < 100) f = w - 1;        // nor 98 % as full
+  return [sg('▇'.repeat(f), fillRole), sg('▁'.repeat(w - f), emptyRole || 'border')];
+}
+
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { view: 'overview', cols: 122 }; }
+
+  // The context bar, stacked by anatomy. Slices alternate ▇/▆ like stacked_bar()
+  // in src/ui/widgets.rs, so the breakdown survives NO_COLOR.
+  ctxBar(w) {
+    var slices = [[44, 'accent'], [82, 'ok'], [49, 'warn'], [42, 'crit'], [21, 'dim']];
+    var filled = Math.round(0.35 * w), out = [], used = 0, acc = 0, total = 238;
+    for (var i = 0; i < slices.length; i++) {
+      acc += slices[i][0];
+      var end = Math.min(filled, Math.round(acc / total * filled));
+      if (end > used) { out.push(sg((i % 2 === 0 ? '▇' : '▆').repeat(end - used), slices[i][1])); used = end; }
+    }
+    if (used < filled) { out.push(sg('▇'.repeat(filled - used), 'dim')); used = filled; }
+    out.push(sg('▁'.repeat(Math.max(0, w - used)), 'border'));
+    return out;
+  }
+
+  actBand(cols) {
+    var a = this.props.alert || 'quiet', wide = cols >= 100, out = [];
+    if (cols < 60) {
+      if (a === 'blocked') {
+        out.push([sg(' ▸ ', 'crit', true), sg('blocked: `cd …` denied', 'fg', true)]);
+        out.push([sg(' ● ', 'crit'), sg('tell Claude the alternative', 'crit')]);
+      } else if (a === 'nudge') {
+        out.push([sg(' ▸ ', 'warn', true), sg('context ≈4 turns to compact', 'fg', true)]);
+        out.push([sg(' ◐ ', 'warn'), sg('compact at a clean stop', 'warn')]);
+      } else {
+        out.push([sg(' ▸ ', 'ok', true), sg('steer window · 4c · 1:56 silent', 'fg', true)]);
+        out.push([sg(' ○ ', 'ok'), sg('ok', 'ok'), sg(' · ', 'border'), sg('✓ test 10s', 'ok'), sg(' · ', 'border'), sg('⚠ 8 stale', 'warn')]);
+      }
+      return out.map(function (l) { return at(l, cols); });
+    }
+    var head = { blocked: ['crit', 'NOW'], nudge: ['warn', 'NEXT'], quiet: ['ok', 'OPEN'] }[a];
+    var copy = {
+      blocked: [wide ? '`cd …` blocked the turn — auto mode denied this command shape' : 'blocked: `cd …` denied by auto mode',
+                wide ? 'tell Claude the alternative — it cannot run this' : 'tell Claude the alternative', 'A45 · call 6 · +4 queued'],
+      nudge:   [wide ? 'context is filling — 616k to autocompact at +146k/turn ≈ 4 turns' : 'context filling — ≈4 turns to autocompact',
+                wide ? 'compact at a clean stop, or hand off to a fresh session' : 'compact at a clean stop', 'A21 · turn 6 · saves ≈350k'],
+      quiet:   [wide ? 'steer window — 4 tool calls and 1:56 since Claude last spoke to you' : 'steer window — 4 calls, 1:56 silent',
+                'nothing to fix — no advice queued, none snoozed', 'type now to redirect']
+    }[a];
+    var l1 = [sg(' ▸ ', head[0], true), sg(head[1], head[0], true)]; at(l1, 10); l1.push(sg(copy[0], 'fg', true));
+    out.push(wide ? spread(l1, [sg(copy[2], 'dim')], cols) : at(l1, cols));
+    var l2 = []; at(l2, 10); l2.push(sg(copy[1], a === 'quiet' ? 'dim' : (a === 'blocked' ? 'crit' : 'warn')));
+    out.push(wide ? spread(l2, [sg('9 advisor', 'accent')], cols) : at(l2, cols));
+    var hg = { blocked: ['●', 'crit', 'spinning'], nudge: ['◐', 'warn', 'watch'], quiet: ['○', 'ok', 'ok'] }[a];
+    var l3 = [sg(' ' + hg[0] + ' ', hg[1]), sg(hg[2], hg[1], true)]; at(l3, 10);
+    if (a === 'blocked') {
+      l3.push(sg('rework 3', 'crit', true)); l3.push(sg('  ·  ', 'border')); l3.push(sg('✗ cargo test 22m', 'crit'));
+      l3.push(sg('  ·  ', 'border')); l3.push(sg('4 denied', 'crit')); l3.push(sg('  ·  ', 'border')); l3.push(sg('git +180/−0', 'warn'));
+    } else {
+      l3.push(sg('rework 0', 'ok')); l3.push(sg('  ·  ', 'border')); l3.push(sg('✓ cargo test 10s', 'ok'));
+      l3.push(sg('  ·  ', 'border')); l3.push(sg('0 denied', 'dim')); l3.push(sg('  ·  ', 'border')); l3.push(sg('⚠ 8 stale reads', 'warn'));
+      if (wide) { l3.push(sg('  ·  ', 'border')); l3.push(sg('agents.rs re-read ×3', 'warn')); l3.push(sg('  ·  ', 'border')); l3.push(sg('git +0/−0', 'dim')); }
+    }
+    out.push(at(l3, cols));
+    return out;
+  }
+
+  overview(cols) {
+    var out = [];
+    if (cols >= 100) {
+      var h = [sg('  cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11 · ~/code/cctop · v2.1.272', 'dim')];
+      out.push(spread(h, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg('  52:11', 'fg'), sg('  ·  159 calls  ', 'dim'), sg('1 err', 'warn')], cols));
+      out.push([]);
+      out = out.concat(this.actBand(cols));
+      out.push([]);
+      var m = function (digit, label, value, pct, barSegs, detail) {
+        var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+        at(l, 3); l.push(sg(label, 'fg', true));
+        at(l, 14); l.push(sg(value, 'fg'));
+        at(l, 27); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+        at(l, 58); l.push(sg(pct, 'fg', true));
+        at(l, 65); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+        return at(l, cols);
+      };
+      out.push(m(1, 'context', '350k/1.00M', '35 %', this.ctxBar(30),
+        [sg('616k', 'fg'), sg(' to autocompact  ·  ', 'dim'), sg('+0', 'fg'), sg('/turn  ·  ', 'dim'), sg('0', 'fg'), sg(' compactions', 'dim')]));
+      out.push(at([sg('       prefix ', 'dim'), sg('44k', 'accent'), sg('  results ', 'dim'), sg('≈82k', 'ok'), sg('  inputs ', 'dim'), sg('≈49k', 'warn'), sg('  thinking ', 'dim'), sg('42k', 'crit'), sg('  harness ', 'dim'), sg('≈21k', 'dim')], cols));
+      out.push(m(3, 'limits', '5h 4 %', ' 4 %', bar(4, 30, 'ok'),
+        [sg('↻ 4h06', 'fg'), sg('  ·  7d ', 'dim'), sg('22 %', 'fg'), sg('  ·  ', 'border'), sg('×5', 'warn'), sg(' opus  ·  long ctx ', 'dim'), sg('78 %', 'warn')]));
+      out.push(m(2, 'cache', 'warm 59m', '98 %', bar(98, 30, 'ok'),
+        [sg('1h', 'fg'), sg(' TTL  ·  ', 'dim'), sg('0', 'ok'), sg(' misses  ·  re-writes ', 'dim'), sg('350k', 'fg'), sg(' when cold', 'dim')]));
+      var sp = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+      at(sp, 3); sp.push(sg('spend', 'fg', true));
+      at(sp, 14); sp.push(sg('≈$22.50', 'fg', true));
+      at(sp, 27); sp.push(sg('API-equivalent', 'dim'));
+      at(sp, 65); sp.push(sg('≈$90', 'warn', true)); sp.push(sg('/h  ·  ', 'dim')); sp.push(sg('≈$.19', 'fg')); sp.push(sg('/call  ·  ', 'dim')); sp.push(sg('≈$29', 'warn')); sp.push(sg('/turn  ·  not a bill', 'dim'));
+      out.push(at(sp, cols));
+      out.push([]);
+      var r = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+      at(r, 3); r.push(sg('running', 'fg', true));
+      at(r, 14); r.push(sg('Bash', 'accent')); r.push(sg('  cargo fmt --all && make check > /tmp/check.log', 'fg'));
+      out.push(spread(r, [sg('0:03', 'fg', true)], cols));
+      var t4 = []; at(t4, 14);
+      t4.push(sg('api ', 'dim')); t4.push(sg('≈21:17', 'fg')); t4.push(sg('  ·  tools ', 'dim')); t4.push(sg('22:14', 'fg'));
+      t4.push(sg('  ·  ', 'border')); t4.push(sg('159', 'fg')); t4.push(sg(' api calls  ·  ', 'dim')); t4.push(sg('1', 'fg')); t4.push(sg(' steer  ·  waiting on you ', 'dim')); t4.push(sg('—', 'dim'));
+      out.push(at(t4, cols));
+      var t5 = [sg(' ', 'dim'), sg('5', 'accent', true), sg(' ', 'dim')];
+      at(t5, 3); t5.push(sg('tools', 'fg', true));
+      at(t5, 14); t5.push(sg('explore ', 'dim')); t5.push(sg('69', 'fg')); t5.push(sg('  test ', 'dim')); t5.push(sg('39', 'fg')); t5.push(sg('  implement ', 'dim')); t5.push(sg('30', 'fg')); t5.push(sg(' (', 'dim')); t5.push(sg('1 ✗', 'warn')); t5.push(sg(')  read ', 'dim')); t5.push(sg('1', 'fg')); t5.push(sg('  write ', 'dim')); t5.push(sg('2', 'fg'));
+      out.push(spread(t5, [sg('top ctx  ', 'dim'), sg('Read …/agents.rs', 'fg'), sg('  10k', 'warn')], cols));
+      var t7 = [sg(' ', 'dim'), sg('7', 'accent', true), sg(' ', 'dim')];
+      at(t7, 3); t7.push(sg('files', 'fg', true));
+      at(t7, 14); t7.push(sg('27', 'fg')); t7.push(sg(' touched  ·  ', 'dim')); t7.push(sg('agent_ledger.rs', 'fg')); t7.push(sg(' W×1 IDE  ·  ', 'dim')); t7.push(sg('task_notification.rs', 'fg')); t7.push(sg(' W×1 IDE', 'dim'));
+      out.push(spread(t7, [sg('6 agents  ', 'accent'), sg('—', 'dim')], cols));
+      out.push([]);
+      var e = [sg(' ', 'dim'), sg('8', 'accent', true), sg(' ', 'dim')];
+      at(e, 3); e.push(sg('05:53', 'dim')); at(e, 10); e.push(sg('tool', 'accent')); at(e, 16); e.push(sg('Bash', 'fg')); at(e, 22); e.push(sg('cargo fmt --all && make check > /tmp/check.log', 'fg'));
+      at(e, 74); e.push(sg('05:52', 'dim')); at(e, 81); e.push(sg('hook', 'accent')); at(e, 87); e.push(sg('PostToolBatch', 'fg'));
+      out.push(at(e, cols));
+      var e2 = []; at(e2, 3); e2.push(sg('05:52', 'dim')); at(e2, 10); e2.push(sg('tool', 'accent')); at(e2, 16); e2.push(sg('Bash', 'fg')); at(e2, 22); e2.push(sg('cargo test harness_facts 2>&1 | grep -c ok', 'fg'));
+      at(e2, 74); e2.push(sg('05:52', 'dim')); at(e2, 81); e2.push(sg('tool', 'accent')); at(e2, 87); e2.push(sg('Bash', 'fg')); at(e2, 93); e2.push(sg('✓', 'ok')); e2.push(sg(' 94 tok', 'dim'));
+      out.push(at(e2, cols));
+      out.push([]);
+      var f = [sg(' ', 'dim'), sg('?', 'accent', true), sg('help', 'dim'), sg('   ', 'dim'), sg('1-9', 'accent', true), sg(' panels   ', 'dim'), sg('c', 'accent', true), sg(' coach   ', 'dim'), sg('a', 'accent', true), sg(' ask   ', 'dim'), sg('t', 'accent', true), sg(' theme   ', 'dim'), sg('q', 'accent', true), sg(' quit', 'dim')];
+      out.push(spread(f, [sg('read-only · nothing is sent', 'dim')], cols));
+      return out;
+    }
+    if (cols >= 60) {
+      var h8 = [sg('  cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11', 'dim')];
+      out.push(spread(h8, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg('  52:11 · 159c ', 'dim'), sg('1 err', 'warn')], cols));
+      out.push([]);
+      out = out.concat(this.actBand(cols));
+      out.push([]);
+      var m8 = function (digit, label, value, pct, barSegs, detail) {
+        var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+        at(l, 3); l.push(sg(label, 'fg', true));
+        at(l, 12); l.push(sg(value, 'fg'));
+        at(l, 24); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+        at(l, 41); l.push(sg(pct, 'fg', true));
+        at(l, 48); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+        return at(l, cols);
+      };
+      out.push(m8(1, 'context', '350k/1.00M', '35 %', this.ctxBar(16), [sg('616k', 'fg'), sg(' to autocompact', 'dim')]));
+      out.push(at([sg('     prefix ', 'dim'), sg('44k', 'accent'), sg(' results ', 'dim'), sg('≈82k', 'ok'), sg(' inputs ', 'dim'), sg('≈49k', 'warn'), sg(' think ', 'dim'), sg('42k', 'crit'), sg(' harness ', 'dim'), sg('≈21k', 'dim')], cols));
+      out.push(m8(3, 'limits', '5h 4 %', ' 4 %', bar(4, 16, 'ok'), [sg('↻ 4h06', 'fg'), sg('  ·  7d ', 'dim'), sg('22 %', 'fg')]));
+      out.push(m8(2, 'cache', 'warm 59m', '98 %', bar(98, 16, 'ok'), [sg('1h', 'fg'), sg(' TTL  ·  ', 'dim'), sg('0', 'ok'), sg(' misses', 'dim')]));
+      var sp8 = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+      at(sp8, 3); sp8.push(sg('spend', 'fg', true)); at(sp8, 12); sp8.push(sg('≈$22.50', 'fg', true));
+      at(sp8, 24); sp8.push(sg('≈$90', 'warn', true)); sp8.push(sg('/h · ', 'dim')); sp8.push(sg('≈$.19', 'fg')); sp8.push(sg('/call · ', 'dim')); sp8.push(sg('≈$29', 'warn')); sp8.push(sg('/turn', 'dim'));
+      out.push(at(sp8, cols));
+      out.push([]);
+      var r8 = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+      at(r8, 3); r8.push(sg('running', 'fg', true)); at(r8, 12); r8.push(sg('Bash', 'accent')); r8.push(sg(' cargo fmt --all && make check…', 'fg'));
+      out.push(spread(r8, [sg('0:03', 'fg', true)], cols));
+      var t58 = [sg(' ', 'dim'), sg('5', 'accent', true), sg(' ', 'dim')];
+      at(t58, 3); t58.push(sg('tools', 'fg', true)); at(t58, 12);
+      t58.push(sg('explore ', 'dim')); t58.push(sg('69', 'fg')); t58.push(sg(' test ', 'dim')); t58.push(sg('39', 'fg')); t58.push(sg(' impl ', 'dim')); t58.push(sg('30', 'fg')); t58.push(sg(' (', 'dim')); t58.push(sg('1 ✗', 'warn')); t58.push(sg(')  top ctx ', 'dim')); t58.push(sg('10k', 'warn'));
+      out.push(at(t58, cols));
+      var t78 = [sg(' ', 'dim'), sg('7', 'accent', true), sg(' ', 'dim')];
+      at(t78, 3); t78.push(sg('files', 'fg', true)); at(t78, 12);
+      t78.push(sg('27', 'fg')); t78.push(sg(' touched · ', 'dim')); t78.push(sg('2', 'fg')); t78.push(sg(' IDE edits · ', 'dim')); t78.push(sg('agents.rs', 'fg')); t78.push(sg(' ×3 re-read', 'warn'));
+      out.push(at(t78, cols));
+      out.push([]);
+      var e8 = [sg(' ', 'dim'), sg('8', 'accent', true), sg(' ', 'dim')];
+      at(e8, 3); e8.push(sg('05:53', 'dim')); at(e8, 10); e8.push(sg('tool', 'accent')); at(e8, 16); e8.push(sg('Bash', 'fg')); at(e8, 22); e8.push(sg('cargo fmt --all && make check…', 'fg'));
+      out.push(at(e8, cols));
+      var e82 = []; at(e82, 3); e82.push(sg('05:52', 'dim')); at(e82, 10); e82.push(sg('hook', 'accent')); at(e82, 16); e82.push(sg('PostToolBatch', 'fg'));
+      at(e82, 44); e82.push(sg('05:52', 'dim')); at(e82, 51); e82.push(sg('tool', 'accent')); at(e82, 57); e82.push(sg('Bash ', 'fg')); e82.push(sg('✓', 'ok')); e82.push(sg(' 94', 'dim'));
+      out.push(at(e82, cols));
+      out.push([]);
+      var f8 = [sg(' ', 'dim'), sg('?', 'accent', true), sg('help  ', 'dim'), sg('1-9', 'accent', true), sg(' panels  ', 'dim'), sg('c', 'accent', true), sg(' coach  ', 'dim'), sg('t', 'accent', true), sg(' theme  ', 'dim'), sg('q', 'accent', true)];
+      out.push(at(f8, cols));
+      return out;
+    }
+    // Below MIN_DOCK_COLUMNS: the inline pane. First glance only, plus the key map.
+    var h4 = [sg(' cctop', 'accent', true), sg(' opus-5 t1', 'dim')];
+    out.push(spread(h4, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11', 'dim')], cols));
+    out = out.concat(this.actBand(cols));
+    var self = this;
+    var m4 = function (digit, label, value, barSegs, detail) {
+      var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+      at(l, 3); l.push(sg(label, 'fg'));
+      at(l, 15 - Array.from(value).length); l.push(sg(value, 'fg', true));
+      at(l, 16); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+      at(l, 25); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+      return at(l, cols);
+    };
+    out.push(m4(1, 'ctx', '35 %', this.ctxBar(8), [sg('616k', 'fg'), sg(' left', 'dim')]));
+    out.push(m4(3, '5h', '4 %', bar(4, 8, 'ok'), [sg('↻ ', 'dim'), sg('4h06', 'fg')]));
+    out.push(m4(2, 'cache', '59m', bar(98, 8, 'ok'), [sg('1h', 'fg'), sg(' TTL', 'dim')]));
+    // spend has no denominator, so it drops out of the meter grid rather than faking a bar
+    var s4 = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+    at(s4, 3); s4.push(sg('spend', 'fg'));
+    at(s4, 11); s4.push(sg('≈$22.50', 'fg', true)); s4.push(sg(' · ', 'border')); s4.push(sg('≈$90', 'warn')); s4.push(sg('/h · ', 'dim')); s4.push(sg('≈$29', 'warn')); s4.push(sg('/turn', 'dim'));
+    out.push(at(s4, cols));
+    var r4 = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+    at(r4, 3); r4.push(sg('▸ ', 'accent')); r4.push(sg('Bash cargo fmt…', 'fg'));
+    out.push(spread(r4, [sg('0:03', 'fg', true)], cols));
+    var k4 = [sg(' ', 'dim'), sg('1', 'accent', true), sg('ctx ', 'dim'), sg('2', 'accent', true), sg('$ ', 'dim'), sg('3', 'accent', true), sg('lim ', 'dim'), sg('4', 'accent', true), sg('turn ', 'dim'), sg('5', 'accent', true), sg('tool ', 'dim'), sg('7', 'accent', true), sg('file ', 'dim'), sg('8', 'accent', true), sg('ev', 'dim')];
+    out.push(at(k4, cols));
+    return out;
+  }
+
+  // A panel frame that never overruns: the hint gives way first, then the title.
+  frame(cols, title, right, body) {
+    var out = [], inner = cols - 6;
+    var t = clip(title, Math.max(8, inner - 4));
+    var r = clip(right, Math.max(0, inner - Array.from(t).length - 3));
+    var top = [sg('╭─ ', 'border'), sg(t, 'fg', true), sg(' ', 'border')];
+    var tail = r ? [sg(' ', 'border'), sg(r, 'dim'), sg(' ─╮', 'border')] : [sg('─╮', 'border')];
+    var n = cols - lw(top) - lw(tail);
+    top.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+    out.push(fit(top.concat(tail), cols));
+    for (var i = 0; i < body.length; i++) {
+      var l = fit([sg('│', 'border')].concat(body[i]), cols - 1);
+      at(l, cols - 1); l.push(sg('│', 'border'));
+      out.push(l);
+    }
+    out.push([sg('╰' + '─'.repeat(Math.max(0, cols - 2)) + '╯', 'border')]);
+    return out;
+  }
+
+  drill(view, cols) {
+    var body = [], out = [], narrow = cols < 60, mid = cols < 100;
+    var col = function (l, c, txt, role, bold) { at(l, c); l.push(sg(txt, role, bold)); return l; };
+    var kv = function (k, v, vrole) { var l = []; col(l, 2, k, 'dim'); col(l, 15, v, vrole || 'fg', true); return l; };
+    if (view === 'context') {
+      if (narrow) {
+        body.push(kv('size', '350k of 1.00M'));
+        body.push(kv('used', '35 %', 'warn'));
+        body.push(kv('left', '616k', 'ok'));
+        body.push(kv('autocompact', '967k'));
+        body.push([]);
+        var sl = [['prefix', '44k', 'accent'], ['results', '≈82k', 'ok'], ['inputs', '≈49k', 'warn'], ['thinking', '42k', 'crit'], ['harness', '≈21k', 'dim']];
+        for (var s0 = 0; s0 < sl.length; s0++) {
+          var ln = []; col(ln, 2, sl[s0][0], 'dim'); col(ln, 13 - Array.from(sl[s0][1]).length, sl[s0][1], 'fg', true);
+          col(ln, 15, '▇'.repeat(Math.max(1, Math.round(parseInt(sl[s0][1].replace(/\D/g, ''), 10) / 82 * 14))), sl[s0][2]);
+          body.push(ln);
+        }
+        body.push([]);
+        body.push(kv('re-reads', '3', 'warn'));
+        body.push(kv('stale reads', '8', 'warn'));
+        out = this.frame(cols, '1 · context', 'Esc', body);
+      } else {
+        body.push([sg('  350k', 'fg', true), sg(' of ', 'dim'), sg('1.00M', 'fg'), sg('   autocompact ', 'dim'), sg('967k', 'fg'), sg('   ', 'dim'), sg('616k', 'ok', true), sg(' left', 'dim')]);
+        body.push([]);
+        var stack = [['prefix', 44, 'accent', 'system prompt · CLAUDE.md · tool schemas — never shrinks'],
+                     ['results', 82, 'ok', 'what tools returned — the lever you actually control'],
+                     ['inputs', 49, 'warn', 'what Claude wrote to call them — Bash text dominates'],
+                     ['thinking', 42, 'crit', 'retained reasoning — dropped at the next boundary'],
+                     ['harness', 21, 'dim', 'reminders, injected files, listings']];
+        var bw = mid ? 14 : 26;
+        for (var i = 0; i < stack.length; i++) {
+          var l = [];
+          col(l, 2, stack[i][0], 'fg');
+          col(l, 15 - String(stack[i][1]).length - 1, stack[i][1] + 'k', 'fg', true);
+          at(l, 17);
+          var f = Math.round(stack[i][1] / 82 * bw);
+          l.push(sg('▇'.repeat(f), stack[i][2])); l.push(sg('▁'.repeat(bw - f), 'border'));
+          if (!mid) col(l, 17 + bw + 3, stack[i][3], 'dim');
+          body.push(l);
+        }
+        body.push([]);
+        var last = [sg('  compactions ', 'dim'), sg('0', 'fg'), sg('   re-reads ', 'dim'), sg('3', 'warn'), sg('   stale ', 'dim'), sg('8', 'warn')];
+        if (!mid) { last.push(sg('   velocity ', 'dim')); last.push(sg('—', 'dim')); last.push(sg(' (turn 1 — no sample yet)', 'dim')); }
+        body.push(last);
+        out = this.frame(cols, '1 · context — where the window went', mid ? 'Esc back' : 'Enter turn ledger  ·  Esc back', body);
+      }
+    } else if (view === 'cost') {
+      body.push([sg('  ≈$22.50', 'fg', true), sg(mid ? '  API-equivalent' : '  this session   API-equivalent list price — a subscription is not billed per token', 'warn')]);
+      body.push([]);
+      var rows = [['cache read', '31.53M', 100, 'ok'], ['cache write', '320k', 4, 'warn'], ['output', '140k', 2, 'accent'], ['└ thinking', '42k', 1, 'crit'], ['fresh input', '318', 1, 'dim']];
+      var bw2 = narrow ? 12 : (mid ? 22 : 40);
+      for (var k = 0; k < rows.length; k++) {
+        var rl = []; col(rl, 2, rows[k][0], 'fg');
+        at(rl, 16);
+        var f2 = Math.max(1, Math.round(rows[k][2] / 100 * bw2));
+        rl.push(sg('▇'.repeat(f2), rows[k][3])); rl.push(sg('▁'.repeat(bw2 - f2), 'border'));
+        at(rl, 16 + bw2 + 2); rl.push(sg(rows[k][1], 'fg', true));
+        body.push(rl);
+      }
+      body.push([]);
+      body.push([sg('  cache hit ', 'dim'), sg('99 %', 'ok', true), sg('   TTL ', 'dim'), sg('1h', 'fg'), sg('   misses ', 'dim'), sg('0', 'ok'), sg('   burn ', 'dim'), sg('≈$90/h', 'warn', true)]);
+      if (!narrow) body.push([sg('  last session ', 'dim'), sg('$1.19', 'fg'), sg(' over ', 'dim'), sg('1d 13h', 'fg'), sg(mid ? '' : '   — this one is ', 'dim'), sg(mid ? '' : '19×', 'crit', true), sg(mid ? '' : ' its cost in ', 'dim'), sg(mid ? '' : '1/43', 'fg'), sg(mid ? '' : ' the time', 'dim')]);
+      out = this.frame(cols, narrow ? '2 · cost' : '2 · tokens & cost', narrow ? 'Esc' : (mid ? 'Esc back' : 'a agents  ·  Enter ledger  ·  Esc back'), body);
+    } else if (view === 'tools') {
+      var tr = [['Bash·explore', '69', '0', '148ms', '18k', '0:03', 'grep -rn "fn apply" src/'],
+                ['Bash·test', '39', '0', '1.6s', '12k', '1:12', 'cargo test harness_facts'],
+                ['Bash·implement', '30', '1', '227ms', '9k', '3:40', 'cargo fmt --all && make…'],
+                ['Write', '2', '0', '38ms', '—', '8:20', 'src/agent_ledger.rs'],
+                ['Read', '1', '0', '52ms', '10k', '12:04', 'src/agents.rs']];
+      if (narrow) {
+        var hN = []; col(hN, 2, 'TOOL', 'dim'); col(hN, 20, 'CALLS', 'dim'); col(hN, 29, '→CTX', 'dim');
+        body.push(hN);
+        for (var qn = 0; qn < tr.length; qn++) {
+          var ln2 = []; col(ln2, 2, clip(tr[qn][0], 16), 'fg');
+          at(ln2, 25 - tr[qn][1].length); ln2.push(sg(tr[qn][1], 'fg', true));
+          at(ln2, 33 - tr[qn][4].length); ln2.push(sg(tr[qn][4], 'fg'));
+          body.push(ln2);
+        }
+        body.push([]);
+        body.push([sg('  159 calls · ', 'dim'), sg('1 err', 'warn')]);
+        out = this.frame(cols, '5 · tools', 'Esc', body);
+      } else {
+        var hdr = [];
+        col(hdr, 2, 'TOOL / CLASS', 'dim'); col(hdr, 22, 'CALLS', 'dim'); col(hdr, 31, 'ERR', 'dim'); col(hdr, 39, 'p50', 'dim'); col(hdr, 49, '→CTX', 'dim'); col(hdr, 58, 'LAST', 'dim');
+        if (!mid) col(hdr, 66, 'LAST INPUT', 'dim');
+        body.push(hdr);
+        for (var q = 0; q < tr.length; q++) {
+          var tl = [];
+          col(tl, 2, tr[q][0], 'fg');
+          at(tl, 27 - tr[q][1].length); tl.push(sg(tr[q][1], 'fg', true));
+          at(tl, 34 - tr[q][2].length); tl.push(sg(tr[q][2], tr[q][2] === '0' ? 'dim' : 'warn', tr[q][2] !== '0'));
+          at(tl, 44 - tr[q][3].length); tl.push(sg(tr[q][3], 'fg'));
+          at(tl, 53 - Array.from(tr[q][4]).length); tl.push(sg(tr[q][4], (tr[q][4] === '10k' || tr[q][4] === '18k') ? 'warn' : 'fg'));
+          at(tl, 62 - tr[q][5].length); tl.push(sg(tr[q][5], 'dim'));
+          if (!mid) col(tl, 66, tr[q][6], 'dim');
+          body.push(tl);
+        }
+        body.push([]);
+        var foot = [sg('  159 calls', 'fg', true), sg('   1 error ', 'dim'), sg('Command Failed', 'warn'), sg('   0 denied', 'dim')];
+        if (!mid) { foot.push(sg('   ▸ running ', 'accent')); foot.push(sg('Bash cargo fmt --all', 'fg')); foot.push(sg('  0:03', 'fg', true)); }
+        body.push(foot);
+        out = this.frame(cols, mid ? '5 · tools' : '5 · tools — what the context is being spent on', mid ? 'Esc back' : 's sort  ·  Enter calls  ·  Esc back', body);
+      }
+    } else {
+      var ev = [['05:53', 'tool', 'Bash  cargo fmt --all && make check > /tmp/check.log', 'fg'],
+                ['05:52', 'hook', 'PostToolBatch', 'dim'],
+                ['05:52', 'tool', 'Bash  ✓ 94 tokens to context', 'fg'],
+                ['05:52', 'tool', 'Bash  cargo test harness_facts 2>&1 | grep -c ok', 'fg'],
+                ['05:52', 'hook', 'PostToolBatch', 'dim'],
+                ['05:51', 'api', 'cost-state  ≈$22.50  ·  159 calls  ·  retries 0:00', 'warn'],
+                ['05:44', 'note', '/clear  ·  continued in a new session', 'accent']];
+      var eh = []; col(eh, 2, 'TIME', 'dim'); col(eh, 10, 'KIND', 'dim'); col(eh, 18, 'WHAT', 'dim');
+      body.push(eh);
+      for (var z = 0; z < ev.length; z++) {
+        var el = []; col(el, 2, ev[z][0], 'dim'); col(el, 10, ev[z][1], 'accent'); col(el, 18, clip(ev[z][2], cols - 21), ev[z][3]);
+        body.push(el);
+      }
+      out = this.frame(cols, narrow ? '8 · events' : '8 · events — the session, newest first', narrow ? 'Esc' : 'f filter  ·  Esc back', body);
+    }
+    for (var pz = 0; pz < 4; pz++) out.push([]);
+    return out;
+  }
+
+  screen(view, cols) {
+    var lines = view === 'overview' ? this.overview(cols) : this.drill(view, cols);
+    return lines.map(function (l) { return fit(l, cols); });
+  }
+
+  renderVals() {
+    var self = this;
+    var p = PALETTES[this.props.theme] || PALETTES['default-dark'];
+    var light = this.props.theme === 'default-light';
+    var cols = this.state.cols, view = this.state.view;
+    var rows = this.screen(view, cols).map(function (l) {
+      if (!l.length) return [{ t: ' '.repeat(cols), c: p.dim, w: '400' }];
+      return l.map(function (s) { return { t: s.t, c: p[s.r] || p.fg, w: s.b ? '600' : '400' }; });
+    });
+    var mk = function (label, active, onPick) {
+      return {
+        label: label, pick: onPick,
+        bg: active ? p.accent : 'transparent',
+        fg: active ? (light ? '#FFFFFF' : '#0E1318') : (light ? '#5A6577' : '#8FA0B4'),
+        bd: active ? p.accent : (light ? '#C8CFDA' : '#2E3B49')
+      };
+    };
+    var widths = [122, 80, 40];
+    var views = [['overview', 'overview'], ['context', '1 context'], ['cost', '2 cost'], ['tools', '5 tools'], ['events', '8 events']];
+    var captions = { overview: 'the 3-second read', context: 'dig deeper · press 1', cost: 'dig deeper · press 2', tools: 'dig deeper · press 5', events: 'dig deeper · press 8' };
+    var vname = views.filter(function (v) { return v[0] === view; })[0][1];
+    return {
+      t: {
+        page: light ? '#E7EAEF' : '#0A0E12',
+        ink: light ? '#1A212C' : '#D6DEE8',
+        mute: light ? '#5A6577' : '#6E7F93',
+        card: light ? '#F4F6F9' : '#121820',
+        chrome: light ? '#DDE2E9' : '#1A222B',
+        bg: p.bg
+      },
+      rows: rows,
+      caption: cols + ' columns · ' + captions[view],
+      termTitle: 'cctop — ' + (view === 'overview' ? cols + ' cols' : vname + ' · ' + cols + ' cols'),
+      widthBtns: widths.map(function (w) { return mk(w + ' cols', cols === w, function () { self.setState({ cols: w }); }); }),
+      viewBtns: views.map(function (v) { return mk(v[1], view === v[0], function () { self.setState({ view: v[0] }); }); }),
+      notes: [
+        { kicker: 'first glance', accent: p.ok, body: 'Phase, one call to action, three headroom meters, spend. Five facts in fixed positions — the same five whatever the session is doing.' },
+        { kicker: 'second look', accent: p.warn, body: 'Running tool, turn timing, tool mix, files, event tail. Same screen, lower half, dimmer — read it when the top half says something is off.' },
+        { kicker: 'dig deeper', accent: p.accent, body: 'Everything else lives behind a digit. The overview never truncates a fact it cannot afford; it hands you the key that opens the whole table.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

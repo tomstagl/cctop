@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 34px 40px; display: flex; flex-direction: column; gap: 24px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 22px; font-weight: 600; color: #D6DEE8">What k9s already worked out</div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 900px; text-wrap: pretty">k9s has had ten years and a large, impatient audience to settle questions cctop is asking now. Two of its answers are things it got wrong in public, which are the more useful ones.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start">
+    <sc-for list="{{chromes}}" as="c" hint-placeholder-count="2"><div style="display: flex; flex-direction: column; gap: 10px"><div style="display: flex; align-items: baseline; gap: 10px"><span class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: {{c.tone}}">{{c.title}}</span><span style="font-size: 13px; color: #6E7F93">{{c.sub}}</span></div><div style="border-radius: 7px; border: 1px solid #1A222B; padding: 14px 16px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 18px"><sc-for list="{{c.rows}}" as="row" hint-placeholder-count="14"><div class="r"><sc-for list="{{row}}" as="s" hint-placeholder-count="6"><span style="color: {{s.c}}; font-weight: {{s.w}}">{{s.t}}</span></sc-for></div></sc-for></div><div style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{c.note}}</div></div></sc-for>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 6px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">what we take</div>
+    <div style="display: flex; flex-direction: column; gap: 1px">
+      <div style="display: grid; grid-template-columns: 176px 232px minmax(0, 1fr) 62px; gap: 16px; padding: 8px 14px"><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">pattern</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">cctop today</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">what changes</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D; text-align: right">cost</span></div>
+      <sc-for list="{{takes}}" as="t" hint-placeholder-count="10"><div style="display: grid; grid-template-columns: 176px 232px minmax(0, 1fr) 62px; gap: 16px; padding: 10px 14px; border-radius: 4px; background: {{t.bg}}; align-items: baseline"><div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 13.5px; font-weight: 600; color: #D6DEE8">{{t.pattern}}</span><span class="m" style="font-size: 11px; color: #4CC2C2">{{t.keys}}</span></div><span style="font-size: 13px; line-height: 1.45; color: #7E8FA3; text-wrap: pretty">{{t.today}}</span><span style="font-size: 13.5px; line-height: 1.5; color: #A6B4C4; text-wrap: pretty">{{t.change}}</span><span class="m" style="font-size: 11px; color: {{t.tone}}; text-align: right">{{t.cost}}</span></div></sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 8px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #E2B04A">the two it got wrong in public — worth more than the rest</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px"><sc-for list="{{lessons}}" as="l" hint-placeholder-count="2"><div style="display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-radius: 7px; background: #141109; border: 1px solid #33290F"><div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap"><span class="m" style="font-size: 12px; color: #E2B04A">{{l.ref}}</span><span style="font-size: 15px; font-weight: 600; color: #D6DEE8">{{l.head}}</span></div><div style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{l.body}}</div><div style="display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 11px; margin-top: 3px; padding-top: 10px; border-top: 1px solid #2A2414"><span class="m" style="font-size: 11px; color: #5FC77E">for cctop</span><span style="font-size: 13.5px; line-height: 1.5; color: #B9C4D1; text-wrap: pretty">{{l.take}}</span></div></sc-for></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px; padding: 18px 20px; border-radius: 8px; background: #121820">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #8B9BB0">what we deliberately leave</div>
+    <div style="display: flex; flex-direction: column; gap: 8px"><sc-for list="{{leave}}" as="x" hint-placeholder-count="3"><div style="display: grid; grid-template-columns: 15px minmax(0, 1fr); gap: 11px"><span class="m" style="font-size: 13px; color: #5D6B7D">·</span><span style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{x}}</span></div></sc-for></div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1680}}'>
+var P = { fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644' };
+function sg(t, c, b) { return { t: String(t), c: c || P.fg, w: b ? '600' : '400' }; }
+function row() { return Array.prototype.slice.call(arguments); }
+
+class Component extends DCLogic {
+  renderVals() {
+    var W = 52, rule = function (ch) { return [sg(ch.repeat(W), P.border)]; };
+    return {
+      chromes: [
+        {
+          title: 'k9s', tone: '#4CC2C2', sub: 'three zones, two of them optional',
+          rows: [
+            rule('─'),
+            row(sg(' context · cluster    ', P.fg), sg('<key hints>', P.accent), sg('      [logo] ', P.dim)),
+            row(sg('                      ', P.dim), sg('changes per view', P.dim)),
+            rule('─'),
+            row(sg(' Pods(default)', P.fg, true), sg('[12]', P.accent, true), sg('                               ', P.dim)),
+            row(sg(' NAME        READY  STATUS       RESTARTS   AGE   ', P.dim)),
+            row(sg(' api-7f4c    1/1    ', P.fg), sg('Running', P.ok), sg('             0   4d   ', P.fg)),
+            row(sg(' web-22a1    0/1    ', P.fg), sg('CrashLoopBackOff', P.crit), sg('   14   2h   ', P.fg)),
+            row(sg(' job-91bd    0/1    ', P.fg), sg('Pending', P.warn), sg('             0   1m   ', P.fg)),
+            rule('─'),
+            row(sg(' <pods>', P.accent), sg('                                       ', P.dim))
+          ],
+          note: 'Header hides with Ctrl-E, breadcrumb with Ctrl-G. The body is one table that takes every row it is given. Colour appears in exactly one column — status.'
+        },
+        {
+          title: 'cctop today', tone: '#E5605E', sub: 'five zones, none of them optional',
+          rows: [
+            row(sg(' header', P.fg), sg('                          1 row   ', P.dim), sg('fixed', P.dim)),
+            row(sg(' tiles', P.fg), sg('                           7 rows  ', P.dim), sg('cannot be hidden', P.crit)),
+            row(sg(' nudge', P.fg), sg('                           1 row   ', P.dim), sg('fixed', P.dim)),
+            row(sg(' ledger 1-9 + detail rows', P.fg), sg('        18 rows ', P.dim), sg('fixed order,', P.crit)),
+            row(sg('                                           ', P.dim), sg('empties included', P.crit)),
+            row(sg(' footer', P.fg), sg('                          1 row   ', P.dim), sg('same string everywhere', P.crit)),
+            rule('─'),
+            row(sg(' 28 rows before a single table fits.', P.warn)),
+            row(sg(' No view has a way to say what its own', P.dim)),
+            row(sg(' keys are, and nothing can be dismissed', P.dim)),
+            row(sg(' to make room.', P.dim))
+          ],
+          note: 'Every row is spoken for before the screen has shown you one sortable, filterable table. The chrome is the product rather than a frame around it.'
+        }
+      ],
+      takes: [
+        { pattern: 'Per-view key hints', keys: 'header block', today: 'One static footer string in every view, including the drill-downs that have their own keys.', change: 'The footer is generated from the active view, so panel 5 advertises s sort and / filter where it actually applies.', cost: 'S', tone: '#5FC77E', bg: '#101820' },
+        { pattern: 'Reclaimable chrome', keys: 'Ctrl-E · Ctrl-G', today: 'The tile block is mandatory at every size and is the first thing on screen.', change: 'A key collapses the headroom block to its one-line form. The act band never collapses.', cost: 'S', tone: '#5FC77E', bg: '#0E141B' },
+        { pattern: 'Un-truncate', keys: 'Ctrl-W wide', today: 'Rows are ellipsed at 118 cells and then clipped again by the terminal, silently.', change: 'A key toggles wide mode: rows wrap instead of cutting. The direct answer to the worst finding in the audit.', cost: 'M', tone: '#E2B04A', bg: '#101820' },
+        { pattern: 'Faults only', keys: 'Ctrl-Z', today: 'Nothing. Every row is drawn whether or not it has anything to report.', change: 'A key hides every zone that is quiet, leaving only what crossed a threshold. Pairs with empty-means-gone.', cost: 'S', tone: '#5FC77E', bg: '#0E141B' },
+        { pattern: 'Command jump', keys: ': with aliases', today: 'Digits 1-9, plus c a t q. Already more destinations than digits, and none of them discoverable.', change: ': opens a fuzzy jump over every view by name — :ctx, :cost, :tools. Digits stay as the fast path.', cost: 'L', tone: '#E5605E', bg: '#101820' },
+        { pattern: 'Filter in place', keys: '/ regex', today: 'Panel tables show a fixed window of rows with no way to narrow them.', change: '/ filters the tools, files and events tables. Esc clears the filter before it leaves the view.', cost: 'M', tone: '#E2B04A', bg: '#0E141B' },
+        { pattern: 'Sort by column', keys: 'Shift-O · Shift-N', today: 's/S sorts the turn ledger only, and says so nowhere except that panel title.', change: 'Every table sorts on the same key, named in the per-view footer.', cost: 'M', tone: '#E2B04A', bg: '#101820' },
+        { pattern: 'Where am I', keys: '[ ] · - · Esc', today: 'Esc backs out one level. No trail, no forward, no way back to the last view.', change: 'A breadcrumb in the footer and - for the previous view. Esc keeps meaning exactly one level up.', cost: 'M', tone: '#E2B04A', bg: '#0E141B' },
+        { pattern: 'Count in the title', keys: 'Pods(ns)[12]', today: 'Already done — panel titles carry a summary figure.', change: 'Keep it, and give every panel one. The only pattern on this list cctop got right first.', cost: '—', tone: '#5FC77E', bg: '#101820' },
+        { pattern: 'Inherit the terminal', keys: 'skin bg: default', today: 'Every theme paints its own background, so cctop never matches the terminal it runs in.', change: 'bg = "default" leaves the background alone. One line in the theme parser.', cost: 'S', tone: '#5FC77E', bg: '#0E141B' }
+      ],
+      lessons: [
+        {
+          ref: 'issue #381', head: 'A colour language nobody can read',
+          body: 'Someone opened an issue asking what the colours mean: orange turned out to be both Terminating and CrashLoopBackOff, most things were blue except when they were green, and the only definition lived in skin.yml. The request was for documentation. It is still open.',
+          take: 'cctop starts ahead — it has four named roles declared once in themes/*.toml. That advantage is lost the moment a fifth meaning appears, which is exactly what the context bar does by spending ok / warn / crit on categories. Keep four roles, document them in the panel guide, and give composition its own ramp.'
+        },
+        {
+          ref: 'issue #3589', head: 'Sorting the broken things to the top — declined',
+          body: 'A request to sort failing pods above healthy ones during incidents, with a full severity ordering worked out. Closed as not planned. In a list you have learned the shape of, a row that moves when something goes wrong costs more than it saves: you lose the position you navigate by, at the moment you can least afford to.',
+          take: 'Directly corrects the redesign. Zones keep fixed positions and never reorder by urgency. The eye gets moved by colour, by the act band at the top, and by an opt-in faults-only key — never by the layout rearranging itself underneath someone.'
+        }
+      ],
+      leave: [
+        'The full : grammar. k9s navigates thousands of objects of hundreds of kinds and needs resource aliases; cctop has a fixed set of about a dozen views, so one flat fuzzy list is the whole feature.',
+        'A table as the main screen. k9s opens on a table because browsing is the job. cctop opens on a glance, so the overview stays a composition of meters and the tables live one keypress down.',
+        'Skins as arbitrary YAML. cctop themes carry nine named roles and derive everything else, which is what lets a user-written theme get a correct series ramp for free. Letting a skin paint any element any colour is how #381 happens.'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
