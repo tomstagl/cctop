@@ -815,6 +815,19 @@ pub fn limits_light(state: &State) -> Light {
         Some((usd, _)) => format!("agents ≈{} · {ran} ran · {failed} failed", usd_short(usd)),
         None => format!("agents {ran} ran · {failed} failed"),
     });
+    if let Some(team) = &state.team {
+        let active = team.active(now);
+        let members = team.members.len();
+        lines.push(match team.cost(now) {
+            Some(c) => format!(
+                "team {}{} · {active} of {members} active · {} read",
+                if c.approx { "≈" } else { "" },
+                usd_short(c.usd),
+                team.read()
+            ),
+            None => format!("team {active} of {members} active · {} read", team.read()),
+        });
+    }
     Light {
         id: "limits",
         level,
@@ -1466,6 +1479,24 @@ mod tests {
             l.text.starts_with("rate limited (five hour) · 5h 82%"),
             "{}",
             l.text
+        );
+        assert!(
+            l.lines.iter().all(|x| !x.starts_with("team ")),
+            "no team, no team line: {:?}",
+            l.lines
+        );
+        // A team: its own line under the agents', with the worst mark once.
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        let mut d =
+            crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        d.limits = s.limits.clone();
+        let l = limits_light(&d);
+        assert_eq!(
+            l.lines.last().map(String::as_str),
+            Some("team ≈$.48 · 1 of 3 active · 2 read"),
+            "{:?}",
+            l.lines
         );
     }
 

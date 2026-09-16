@@ -46,6 +46,25 @@ pub fn missing(hint: &str) -> Value {
 const INSTALL_HINT: &str = "run cctop install";
 
 pub fn summary(state: &State) -> Value {
+    let mut v = summary_object(state);
+    // The team's part only for a session that leads one: a session without
+    // a team prints exactly what it did before the team PRD.
+    if let Some(team) = state.team_cost_share().map(|(usd, share, read, members)| {
+        json!({
+            "usd": serde_json::to_value(CostValue::new(state.team_cost().unwrap_or(cost::Cost::priced(usd)), "team_cost")).unwrap_or(Value::Null),
+            "share": m(share, "ratio", "team_cost", true),
+            "read": read,
+            "members": members,
+        })
+    }) {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("team_cost".into(), team);
+        }
+    }
+    v
+}
+
+fn summary_object(state: &State) -> Value {
     let ctx = state.context();
     let u = state.agg.total;
     let rates = cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
@@ -55,8 +74,9 @@ pub fn summary(state: &State) -> Value {
     };
     // `cost` keeps today's meaning (the ledger plus the main responses
     // after it) for one release; `cost_combined` adds the agents' calls
-    // after the ledger's moment and says where the figure comes from.
-    let cost_combined = match state.cost.combined(state.agents.values()) {
+    // after the ledger's moment and the team's own figures, and says where
+    // the figure comes from.
+    let cost_combined = match state.cost_combined() {
         Some(c) => serde_json::to_value(CostValue::new(c, "cost_combined")).unwrap_or(Value::Null),
         None => missing("no priced model or cost-state yet"),
     };
@@ -605,6 +625,59 @@ mod tests {
         }
         s.session.ended_at_ms = s.last_line_at_ms;
         s
+    }
+
+    fn state_d() -> State {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path))
+    }
+
+    #[test]
+    fn team_cost_is_in_the_combined_figure_and_named_only_with_a_team() {
+        let d = state_d();
+        let s = summary(&d);
+        let team = &s["team_cost"];
+        assert_eq!(team["read"], 2);
+        assert_eq!(team["members"], 3);
+        assert_eq!(team["usd"]["metric_id"], "team_cost");
+        assert_eq!(
+            team["usd"]["source"], "mixed",
+            "one ledger, one priced tail"
+        );
+        assert_eq!(team["usd"]["approx"], true);
+        let team_usd = team["usd"]["value"].as_f64().unwrap();
+        let main = s["cost"]["value"].as_f64().unwrap();
+        let combined = s["cost_combined"]["value"].as_f64().unwrap();
+        assert!(
+            (combined - (main + team_usd)).abs() < 1e-9,
+            "{combined} = {main} + {team_usd}"
+        );
+        assert_eq!(s["cost"]["approx"], false, "the lead's own ledger is exact");
+        assert_eq!(
+            s["cost_combined"]["approx"], true,
+            "the team's part marks it"
+        );
+        assert_eq!(s["cost_combined"]["source"], "mixed");
+        assert!(s["agents_cost"].is_null(), "D has no subagents");
+        // Dashboard row 2's detail carries the same words as Panel 2.
+        let dash = dashboard(&d);
+        let detail: String = dash["rows"][1]["detail"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|seg| seg["text"].as_str())
+            .collect();
+        assert!(
+            detail.contains("team ≈$0.48 (5 %, 2 of 3 read)"),
+            "{detail}"
+        );
+        assert_eq!(dash["cost_combined"]["source"], "mixed");
+        // No team: no key at all, so A's and B's output is what it was.
+        for st in [state(), state_b()] {
+            let s = summary(&st);
+            assert!(s.get("team_cost").is_none(), "{}", s["team_cost"]);
+        }
     }
 
     #[test]

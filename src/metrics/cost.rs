@@ -293,15 +293,19 @@ impl CostTracker {
         any.then(|| Cost::priced(usd))
     }
 
-    /// The session's whole spend: `current()` plus `agents_after`. With no
-    /// agents this is `current()` exactly.
-    pub fn combined<'a>(&self, agents: impl IntoIterator<Item = &'a Agent>) -> Option<Cost> {
-        match (self.current(), self.agents_after(agents)) {
-            (Some(c), Some(a)) => Some(c.plus(a)),
-            (Some(c), None) => Some(c),
-            (None, Some(a)) => Some(a),
-            (None, None) => None,
-        }
+    /// The session's whole spend: `current()` plus `agents_after` plus the
+    /// team's part (`team::Team::cost`: each teammate's own ledger and
+    /// priced tail, a second ledger that never overlaps this one). With no
+    /// agents and no team this is `current()` exactly.
+    pub fn combined<'a>(
+        &self,
+        agents: impl IntoIterator<Item = &'a Agent>,
+        team: Option<Cost>,
+    ) -> Option<Cost> {
+        [self.current(), self.agents_after(agents), team]
+            .into_iter()
+            .flatten()
+            .reduce(Cost::plus)
     }
 
     /// Per-model breakdown: authoritative `modelUsage` cost plus estimates.
@@ -735,7 +739,7 @@ mod tests {
         let fork = &agents["a9a92645226d3a561"];
         let moment = t.authoritative_at_ms.unwrap();
         assert!(fork.calls.iter().all(|c| c.at_ms.unwrap() > moment));
-        let all = t.combined(agents.values()).unwrap();
+        let all = t.combined(agents.values(), None).unwrap();
         let fork_usd = Pricing::bundled()
             .estimate(&fork.usage, &fork.model)
             .unwrap();
@@ -778,7 +782,7 @@ mod tests {
         let mut t = CostTracker::new(Pricing::bundled());
         t.push(&main_line("2026-01-01T00:00:00Z", "a"));
         let agents = [agent("claude-opus-5", &[("2026-01-01T00:00:05Z", 1000)])];
-        let c = t.combined(&agents).unwrap();
+        let c = t.combined(&agents, None).unwrap();
         assert_eq!(c.source, Source::Priced);
         assert!(c.approx);
         assert!((c.usd - 2000.0 * out).abs() < eps);
@@ -805,35 +809,59 @@ mod tests {
                 ],
             ),
         ];
-        let c = t.combined(&agents).unwrap();
+        let c = t.combined(&agents, None).unwrap();
         assert_eq!(c.source, Source::Mixed);
         assert!(c.approx);
         assert!((c.usd - (10.0 + 1000.0 * out)).abs() < eps, "{}", c.usd);
         // Only calls before it: the ledger stands alone, exact.
-        let c = t.combined(&agents[..1]).unwrap();
+        let c = t.combined(&agents[..1], None).unwrap();
         assert_eq!(c, Cost::ledger(10.0));
         // Main calls after the ledger are priced too (`current()`).
         t.push(&main_line("2026-01-01T00:03:00Z", "c"));
-        let c = t.combined(&agents).unwrap();
+        let c = t.combined(&agents, None).unwrap();
         assert!((c.usd - (10.0 + 2000.0 * out)).abs() < eps);
         assert_eq!(c.source, Source::Mixed);
 
         // An agent on a model the table does not know adds nothing and
         // does not change the mark.
         let unknown = [agent("claude-unknown-9", &[("2026-01-01T00:04:00Z", 1000)])];
-        let with = t.combined(&unknown).unwrap();
+        let with = t.combined(&unknown, None).unwrap();
         assert_eq!(with, t.current().unwrap());
         let mut fresh = CostTracker::new(Pricing::bundled());
-        assert_eq!(fresh.combined(&unknown), None, "nothing priceable at all");
+        assert_eq!(
+            fresh.combined(&unknown, None),
+            None,
+            "nothing priceable at all"
+        );
         fresh.push(&main_line("2026-01-01T00:00:00Z", "a"));
-        assert_eq!(fresh.combined(&unknown), fresh.current());
+        assert_eq!(fresh.combined(&unknown, None), fresh.current());
 
         // No agents: `current()` exactly (FR-6).
-        assert_eq!(t.combined(&[]), t.current());
+        assert_eq!(t.combined(&[], None), t.current());
         let mut none = CostTracker::new(Pricing::bundled());
-        assert_eq!(none.combined(&[]), None);
+        assert_eq!(none.combined(&[], None), None);
         none.push(&ledger);
-        assert_eq!(none.combined(&[]), Some(Cost::ledger(10.0)));
+        assert_eq!(none.combined(&[], None), Some(Cost::ledger(10.0)));
+        // The team's part is a second ledger: exact stays exact, a priced
+        // teammate marks the sum, and it counts with no main figure at all.
+        assert_eq!(
+            none.combined(&[], Some(Cost::ledger(2.5))),
+            Some(Cost::ledger(12.5))
+        );
+        let with_team = none.combined(&[], Some(Cost::priced(0.5))).unwrap();
+        assert!((with_team.usd - 10.5).abs() < 1e-9);
+        assert_eq!(with_team.source, Source::Mixed);
+        assert!(with_team.approx);
+        assert_eq!(
+            fresh.combined(&[], Some(Cost::priced(0.5))),
+            fresh.current().map(|c| c.plus(Cost::priced(0.5)))
+        );
+        let none_at_all = CostTracker::new(Pricing::bundled());
+        assert_eq!(
+            none_at_all.combined(&[], Some(Cost::priced(0.5))),
+            Some(Cost::priced(0.5)),
+            "a team's figure stands on its own"
+        );
         assert_eq!(
             none.authoritative_at_ms, None,
             "a ledger with no timestamped line before it has no moment"

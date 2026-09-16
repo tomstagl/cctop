@@ -47,7 +47,7 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
     out.push_str("\n## Cost\n\n");
     // The session's whole spend: the ledger, the main responses after it
     // and the agents' calls after it (agent PRD §4.2).
-    match state.cost.combined(state.agents.values()) {
+    match state.cost_combined() {
         Some(c) => out.push_str(&format!(
             "- total {}{}\n",
             if c.approx { "≈ " } else { "" },
@@ -60,6 +60,13 @@ pub fn markdown(state: &State, baseline: Option<&Baseline>) -> String {
             "- agents ≈{} ({:.0} % of the total; a fork's replayed parent message and the ledger's own copy of the agents' earlier calls are not counted twice)\n",
             fmt::usd(usd),
             share * 100.0
+        ));
+    }
+    if let (Some(t), Some((_, share, read, members))) = (state.team_cost(), state.team_cost_share())
+    {
+        out.push_str(&format!(
+            "- {} — each teammate's own `cost-state`, priced after it; ≈ while one works or a transcript is missing\n",
+            crate::ui::panels::tokens::team_part(t, share, (read, members))
         ));
     }
     let by = state.cost.by_model();
@@ -271,6 +278,21 @@ mod tests {
             crate::ui::state::SessionInfo::from_fixture(Path::new("fixtures/session-a.jsonl"));
         s.session.ended_at_ms = s.last_line_at_ms;
         s
+    }
+
+    #[test]
+    fn team_line_follows_the_combined_total() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        let state =
+            crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let out = markdown(&state, None);
+        assert!(out.contains("- total ≈ $10.6\n"), "{out}");
+        assert!(
+            out.contains("- team ≈$0.48 (5 %, 2 of 3 read) — each teammate's own `cost-state`"),
+            "{out}"
+        );
+        assert!(!out.contains("- agents"), "{out}");
     }
 
     #[test]

@@ -1,0 +1,24 @@
+---
+source: src/ui/panels/tokens.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+╭2 Tokens & Cost ─ 12.16M ─────────────────────────────╮
+│ cache read  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇ 11.62M │
+│ cache write ▇                                   444k │
+│ fresh in                                        1.3k │
+│ output                                           92k │
+│  └ thinking                                      42k │
+│ cache hit 96 %  ·  ≈ $10.6 ($34.2/h main)  ·  in 430k│
+│ ledger $10.2 · team ≈$0.48 (5 %, 2 of 3 read)        │
+│ per turn ▁▁▄▃▂▁█▂   last turn 817k · $0.47           │
+│ ≈$0.06/call · ≈$0.36/turn (≈$0.29 at 100k) · next 30c│
+│ cache ≈warm 59:57 · TTL 1h                           │
+│ where: skill:ralph-skills:prd 10 % · skill:cctop:ccto│
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+╰──────────────────────────────────────────────────────╯
+ Esc back  a ask  c coach  t theme  L sessions  q
