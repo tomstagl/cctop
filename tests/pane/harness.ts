@@ -3,11 +3,20 @@
 // fake `on` (`fakeOn`) that records registrations and dispatches an event
 // through them with a working `next`. Nothing here talks to Claude Code.
 //
+// Why not the engine's own kit (`claude plugin test`, 'claude-code/testing',
+// in the d.ts since 2.1.272): it runs a plugin "in an environment like the one
+// its hooks run in (no fs, network or process)", and the pane is built on
+// `$.process.run` (`cctop query`) and `$.fs.write` (the marker), so nothing
+// past session.start would run under it. This fake keeps those nouns; what it
+// implements is checked against the contract by `satisfies` (below), so a
+// regenerated d.ts fails the typecheck here too.
+//
 // Importing this module also installs the two JSX globals a hooks module
 // compiles against (`h`, `Fragment`): the engine provides them in its own
 // environment, Node does not, so they must exist before a render hook runs.
 import type {
   CommandSpec,
+  Elements,
   ElementTable,
   EngineInterface,
   HookFailure,
@@ -15,9 +24,11 @@ import type {
   PaneCloseArgs,
   PaneOpenArgs,
   ProcessRunResult,
+  PromptFillResult,
   RenderElement,
   RenderInput,
   RenderNode,
+  ResolveInput,
   SessionUsage,
   Timer,
 } from 'claude-code';
@@ -170,6 +181,13 @@ export type FakeExtras = {
 
 export type FakeEngine = EngineInterface & FakeExtras;
 
+// What the fake implements, checked noun by noun against the contract: a
+// `Partial` of each noun, so the nouns and methods the pane never calls stay
+// out, while every method it does implement must have the contract's type.
+// A regenerated d.ts that changes one (2.1.271's `clock.now`, issue #3) then
+// fails `npm run typecheck` here as well as in the module (issue #4).
+type Implemented = { [N in keyof EngineInterface]?: Partial<EngineInterface[N]> };
+
 type FakeTimer = { due: number; ms: number; fn: () => void; repeat: boolean; cancelled: boolean };
 
 export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
@@ -222,16 +240,23 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   };
   const env = { ...(opts.env ?? {}) };
   const registered: CommandSpec[] = [];
+  const logs: string[] = [];
+  const toasts: string[] = [];
+  const statuses: (string | undefined)[] = [];
+  const opens: PaneOpenArgs[] = [];
+  const closes: PaneCloseArgs[] = [];
+  const renderListeners: (() => void)[] = [];
+  const fills: string[] = [];
 
   const engine = {
     plugin: { name: opts.plugin?.name ?? 'cctop', root: opts.plugin?.root ?? '/plugins/cctop' },
     ui: {
       invalidates,
-      logs: [] as string[],
-      toasts: [] as string[],
-      statuses: [] as (string | undefined)[],
-      opens: [] as PaneOpenArgs[],
-      closes: [] as PaneCloseArgs[],
+      logs,
+      toasts,
+      statuses,
+      opens,
+      closes,
       openIds,
       presses,
       press: (key: string) => {
@@ -242,26 +267,31 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       notice: () => {},
       invalidate: (event: string) => {
         invalidates[event] = (invalidates[event] ?? 0) + 1;
-        if (event === 'ui.render') for (const fn of engine.ui.renderListeners) fn();
+        if (event === 'ui.render') for (const fn of renderListeners) fn();
       },
-      renderListeners: [] as (() => void)[],
-      resolve: () => elements,
+      renderListeners,
+      // Only the terminal's table exists here: the pane draws on no other
+      // surface, and a test that asks for one should hear so.
+      resolve: <E extends ResolveInput>(e: E): Elements[E['surface']] => {
+        if (e.surface !== 'terminal') throw new Error(`fakeEngine: no element table for ${e.surface}`);
+        return elements as Elements[E['surface']];
+      },
       log: (text: string) => {
-        engine.ui.logs.push(text);
+        logs.push(text);
       },
       ask: () => Promise.reject(new Error('fakeEngine: ui.ask is not scripted')),
       toast: (text: string) => {
-        engine.ui.toasts.push(text);
+        toasts.push(text);
       },
       status: (text: string | undefined) => {
-        engine.ui.statuses.push(text);
+        statuses.push(text);
       },
       open: async (pane: PaneOpenArgs) => {
-        engine.ui.opens.push({ ...pane });
+        opens.push({ ...pane });
         openIds.add(pane.id);
       },
       close: async (pane: PaneCloseArgs) => {
-        engine.ui.closes.push({ ...pane });
+        closes.push({ ...pane });
         openIds.delete(pane.id);
       },
     },
@@ -340,10 +370,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       },
     },
     prompt: {
-      fills: [] as string[],
+      fills,
       filled: true,
-      fill: async ({ text }: { text: string }) => {
-        engine.prompt.fills.push(text);
+      // The return type is spelled so the body may read `engine` back (a
+      // literal under `satisfies` cannot otherwise name itself).
+      fill: async ({ text }: { text: string }): Promise<PromptFillResult> => {
+        fills.push(text);
         return { isFilled: engine.prompt.filled };
       },
       submit: async () => {
@@ -358,7 +390,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         else env[name] = value;
       },
     },
-  };
+  } satisfies Implemented & FakeExtras;
+  // The nouns the fake leaves out (`model`, `tool`, `http`, ...) are what the
+  // cast covers; the methods it has were checked above.
   return engine as unknown as FakeEngine;
 }
 
