@@ -26,6 +26,12 @@ pub fn live_count() -> usize {
     LIVE.load(Ordering::Relaxed)
 }
 
+/// Tests that assert on [`live_count`], or open many tailers at once, hold
+/// this so they do not count each other's threads (the counter is
+/// process-wide and the test harness runs tests in parallel).
+#[cfg(test)]
+pub static TEST_TAILERS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// A running tailer. Drop it (or call [`Tailer::stop`]) to end the thread.
 pub struct Tailer {
     rx: mpsc::UnboundedReceiver<Line>,

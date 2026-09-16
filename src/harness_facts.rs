@@ -276,6 +276,17 @@ mod tests {
             "session-83f0e9b9"
         );
         assert_eq!(teams::HEAD_SCAN_LINES, 10);
+        // The drift warning of `make check-types` covers this module: a
+        // newer `claude` than READ_FROM names it among what to re-verify.
+        let script = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/check-plugin-types.sh"),
+        )
+        .unwrap();
+        assert!(script.contains("READ_FROM"), "the script reads READ_FROM");
+        assert!(
+            script.contains("teams module"),
+            "the warning names the teams module"
+        );
     }
 
     #[test]

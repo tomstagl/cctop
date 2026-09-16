@@ -220,6 +220,9 @@ mod tests {
 
     #[test]
     fn switching_sessions_rebuilds_collectors_without_leaking_tailers() {
+        let _serial = crate::tail::TEST_TAILERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let path = fixtures().join("session-a.jsonl");
         let mut app = App::new(
             crate::ui::panels::all(),
