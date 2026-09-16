@@ -221,3 +221,17 @@ Kept for provenance; both earlier versions are in this file's history.
 | `layout = tiles \| zones` comparison arm | **Dropped** — the dogfood happened (PRD §10) |
 | Four regexes in `build-site.sh` | Five, plus two silent `re.search` fences |
 | "each phase ships" | Three of six boundaries were red; §4 names the one that still is |
+
+After the branch landed (PR #8, v0.6.0 / plugin 0.7.0, 2026-09-16) — what the implementation found wrong, from `tasks/handoff-after-console.md`:
+
+| Claim | Verdict |
+|---|---|
+| "a near-zero `total_cost_usd` on a session with real usage" (§3.2, A1) | **Not on this machine** (130 ledgers). The mechanism is *two processes appending to one transcript*, each writing its own running total (`ab339470`: $29.04 then $7.15 over ≈$36); a do-nothing process writes `$0` — the screenshot. `startTime` names the process |
+| "A bug exists only if … then it is in `src/phase.rs`" (A2) | **Wrong file.** `Turn.duration_ms` stayed `Some(205)` after Claude Code re-drove the prompt following `/login`; fixed in `usage.rs` |
+| "`4c +145` spelled out" fits the state line (A3) | **The coach card is 52 cells** and the plan did not carry it; spelled in place it cut `▸ steer window` to `▸ ste…` |
+| "The context bar paints its five slices with accent / ok / warn / crit / dim" (§3.3, A4) | **Never in code**: panel 1 drew every slice in `fg` since `38d317c`; measured from the *Before* mockup |
+| Baseline "292 passed" | `78f8a2f`'s count; `main` had 345 |
+| B1 green on its own, B2 after | **B1 cannot build alone** — the TUI reads the object |
+| `Cell.active`, `body: Body` singular (US-102) | The object cannot know what a surface has open; all eight bodies travel |
+| The prototype's `1:ctx` | The engine draws `1: ctx` |
+| `viewOfDigit` and the ledger's unfold (§3.5) | Gone with the ledger; the pane's other views stay on the view bar, as the non-goals say |

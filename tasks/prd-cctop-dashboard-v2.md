@@ -1,6 +1,6 @@
 # PRD: dashboard v2 — zones, meters and one colour language
 
-**Status:** v2.0 · 2026-09-16 — proposed, nothing implemented. v1.0 left the layout open between three directions; the dogfood and a pane-contract sweep closed it on **Console** (§3.6, §4).
+**Status:** v2.0 · 2026-09-16 — **shipped**: PR #8 rebase-merged and released as cctop v0.6.0 with plugin 0.7.0 (dashboard schema 2) the same day; `tasks/handoff-after-console.md` has the per-step commits, the two §6.2 defaults taken and what the plan got wrong (now `tasks/plan-dashboard-v2.md` §7); live checks 25–32 stay pending in `docs/verification/pane.md`; US-107 stays deferred. v1.0 left the layout open between three directions; the dogfood and a pane-contract sweep closed it on **Console** (§3.6, §4).
 **Target:** cctop ≥ 0.3.1 attached to Claude Code CLI 2.1.272 on macOS/Linux; the TUI and the function-hooks pane change together, `cctop query dashboard` changes with them.
 **Depends on:** `tasks/prd-cctop.md` v1.1 (the nine panels, the metrics registry, the query interface) · `tasks/prd-cctop-coach.md` v1.3 (the four lights, the nudge slot, the urgency model) · `tasks/prd-cctop-pane.md` v1.2 (the second front-end).
 **Supersedes:** `tasks/plan-dashboard-big-figures.md` §1 and §3 — the block-digit tiles and the nine-row ledger. The one-object rule of §2 (`dashboard::snapshot`, every surface draws it verbatim) is kept and extended.
