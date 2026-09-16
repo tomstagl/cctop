@@ -36,6 +36,7 @@ pub struct AgentsUi {
 
 pub fn open(state: &mut State) {
     state.overlay = Some(OWNER);
+    state.agents_view_opens += 1;
 }
 
 /// One line of the list: an agent, or a workflow run's group row.

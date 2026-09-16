@@ -441,6 +441,8 @@ pub struct State {
     pub events_ui: EventsUi,
     pub ledger_ui: crate::ui::ledger_view::LedgerUi,
     pub agents_ui: crate::ui::agents_view::AgentsUi,
+    /// Times the agents view was opened this session (A48's `acted`).
+    pub agents_view_opens: u64,
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,

@@ -384,6 +384,15 @@ tr:target td{background:var(--spot-soft)}
 <dt class="act">What to do</dt><dd>Watch it alongside burn rate if you're trying to keep a session inside a budget.</dd>
 <dt>Measured</dt><dd class="meta">USD · from Claude Code's own cost record · the transcript · the price table · ≈ when any part of it is estimated · <a href="../metrics.html#cost">how</a></dd>
 </dl></article>
+<article class="entry" id="cost_combined">
+<div class="mg">
+<h3>Combined cost</h3>
+</div><dl>
+<dt>What it means</dt><dd>The session's whole spend — Claude Code's own ledger, which already holds the subagents' earlier calls, plus what cctop priced after it on both the main transcript and the agents. Panel 2's headline.</dd>
+<dt class="act">What to do</dt><dd>Read the breakdown line under it: `main`/`ledger` and `since` add up to the headline, `agents` says how much of it went to agents. `a` drops them from the figure.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A48">A48 Agent waste</a> · <a href="advisor.html#A14">A14 Subagent model choice</a></dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · the subagent's transcript · the price table · Claude Code's own cost record · ≈ when any priced part is non-zero · <a href="../metrics.html#cost_combined">how</a></dd>
+</dl></article>
 <article class="entry" id="cost_by_model">
 <div class="mg">
 <h3>Cost by model</h3>
@@ -419,7 +428,7 @@ tr:target td{background:var(--spot-soft)}
 <h3>Agents cost</h3>
 </div><dl>
 <dt>What it means</dt><dd>Priced usage of every subagent transcript (incl. <code>subagents/workflows/**</code>) and its share of the session's total</dd>
-<dt>Measured</dt><dd class="meta">USD · from D6 · the price table · ≈ (priced from the table) · <a href="../metrics.html#agents_cost">how</a></dd>
+<dt>Measured</dt><dd class="meta">USD · from the subagent's transcript · the price table · ≈ (priced from the table) · <a href="../metrics.html#agents_cost">how</a></dd>
 </dl></article>
 <article class="entry" id="limit_weight">
 <div class="mg">

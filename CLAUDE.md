@@ -49,7 +49,7 @@ Useful for poking at behaviour without a live session: `--session` accepts a fix
 tail.rs (follow .jsonl) → transcript::Line (typed, tolerant; unknown types → Line::Unknown)
    → ui::State::apply (+ apply_hook / apply_status / apply_otel / apply_claude_home from the other collectors)
    → metrics/ (context, usage, cost, limits — derived on read)
-   → advisor::Engine (35 rules, one nudge slot)
+   → advisor::Engine (36 rules, one nudge slot)
    → coach.rs / dashboard.rs (the objects every surface draws verbatim)
    → ui/ (ratatui) · query.rs (JSON) · mcp.rs · plugin/hooks/views (the pane, via `cctop query`)
 ```
