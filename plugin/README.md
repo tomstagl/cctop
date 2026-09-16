@@ -28,6 +28,26 @@ claude plugin add tomstagl/cctop
 
 Restart Claude Code (or `/reload-plugins`) and type `/cctop`.
 
+### Claude Code versions
+
+The pane needs function hooks, which shipped in Claude Code **2.1.269**.
+Each plugin release is built against one Claude Code version — the
+`TESTED_WITH` the header's `hooks …` light shows — and runs on the releases
+between the last contract change and the next one:
+
+| plugin | tested with | runs on |
+|---|---|---|
+| 0.2.0 – 0.4.0 | 2.1.269 / 2.1.270 | 2.1.269 – 2.1.270 only (`$.clock.now()` became a Promise in 2.1.271, issue #3) |
+| 0.4.1 – 0.7.0 | 2.1.272 / 2.1.273 | 2.1.269 and later, as far as CI has seen (the module awaits every host call) |
+
+Function hooks are early access and change between Claude Code releases.
+CI checks the contract against the latest release daily
+(`scripts/check-contract.sh`), `cctop pane status` pairs the installed
+plugin with `claude --version`, and the module says at session start what
+it found (see "When the contract moves"). When a release breaks the pane,
+the fix is a plugin release; `claude plugin marketplace update cctop &&
+claude plugin update cctop@cctop`, then restart Claude Code.
+
 ## The pane
 
 With function hooks enabled, `/cctop-pane` docks the dashboard beside the
