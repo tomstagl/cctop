@@ -2,7 +2,7 @@
 //! `<projects>/<slug>/<sessionId>/subagents/agent-<id>.jsonl` with an
 //! `agent-<id>.meta.json` describing type, model and description.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc as std_mpsc;
 
@@ -10,7 +10,7 @@ use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 
 use crate::metrics::cost::parse_ts_ms;
-use crate::metrics::{Aggregate, Usage};
+use crate::metrics::Usage;
 use crate::tail::{parse_file, Tailer};
 use crate::transcript::{AssistantBlock, Line};
 
@@ -74,7 +74,19 @@ pub struct Agent {
     last_was_error_result: bool,
     last_assistant_ended_with_text: bool,
     last_stop_reason: Option<String>,
-    agg: Aggregate,
+    /// Distinct `message.id`s counted (an API response is several lines).
+    seen_ids: HashSet<String>,
+    /// The last message counted and the usage taken for it, so a later
+    /// line of the same message replaces the figure instead of adding to
+    /// it: subagent transcripts stream `output_tokens` and only the last
+    /// line of a message is complete (main transcripts never differ).
+    last_message: Option<(String, Usage)>,
+    /// A `fork-context-ref` line was seen and the parent's message is next.
+    expect_parent_message: bool,
+    /// The parent's launching response, replayed as the first assistant
+    /// message of a fork's transcript and billed to the parent: not one of
+    /// the fork's calls.
+    parent_message_id: Option<String>,
 }
 
 impl Agent {
@@ -102,7 +114,10 @@ impl Agent {
             last_was_error_result: false,
             last_assistant_ended_with_text: false,
             last_stop_reason: None,
-            agg: Aggregate::default(),
+            seen_ids: HashSet::new(),
+            last_message: None,
+            expect_parent_message: false,
+            parent_message_id: None,
         }
     }
 
@@ -154,16 +169,27 @@ impl Agent {
                 if v.get("type").and_then(|t| t.as_str()) == Some("fork-context-ref") =>
             {
                 self.inherited_context_len = v.get("contextLength").and_then(|c| c.as_u64());
+                self.expect_parent_message = true;
             }
+            Line::Assistant(a) if self.is_parent_message(&a.message.id) => {}
+            Line::Assistant(a) if a.is_api_error() => {}
             Line::Assistant(a) => {
-                let before = self.agg.api_calls();
-                self.agg.push(line);
-                if self.agg.api_calls() > before {
-                    self.api_calls += 1;
-                    self.usage.add(&Usage::from_api(&a.message.usage));
-                    if !a.message.model.is_empty() {
-                        self.model = a.message.model.clone();
+                let usage = Usage::from_api(&a.message.usage);
+                match &mut self.last_message {
+                    Some((id, counted)) if *id == a.message.id => {
+                        self.usage.sub(counted);
+                        self.usage.add(&usage);
+                        *counted = usage;
                     }
+                    _ if self.seen_ids.insert(a.message.id.clone()) => {
+                        self.api_calls += 1;
+                        self.usage.add(&usage);
+                        self.last_message = Some((a.message.id.clone(), usage));
+                        if !a.message.model.is_empty() {
+                            self.model = a.message.model.clone();
+                        }
+                    }
+                    _ => {}
                 }
                 let mut uses = 0;
                 for b in &a.message.content {
@@ -188,7 +214,6 @@ impl Agent {
                 self.last_was_error_result = false;
             }
             Line::User(u) => {
-                self.agg.push(line);
                 let results: Vec<_> = u.message.content.tool_results().collect();
                 if !results.is_empty() {
                     self.pending_tool_uses = self.pending_tool_uses.saturating_sub(results.len());
@@ -203,6 +228,18 @@ impl Agent {
         } else {
             self.finished_at = None;
         }
+    }
+
+    /// The first assistant message after `fork-context-ref` is the parent's
+    /// launching response (same `message.id` as in the parent transcript,
+    /// carrying the `Agent` tool_use whose id is the meta's `toolUseId`);
+    /// every line of it is skipped.
+    fn is_parent_message(&mut self, id: &str) -> bool {
+        if self.expect_parent_message {
+            self.expect_parent_message = false;
+            self.parent_message_id = Some(id.to_string());
+        }
+        self.parent_message_id.as_deref() == Some(id)
     }
 
     /// Edits the agent made (Edit / Write / MultiEdit / NotebookEdit).
@@ -598,10 +635,20 @@ mod tests {
             "meta says inherit; transcript wins"
         );
         assert_eq!(a.inherited_context_len, Some(32));
-        // Hand-counted: 14 assistant lines, 8 distinct responses, 1415 output tokens.
-        assert_eq!(a.api_calls, 8);
-        assert_eq!(a.usage.output, 1415);
-        assert!(a.usage.cache_read > 0);
+        // Hand-counted: 14 assistant lines after `fork-context-ref`, 8
+        // distinct message ids. The first (1 227 output tokens, one line) is
+        // the parent's launching response replayed into the fork and billed
+        // in the parent transcript, so 7 are the fork's own. Their output is
+        // 188 by each message's first line and 304 by its last: subagent
+        // transcripts stream `output_tokens` (line 5 of the fixture
+        // completes line 4's message with 118 against 2).
+        assert_eq!(a.api_calls, 7);
+        assert_eq!(a.usage.output, 304);
+        assert_eq!(a.usage.cache_read, 473_013);
+        assert_eq!(
+            a.tool_calls, 6,
+            "6 of its own; the `Agent` launch was the parent's"
+        );
         assert_eq!(a.state(i64::MAX), State::Done);
         assert!(a.finished_at.is_some());
         assert!(a.elapsed_ms(i64::MAX).unwrap() > 0);
@@ -644,6 +691,79 @@ mod tests {
         let mut b = Agent::new("y", Meta::default());
         b.push(&asst("m1", text, "null"));
         assert_eq!(b.state(t0), State::Done);
+    }
+
+    #[test]
+    fn streamed_message_keeps_its_last_line() {
+        // Subagent transcripts write one message over several lines with a
+        // growing `output_tokens`; only the last is complete.
+        let line = |id: &str, out: u64, block: &str| -> Line {
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{{"id":"{id}","model":"m","content":[{block}],"usage":{{"input_tokens":3,"cache_read_input_tokens":100,"output_tokens":{out}}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let thinking = r#"{"type":"thinking","thinking":"…"}"#;
+        let text = r#"{"type":"text","text":"done"}"#;
+        let mut a = Agent::new("x", Meta::default());
+        a.push(&line("m1", 2, thinking));
+        a.push(&line("m1", 40, text));
+        a.push(&line("m1", 118, text));
+        assert_eq!(a.api_calls, 1, "one id, one call");
+        assert_eq!(
+            a.usage.output, 118,
+            "the last line wins, nothing is added up"
+        );
+        assert_eq!(
+            a.usage.cache_read, 100,
+            "the shared fields are counted once"
+        );
+        assert_eq!(a.usage.input, 3);
+        a.push(&line("m2", 5, text));
+        assert_eq!(a.api_calls, 2);
+        assert_eq!(a.usage.output, 123);
+        assert_eq!(a.usage.cache_read, 200);
+    }
+
+    #[test]
+    fn fork_skips_the_parents_launching_message() {
+        // A fork's transcript opens with `fork-context-ref` and then the
+        // parent's own response (same `message.id` as in the parent
+        // transcript, carrying the `Agent` tool_use); the fork's calls start
+        // with the second message.
+        let asst = |id: &str, out: u64, block: &str| -> Line {
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{{"id":"{id}","model":"claude-opus-5","content":[{block}],"stop_reason":"end_turn","usage":{{"cache_read_input_tokens":60000,"output_tokens":{out}}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let launch = r#"{"type":"tool_use","id":"toolu_1","name":"Agent","input":{}}"#;
+        let text = r#"{"type":"text","text":"done"}"#;
+        let fork_ref =
+            Line::parse(r#"{"type":"fork-context-ref","parentSessionId":"p","contextLength":32}"#)
+                .unwrap();
+        let mut a = Agent::new("f", Meta::default());
+        a.push(&fork_ref);
+        a.push(&asst("parent", 1200, launch));
+        a.push(&asst("parent", 1227, launch));
+        assert_eq!(
+            a.api_calls, 0,
+            "every line of the parent's message is skipped"
+        );
+        assert_eq!(a.usage.output, 0);
+        assert_eq!(a.tool_calls, 0, "the `Agent` launch is the parent's call");
+        a.push(&asst("own", 7, text));
+        assert_eq!(a.api_calls, 1);
+        assert_eq!(a.usage.output, 7);
+        assert_eq!(a.usage.cache_read, 60000);
+        assert_eq!(a.model, "claude-opus-5");
+        assert_eq!(a.inherited_context_len, Some(32));
+
+        // Without `fork-context-ref` nothing is skipped.
+        let mut b = Agent::new("s", Meta::default());
+        b.push(&asst("first", 9, text));
+        assert_eq!(b.api_calls, 1);
+        assert_eq!(b.usage.output, 9);
     }
 
     #[test]

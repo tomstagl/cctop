@@ -266,7 +266,7 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | Metric | Unit | How it is computed | Sources | Caveats | Estimate |
 |---|---|---|---|---|---|
 | **Agent state** <a id="agent_state"></a> `agent_state` | enum | running while tool_uses are pending; done when the last response ends with text and no pending tool_use; failed when the last result is an error and nothing followed for 60 s | D2a D4 | — | never |
-| **Agent tokens** <a id="agent_tokens"></a> `agent_tokens` | tokens | Deduplicated usage of the agent's own transcript | D2a | — | never |
+| **Agent tokens** <a id="agent_tokens"></a> `agent_tokens` | tokens | Deduplicated usage of the agent's own transcript: the last line of each `message.id` (subagent transcripts stream `output_tokens`), without a fork's replayed first message (the parent's launching response, billed in the parent) | D2a | — | never |
 | **MCP memory** <a id="mcp_rss"></a> `mcp_rss` | bytes | RSS of the MCP server process | D5 | — | never |
 | **MCP calls** <a id="mcp_calls"></a> `mcp_calls` | count | Calls of tools named `mcp__<server>__*` | D2 | — | never |
 | **Workflow runs** <a id="agent_workflows"></a> `agent_workflows` | count | `subagents/workflows/<run>/journal.jsonl`: agents launched, finished (`result`) and `failed` per run; the run's agents are scanned like the top-level ones | D2a | — | never |

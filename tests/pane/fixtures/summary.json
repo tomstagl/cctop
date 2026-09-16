@@ -12,13 +12,13 @@
       "approx": true,
       "metric_id": "agents_cost",
       "unit": "ratio",
-      "value": 0.015007504334002386
+      "value": 0.012666611349004847
     },
     "usd": {
       "approx": true,
       "metric_id": "agents_cost",
       "unit": "USD",
-      "value": 0.15089129999999998
+      "value": 0.1270531
     }
   },
   "api_calls": {
@@ -34,7 +34,7 @@
         "approx": false,
         "metric_id": "attribution",
         "unit": "ratio",
-        "value": 0.7984581048413432
+        "value": 0.7999281383877861
       }
     },
     {
@@ -43,7 +43,7 @@
         "approx": false,
         "metric_id": "attribution",
         "unit": "ratio",
-        "value": 0.03624022006989923
+        "value": 0.03630694159092858
       }
     },
     {
@@ -52,7 +52,7 @@
         "approx": false,
         "metric_id": "attribution",
         "unit": "ratio",
-        "value": 0.01604819006437544
+        "value": 0.014236645839427034
       }
     },
     {
@@ -61,7 +61,7 @@
         "approx": false,
         "metric_id": "attribution",
         "unit": "ratio",
-        "value": 0.004084158140122785
+        "value": 0.004091677444440138
       }
     }
   ],
@@ -78,13 +78,13 @@
       "approx": false,
       "metric_id": "behaviour_flags",
       "unit": "%",
-      "value": 82.67876070704885
+      "value": 82.89990923824222
     },
     "subagent_pct": {
       "approx": false,
       "metric_id": "behaviour_flags",
       "unit": "%",
-      "value": 1.692973925508824
+      "value": 1.4300230269171714
     },
     "tips": [
       "83% of your usage was at >150k context"

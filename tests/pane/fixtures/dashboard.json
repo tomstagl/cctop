@@ -129,7 +129,7 @@
           "tone": "dim"
         },
         {
-          "text": "agents $0.15 (2 %)",
+          "text": "agents $0.13 (1 %)",
           "tone": "fg"
         },
         {
@@ -324,7 +324,7 @@
           "tone": "dim"
         },
         {
-          "text": "2 %",
+          "text": "1 %",
           "tone": "fg"
         },
         {
@@ -332,7 +332,7 @@
           "tone": "dim"
         },
         {
-          "text": "fork 0:42 548k",
+          "text": "fork 0:42 485k",
           "tone": "fg"
         },
         {
@@ -340,7 +340,7 @@
           "tone": "dim"
         },
         {
-          "text": "$0.15",
+          "text": "$0.13",
           "tone": "fg"
         }
       ]
