@@ -18,6 +18,21 @@ def block(name):
         raise SystemExit(f"README.md has no <!-- {name}:start --> block")
     return m.group(1).strip()
 
+def must_sub(pattern, repl, text, what, flags=0):
+    """A layout-coupled rewrite: zero matches means the README's mockup no
+    longer has the shape this script parses, and the page would describe a
+    UI that does not exist. Fail the build instead of publishing it."""
+    out, n = re.subn(pattern, repl, text, flags=flags)
+    if n == 0:
+        raise SystemExit(f"build-site: {what} matched nothing in README.md — the mockup changed; update this script")
+    return out
+
+def must_search(pattern, text, what, flags=0):
+    m = re.search(pattern, text, flags)
+    if not m:
+        raise SystemExit(f"build-site: {what} not found in README.md — the mockup changed; update this script")
+    return m.group(1)
+
 def inline_md(s):
     s = html.escape(s, quote=False)
     s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
@@ -33,22 +48,23 @@ install = re.sub(r"(#.*)$", r'<span class="c">\1</span>', html.escape(install), 
 themes = []
 for path in sorted(glob.glob("themes/*.toml")):
     kv = dict(re.findall(r'^(\w+)\s*=\s*"([^"]+)"', pathlib.Path(path).read_text(), re.M))
+    for k in ("name", "bg", "fg", "dim", "accent", "ok", "warn", "crit", "border"):
+        if k not in kv:
+            raise SystemExit(f"build-site: {path} has no `{k}`")
     sw = "".join(f'<i style="background:{kv[k]}"></i>' for k in ("accent", "ok", "warn", "crit"))
     bar = f'<span class="bar" style="color:{kv["accent"]}">▇▇▇▇▇<span style="color:{kv["dim"]}">▁▁▁</span></span>'
     themes.append(f'<div class="theme" style="background:{kv["bg"]};color:{kv["fg"]};border-color:{kv["border"]}">{kv["name"]}{bar}{sw}</div>')
 # mockup: the fenced block after "## What it looks like" (the terminal view):
 # the ledger's digits become callouts that the legend below repeats, the four
 # lights' names and the nudge are marked, the key line is dimmed
-m = re.search(r"## What it looks like\n\n```\n(.*?)\n```", readme, re.S)
-mockup = html.escape(m.group(1)) if m else ""
-mockup = re.sub(r"^ (\d) ([A-Z][a-z]+) ", r' <b class="co">\1</b> <span class="t">\2</span> ', mockup, flags=re.M)
-mockup = re.sub(r"([○◐●◆]) (context|cache|limits|rework)\b", r'\1 <span class="t">\2</span>', mockup)
-mockup = re.sub(r"^( ▸ .*)$", r'<b class="nudge">\1</b>', mockup, flags=re.M)
-mockup = re.sub(r"^( \?help .*)$", r'<span class="d">\1</span>', mockup, flags=re.M)
+mockup = html.escape(must_search(r"## What it looks like\n\n```\n(.*?)\n```", readme, "the terminal mockup fence", re.S))
+mockup = must_sub(r"^ (\d) ([A-Z][a-z]+) ", r' <b class="co">\1</b> <span class="t">\2</span> ', mockup, "the ledger digits", re.M)
+mockup = must_sub(r"([○◐●◆]) (context|cache|limits|rework)\b", r'\1 <span class="t">\2</span>', mockup, "the four lights' names")
+mockup = must_sub(r"^( ▸ .*)$", r'<b class="nudge">\1</b>', mockup, "the nudge line", re.M)
+mockup = must_sub(r"^( \?help .*)$", r'<span class="d">\1</span>', mockup, "the footer key line", re.M)
 # panel mockup: the fenced block under "**Panel view.**" in the same section
-m = re.search(r"\*\*Panel view\.\*\*.*?\n```\n(.*?)\n```", readme, re.S)
-panel_mockup = html.escape(m.group(1)) if m else ""
-panel_mockup = re.sub(r"╭(coach|[○◐●] \w+)", r'╭<span class="t">\1</span>', panel_mockup)
+panel_mockup = html.escape(must_search(r"\*\*Panel view\.\*\*.*?\n```\n(.*?)\n```", readme, "the panel-view fence", re.S))
+panel_mockup = must_sub(r"╭(coach|[○◐●] \w+)", r'╭<span class="t">\1</span>', panel_mockup, "the panel-view card title")
 
 # The demo block needs assets produced by `make demo`; drop it until they exist.
 if not pathlib.Path("site/assets/two-pane.png").exists():
