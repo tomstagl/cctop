@@ -208,7 +208,7 @@
     {
       "detail": [
         {
-          "text": "elapsed 0:00 · 0 api calls · 0 tool calls",
+          "text": "turn elapsed 0:00 · 0 api calls · 0 tool calls",
           "tone": "dim"
         }
       ],

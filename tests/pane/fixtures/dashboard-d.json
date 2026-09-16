@@ -226,7 +226,7 @@
     {
       "detail": [
         {
-          "text": "elapsed 3:15 · 4 api calls · 3 tool calls",
+          "text": "turn elapsed 3:15 · 4 api calls · 3 tool calls",
           "tone": "dim"
         },
         {

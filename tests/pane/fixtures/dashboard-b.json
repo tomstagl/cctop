@@ -218,7 +218,7 @@
     {
       "detail": [
         {
-          "text": "elapsed 8h 40m · 4 api calls · 4 tool calls",
+          "text": "turn elapsed 8h 40m · 4 api calls · 4 tool calls",
           "tone": "dim"
         }
       ],

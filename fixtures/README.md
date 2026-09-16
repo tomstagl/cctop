@@ -77,6 +77,19 @@ Layout mirrors `~/.claude`:
   team file still agree, names each teammate file by its hashed session id,
   and rewrites `cwd` like every path.
 
+- `session-e.jsonl` — the reopened-turn fixture (66 lines, 2.1.272): the
+  first 66 lines of the session in the screenshot that opened
+  `tasks/prd-cctop-dashboard-v2.md` §3.2, a point in time rather than a
+  session (the anonymiser's `--lines`). The typed prompt at line 5 got a
+  `stop_sequence` reply with no usage 150 ms later (the session needed
+  `/login`), Claude Code closed it with a 205 ms `turn_duration` (line 20),
+  the person ran `/login` (lines 25–26) and the harness re-drove the same
+  prompt with no new `user` line: six responses, five tool calls, under the
+  turn that had "ended". Read whole it is the moment the header said
+  `EXPLORING · silent 1:50` while row 4 said `elapsed 0:00`; read at
+  `--lines 20` it is the closed attempt, at `--lines 27` the first response
+  that reopens the turn.
+
 To rebuild `session-b.jsonl` from the same sources:
 
 ```
@@ -111,4 +124,12 @@ for f in raw/d/teammates/*.jsonl; do
   python3 scripts/anonymise-transcript.py "$f" fixtures/session-d/teammates/ --max-str 2000 --team <lead id>
 done
 python3 scripts/anonymise-transcript.py raw/d.team.json fixtures/session-d.team.json --team <lead id>
+```
+
+To rebuild `session-e.jsonl` (the source is any session whose first
+`turn_duration` is followed by responses before the next typed prompt —
+a `/login` between them is the shape):
+
+```
+python3 scripts/anonymise-transcript.py <session> fixtures/session-e.jsonl --max-str 2000 --lines 66
 ```
