@@ -39,8 +39,15 @@ Page *Directions* (added after the dogfood):
 - `Console.dc.html` — direction 3, *focus*. Three fixed header rows plus one
   body that fills the rest; a digit swaps the body.
 
-All three carry the same session and the same readings — the dogfood validated
-the data, so only the rendering varies between them.
+All three are clickable prototypes carrying the same session and the same
+readings — the dogfood validated the data, so only the rendering varies. Each
+one makes its *characteristic* interaction real rather than all of them:
+Instrument opens panels from row labels, Ledger sorts and filters in place,
+Console swaps its body. Underlined text inside a terminal is a click target.
+
+`check-grid.mjs` measures `Main.dc.html` only. The three prototypes are checked
+by driving every click handler at both widths and re-measuring after each state
+change — see the commit that added them for the harness.
 
 ## Scripts
 
