@@ -331,7 +331,9 @@ tr:target td{background:var(--spot-soft)}
 <div class="mg">
 <h3>Context anatomy</h3>
 </div><dl>
-<dt>What it means</dt><dd>The stacked bar: prefix (first call's cache read + write) · tool inputs (chars the model wrote / 4) · tool results (<code>tokens_to_ctx</code>) · retained thinking · harness (attachments, <code>rendered</code> chars / 4) · prose (text blocks / 4) · unattributed (the rest of the size), summed since the last context boundary</dd>
+<dt>What it means</dt><dd>What the context is made of, drawn as a bar whose colour is a list of levers rather than a chart of what happened. The slices run in the order of what you can do about them, and the hue ramps from dim to bright in the theme's own accent: the dim end is the prefix and the harness, fixed for this session; the middle is retained thinking, which the next context boundary drops whether or not anyone acts; the bright end is tool inputs, tool results and prose — the part you can move this afternoon, and results is the biggest of them. Amber and red are kept for thresholds and mean nothing here; adjacent slices alternate the fill glyph so the order still reads on sixteen colours, with <code>NO_COLOR</code>, and in the pane.</dd>
+<dt class="act">What to do</dt><dd>Read the bright block first. If it is mostly results, hand the next read-heavy stretch to an Explore subagent — the same work returns a few dozen tokens instead of tens of thousands. The dim block only changes between sessions: trim CLAUDE.md, drop unused MCP servers.</dd>
+<dt>Advisor</dt><dd class="meta"><a href="advisor.html#A25">A25 Exploring in the main context</a> · <a href="advisor.html#A17">A17 Oversized prefix</a></dd>
 <dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ whenever a slice rests on chars / 4 or an attachment fallback · <a href="../metrics.html#context_anatomy">how</a></dd>
 </dl></article>
 <article class="entry" id="harness_tokens">

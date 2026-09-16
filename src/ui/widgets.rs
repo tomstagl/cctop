@@ -26,8 +26,13 @@ pub fn gauge(t: &Theme, ratio: f64, width: usize, style: Style) -> Vec<Span<'sta
 }
 
 /// A stacked bar of `width` cells: `parts` are `(tokens, style)` slices of
-/// `total`, drawn left to right; the rest of `total` is empty. Segments
-/// alternate the fill glyph with a dim fill so they read without colour.
+/// `total`, drawn left to right; the rest of `total` is empty. Adjacent
+/// *drawn* segments alternate the fill glyph with the half glyph so they
+/// read without colour: the alternation counts emitted segments, never the
+/// input index, so a slice that gets no cell (a session with no extended
+/// thinking between two others) does not leave its neighbours in the same
+/// glyph — the pane has no colour ramp and depends on this alone (PRD
+/// dashboard-v2 §3.6, FR-9).
 pub fn stacked_bar(
     t: &Theme,
     parts: &[(u64, Style)],
@@ -40,18 +45,20 @@ pub fn stacked_bar(
         return vec![Span::styled(t.gauge_empty().repeat(width), t.dim())];
     }
     let mut acc = 0u64;
-    for (i, (tokens, style)) in parts.iter().enumerate() {
+    let mut emitted = 0usize;
+    for (tokens, style) in parts {
         acc += tokens;
         let end = ((acc as f64 / total as f64) * width as f64).round() as usize;
         let cells = end.min(width).saturating_sub(used);
         if cells == 0 {
             continue;
         }
-        let glyph = if i % 2 == 0 {
+        let glyph = if emitted % 2 == 0 {
             t.gauge_fill()
         } else {
             t.gauge_half()
         };
+        emitted += 1;
         out.push(Span::styled(glyph.repeat(cells), *style));
         used += cells;
     }
@@ -103,6 +110,44 @@ mod tests {
             ["▇▇", "▆▆▆", "▁▁▁▁▁"]
         );
         assert_eq!(stacked_bar(&t, &[], 0, 4)[0].content, "▁▁▁▁");
+        // A zero-cell middle slice does not consume an alternation: the
+        // two slices around it still differ by glyph (the FR-9 test).
+        let mono = Theme::default().for_caps(crate::theme::Caps {
+            truecolor: false,
+            colors256: false,
+            mono: true,
+            ascii: false,
+        });
+        let s = stacked_bar(
+            &mono,
+            &[
+                (50, Style::default()),
+                (0, Style::default()),
+                (50, Style::default()),
+            ],
+            100,
+            10,
+        );
+        let drawn: Vec<&str> = s.iter().map(|x| x.content.as_ref()).collect();
+        assert_eq!(drawn, ["▇▇▇▇▇", "▆▆▆▆▆"]);
+        assert!(
+            s.iter().all(|x| x.style.fg.is_none()),
+            "the bar adds no colour of its own"
+        );
+        // And a slice too thin for a cell in a wide set neither.
+        let s = stacked_bar(
+            &mono,
+            &[
+                (40, Style::default()),
+                (1, Style::default()),
+                (40, Style::default()),
+                (19, Style::default()),
+            ],
+            100,
+            10,
+        );
+        let drawn: Vec<&str> = s.iter().map(|x| x.content.as_ref()).collect();
+        assert_eq!(drawn, ["▇▇▇▇", "▆▆▆▆", "▇▇"]);
         assert_eq!(band_style(&t, 0.5, 0.6, 0.8).fg, Some(t.ok));
         assert_eq!(band_style(&t, 0.7, 0.6, 0.8).fg, Some(t.warn));
         assert_eq!(band_style(&t, 0.9, 0.6, 0.8).fg, Some(t.crit));

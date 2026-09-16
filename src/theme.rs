@@ -79,6 +79,12 @@ pub struct Theme {
     pub border: Color,
     pub border_focused: Color,
     pub ascii: bool,
+    /// What `for_caps` reduced to; `series` reduces the ramp the same way.
+    pub caps: Caps,
+    /// The file's `bg` and `accent` before reduction: the series ramp is
+    /// derived from these (a reduced colour may be an index with no RGB).
+    pub source_bg: Color,
+    pub source_accent: Color,
 }
 
 pub const BUNDLED: &[(&str, &str)] = &[
@@ -192,18 +198,23 @@ fn to_256(c: Color) -> Color {
 impl Theme {
     pub fn parse(text: &str) -> Option<Theme> {
         let f: ThemeFile = toml::from_str(text).ok()?;
+        let bg = parse_color(&f.bg)?;
+        let accent = parse_color(&f.accent)?;
         Some(Theme {
             name: f.name,
-            bg: parse_color(&f.bg)?,
+            bg,
             fg: parse_color(&f.fg)?,
             dim: parse_color(&f.dim)?,
-            accent: parse_color(&f.accent)?,
+            accent,
             ok: parse_color(&f.ok)?,
             warn: parse_color(&f.warn)?,
             crit: parse_color(&f.crit)?,
             border: parse_color(&f.border)?,
             border_focused: parse_color(&f.border_focused)?,
             ascii: false,
+            caps: Caps::full(),
+            source_bg: bg,
+            source_accent: accent,
         })
     }
 
@@ -250,19 +261,24 @@ impl Theme {
             .or_else(|| Theme::bundled(name))
     }
 
-    /// Reduce colours to what the terminal supports.
+    /// One colour as the terminal can show it.
+    fn reduce(caps: Caps, c: Color) -> Color {
+        if caps.mono {
+            Color::Reset
+        } else if caps.truecolor {
+            c
+        } else if caps.colors256 {
+            to_256(c)
+        } else {
+            to_ansi16(c)
+        }
+    }
+
+    /// Reduce colours to what the terminal supports. The file's `bg` and
+    /// `accent` are kept aside for `series`.
     pub fn for_caps(mut self, caps: Caps) -> Theme {
-        let reduce = |c: Color| -> Color {
-            if caps.mono {
-                Color::Reset
-            } else if caps.truecolor {
-                c
-            } else if caps.colors256 {
-                to_256(c)
-            } else {
-                to_ansi16(c)
-            }
-        };
+        let reduce = |c: Color| Theme::reduce(caps, c);
+        self.caps = caps;
         self.bg = if caps.mono {
             Color::Reset
         } else {
@@ -278,6 +294,28 @@ impl Theme {
         self.border_focused = reduce(self.border_focused);
         self.ascii = caps.ascii;
         self
+    }
+
+    /// The composition ramp: `n` colours from the theme's own `accent`,
+    /// step 0 what the person cannot change, step `n − 1` what they can
+    /// (`crate::series`, PRD dashboard-v2 §5.2). Derived from the
+    /// unreduced accent and background, then reduced like every other
+    /// colour — on 16 colours and under `NO_COLOR` steps may coincide, and
+    /// the alternating fill glyph carries the order alone (FR-9). A theme
+    /// whose `bg` or `accent` is a named colour has no RGB to derive from
+    /// and gets the accent at every step.
+    pub fn series(&self, n: usize) -> Vec<Color> {
+        let rgb = |c: Color| match c {
+            Color::Rgb(r, g, b) => Some((r, g, b)),
+            _ => None,
+        };
+        match (rgb(self.source_bg), rgb(self.source_accent)) {
+            (Some(bg), Some(accent)) => crate::series::ramp(bg, accent, n)
+                .into_iter()
+                .map(|(r, g, b)| Theme::reduce(self.caps, Color::Rgb(r, g, b)))
+                .collect(),
+            _ => vec![self.accent; n],
+        }
     }
 
     pub fn dim(&self) -> Style {
@@ -514,6 +552,80 @@ mod render_tests {
             colours_used(&buf) >= 4,
             "truecolour theme uses several fg colours"
         );
+    }
+
+    /// `Theme::series` is derived from the file's colours, not the reduced
+    /// ones, and reduced like the rest (PRD dashboard-v2 US-105). Measured
+    /// on the six bundled themes: 256 colours keep three distinct steps on
+    /// every theme; 16 colours keep the fixed step apart from the rest and
+    /// merge the two bright ones on five of six (nord keeps three) — so the
+    /// 16-colour terminal is declared glyph-only beyond step 0, which the
+    /// alternating fill in `stacked_bar` carries; `NO_COLOR` is glyph-only
+    /// entirely.
+    #[test]
+    fn series_survives_reduction_as_declared() {
+        let distinct = |v: &[Color]| {
+            v.iter()
+                .map(|c| format!("{c:?}"))
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+        };
+        for (name, _) in BUNDLED {
+            let t = Theme::bundled(name).unwrap();
+            let full = t.clone().for_caps(Caps::full()).series(3);
+            assert!(full.iter().all(|c| matches!(c, Color::Rgb(..))), "{name}");
+            assert_eq!(distinct(&full), 3, "{name} truecolor");
+            let c256 = t
+                .clone()
+                .for_caps(Caps {
+                    truecolor: false,
+                    colors256: true,
+                    mono: false,
+                    ascii: false,
+                })
+                .series(3);
+            assert!(
+                c256.iter().all(|c| matches!(c, Color::Indexed(_))),
+                "{name}"
+            );
+            assert_eq!(distinct(&c256), 3, "{name} 256: {c256:?}");
+            let c16 = t
+                .clone()
+                .for_caps(Caps {
+                    truecolor: false,
+                    colors256: false,
+                    mono: false,
+                    ascii: false,
+                })
+                .series(3);
+            assert_eq!(c16[0], Color::DarkGray, "{name} 16: {c16:?}");
+            assert!(distinct(&c16) >= 2, "{name} 16: {c16:?}");
+            let mono = t
+                .for_caps(Caps {
+                    truecolor: true,
+                    colors256: true,
+                    mono: true,
+                    ascii: false,
+                })
+                .series(3);
+            assert!(mono.iter().all(|c| *c == Color::Reset), "{name} NO_COLOR");
+        }
+        // A reduced theme still derives from the file's accent: the ramp of
+        // a 16-colour theme is not the ramp of `Color::Cyan`.
+        let t = Theme::bundled("default-dark").unwrap().for_caps(Caps {
+            truecolor: false,
+            colors256: false,
+            mono: false,
+            ascii: false,
+        });
+        assert_eq!(t.accent, Color::LightCyan);
+        assert_eq!(t.source_accent, Color::Rgb(0x4C, 0xC2, 0xC2));
+        // A theme with a named colour has nothing to derive from.
+        let named = Theme {
+            source_accent: Color::Cyan,
+            ..Theme::default()
+        };
+        assert_eq!(named.series(3), vec![named.accent; 3]);
     }
 
     #[test]
