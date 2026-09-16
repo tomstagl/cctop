@@ -150,6 +150,13 @@
     "claude-haiku-4-5-20251001": 0.001305,
     "claude-opus-5": 18.7446
   },
+  "cost_combined": {
+    "approx": false,
+    "metric_id": "cost_combined",
+    "source": "ledger",
+    "unit": "USD",
+    "value": 18.745904999999997
+  },
   "cost_gradient": {
     "calls_per_turn": 15.0,
     "cold": false,

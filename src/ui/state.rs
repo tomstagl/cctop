@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::metrics::cost::Cost;
 use crate::metrics::{Aggregate, CostTracker, Pricing};
 use crate::tools;
 use crate::transcript::Line;
@@ -287,6 +288,30 @@ pub struct CacheClock {
     pub remaining_ms: i64,
     /// From the last API call + observed TTL rather than the shim.
     pub approx: bool,
+}
+
+/// The session's money as Panel 2, dashboard row 2, `cctop report` and
+/// `cctop query` print it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CostBreakdown {
+    /// Combined (main + agents after the ledger) with `a` on; `current()`
+    /// with it off.
+    pub headline: Cost,
+    /// Always the combined figure (`×N$` compares it with the combined
+    /// 7-day baseline whatever `a` says).
+    pub combined: Cost,
+    /// Claude Code's `cost-state.totalCostUSD`, when one exists.
+    pub ledger: Option<f64>,
+    /// Priced after the ledger's moment: main responses, and the agents'
+    /// calls when they are included; every priced part without a ledger.
+    pub since: Option<Cost>,
+    /// Every agent call priced — the whole session's agent spend, part of
+    /// which the ledger already holds.
+    pub agents: Option<Cost>,
+    /// `agents ÷ combined`.
+    pub agents_share: f64,
+    /// Any agent has usage: the breakdown line is drawn.
+    pub any_agents: bool,
 }
 
 /// What the main transcript says about one subagent: its launch and its
@@ -1764,7 +1789,10 @@ impl State {
         v
     }
 
-    /// Subagent spend: `(usd, share of the session)` when priceable.
+    /// Subagent spend: `(usd, share of the session)` when priceable — the
+    /// whole session's agent calls priced, over the combined figure (the
+    /// ledger holds the agents' earlier calls, so the share is not derived
+    /// by adding them to it again).
     pub fn agents_cost(&self) -> Option<(f64, f64)> {
         let pricing = self.cost.pricing();
         let mut usd = 0.0;
@@ -1778,9 +1806,41 @@ impl State {
         if !any {
             return None;
         }
-        let main = self.cost.current().map(|c| c.usd).unwrap_or(0.0);
-        let total = main + usd;
+        let total = self
+            .cost
+            .combined(self.agents.values())
+            .map(|c| c.usd)
+            .unwrap_or(usd);
         Some((usd, if total > 0.0 { usd / total } else { 0.0 }))
+    }
+
+    /// The session's money in the parts the surfaces print (agent PRD
+    /// §4.2): the headline (combined, or main-only with `a` off), the
+    /// ledger, what was priced after it, and the agents' whole spend.
+    pub fn cost_breakdown(&self) -> Option<CostBreakdown> {
+        let include = self.tokens_include_agents;
+        let combined = self.cost.combined(self.agents.values());
+        let headline = if include {
+            combined
+        } else {
+            self.cost.current()
+        }?;
+        let agents_after = self.cost.agents_after(self.agents.values());
+        let since = match (self.cost.since(), agents_after.filter(|_| include)) {
+            (Some(m), Some(a)) => Some(m.plus(a)),
+            (Some(m), None) => Some(m),
+            (None, a) => a,
+        };
+        let agents = self.agents_cost();
+        Some(CostBreakdown {
+            headline,
+            combined: combined.unwrap_or(headline),
+            ledger: self.cost.authoritative.as_ref().map(|c| c.total_cost_usd),
+            since,
+            agents: agents.map(|(usd, _)| Cost::priced(usd)),
+            agents_share: agents.map(|(_, s)| s).unwrap_or(0.0),
+            any_agents: self.agents_usage().total() > 0,
+        })
     }
 
     /// `/usage`'s behaviour flags for this session.

@@ -258,15 +258,22 @@ impl CostTracker {
         }
     }
 
-    /// The session's whole spend: `current()` plus the priced calls of its
-    /// subagents after the ledger's moment. The ledger already holds the
-    /// agents' calls up to that moment (`harness_facts::cost_state`), so a
-    /// call counts only when its own line timestamp is later; with no
-    /// ledger every agent call counts. With no agents this is `current()`
-    /// exactly. A call on a model the table does not know adds nothing.
-    pub fn combined<'a>(&self, agents: impl IntoIterator<Item = &'a Agent>) -> Option<Cost> {
-        let mut agents_usd = 0.0;
-        let mut any_agent = false;
+    /// The priced main-transcript responses after the ledger (all of them
+    /// without one); `None` when there are none.
+    pub fn since(&self) -> Option<Cost> {
+        let any = self.since.values().any(|u| u.total() > 0);
+        any.then(|| Cost::priced(self.since_usd()))
+    }
+
+    /// The priced calls of the agents after the ledger's moment. The
+    /// ledger already holds the agents' calls up to that moment
+    /// (`harness_facts::cost_state`), so a call counts only when its own
+    /// line timestamp is later; with no ledger every agent call counts. A
+    /// call on a model the table does not know adds nothing; `None` when
+    /// nothing was priced.
+    pub fn agents_after<'a>(&self, agents: impl IntoIterator<Item = &'a Agent>) -> Option<Cost> {
+        let mut usd = 0.0;
+        let mut any = false;
         for a in agents {
             for c in &a.calls {
                 let after = match (self.authoritative_at_ms, c.at_ms) {
@@ -277,17 +284,23 @@ impl CostTracker {
                 if !after {
                     continue;
                 }
-                if let Some(usd) = self.pricing.estimate(&c.usage, &c.model) {
-                    agents_usd += usd;
-                    any_agent = true;
+                if let Some(c) = self.pricing.estimate(&c.usage, &c.model) {
+                    usd += c;
+                    any = true;
                 }
             }
         }
-        match self.current() {
-            Some(c) if any_agent => Some(c.plus(Cost::priced(agents_usd))),
-            Some(c) => Some(c),
-            None if any_agent => Some(Cost::priced(agents_usd)),
-            None => None,
+        any.then(|| Cost::priced(usd))
+    }
+
+    /// The session's whole spend: `current()` plus `agents_after`. With no
+    /// agents this is `current()` exactly.
+    pub fn combined<'a>(&self, agents: impl IntoIterator<Item = &'a Agent>) -> Option<Cost> {
+        match (self.current(), self.agents_after(agents)) {
+            (Some(c), Some(a)) => Some(c.plus(a)),
+            (Some(c), None) => Some(c),
+            (None, Some(a)) => Some(a),
+            (None, None) => None,
         }
     }
 
