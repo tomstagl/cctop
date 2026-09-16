@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cctop dashboard v2 — three directions</title>
+<meta name="description" content="Clickable prototypes of the three cctop dashboard redesign directions: Instrument, Ledger and Console.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+  :root{--bg:#0A0E12;--card:#121820;--ink:#D6DEE8;--mute:#8FA0B4;--dim:#6E7F93;--edge:#1E2731;--acc:#4CC2C2}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Condensed",ui-sans-serif,system-ui,sans-serif;
+       padding:28px clamp(14px,3vw,34px) 48px}
+  .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  .m{font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  h1{font-size:23px;font-weight:600;margin:0}
+  .sub{font-size:14.5px;line-height:1.5;color:var(--mute);max-width:880px;text-wrap:pretty;margin:0}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tab{font-family:"IBM Plex Mono",monospace;font-size:13px;padding:9px 16px;border-radius:6px;cursor:pointer;
+       border:1px solid #2E3B49;background:transparent;color:var(--mute)}
+  .tab[aria-selected=true]{background:var(--acc);border-color:var(--acc);color:#0E1318;font-weight:600}
+  .bar{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  .grp{display:flex;align-items:center;gap:8px}
+  .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .chip{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:6px 12px;border-radius:5px;cursor:pointer;
+        border:1px solid #2E3B49;background:transparent;color:var(--mute)}
+  .chip[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:#0E1318}
+  .state{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:6px 12px;border-radius:5px;background:var(--card);color:#A6B4C4}
+  #term{border-radius:7px;border:1px solid #1A222B;padding:13px 15px;background:#0E1318;
+        font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+        font-size:12.5px;line-height:18px;width:max-content;max-width:100%;overflow-x:auto}
+  #term .r{white-space:pre;font-variant-ligatures:none}
+  #term .hit{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  #term .hit:hover{background:#1B2833}
+  .hint{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#5D6B7D;line-height:1.6}
+  .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  @media(max-width:820px){.cards{grid-template-columns:minmax(0,1fr)}}
+  .c{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:6px;background:var(--card)}
+  .c h2{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;margin:0}
+  .c p{font-size:13.5px;line-height:1.5;color:#A6B4C4;margin:0;text-wrap:pretty}
+  footer{font-size:12.5px;line-height:1.6;color:var(--dim);border-top:1px solid var(--edge);padding-top:14px}
+  footer code{font-family:"IBM Plex Mono",monospace;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1>cctop dashboard v2 — three directions</h1>
+    <p class="sub">Clickable prototypes. All three carry the same session and the same readings — the dogfood validated the data, so only the rendering varies. Underlined text inside the terminal is a click target; digit keys, <span class="m">Esc</span>, <span class="m">w</span> and <span class="m">s</span> work too.</p>
+  </div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+
+  <div class="bar">
+    <div class="grp"><span class="lab">width</span><div id="widths" style="display:flex;gap:6px"></div></div>
+    <div class="grp"><span class="lab">state</span><span class="state" id="state"></span>
+      <button class="chip" id="reset" type="button">reset</button></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div id="term"></div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <div class="cards">
+    <div class="c" style="border-left:3px solid #5FC77E"><h2 style="color:#5FC77E">what it fixes</h2><p id="fixes"></p></div>
+    <div class="c" style="border-left:3px solid #E5605E"><h2 style="color:#E5605E">what it costs</h2><p id="costs"></p></div>
+    <div class="c" style="border-left:3px solid #4CC2C2"><h2 style="color:#4CC2C2">pick this if</h2><p id="pick"></p></div>
+  </div>
+
+  <footer>
+    Generated from <code>tasks/design-dashboard-v2/</code> by <code>build-prototype.py</code> — edit the renderers there, not this file.
+    The same screens are on the design canvas, page <em>Directions</em>. Every row is measured on the character grid;
+    <code>node drive-protos.mjs</code> drives every click target at both widths and re-checks it.
+  </footer>
+</div>
+
+<script>
+var P = { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644',
+          s0:'#516A69', s1:'#69AAAA', s2:'#7EF0F0' };
+function sg(t, r, b, on) { return { t: String(t), r: r || 'fg', b: !!b, on: on }; }
+function lw(l) { var n = 0; for (var i = 0; i < l.length; i++) n += Array.from(l[i].t).length; return n; }
+function at(l, c, r) { var n = c - lw(l); if (n > 0) l.push(sg(' '.repeat(n), r || 'dim')); return l; }
+function rt(l, c, txt, role, b) { at(l, c - Array.from(String(txt)).length); l.push(sg(txt, role, b)); return l; }
+function sp(l, right, cols) { var n = cols - lw(l) - lw(right); l.push(sg(' '.repeat(n > 0 ? n : 1), 'dim')); for (var i = 0; i < right.length; i++) l.push(right[i]); return l; }
+function fit(l, cols) { var o = [], u = 0; for (var i = 0; i < l.length; i++) { if (u >= cols) break; var a = Array.from(l[i].t);
+  if (u + a.length <= cols) { o.push(l[i]); u += a.length; } else { o.push({ t: a.slice(0, Math.max(0, cols - u - 1)).join('') + '…', r: l[i].r, b: l[i].b }); u = cols; } } return o; }
+function rule(cols, role) { return [sg('─'.repeat(cols), role || 'border')]; }
+function bar(pct, w, role) { var f = Math.max(0, Math.min(w, Math.round(pct / 100 * w))); if (f === 0 && pct > 0) f = 1; if (f === w && pct < 100) f = w - 1;
+  return [sg('▇'.repeat(f), role || 'ok'), sg('▁'.repeat(w - f), 'border')]; }
+// the context bar, stacked by agency: fixed / transient / yours, alternating glyphs
+function ctx(w) { var filled = Math.round(0.35 * w), a = Math.round(filled * 65 / 238), b = Math.round(filled * 42 / 238), c = filled - a - b;
+  return [sg('▇'.repeat(a), 's0'), sg('▆'.repeat(b), 's1'), sg('▇'.repeat(c), 's2'), sg('▁'.repeat(w - filled), 'border')]; }
+function paint(rows, cols) { return rows.map(function (l) { l = fit(l, cols);
+  if (!l.length) return [{ t: ' '.repeat(cols), c: P.dim, w: '400', cur: 'default', ul: 'none' }];
+  var out = l.map(function (s) { return { t: s.t, c: P[s.r] || P.fg, w: s.b ? '600' : '400', on: s.on, cur: s.on ? 'pointer' : 'default', ul: s.on ? 'underline dotted' : 'none' }; });
+  var n = cols - l.reduce(function (x, s) { return x + Array.from(s.t).length; }, 0);
+  if (n > 0) out.push({ t: ' '.repeat(n), c: P.dim, w: '400', cur: 'default', ul: 'none' });
+  return out; }); }
+
+// Shared content for every view, used as a framed panel (1, 2) or as the body (3).
+function bContext(cols) {
+  var wide = cols >= 100, bw = wide ? 24 : 14;
+  var sl = [['prefix', 44, 's0', 'system prompt · CLAUDE.md · tool schemas — fixed this session'],
+            ['harness', 21, 's0', 'reminders and injected files Claude Code adds per turn'],
+            ['thinking', 42, 's1', 'retained reasoning — dropped at the next boundary'],
+            ['inputs', 49, 's2', 'what Claude wrote to call tools — Bash text dominates'],
+            ['results', 82, 's2', 'what tools returned — the lever you actually control']];
+  var rows = [[sg('  350k', 'fg', true), sg(' of ', 'dim'), sg('1.00M', 'fg'), sg('   autocompact ', 'dim'), sg('967k', 'fg'), sg('   ', 'dim'), sg('616k', 'ok', true), sg(' left', 'dim'), sg('   +0/turn', 'dim')], []];
+  for (var i = 0; i < sl.length; i++) {
+    var l = []; at(l, 2); l.push(sg(sl[i][0], 'fg')); rt(l, 16, sl[i][1] + 'k', 'fg', true);
+    at(l, 18); var f = Math.round(sl[i][1] / 82 * bw);
+    l.push(sg((i % 2 === 0 ? '▇' : '▆').repeat(f), sl[i][2])); l.push(sg('▁'.repeat(bw - f), 'border'));
+    if (wide) { at(l, 20 + bw + 2); l.push(sg(sl[i][3], 'dim')); }
+    rows.push(l);
+  }
+  rows.push([]);
+  rows.push([sg('  compactions ', 'dim'), sg('0', 'fg'), sg('   re-reads ', 'dim'), sg('3', 'warn'), sg('   stale ', 'dim'), sg('8', 'warn'), sg('   velocity ', 'dim'), sg('—', 'dim'), sg(' (turn 1)', 'dim')]);
+  return { title: 'context', keys: 'Enter turn ledger', rows: rows };
+}
+function bCost(cols) {
+  var wide = cols >= 100, bw = wide ? 34 : 18;
+  var r = [['cache read', '31.53M', 100, 's2'], ['cache write', '320k', 4, 's1'], ['output', '140k', 2, 's2'], ['└ thinking', '42k', 1, 's1'], ['fresh input', '318', 1, 's0']];
+  var rows = [[sg('  ≈$22.50', 'fg', true), sg('   API-equivalent list price — a subscription is not billed per token', 'warn')], []];
+  for (var k = 0; k < r.length; k++) {
+    var l = []; at(l, 2); l.push(sg(r[k][0], 'fg')); at(l, 16);
+    var f = Math.max(1, Math.round(r[k][2] / 100 * bw));
+    l.push(sg('▇'.repeat(f), r[k][3])); l.push(sg('▁'.repeat(bw - f), 'border'));
+    at(l, 16 + bw + 2); l.push(sg(r[k][1], 'fg', true));
+    rows.push(l);
+  }
+  rows.push([]);
+  rows.push([sg('  cache hit ', 'dim'), sg('99 %', 'ok', true), sg('   TTL ', 'dim'), sg('1h', 'fg'), sg('   misses ', 'dim'), sg('0', 'ok'), sg('   burn ', 'dim'), sg('≈$90/h', 'warn', true), sg('   next 30c ', 'dim'), sg('≈$5.6', 'fg')]);
+  rows.push([sg('  last session ', 'dim'), sg('$1.19', 'fg'), sg(' over ', 'dim'), sg('1d 13h', 'fg')]);
+  return { title: 'cost', keys: 'a agents · Enter ledger', rows: rows };
+}
+function bTools(cols) {
+  var wide = cols >= 100;
+  var tr = [['Bash·explore', '69', '0', '148ms', '18k', '0:03', 'grep -rn "fn apply" src/'],
+            ['Bash·test', '39', '0', '1.6s', '12k', '1:12', 'cargo test harness_facts'],
+            ['Bash·implement', '30', '1', '227ms', '9k', '3:40', 'cargo fmt --all && make…'],
+            ['Write', '2', '0', '38ms', '—', '8:20', 'src/agent_ledger.rs'],
+            ['Read', '1', '0', '52ms', '10k', '12:04', 'src/agents.rs']];
+  var h = []; at(h, 2); h.push(sg('TOOL / CLASS', 'dim')); rt(h, 27, 'CALLS', 'dim'); rt(h, 34, 'ERR', 'dim'); rt(h, 44, 'p50', 'dim'); rt(h, 53, '→CTX', 'dim'); rt(h, 62, 'LAST', 'dim');
+  if (wide) { at(h, 66); h.push(sg('LAST INPUT', 'dim')); }
+  var rows = [h];
+  for (var q = 0; q < tr.length; q++) {
+    var l = []; at(l, 2); l.push(sg(tr[q][0], 'fg'));
+    rt(l, 27, tr[q][1], 'fg', true); rt(l, 34, tr[q][2], tr[q][2] === '0' ? 'dim' : 'warn', tr[q][2] !== '0');
+    rt(l, 44, tr[q][3], 'fg'); rt(l, 53, tr[q][4], (tr[q][4] === '10k' || tr[q][4] === '18k') ? 'warn' : 'fg'); rt(l, 62, tr[q][5], 'dim');
+    if (wide) { at(l, 66); l.push(sg(tr[q][6], 'dim')); }
+    rows.push(l);
+  }
+  rows.push([]);
+  rows.push([sg('  159 calls', 'fg', true), sg('   1 error ', 'dim'), sg('Command Failed', 'warn'), sg('   0 denied   ', 'dim'), sg('▸ running ', 'accent'), sg('Bash cargo fmt --all', 'fg'), sg('  0:03', 'fg', true)]);
+  return { title: 'tools', keys: 's sort · / filter', rows: rows };
+}
+function bFiles(cols) {
+  var fr = [['src/agents.rs', 'R×3', '8k', 're-read ×3 — no edit between', 'warn'],
+            ['src/tools.rs', 'R×3', '6k', 're-read ×3 — no edit between', 'warn'],
+            ['src/agent_ledger.rs', 'W×1', '—', 'IDE edit after Claude wrote it', 'dim'],
+            ['src/task_notification.rs', 'W×1', '—', 'IDE edit after Claude wrote it', 'dim'],
+            ['docs/metrics.md', 'R×1', '4k', '', 'dim']];
+  var h = []; at(h, 2); h.push(sg('FILE', 'dim')); rt(h, 38, 'TOUCH', 'dim'); rt(h, 46, '→CTX', 'dim');
+  if (cols >= 100) { at(h, 50); h.push(sg('NOTE', 'dim')); }
+  var rows = [h];
+  for (var i = 0; i < fr.length; i++) {
+    var l = []; at(l, 2); l.push(sg(fr[i][0], 'fg')); rt(l, 38, fr[i][1], 'fg', true); rt(l, 46, fr[i][2], 'fg');
+    if (cols >= 100 && fr[i][3]) { at(l, 50); l.push(sg(fr[i][3], fr[i][4])); }
+    rows.push(l);
+  }
+  rows.push([]);
+  rows.push([sg('  27 touched', 'fg', true), sg('   8 stale reads', 'warn'), sg('   2 IDE edits', 'dim'), sg('   git +0/−0', 'dim')]);
+  return { title: 'files', keys: 's sort', rows: rows };
+}
+function bEvents(cols) {
+  var ev = [['05:53', 'tool', 'Bash', 'cargo fmt --all && make check > /tmp/check.log', 'fg'],
+            ['05:52', 'hook', '', 'PostToolBatch', 'dim'],
+            ['05:52', 'tool', 'Bash', '✓ 94 tokens to context', 'fg'],
+            ['05:52', 'tool', 'Bash', 'cargo test harness_facts 2>&1 | grep -c ok', 'fg'],
+            ['05:52', 'hook', '', 'PostToolBatch', 'dim'],
+            ['05:51', 'api', '', 'cost-state  ≈$22.50 · 159 calls · retries 0:00', 'warn'],
+            ['05:44', 'note', '', '/clear · continued in a new session', 'accent']];
+  return { title: 'events', keys: '/ filter', rows: ev.map(function (e) {
+    var l = []; at(l, 2); l.push(sg(e[0], 'dim')); at(l, 9); l.push(sg(e[1], 'accent')); at(l, 15); if (e[2]) l.push(sg(e[2], 'fg'));
+    at(l, 21); l.push(sg(e[3], e[4])); return l; }) };
+}
+var BODIES = { context: bContext, cost: bCost, tools: bTools, files: bFiles, events: bEvents };
+function frame(cols, b, onBack) {
+  var out = [], t = [sg('╭─ ', 'border'), sg(b.title, 'fg', true), sg(' ', 'border')];
+  var tail = [sg(' ', 'border'), sg(b.keys, 'dim'), sg('  ', 'border'), sg('Esc back', 'accent', false, onBack), sg(' ─╮', 'border')];
+  var n = cols - lw(t) - lw(tail); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+  out.push(t.concat(tail));
+  for (var i = 0; i < b.rows.length; i++) {
+    var l = fit([sg('│', 'border')].concat(b.rows[i]), cols - 1); at(l, cols - 1); l.push(sg('│', 'border')); out.push(l);
+  }
+  out.push([sg('╰' + '─'.repeat(Math.max(0, cols - 2)) + '╯', 'border')]);
+  return out;
+}
+
+// ============ 1 · INSTRUMENT ============
+function instrumentScreen(self, cols) {
+  var st = self.state, wide = cols >= 100, out = [];
+  if (st.view !== 'overview') return frame(cols, BODIES[st.view](cols), function () { self.setState({ view: 'overview' }); });
+  var go = function (v) { return function () { self.setState({ view: v }); }; };
+  var C = wide ? { l: 1, v: 30, b: 47, c: 64, n: 70 } : { l: 1, v: 22, b: 35, c: 48, n: 52 };
+  var row = function (label, view, v, vr, b, br, c, cr, note, nr) {
+    var li = []; at(li, C.l); li.push(sg(label, view ? 'accent' : 'dim', false, view ? go(view) : undefined));
+    rt(li, C.v, v, vr || 'fg', true);
+    if (b) rt(li, C.b, b, br || 'fg');
+    if (c) rt(li, C.c, c, cr || 'fg');
+    if (note && wide) { at(li, C.n); li.push(sg(note, nr || 'dim')); }
+    out.push(li);
+    if (note && !wide && st.w) out.push(at([sg('   ↳ ', 'border'), sg(note, nr || 'dim')], 0));
+  };
+  out.push(sp([sg(' cctop', 'accent', true)], [sg('opus-5 · turn 1 · 52:11 · ~/code/cctop ', 'dim')], cols));
+  out.push(rule(cols));
+  var s = []; at(s, 1); s.push(sg('WORKING', 'ok', true));
+  rt(s, C.v, '52:11', 'fg', true); rt(s, C.b, '159 calls', 'fg'); rt(s, C.c, '1 err', 'warn');
+  if (wide) { at(s, C.n); s.push(sg('▸ ', 'ok')); s.push(sg('steer window', 'fg')); s.push(sg('  ·  1:56 silent', 'dim')); }
+  out.push(s); out.push(rule(cols));
+  row('context', 'context', '350k', 'fg', 'of 1.00M', 'dim', '35 %', 'fg', '616k to autocompact');
+  row('5h limit', null, '4 %', 'fg', 'of 100 %', 'dim', '↻ 4h06', 'dim', '7d 22 %  ·  long ctx 78 %', 'warn');
+  row('cache', 'cost', '59m', 'fg', 'of 1h', 'dim', 'warm', 'ok', '0 misses  ·  re-writes 350k cold');
+  row('spend', 'cost', '≈$22.50', 'fg', '≈$90/h', 'warn', '≈$29/turn', 'warn', 'API-equivalent, not a bill');
+  out.push(rule(cols));
+  row('running', 'tools', 'Bash', 'accent', '0:03', 'fg', '', null, 'cargo fmt --all && make check > /tmp/check.log');
+  row('tools', 'tools', '159', 'fg', '1 err', 'warn', '', null, 'explore 69 · test 39 · implement 30');
+  row('files', 'files', '27', 'fg', '8 stale', 'warn', '', null, 'agents.rs ×3 re-read · 2 IDE edits');
+  row('checks', null, '✓', 'ok', 'rework 0', 'ok', '', null, 'cargo test 10s  ·  git +0/−0');
+  out.push(rule(cols));
+  var e = []; at(e, 1); e.push(sg('05:53', 'dim', false, go('events'))); at(e, 9); e.push(sg('Bash', 'fg')); at(e, 16); e.push(sg('cargo fmt --all && make check > /tmp/check.log', 'dim'));
+  out.push(e);
+  var e2 = []; at(e2, 1); e2.push(sg('05:52', 'dim', false, go('events'))); at(e2, 9); e2.push(sg('hook', 'fg')); at(e2, 16); e2.push(sg('PostToolBatch', 'dim'));
+  out.push(e2); out.push([]);
+  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' panels   ', 'dim'),
+            sg('w', 'accent', true, function () { self.setState({ w: !st.w }); }), sg(st.w ? ' wide ON   ' : ' wide   ', st.w ? 'ok' : 'dim'),
+            sg('q', 'accent', true), sg(' quit', 'dim')]);
+  return out;
+}
+
+// ============ 2 · LEDGER ============
+var LROWS = [
+  { n: 'context', v: '350k', of: '1.00M', p: 35, note: '616k to autocompact', view: 'context', g: 'budget', stacked: true },
+  { n: '5h limit', v: '4 %', of: '100 %', p: 4, note: 'resets 4h06', g: 'budget' },
+  { n: '7d limit', v: '22 %', of: '100 %', p: 22, note: 'resets 76h06 · long ctx 78 %', nr: 'warn', g: 'budget' },
+  { n: 'cache', v: '59m', of: '1h', p: 98, note: '0 misses · re-writes 350k cold', view: 'cost', g: 'budget' },
+  { n: 'spend', v: '≈$22.50', of: '—', p: null, note: '≈$90/h · ≈$29/turn · API-equivalent', view: 'cost', g: 'cost' },
+  { n: 'rework', v: '0', of: '—', p: null, note: '✓ cargo test 10s · git +0/−0', nr: 'ok', g: 'work' },
+  { n: 'tools', v: '159', of: '—', p: null, note: '1 err · explore 69 · test 39 · impl 30', view: 'tools', g: 'work' },
+  { n: 'files', v: '27', of: '—', p: null, note: '8 stale · agents.rs ×3 re-read', nr: 'warn', view: 'files', g: 'work' },
+  { n: 'running', v: 'Bash', of: '0:03', p: null, note: 'cargo fmt --all && make check', view: 'tools', g: 'work' }
+];
+function ledgerScreen(self, cols) {
+  var st = self.state, wide = cols >= 100, out = [];
+  if (st.view !== 'overview') return frame(cols, BODIES[st.view](cols), function () { self.setState({ view: 'overview' }); });
+  var C = wide ? { r: 1, v: 26, l: 40, b: 44, bw: 20, p: 69, n: 73 } : { r: 1, v: 22, l: 33, b: 36, bw: 12, p: 52, n: 56 };
+  var rows = LROWS.filter(function (x) { return st.filter === 'all' || x.g === st.filter; });
+  var key = st.sort, asc = st.asc;
+  rows = rows.slice().sort(function (a, b) {
+    var x, y;
+    if (key === 'reading') { x = a.n; y = b.n; return asc ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0); }
+    if (key === 'value') { x = a.v; y = b.v; return asc ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0); }
+    x = a.p === null ? -1 : a.p; y = b.p === null ? -1 : b.p;      // blanks last on descending
+    return asc ? x - y : y - x;
+  });
+  var sortBy = function (k) { return function () { self.setState(st.sort === k ? { asc: !st.asc } : { sort: k, asc: k === 'fill' ? false : true }); }; };
+  var mark = function (k) { return st.sort === k ? (st.asc ? ' ▲' : ' ▼') : ''; };
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11 · ~/code/cctop', 'dim')],
+              [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 · 159c · ', 'dim'), sg('1 err', 'warn')], cols));
+  out.push(sp([sg(' Readings', 'fg', true), sg('(' + st.filter + ')', 'dim'), sg('[' + rows.length + ']', 'accent', true)],
+              [sg('▸ ', 'ok'), sg('steer window — 4 calls, 1:56 silent', 'fg')], cols));
+  out.push([]);
+  var h = []; at(h, C.r); h.push(sg('READING' + mark('reading'), st.sort === 'reading' ? 'accent' : 'dim', false, sortBy('reading')));
+  rt(h, C.v, 'VALUE' + mark('value'), st.sort === 'value' ? 'accent' : 'dim', false); h[h.length - 1].on = sortBy('value');
+  rt(h, C.l, 'OF', 'dim'); at(h, C.b); h.push(sg('FILL' + mark('fill'), st.sort === 'fill' ? 'accent' : 'dim', false, sortBy('fill')));
+  rt(h, C.p, '%', 'dim'); at(h, C.n); h.push(sg('NOTE', 'dim'));
+  out.push(h);
+  for (var i = 0; i < rows.length; i++) {
+    var x = rows[i], l = [];
+    at(l, C.r); l.push(sg(x.n, x.view ? 'accent' : 'fg', false, x.view ? (function (v) { return function () { self.setState({ view: v }); }; })(x.view) : undefined));
+    rt(l, C.v, x.v, 'fg', true); rt(l, C.l, x.of, 'dim');
+    at(l, C.b);
+    if (x.p === null) l.push(sg('·'.repeat(C.bw), 'border'));
+    else if (x.stacked) { var cb = ctx(C.bw); for (var z = 0; z < cb.length; z++) l.push(cb[z]); }
+    else { var bb = bar(x.p, C.bw, 'ok'); for (var z2 = 0; z2 < bb.length; z2++) l.push(bb[z2]); }
+    rt(l, C.p, x.p === null ? '—' : String(x.p), x.p === null ? 'dim' : 'fg', x.p !== null);
+    at(l, C.n); l.push(sg(x.note, x.nr || 'dim'));
+    out.push(l);
+  }
+  out.push([]);
+  var f = [sg(' s', 'accent', true), sg(' sort   ', 'dim'), sg('/', 'accent', true), sg(' filter: ', 'dim')];
+  ['all', 'budget', 'cost', 'work'].forEach(function (g) {
+    f.push(sg(g, st.filter === g ? 'ok' : 'dim', st.filter === g, function () { self.setState({ filter: g }); }));
+    f.push(sg('  ', 'dim'));
+  });
+  f.push(sg('  1-9', 'accent', true)); f.push(sg(' panels', 'dim'));
+  out.push(f);
+  return out;
+}
+
+// ============ 3 · CONSOLE ============
+function consoleScreen(self, cols) {
+  var st = self.state, out = [], b = BODIES[st.body](cols);
+  var go = function (v) { return function () { self.setState({ body: v }); }; };
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11 · ~/code/cctop', 'dim')],
+              [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 ', 'dim')], cols));
+  var hb = [sg(' ', 'dim')];
+  var cell = function (k, v, vr, extra, er, view) {
+    hb.push(sg(k + ' ', 'dim', false, view ? go(view) : undefined));
+    hb.push(sg(v, vr || 'fg', true, view ? go(view) : undefined));
+    if (extra) hb.push(sg(' ' + extra, er || 'dim'));
+    hb.push(sg('  │  ', 'border'));
+  };
+  cell('ctx', '35%', 'fg', '616k left', 'dim', 'context');
+  cell('5h', '4%', 'fg', '↻4h06');
+  cell('cache', '59m', 'fg', '1h', 'dim', 'cost');
+  cell('spend', '≈$22.50', 'fg', '≈$90/h', 'warn', 'cost');
+  hb.push(sg('✓ ', 'ok')); hb.push(sg('test 10s', 'ok', false, go('files'))); hb.push(sg('  │  ', 'border'));
+  hb.push(sg('159c ', 'fg', false, go('tools'))); hb.push(sg('1 err', 'warn', false, go('tools')));
+  out.push(hb);
+  out.push(sp([sg(' ▸ ', 'ok', true), sg('steer window', 'fg', true), sg(' — 4 calls and 1:56 since Claude last spoke', 'dim')],
+              [sg('9 advisor', 'accent')], cols));
+  var t = [sg('─── ', 'border'), sg(b.title, 'fg', true), sg(' ', 'border')];
+  var map = [sg(' ', 'border')];
+  [['1', 'context'], ['2', 'cost'], ['5', 'tools'], ['7', 'files'], ['8', 'events']].forEach(function (d, i) {
+    if (i) map.push(sg('  ', 'border'));
+    map.push(sg(d[0], st.body === d[1] ? 'ok' : 'accent', st.body === d[1], go(d[1])));
+    map.push(sg(' ' + d[1], st.body === d[1] ? 'ok' : 'dim', st.body === d[1], go(d[1])));
+  });
+  map.push(sg(' ───', 'border'));
+  var n = cols - lw(t) - lw(map); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+  out.push(t.concat(map));
+  for (var i = 0; i < b.rows.length; i++) out.push(b.rows[i]);
+  var pad = 9 - b.rows.length; for (var z = 0; z < pad; z++) out.push([]);
+  out.push([]);
+  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' change the body   ', 'dim'),
+            sg('-', 'accent', true, go('events')), sg(' back   ', 'dim'), sg('/', 'accent', true), sg(' filter   ', 'dim'), sg('q', 'accent', true)]);
+  return out;
+}
+
+
+var DIRS = {
+  instrument: { label: '1 · Instrument', screen: instrumentScreen,
+    init: { cols: 122, view: 'overview', w: false },
+    state: function (s) { return s.view === 'overview' ? ('overview' + (s.w ? ' · wide' : '')) : ('panel: ' + s.view); },
+    hint: function (s) { return s.view === 'overview'
+      ? 'Click an underlined row label to open its panel · press w (or click it in the footer) to toggle wide — visible at 78 columns · 1 2 5 7 8 open panels'
+      : 'Click "Esc back" in the frame title, or press Esc'; },
+    fixes: 'The ugliness directly — nothing is decorative, so nothing clashes. Alignment does the work the tiles attempted with size, in four rows instead of seven. Cheapest to build: no new widget.',
+    costs: 'You lose proportion at a glance. 35 % as a number is not a third of a bar filled, and the context breakdown leaves the overview entirely. If seeing the bar fill is what changed your behaviour, this takes it away.',
+    pick: 'The complaint is visual noise rather than missing information, and you would rather read than scan. Safest if you want something better next week.' },
+  ledger: { label: '2 · Ledger', screen: ledgerScreen,
+    init: { cols: 122, view: 'overview', sort: 'fill', asc: false, filter: 'all' },
+    state: function (s) { return s.view === 'overview' ? ('sort ' + s.sort + (s.asc ? ' up' : ' down') + ' · ' + s.filter) : ('panel: ' + s.view); },
+    hint: function (s) { return s.view === 'overview'
+      ? 'Click READING / VALUE / FILL to sort, again to reverse (or press s to cycle) · click a filter word in the footer · click a reading name to open its panel'
+      : 'Click "Esc back" in the frame title, or press Esc'; },
+    fixes: 'The thing that makes the current screen hard to scan — nine rows of nine shapes. Here the eye runs down one column. The only direction that offers a severity view without breaking position.',
+    costs: 'Nothing stands out, including the call to action, which fights the table from a header line. Readings with no denominator carry visibly empty columns. Most work: a real table widget across every reading.',
+    pick: 'The complaint is that nothing lines up and you want one interaction everywhere. Most k9s-shaped, and the one that scales if the reading count keeps growing.' },
+  console: { label: '3 · Console', screen: consoleScreen,
+    init: { cols: 122, body: 'events' },
+    state: function (s) { return 'body: ' + s.body; },
+    hint: function () { return 'Click a digit in the rule line to swap the body — or click a reading in the header strip, which jumps to the body that explains it · 1 2 5 7 8 work as keys'; },
+    fixes: 'The pane specifically. It stops summarising nine things in a space that fits one and gives the body enough height to be worth reading. The header is learned once and never moves.',
+    costs: 'Biggest behavioural change, and you can no longer see two panels at once. The header line is dense enough to need learning, and at 78 columns it truncates — switch the width to see where that hurts.',
+    pick: 'The complaint is really the pane being cramped and you mostly look at one thing at a time. The only direction that makes room for a genuinely good events or tools view.' }
+};
+
+var cur = 'instrument', S = {};
+Object.keys(DIRS).forEach(function (k) { S[k] = Object.assign({}, DIRS[k].init); });
+function ctxObj() { return { state: S[cur], setState: function (p) { Object.assign(S[cur], p); render(); } }; }
+
+var $ = function (id) { return document.getElementById(id); };
+Object.keys(DIRS).forEach(function (k) {
+  var b = document.createElement('button');
+  b.className = 'tab'; b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = DIRS[k].label;
+  b.onclick = function () { cur = k; render(); };
+  b.dataset.k = k; $('tabs').appendChild(b);
+});
+[122, 78].forEach(function (w) {
+  var b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = w + ' cols';
+  b.onclick = function () { S[cur].cols = w; render(); };
+  b.dataset.w = w; $('widths').appendChild(b);
+});
+$('reset').onclick = function () { S[cur] = Object.assign({}, DIRS[cur].init); render(); };
+
+document.addEventListener('keydown', function (e) {
+  var s = S[cur], d = cur, map = { '1': 'context', '2': 'cost', '5': 'tools', '7': 'files', '8': 'events' };
+  if (map[e.key]) { if (d === 'console') s.body = map[e.key]; else s.view = map[e.key]; render(); e.preventDefault(); return; }
+  if (e.key === 'Escape' && d !== 'console') { s.view = 'overview'; render(); return; }
+  if (e.key === 'w' && d === 'instrument') { s.w = !s.w; render(); return; }
+  if (e.key === 's' && d === 'ledger') {
+    var order = ['reading', 'value', 'fill'], i = order.indexOf(s.sort);
+    s.sort = order[(i + 1) % 3]; s.asc = s.sort !== 'fill'; render(); return;
+  }
+  if (e.key === '-' && d === 'console') { s.body = 'events'; render(); }
+});
+
+function render() {
+  var d = DIRS[cur], s = S[cur];
+  Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-selected', b.dataset.k === cur); });
+  Array.prototype.forEach.call($('widths').children, function (b) { b.setAttribute('aria-pressed', +b.dataset.w === s.cols); });
+  var rows = paint(d.screen(ctxObj(), s.cols), s.cols);
+  var t = $('term'); t.textContent = '';
+  rows.forEach(function (r) {
+    var line = document.createElement('div'); line.className = 'r';
+    r.forEach(function (g) {
+      var el = document.createElement('span');
+      el.textContent = g.t; el.style.color = g.c; el.style.fontWeight = g.w;
+      if (g.on) { el.className = 'hit'; el.onclick = g.on; el.tabIndex = 0;
+        el.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.on(); } }; }
+      line.appendChild(el);
+    });
+    t.appendChild(line);
+  });
+  $('state').textContent = d.state(s);
+  $('hint').textContent = d.hint(s);
+  $('fixes').textContent = d.fixes; $('costs').textContent = d.costs; $('pick').textContent = d.pick;
+  document.title = 'cctop — ' + d.label.replace(/^\d+ · /, '');
+}
+render();
+</script>
+</body>
+</html>
