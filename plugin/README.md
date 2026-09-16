@@ -104,8 +104,9 @@ and later every hook failed — `marker write failed: RangeError: Invalid
 Date` at the start of every session, every light on `waiting for cctop`
 once the pane was open, and `cctop pane status` reporting the hooks module
 as not loaded (issue #3). Plugin 0.4.1 awaits every reading and runs on
-2.1.270 and 2.1.272 alike; the header's `hooks 2.1.272` light names the
-Claude Code version the module's contract was generated from. Update with
+2.1.270 and 2.1.272 alike; the header's `hooks 2.1.273` light names the
+Claude Code version the module's contract was generated from (2.1.273 added
+a `vscode` render surface and changed nothing the pane calls). Update with
 `claude plugin marketplace update cctop && claude plugin update
 cctop@cctop`, then restart Claude Code.
 
