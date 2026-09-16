@@ -11,6 +11,10 @@
     {
       "id": "page-3",
       "name": "Directions"
+    },
+    {
+      "id": "page-4",
+      "name": "Console"
     }
   ],
   "artboards": [
@@ -105,13 +109,31 @@
     },
     {
       "file": "Console.dc.html",
-      "x": 3780,
+      "x": 0,
       "y": 0,
       "w": 1160,
       "h": 1240,
-      "page": "page-3",
+      "page": "page-4",
       "print": "flow",
       "is_interactive": true
+    },
+    {
+      "file": "ConsoleTargets.dc.html",
+      "x": 1260,
+      "y": 0,
+      "w": 1180,
+      "h": 1840,
+      "page": "page-4",
+      "print": "flow"
+    },
+    {
+      "file": "ConsoleInSession.dc.html",
+      "x": 2540,
+      "y": 0,
+      "w": 1180,
+      "h": 1680,
+      "page": "page-4",
+      "print": "flow"
     }
   ],
   "annotations": [
@@ -146,10 +168,18 @@
       "w": 1160,
       "page": "page-3",
       "text": "Dogfood verdict: the data is validated, the rendering is not. All three carry the same readings and the same session \u2014 they differ only in how the screen is built.\nAll three are live: click the underlined text inside each terminal. Instrument opens panels, Ledger sorts and filters, Console swaps its body."
+    },
+    {
+      "id": "console-sweep",
+      "x": 0,
+      "y": -160,
+      "w": 1160,
+      "page": "page-4",
+      "text": "Console, designed against the pane the dock actually gives \u2014 85 columns at the widest, 67 typically, not the 122 the earlier rounds drew.\nEvery header cell is one hit area, padding included; the digits are the engine's own plain-Button rendering, contiguous and 1:1 with the cells."
     }
   ],
   "launch": {
     "view": "canvas",
-    "page": "page-3"
+    "page": "page-4"
   }
 }

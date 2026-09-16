@@ -49,6 +49,19 @@ Console swaps its body. Underlined text inside a terminal is a click target.
 by driving every click handler at both widths and re-measuring after each state
 change — see the commit that added them for the harness.
 
+Page *Console* (the chosen direction, swept):
+
+- `Console.dc.html` — laid out at the widths the dock actually gives (85 / 67 /
+  54), regenerated from `proto/directions.js` so it cannot drift from the
+  prototype.
+- `ConsoleTargets.dc.html` — every clickable area: the keyed-Box-plus-scope
+  mechanism, the eight targets with the registry ids behind each, the five
+  render states on both surfaces, and the four things to check at a real
+  terminal.
+- `ConsoleInSession.dc.html` — what the pane is: the dock width arithmetic, the
+  four theme colours that are its whole vocabulary, and which glyphs survive an
+  unknown terminal font.
+
 ## The clickable prototype
 
 `prototype.html` is a standalone page — open it from a clone (`open
