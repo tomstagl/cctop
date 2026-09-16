@@ -41,6 +41,13 @@ INSTA_UPDATE=always cargo test                    # accept insta snapshots (src/
 make site                                         # site/ from README marked blocks + docs/metrics.md + themes
 ```
 
+Release checklist (issue #4 — the contract moves between Claude Code releases; every step is a command above):
+
+1. `claude update`, then `cd plugin && CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p '/plugin-types ./.claude/types'` — regenerate the d.ts against the latest `claude`; `npm run typecheck` names every call site a changed surface touches.
+2. `make check-contract` — the §A headless load check (no model call), the surface diff, the validator, the pins; then `make check-facts` and bump `READ_FROM` in `src/harness_facts.rs` (`make check-types` fails past 5 releases behind).
+3. `TESTED_WITH` in `plugin/hooks/model.ts` to the version of step 1; the plugin manifest version; the "Claude Code versions" table in `plugin/README.md` (the range the release runs on, and a new row when a contract change forced it); `KNOWN_INCOMPATIBLE` in `src/pane.rs` when a pair is known to fail.
+4. `make check && npm test`, the install lines and `make site`, then the release commit and the tag on `main`'s tip after the merge.
+
 Useful for poking at behaviour without a live session: `--session` accepts a fixture path (`cctop query dashboard --session fixtures/session-b.jsonl`), `--lines N` feeds only the first N transcript lines (a point in time), and `CCTOP_FAKE_NOW=<epoch ms>` fixes the clock. Never run `cctop run` or `claude` interactively in the foreground of a tool call; `claude -p … --max-turns 1` is fine for load checks, and its debug log is `~/.claude/debug/latest`.
 
 ## Architecture
