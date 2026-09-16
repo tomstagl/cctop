@@ -719,7 +719,7 @@ mod fixture_b_snapshots {
         let d = app.dashboard();
         for (w, h) in [(122, 24), (85, 24), (67, 24), (54, 24), (35, 24)] {
             for open in 0..d.bodies.len() {
-                let rows = crate::ui::dashboard::compose(&app.state.theme, &d, w, h, open);
+                let rows = crate::ui::dashboard::compose(&app.state.theme, &d, w, h, open, false);
                 assert!(
                     rows.len() <= h as usize,
                     "{w}x{h} body {open}: {} rows",

@@ -7,7 +7,7 @@ expression: text
  3: cache 50m~ 1h TTL         4: spend $9.90 ~$16.3/h
  5: v none rework 1 open      6: 257 calls 5 err
  > Edited 1 src file, no test/build run yet
---- context -------------------- 0: home  .  Enter panel ---
+--- context ------------------------- 0: home  .  ? keys ---
   396k of 1.00M est   autocompact 967k   570k left   +50k/t.
 
   prefix    ~60k  #####---------
@@ -20,29 +20,3 @@ expression: text
 
   next 8c ~$.66 . fresh ~$.18
   threshold 967k . 570k left . prefix 60k (15 %)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask

@@ -3,6 +3,7 @@ source: src/theme.rs
 expression: "render_to_string(&app, 80, 30)"
 ---
 ┌ Events 307  (j/k scroll, / search, Esc back) ────────────────────────────────┐
+│ 14:34:12 tool   Bash lorem_i lor lore lorem_ lorem_ipsum_dolor_sit_amet_cons…│
 │ 14:34:12 cost   model opus-5 → sonnet-5                                      │
 │ 14:34:30 perm   Bash ✗ automode-blocked                                      │
 │ 14:35:15 tool   Bash cd lore && rm -rf lorem_ && git lorem --quiet --depth l…│
@@ -31,4 +32,3 @@ expression: "render_to_string(&app, 80, 30)"
 │ 23:29:30 note   /clear · continued in a new session                          │
 │ 23:29:30 api    cost-state $18.75 · api 22:14 · retries 0:00                 │
 └──────────────────────────────────────────────────────────────────────────────┘
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

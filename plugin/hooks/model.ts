@@ -112,6 +112,8 @@ export type Model = {
   coachStatus: string | null;
   /** Console's open body (its id); events, the way home, by default. */
   body: string;
+  /** Console's rule line expanded into the key map (`? keys` pressed). */
+  keys: boolean;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -142,7 +144,8 @@ export type Action =
   | { type: 'coach.why'; why: boolean }
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
-  | { type: 'overview.body'; id: string };
+  | { type: 'overview.body'; id: string }
+  | { type: 'overview.keys'; keys: boolean };
 
 export function initialModel(): Model {
   return {
@@ -184,6 +187,7 @@ export function initialModel(): Model {
     coachToastTurn: null,
     coachStatus: null,
     body: 'events',
+    keys: false,
   };
 }
 
@@ -300,6 +304,8 @@ export function reduce(model: Model, action: Action): Model {
       return model.coachStatus === action.status ? model : { ...model, coachStatus: action.status };
     case 'overview.body':
       return model.body === action.id ? model : { ...model, body: action.id };
+    case 'overview.keys':
+      return model.keys === action.keys ? model : { ...model, keys: action.keys };
   }
 }
 

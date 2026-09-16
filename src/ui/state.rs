@@ -450,6 +450,8 @@ pub struct State {
     /// Console's open body, an index into `Dashboard::bodies` (`1`–`6`, `a`,
     /// `0`); `None` is events, the way home (`console_body()`).
     pub console_body: Option<usize>,
+    /// Console's rule line expanded into the open body's key map (`?`).
+    pub console_keys: bool,
     /// A view the open panel owns on top of itself (`Enter`: a ledger, a
     /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,

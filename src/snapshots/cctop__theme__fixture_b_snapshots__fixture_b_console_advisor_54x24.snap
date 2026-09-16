@@ -7,7 +7,7 @@ expression: "render_to_string(&app, 54, 24)"
  3: cache 59m≈             4: spend $18.7
  5: ✓ python3 -… 9h01      6: 140c 6 err
  ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…
-─── advisor ────────────── 0: home  ·  Enter coach ───
+─── advisor ─────────────────── 0: home  ·  ? keys ───
   ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…
     queue: 'run builds and test suites longer than a …
     LATER · since turn 6 · +0 queued
@@ -16,13 +16,3 @@ expression: "render_to_string(&app, 54, 24)"
   class    LATER   A10 · retires 3 turns
   next     —
   snoozed  —
-
-
-
-
-
-
-
-
-
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach

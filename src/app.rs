@@ -35,7 +35,7 @@ pub struct Binding {
 pub const BINDINGS: &[Binding] = &[
     Binding {
         keys: "?",
-        action: "help",
+        action: "key map (Console) · this help",
     },
     Binding {
         keys: "1-6 · a · 0",
@@ -511,6 +511,13 @@ impl App {
             KeyCode::Char('q') | KeyCode::Char('c') if ctrl_c || key.code == KeyCode::Char('q') => {
                 self.quit = true
             }
+            KeyCode::Char('?')
+                if self.state.open.is_none()
+                    && self.state.view == crate::ui::state::View::Dashboard =>
+            {
+                // Console: the rule line's key map, expanded and collapsed.
+                self.state.console_keys = !self.state.console_keys;
+            }
             KeyCode::Char('?') => self.help = true,
             KeyCode::Enter
                 if self.state.open.is_none()
@@ -734,12 +741,26 @@ impl App {
             }
             return;
         }
-        let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+        // Console has no footer: its rule line carries the keys and the
+        // body takes the last row. A toast or PAUSED borrows that row while
+        // it lasts; a panel keeps its footer.
+        let console = self.state.open.is_none();
+        let footer_rows = if console && self.state.toast_text().is_none() && !self.state.paused {
+            0
+        } else {
+            1
+        };
+        let body = Rect::new(
+            area.x,
+            area.y,
+            area.width,
+            area.height.saturating_sub(footer_rows),
+        );
         let footer = Rect::new(
             area.x,
             area.y + area.height.saturating_sub(1),
             area.width,
-            1,
+            footer_rows,
         );
         match self
             .state
@@ -762,6 +783,7 @@ impl App {
                     &d,
                     &self.state.theme,
                     self.state.console_body(),
+                    self.state.console_keys,
                 );
             }
         }
@@ -850,10 +872,8 @@ impl App {
                         .coach_text(crate::ui::coach_view::FOOTER)
                         .trim_start()
                         .to_string()
-                } else if self.state.open.is_some() {
-                    "Esc back  a ask  c coach  t theme  L sessions  q".to_string()
                 } else {
-                    crate::ui::dashboard::FOOTER.trim_start().to_string()
+                    "Esc back  a ask  c coach  t theme  L sessions  q".to_string()
                 },
                 dim,
             ));
@@ -1242,9 +1262,24 @@ mod tests {
         let out = render_to_string(&app(), 60, 24);
         assert!(out.contains("1: ctx"), "{out}");
         assert!(out.contains("─── events "), "{out}");
-        assert!(out.contains("0: home"), "{out}");
-        assert!(out.contains("?help  1-6 a 0 body"), "{out}");
+        assert!(out.contains("0: home  ·  ? keys ───"), "{out}");
+        // Console has no footer: the last row is the body's.
+        assert!(!out.contains("?help"), "{out}");
         assert_eq!(out.lines().count(), 24);
+        let mut a = app();
+        a.handle_key(key('?'));
+        assert!(a.state.console_keys && !a.help);
+        let out = render_to_string(&a, 100, 24);
+        assert!(
+            out.contains("0: home  ·  Enter panel  ·  1-6 a 0 body  ·  Esc home"),
+            "{out}"
+        );
+        a.handle_key(key('?'));
+        assert!(!a.state.console_keys);
+        // A toast borrows the last row while it lasts.
+        a.state.set_toast("theme: nord");
+        let out = render_to_string(&a, 60, 24);
+        assert!(out.lines().last().unwrap().contains("theme: nord"), "{out}");
     }
 
     /// Console: a digit swaps the body in place, Enter opens that body's
@@ -1282,6 +1317,10 @@ mod tests {
         a.handle_key(key('5'));
         a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(a.state.open, None);
+        // `?` elsewhere (the coach view here; a panel too) is the help
+        // overlay; on Console it is the rule line's key map.
+        a.handle_key(key('c'));
+        assert_eq!(a.state.view, crate::ui::state::View::Coach);
         a.handle_key(key('?'));
         let out = render_to_string(&a, 60, 20);
         assert!(out.contains("cctop keys"));

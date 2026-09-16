@@ -30,5 +30,5 @@ expression: "render_to_string(&app, 80, 30)"
 │                                                                              │
 │                                                                              │
 │                                                                              │
+│                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

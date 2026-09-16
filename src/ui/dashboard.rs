@@ -16,7 +16,10 @@ use ratatui::Frame;
 use crate::dashboard::{self, Dashboard, Seg, Tone};
 use crate::theme::Theme;
 
-pub const FOOTER: &str = " ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q";
+/// The keys every body shares, after its own, when the rule line is
+/// expanded (`?`). Console has no footer: this is where the keys live.
+pub const GLOBAL_KEYS: &str =
+    "1-6 a 0 body  ·  Esc home  ·  c coach  ·  A ask  ·  t theme  ·  p pause  ·  L sessions  ·  q quit";
 /// Three cells per row from this many columns; two below.
 pub const THREE_CELLS: u16 = 80;
 /// A cell's middle form from this many cells wide; the short one below.
@@ -205,8 +208,16 @@ fn act_rows<'a>(t: &Theme, d: &Dashboard, width: u16, open: usize) -> Vec<Line<'
     rows
 }
 
-/// Row 6: `─── title ─────── 0 home  ·  keys ───`.
-fn rule_line<'a>(t: &Theme, body: &dashboard::Body, width: usize, home: bool) -> Line<'a> {
+/// Row 6: `─── title ─────── 0: home  ·  ? keys ───`; with `keys` (the
+/// `?` toggle) the tail is the body's own keys and then the global ones,
+/// cut at the width. Short widths lose `? keys`, then the word `home`.
+fn rule_line<'a>(
+    t: &Theme,
+    body: &dashboard::Body,
+    width: usize,
+    home: bool,
+    keys: bool,
+) -> Line<'a> {
     let border = Style::default().fg(t.border);
     let key = if home { t.ok() } else { t.accent() }.add_modifier(Modifier::BOLD);
     let head = vec![
@@ -217,15 +228,28 @@ fn rule_line<'a>(t: &Theme, body: &dashboard::Body, width: usize, home: bool) ->
         ),
         Span::styled(" ", border),
     ];
+    let sep = || Span::styled(t.coach_text("  ·  "), border);
     let mut tail = vec![
         Span::styled(" ", border),
         Span::styled("0: ", key),
         Span::styled("home", t.dim()),
     ];
-    // The keys give way first, then the word `home`, when the width is short.
-    if !body.keys.is_empty() && cells_of(&head) + 12 + body.keys.chars().count() + 8 <= width {
-        tail.push(Span::styled(t.coach_text("  ·  "), border));
-        tail.push(Span::styled(body.keys.to_string(), t.dim()));
+    if keys {
+        let map = if body.keys.is_empty() {
+            GLOBAL_KEYS.to_string()
+        } else {
+            format!("{}  ·  {GLOBAL_KEYS}", body.keys)
+        };
+        let room = width.saturating_sub(cells_of(&head) + cells_of(&tail) + 5 + 4);
+        tail.push(sep());
+        tail.push(Span::styled(
+            crate::ui::fmt::clip(&t.coach_text(&map), room),
+            t.dim(),
+        ));
+    } else if cells_of(&head) + cells_of(&tail) + 5 + 6 + 4 <= width {
+        tail.push(sep());
+        tail.push(Span::styled("?", t.accent().add_modifier(Modifier::BOLD)));
+        tail.push(Span::styled(" keys", t.dim()));
     }
     tail.push(Span::styled(t.coach_text(" ───"), border));
     if cells_of(&head) + cells_of(&tail) > width {
@@ -250,6 +274,7 @@ pub fn compose<'a>(
     width: u16,
     height: u16,
     open: usize,
+    keys: bool,
 ) -> Vec<Line<'a>> {
     let w = width as usize;
     let h = height as usize;
@@ -258,7 +283,7 @@ pub fn compose<'a>(
     out.extend(cell_rows(t, d, width, open));
     out.extend(act_rows(t, d, width, open));
     if let Some(body) = d.bodies.get(open) {
-        out.push(rule_line(t, body, w, body.id == "events"));
+        out.push(rule_line(t, body, w, body.id == "events", keys));
         for row in &body.rows {
             if out.len() >= h {
                 break;
@@ -274,8 +299,8 @@ pub fn compose<'a>(
     out
 }
 
-/// Draw the dashboard into `area` (the footer excluded).
-pub fn render(frame: &mut Frame, area: Rect, d: &Dashboard, t: &Theme, open: usize) {
-    let lines = compose(t, d, area.width, area.height, open);
+/// Draw Console into `area`: the whole of it, there is no footer.
+pub fn render(frame: &mut Frame, area: Rect, d: &Dashboard, t: &Theme, open: usize, keys: bool) {
+    let lines = compose(t, d, area.width, area.height, open, keys);
     frame.render_widget(Paragraph::new(lines), area);
 }

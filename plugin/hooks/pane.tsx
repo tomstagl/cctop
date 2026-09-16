@@ -250,6 +250,7 @@ function coachChanged($: EngineInterface): void {
 function overviewActions($: EngineInterface): OverviewActions {
   return {
     open: (id) => apply($, { type: 'overview.body', id }),
+    keys: (keys) => apply($, { type: 'overview.keys', keys }),
   };
 }
 

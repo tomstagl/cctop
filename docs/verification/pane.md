@@ -492,6 +492,27 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+32. **`? keys` expands the rule line and collapses it again** (Console,
+    PRD dashboard-v2 US-106). Console has no footer; the rule line's right
+    half is `0: home  ·  ? keys`, and `?` (the TUI) or a click on `? keys`
+    (the pane, a plain Button without a hotkey — the engine takes digits
+    and lowercase letters only) turns it into the open body's key map: the
+    body's own keys, then the global ones in the TUI, the pane's hotkeys
+    and pointer targets in the pane.
+    Setup: as item 28.
+    Keys: `?` in the TUI (`cctop run`), then `?` again; in the pane, click
+    `? keys`, then click the key map.
+    Expected: in the TUI the tail reads `0: home  ·  Enter panel  ·  1-6 a
+    0 body  ·  Esc home  ·  c coach  ·  A ask  ·  t theme  ·  p pause  ·  L
+    sessions  ·  q quit` cut at the width with `…`, and `?` again restores
+    `? keys`; the help overlay is not what `?` opens on Console (it is in a
+    panel and the coach view); in the pane the click swaps the tail for
+    `1-6 a 0 body  ·  click a cell, the act line or home  ·  the view bar
+    for the other views` and a click on that text collapses it; the rows
+    above and below do not move on either surface.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window
