@@ -212,7 +212,10 @@ mod tests {
         assert_eq!(v.threshold, 185_000);
         assert!(v.threshold_learned);
         let v = view(&agg("session-a"), Some(200_000), None, None);
-        assert_eq!(v.threshold, 187_000);
+        assert_eq!(
+            v.threshold, 167_000,
+            "200 k − the 20 k output reserve − 13 k"
+        );
         assert_eq!(default_window(Some("claude-haiku-4-5-20251001")), 200_000);
         assert_eq!(default_window(Some("claude-opus-5")), 1_000_000);
         assert_eq!(default_window(None), 1_000_000);
@@ -390,8 +393,9 @@ impl AutocompactConfig {
 /// The three bands of the context gauge and where they start, in tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bands {
-    /// The window Claude Code reasons with (980 000 on a 1M model, or the
-    /// override).
+    /// The window Claude Code reasons with: the nominal one less the 20 000
+    /// output reserve (980 000 on a 1M model, 180 000 on 200 k), or the
+    /// override.
     pub effective_window: u64,
     /// Where autocompact fires: `effective − 13 000`, lowered by a pct override.
     pub threshold: u64,
@@ -596,8 +600,9 @@ mod band_tests {
         assert!(!b.precompute_armed(412_000));
         assert!(b.precompute_armed(800_000));
         let b = bands(200_000, &cfg);
-        assert_eq!(b.threshold, 187_000);
-        assert_eq!(b.footer(134_000), "28% until auto-compact");
+        assert_eq!(b.effective_window, 180_000);
+        assert_eq!(b.threshold, 167_000);
+        assert_eq!(b.footer(134_000), "19% until auto-compact");
     }
 
     #[test]

@@ -295,8 +295,9 @@ mod tests {
         assert!(!out.contains("84 % est"), "{out}");
         assert!(out.contains("420k / 500k"), "{out}");
         assert!(out.contains("precompute armed"), "{out}");
-        // Inside the warn band the footer switches to Claude Code's wording.
-        app.state.context_size_exact = Some(470_000);
+        // Inside the warn band the footer switches to Claude Code's wording
+        // (500k: effective 480k, threshold 467k, the band from 447k).
+        app.state.context_size_exact = Some(450_000);
         let out = render_to_string(&app, 80, 51);
         assert!(
             out.contains("Context low (3% remaining) · Run /compact"),

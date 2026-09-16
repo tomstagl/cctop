@@ -334,19 +334,20 @@ mod tests {
             Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}"#).unwrap()
         };
         s.apply(&prompt());
-        s.apply(&ctx("a", 170_000)); // 85 % of haiku's 200k: still below the warn band (167k)
+        // Haiku's 200k: effective 180k, threshold 167k, the warn band from 147k.
+        s.apply(&ctx("a", 150_000));
         assert!(
             fires(&mut e, &s, RuleId::ContextHigh),
-            "170k ≥ warn at 167k"
+            "150k ≥ warn at 147k"
         );
         assert!(
             !fires(&mut e, &s, RuleId::ContextHigh),
             "no re-fire while high"
         );
-        s.context_size_exact = Some(160_000);
+        s.context_size_exact = Some(140_000);
         assert!(
             !fires(&mut e, &s, RuleId::ContextHigh),
-            "160k is below Claude Code's warn band"
+            "140k is below Claude Code's warn band"
         );
         s.context_size_exact = Some(190_000);
         let f = e.evaluate(&s);

@@ -19,6 +19,7 @@ cargo test <name>                # one test / module, e.g. cargo test advisor::r
 cargo build --release            # target/release/cctop
 make check-types                 # d.ts + harness_facts version vs installed `claude` (skips if no claude)
 make check-contract              # what CI's `contract` job runs: the §A load check (no model call), the d.ts surface diff, the validator, the pins
+make check-facts                 # src/harness_facts.rs constants re-read from the installed Claude Code bundle; then bump READ_FROM
 ```
 
 Pane (TypeScript, Node ≥ 22, no bun):
