@@ -5,6 +5,13 @@ Written 2026-09-16, branch `agent-costs` at its tip (draft PR #6 against
 2.1.273 on this machine. Read this, then `tasks/prd-cctop-team-costs.md`
 in full, then `tasks/handoff-agent-costs.md` for fixture D's sources.
 
+> **Later on 2026-09-16:** PR #6 was rebase-merged into `main` and released
+> as **v0.4.0** (tag on `876d41e`; plugin manifest 0.5.0; the function-hooks
+> contract regenerated against Claude Code 2.1.273, `TESTED_WITH` and the
+> header badge name it; `harness_facts::READ_FROM` still 2.1.270). The
+> "not merged, not released" below is history; branch the team PRD from
+> `main`. `docs/verification/pane.md` item 26 stays pending — a live check.
+
 ## Where things stand
 
 - **The agent-costs PRD is implemented**, one commit per story on PR #6
@@ -56,7 +63,7 @@ in full, then `tasks/handoff-agent-costs.md` for fixture D's sources.
 Implement tasks/prd-cctop-team-costs.md per @tasks/handoff-team-costs.md
 (read the hand-off, then the PRD, then tasks/handoff-agent-costs.md for
 fixture D's sources). Branch from agent-costs (or from main once PR #6 is
-merged). Its US-001 first (facts, fixture D, the two parser additions),
+merged — it is, at v0.4.0). Its US-001 first (facts, fixture D, the two parser additions),
 then US-002 the collector, US-003 Panel 2, US-004 the rows, US-005 budget
 and drift; one commit per story; make check, npm test and the plugin
 validator before each commit; regenerate docs/metrics.md, the README
