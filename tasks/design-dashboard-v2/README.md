@@ -1,7 +1,14 @@
 # Design canvas sources — cctop Dashboard Redesign
 
-The working files behind the canvas https://claude.ai/artifact/1WvbQBFa3mKqyVPZ8YuWmy
-for `tasks/prd-cctop-dashboard-v2.md` and `tasks/plan-dashboard-v2.md`.
+The working files behind the design of `tasks/prd-cctop-dashboard-v2.md` and
+`tasks/plan-dashboard-v2.md`.
+
+- **Canvas** (all four pages, annotated): https://claude.ai/artifact/1WvbQBFa3mKqyVPZ8YuWmy
+- **Clickable prototype** (the same screens, standalone): https://claude.ai/artifact/DYa82nCEikBcSe5tv8RTrE
+
+Both are private artifacts on the author's account. In a Claude Code session on
+that account, `/artifacts` lists them; otherwise open `prototype.html` from this
+directory, which needs nothing.
 
 Unlike `tasks/design-coach/`, these `.dc.html` files **are** the sources — there is
 no `build.mjs` between them and the canvas — so they are committed.
