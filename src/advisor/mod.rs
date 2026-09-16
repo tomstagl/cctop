@@ -252,6 +252,7 @@ pub const ORDER_LATER: &[&str] = &[
     "fresh-input",
     "chatty",
     "subagent-model",
+    "agents-waste",
     "hook-overhead",
 ];
 
@@ -1406,7 +1407,7 @@ mod tests {
         assert!(e.current.is_empty());
         assert!(e.occupant.is_none());
         let ids = e.rule_ids();
-        assert_eq!(ids.len(), 35, "{ids:?}");
+        assert_eq!(ids.len(), 36, "{ids:?}");
         assert!(!ids.contains(&"A15"), "A15 retired for A38");
         assert!(!ids.contains(&"A18"), "A18 retired for A42");
         for id in [

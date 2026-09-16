@@ -22,6 +22,7 @@ pub fn all() -> Vec<Box<dyn Rule>> {
         Box::new(FreshInputSpike),
         Box::new(ChattyTurns),
         Box::new(SubagentModel),
+        Box::new(AgentsWaste),
         Box::new(BigPrefix),
         Box::new(ExploreRun),
         Box::new(CacheCountdown),
@@ -801,6 +802,98 @@ impl Rule for SubagentModel {
     }
 }
 
+/// A48 — money that went to agents whose work did not come back: the
+/// agents ledger's waste is ≥ $1 and ≥ 25 % of the agents' spend, over at
+/// least two classified agents (agent PRD US-006). Structural evidence
+/// only: the task notifications' statuses and result lengths, the
+/// workflow journal, the agents' states and the hook spool.
+pub struct AgentsWaste;
+
+/// The waste share the rule fires above, and the one it counts as acted
+/// below.
+const WASTE_FIRE_RATIO: f64 = 0.25;
+const WASTE_ACTED_RATIO: f64 = 0.10;
+const WASTE_FIRE_USD: f64 = 1.0;
+
+fn waste_figures(
+    state: &State,
+) -> (
+    crate::agent_ledger::Totals,
+    Vec<crate::agent_ledger::AgentRow>,
+) {
+    let rows = crate::agent_ledger::rows(state, crate::agent_ledger::Sort::Waste, false);
+    let totals = crate::agent_ledger::totals(&rows);
+    (totals, rows)
+}
+
+fn waste_ratio(t: &crate::agent_ledger::Totals) -> f64 {
+    if t.cost.usd > 0.0 {
+        t.waste_usd / t.cost.usd
+    } else {
+        0.0
+    }
+}
+
+impl Rule for AgentsWaste {
+    fn id(&self) -> &'static str {
+        "A48"
+    }
+    fn family(&self) -> &'static str {
+        "agents-waste"
+    }
+    fn urgency(&self) -> Urgency {
+        Urgency::Later
+    }
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let (t, rows) = waste_figures(state);
+        if t.classified < 2
+            || t.waste_usd < WASTE_FIRE_USD
+            || t.waste_usd < WASTE_FIRE_RATIO * t.cost.usd
+        {
+            return None;
+        }
+        // The reason that cost the most, and how many agents share it.
+        let (top, top_usd) = crate::agent_ledger::WasteReason::ALL
+            .iter()
+            .zip(t.waste_by_reason.iter())
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(r, usd)| (*r, *usd))?;
+        let top_n = rows
+            .iter()
+            .filter(|r| r.waste.is_some_and(|w| w.reason == top))
+            .count();
+        let mut a = Advice::new("A48", "agents-waste", Urgency::Later);
+        a.headline = format!(
+            "agents wasted ≈{} of ≈{}: {} {} ≈{}",
+            fmt::usd(t.waste_usd),
+            fmt::usd(t.cost.usd),
+            top_n,
+            top.label(),
+            fmt::usd(top_usd)
+        );
+        a.evidence = format!(
+            "{} of {} agents classified · {:.0} % of agent spend",
+            t.classified,
+            t.agents,
+            waste_ratio(&t) * 100.0
+        );
+        a.action = "open the agents view (6, Enter) and see which launches did not pay off before launching more".into();
+        a.action_text = "6 Enter".into();
+        a.action_kind = ActionKind::Key;
+        a.saving = Saving::OneOff((t.waste_usd / 5.0 * 1e6) as u64);
+        a.retires_on = "the view opened or the waste share under 10 %";
+        a.mark = state.agents_view_opens;
+        Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state.agents_view_opens > fired.mark
+            || waste_ratio(&waste_figures(state).0) < WASTE_ACTED_RATIO
+    }
+    fn cooldown_turns(&self) -> usize {
+        10
+    }
+}
+
 /// A17 — the fixed prefix costs ≥ $0.25 per turn at the cache-read price,
 /// or is ≥ 100 k tokens (a fifth of a 200 k window).
 pub struct BigPrefix;
@@ -1399,6 +1492,122 @@ mod tests {
             ChattyTurns.evaluate(&fixture_state()).is_none(),
             "15 turns only"
         );
+    }
+
+    #[test]
+    fn a48_agents_waste_fires_on_two_classified_agents_over_a_dollar_and_a_quarter() {
+        let mut s = State::new(Pricing::bundled());
+        // Four opus agents at ≈$1.25 each (1.5 M cache read at $0.50/M,
+        // 20 k output at $25/M).
+        let mk = |id: &str| {
+            let mut a = crate::agents::Agent::new(
+                id,
+                crate::agents::Meta {
+                    agent_type: "Explore".into(),
+                    ..Default::default()
+                },
+            );
+            a.model = "claude-opus-5".into();
+            a.usage.cache_read = 1_500_000;
+            a.usage.output = 20_000;
+            a
+        };
+        let notify = |s: &mut State, id: &str, status: &str, result: &str| {
+            let text = format!(
+                "<task-notification><task-id>{id}</task-id><status>{status}</status><summary>s</summary><result>{result}</result></task-notification>"
+            );
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"2026-01-01T00:10:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+                serde_json::to_string(&text).unwrap()
+            )).unwrap());
+        };
+        for id in [
+            "0000000000000000a",
+            "0000000000000000b",
+            "0000000000000000c",
+            "0000000000000000d",
+        ] {
+            s.agents.insert(id.into(), mk(id));
+        }
+        for id in [
+            "0000000000000000a",
+            "0000000000000000b",
+            "0000000000000000c",
+            "0000000000000000d",
+        ] {
+            notify(&mut s, id, "completed", &"r".repeat(800));
+        }
+        assert!(AgentsWaste.evaluate(&s).is_none(), "nothing wasted");
+        // One failed agent: ≈$1.25 of ≈$5 is 25 %, but one classified.
+        notify(&mut s, "0000000000000000a", "failed", "");
+        assert!(AgentsWaste.evaluate(&s).is_none(), "one classified agent");
+        // A second, killed: ≈$2.50 of ≈$5.
+        notify(&mut s, "0000000000000000b", "killed", "");
+        let adv = AgentsWaste.evaluate(&s).expect("fires");
+        assert_eq!(adv.rule, "A48");
+        assert_eq!(adv.urgency, Urgency::Later);
+        assert!(
+            adv.headline.starts_with("agents wasted ≈$2."),
+            "{}",
+            adv.headline
+        );
+        assert!(
+            adv.headline.contains("1 failed ≈$1.") || adv.headline.contains("1 killed ≈$1."),
+            "{}",
+            adv.headline
+        );
+        assert_eq!(
+            adv.evidence,
+            "2 of 4 agents classified · 50 % of agent spend"
+        );
+        assert_eq!(adv.action_kind, ActionKind::Key);
+        assert_eq!(adv.action_text, "6 Enter");
+        assert!(matches!(adv.saving, Saving::OneOff(t) if t > 0));
+        assert_eq!(AgentsWaste.cooldown_turns(), 10);
+        assert!(!AgentsWaste.acted(&s, &adv));
+        // Opening the agents view acts on it.
+        crate::ui::agents_view::open(&mut s);
+        assert!(AgentsWaste.acted(&s, &adv));
+        // So does the waste share falling under 10 %: eight more agents
+        // that returned.
+        let mut t = State::new(Pricing::bundled());
+        for id in ["0000000000000000a", "0000000000000000b"] {
+            t.agents.insert(id.into(), mk(id));
+        }
+        notify(&mut t, "0000000000000000a", "failed", "");
+        notify(&mut t, "0000000000000000b", "failed", "");
+        let fired = AgentsWaste.evaluate(&t).expect("fires at 100 %");
+        for i in 0..20u64 {
+            let id = format!("{:017x}", 0xb000_0000_0000_0000u64 + i);
+            t.agents.insert(id.clone(), mk(&id));
+            notify(&mut t, &id, "completed", "rrrr");
+        }
+        assert!(AgentsWaste.acted(&t, &fired), "2 of 22 wasted: under 10 %");
+        assert!(AgentsWaste.evaluate(&t).is_none());
+        // Below a dollar of waste it stays quiet whatever the share.
+        let mut cheap = State::new(Pricing::bundled());
+        for id in ["0000000000000000a", "0000000000000000b"] {
+            let mut a = mk(id);
+            a.usage.cache_read = 40_000;
+            a.usage.output = 500;
+            cheap.agents.insert(id.into(), a);
+        }
+        notify(&mut cheap, "0000000000000000a", "failed", "");
+        notify(&mut cheap, "0000000000000000b", "failed", "");
+        assert!(AgentsWaste.evaluate(&cheap).is_none());
+    }
+
+    #[test]
+    fn a48_is_silent_on_the_fixtures() {
+        // A: a fork with no notification, nothing classified. B: no agents.
+        // C: one killed agent, ≈$0.18 — under the dollar and one classified.
+        for name in ["session-a", "session-b", "session-c"] {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("fixtures/{name}.jsonl"));
+            let info = crate::ui::state::SessionInfo::from_fixture(&path);
+            let s = crate::load::state_from(&path, info);
+            assert!(AgentsWaste.evaluate(&s).is_none(), "{name}");
+        }
     }
 
     #[test]

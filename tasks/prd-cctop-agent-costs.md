@@ -23,6 +23,7 @@
 > - **A notification is delivered three ways**, all with the same text: as a `user` line when the model is idle, and when it is busy as a `queue-operation` `enqueue` (its `content`) followed by a `queued_command` attachment (its `prompt`) or, after a `dequeue`, the user line. Every `killed` agent notification on this machine came as an attachment, none as a user line — a parser that reads user lines alone never sees one. `Line::task_notification()` reads all three; `State` keys by `<task-id>` so a repeat overwrites.
 > - **Background shell commands' notifications do carry `<tool-use-id>`** (it names the `Bash` call); what tells them from an agent's is the id: an agent's `<task-id>` is its 17-hex agent id, a shell task's 9 base-36 characters. `State` takes a notification as an agent's when the id is a known agent's, the tool_use was an `Agent` call, or (no launch seen) the id has the agent shape.
 > - **No `failed` agent notification exists on this machine** (the 25 of v1.1 were shell tasks and tool-result text); fixture C carries `completed` and `killed` agents and a shell `failed`; the `failed` reason is pinned on synthetic lines. `<result>` is present on a `killed` notification too (the partial result, 165 chars on the fixture).
+> - **A48 fires zero times on fixture C**, not once as US-006 says: its one killed agent is ≈$0.18 of ≈$0.31, under the rule's own `max($1, 25 %)` floor and its two-agents minimum. The rule is pinned on a synthetic four-agent state instead; the thresholds stand.
 
 ---
 

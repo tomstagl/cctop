@@ -81,7 +81,7 @@ RULE_NAMES = {
     "A34": "Plan first", "A36": "Correction streak", "A38": "Failure cascade",
     "A40": "Review before merge", "A41": "Waiting on you", "A42": "Natural boundary",
     "A43": "Destructive git", "A44": "Stale collision", "A45": "Denial streak",
-    "A46": "Instruction drift", "A47": "Turn died",
+    "A46": "Instruction drift", "A47": "Turn died", "A48": "Agent waste",
 }
 # The class a rule fires in, from its `Advice::new(id, family, Urgency::…)`;
 # A34 and A46 never take the slot (`next_row_only` unconditionally).
@@ -144,6 +144,8 @@ GUIDE = {
         "Pace batched questions to land inside this window rather than trickling them out past it.", ["A02", "A19", "A30"]),
     "cost": ("What this session would cost at API list price, even on a subscription plan with no per-token bill.",
         "Watch it alongside burn rate if you're trying to keep a session inside a budget.", []),
+    "cost_combined": ("The session's whole spend — Claude Code's own ledger, which already holds the subagents' earlier calls, plus what cctop priced after it on both the main transcript and the agents. Panel 2's headline.",
+        "Read the breakdown line under it: `main`/`ledger` and `since` add up to the headline, `agents` says how much of it went to agents. `a` drops them from the figure.", ["A48", "A14"]),
     "cost_by_model": ("Splits spend by model — the number that matters once subagents are running on something other than the main thread's model.",
         "If a cheap search or summarise task is running on your priciest model, point that subagent at a smaller one.", ["A14"]),
     "burn_rate": ("An early-warning $/hour figure extrapolated from the last 15 minutes, well before the final bill or a usage limit surprises you.",
@@ -192,6 +194,12 @@ GUIDE = {
         "A failed state with nothing following for a while is worth checking on directly rather than assuming it will recover.", []),
     "agent_tokens": ("Subagents have their own context and their own cost, entirely separate from the main thread's numbers.",
         "An expensive subagent doing simple search or summary work is a candidate to move to a cheaper model.", ["A14"]),
+    "agent_cost": ("Each subagent's own calls priced from the table, on top of the tokens — the figure the agents view sorts by.",
+        "Read it with `ret`: a costly agent that returned little is the one to rethink.", ["A48"]),
+    "agent_waste": ("Money that went to agents whose work did not come back — failed, killed, an empty result, or gone quiet — with the reason word beside the dollars.",
+        "Enter on the panel opens the agents view; before launching another of the same kind, look at why the last ones did not return.", ["A48"]),
+    "agents_waste": ("The session's wasted agent spend summed by reason: what the coach's A48 fires on.",
+        "Above a dollar and a quarter of the agents' spend, stop launching and look at the rows.", ["A48"]),
     "mcp_rss": ("Memory footprint of MCP server processes running alongside the session.",
         "Mostly diagnostic — a steadily growing figure over a long session is worth reporting to that server's maintainer.", []),
     "mcp_calls": ("How much an MCP server is actually used, in raw call count.",
