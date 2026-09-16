@@ -395,6 +395,33 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+27. **The team group and the team's part of the cost** (the team-costs
+    PRD). The pane's Agents view lists the teammates of a team the session
+    leads under the subagents — a `team N · M active · ≈$X` group row, then
+    one row per member with the TUI's columns: glyph, name, model family,
+    time, `ctx`, `tok`, `$` with its mark, human/machine turns, the status
+    word — and the Overview's row 2 carries `team ≈$X (P %, N of M)` in its
+    detail, row 6 `team ≈$X`.
+    Setup: as item 25; a session that spawned two teammates through the
+    `Agent` tool (`Agent` with `name` and `team_name`, or a `/team` flow),
+    one of which has ended (its transcript ends with a `cost-state`) while
+    the other still works.
+    Keys: `/cctop agents` (or the view bar); then the Overview; then, in
+    the TUI, `6` and Enter, and `a` on Panel 2.
+    Expected: the group row within one poll of the second spawn, marked
+    `≈` while a teammate works; the ended member `○ … ended` with an exact
+    figure (no `≈`, Claude Code's own `totalCostUSD`), the working one
+    `● …` with `≈`; below 58 body columns the model and `ctx` columns are
+    gone and the status word stays; the Overview's row 2 reads `≈$…` with
+    `team ≈$… (N %, 2 of 2)` in its detail and row 6 `team ≈$…`; `cctop
+    query agents --session <id> | jq .team` says `source: "config"` while
+    `~/.claude/teams/session-<id8>/` exists and `"transcripts"` after the
+    team ended and the directory went, with the same members either way;
+    the TUI's team rows and the pane's are the same characters at 120
+    columns; `a` on Panel 2 takes the team out (`main only`) and back.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

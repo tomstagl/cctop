@@ -1,0 +1,24 @@
+---
+source: src/ui/agents_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+┌ Agents ─ 0 · 0 running · —  ↕spend↓  (s/S sort, j/k, ┐
+│   type     model    time   tok    ≈$   ret  waste    │
+│ no subagents yet                                     │
+│ team 3 · 1 active · ≈$0.48 · 2 of 3 read             │
+│   name     model    time   ctx    tok      $ turns   │
+│ ○ diff-pa… haiku  15m 48   62k   327k   0.31  0/1 en…│
+│ ● diff-pa… haiku     45s   62k   327k  ≈0.17  0/1    │
+│ — diff-pa… haiku   no transcript                     │
+│──────────────────────────────────────────────────────│
+│ waste: failed 0.00 · killed 0.00 · no ret 0.00 · idl…│
+│ cold starts 0 (≈$0.000 writes) · no output yet       │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

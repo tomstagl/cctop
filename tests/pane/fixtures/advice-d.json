@@ -1,0 +1,81 @@
+{
+  "items": [
+    {
+      "action": "queue: 'run cargo test --lib lorem_i 2>&1, fix failures' or /goal",
+      "action_kind": "prompt",
+      "action_text": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+      "class": "NEXT",
+      "doc_key": "A32",
+      "evidence": "1 edits since the last check · 17:29 · 29 calls",
+      "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
+      "family": "verify-gap",
+      "headline": "Edited 1 src file, no test/build run yet",
+      "retires_on": "a test run or a read of an edited file",
+      "rule": "A32",
+      "saving": "avoids a hard stop",
+      "since_turn": 8,
+      "window_turns": 1
+    },
+    {
+      "action": "a switch re-writes all context — pick the model early, or switch right after /clear",
+      "action_kind": "advice",
+      "action_text": "",
+      "class": "LATER",
+      "doc_key": "A01",
+      "evidence": "model_changed · turn 7 · 1 named misses this session",
+      "explain": "A named cache miss means the API could not reuse the cached prefix: a model switch (`model_changed`) re-writes the entire context at the cache-write price, a changed tool list (`tools_changed`: an MCP server connecting, ToolSearch loading a deferred tool, a CLI older than 2.1.267 rebuilding the list) re-writes everything after the tools, and a rewritten earlier message (`messages_changed`: a rewind or an edited turn) re-writes from that point. Each is a one-off cost the size of the context; the fix is timing — switch models and load tools early, or right after /clear.",
+      "family": "cache-miss",
+      "headline": "cache miss: model → fable-5-1 · 111k re-written ≈$2.24",
+      "retires_on": "3 turns",
+      "rule": "A01",
+      "saving": "~111k once",
+      "since_turn": 8,
+      "window_turns": 3
+    },
+    {
+      "action": "queue: 'run builds and test suites longer than a minute in the background'",
+      "action_kind": "prompt",
+      "action_text": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+      "class": "LATER",
+      "doc_key": "A10",
+      "evidence": "a foreground Bash call longer than a minute; Claude waited for it",
+      "explain": "A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background (`run_in_background`): Claude keeps working and is notified when the command finishes. Calls Claude Code backgrounded itself do not count.",
+      "family": "long-foreground",
+      "headline": "`lorem_ipsum_dolor_sit_amet_co…` blocked the turn for 1:38",
+      "retires_on": "3 turns",
+      "rule": "A10",
+      "saving": "~1:38/turn",
+      "since_turn": 8,
+      "window_turns": 5
+    }
+  ],
+  "next": {
+    "class": "LATER",
+    "headline": "cache miss: model → fable-5-1 · 111k re-written ≈$2.24",
+    "promotes": "when the slot frees",
+    "rule": "A01"
+  },
+  "primary": {
+    "acting": false,
+    "action": "queue: 'run cargo test --lib lorem_i 2>&1, fix failures' or /goal",
+    "action_kind": "prompt",
+    "action_text": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+    "class": "NEXT",
+    "doc_key": "A32",
+    "evidence": "1 edits since the last check · 17:29 · 29 calls",
+    "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
+    "family": "verify-gap",
+    "fired_at_ms": 1789225485845,
+    "headline": "Edited 1 src file, no test/build run yet",
+    "retires_on": "a test run or a read of an edited file",
+    "rule": "A32",
+    "saving": "avoids a hard stop",
+    "since_turn": 8,
+    "window_turns": 1
+  },
+  "recent": [],
+  "schema": 2,
+  "session_mode": "interactive",
+  "snoozed": [],
+  "suppressed": []
+}

@@ -761,6 +761,32 @@ fn row_agents(state: &State) -> Row {
             )]);
         }
     }
+    // The team after the agents (team PRD §4.5): its sum with the worst
+    // mark, the transcripts not found, its waste.
+    let team_rows =
+        crate::agent_ledger::teammate_rows(state, crate::agent_ledger::Sort::Waste, false);
+    if let Some(t) = crate::agent_ledger::team_totals(state, &team_rows) {
+        parts.push(vec![fg(match t.cost {
+            Some(c) => format!(
+                "team {}{}",
+                if c.approx { "≈" } else { "" },
+                fmt::usd(c.usd)
+            ),
+            None => format!("team {}", t.members),
+        })]);
+        if t.read < t.members {
+            parts.push(vec![seg(
+                format!("{} of {} read", t.read, t.members),
+                Tone::Warn,
+            )]);
+        }
+        if t.waste_usd > 0.0 {
+            parts.push(vec![seg(
+                format!("team wasted ≈{}", fmt::usd(t.waste_usd)),
+                Tone::Warn,
+            )]);
+        }
+    }
     if !state.mcp_needs_auth.is_empty() {
         parts.push(vec![seg("! auth", Tone::Warn)]);
     }

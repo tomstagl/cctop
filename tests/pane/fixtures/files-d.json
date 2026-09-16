@@ -1,0 +1,170 @@
+[
+  {
+    "edits": 1,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/d93e76.md",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 2
+    },
+    "writes": 1
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/f58ab3.md",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/40cde3.md",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/0d057b.ts",
+    "reads": 6,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 6
+    },
+    "writes": 0
+  },
+  {
+    "edits": 9,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/054354.rs",
+    "reads": 5,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 14
+    },
+    "writes": 0
+  },
+  {
+    "edits": 1,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/912bc9.md",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 2
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/e7bb7c.rs",
+    "reads": 2,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 2
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/lorem_ip.rs",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  }
+]

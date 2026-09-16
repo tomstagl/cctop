@@ -1,14 +1,26 @@
 // The Agents & MCP view: subagents as the TUI's agents view lists them
 // (state glyph, type, model family, elapsed, tokens, priced cost, what came
-// back, waste with its reason), MCP servers (name, RSS, calls, restarts) and
-// background tasks, one row each, from `cctop query agents`.
+// back, waste with its reason), the team the session leads as a second
+// group (glyph, name, model, elapsed, context, tokens, its own cost with
+// its mark, human/machine turns, the status word — team PRD §4.3), MCP
+// servers (name, RSS, calls, restarts) and background tasks, one row each,
+// from `cctop query agents`.
 import type { RenderElement } from 'claude-code';
 import type { Model } from '../model';
-import { DASH, at, formatBytes, formatDuration, isMissing, measured, stringAt, tokensOf } from './format';
+import { DASH, at, formatBytes, formatDuration, formatUsd, isMissing, measured, stringAt, tokensOf } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
 import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
-const W = { glyph: 10, model: 6, prefix: 3, kind: 6, elapsed: 6, tokens: 6, cost: 5, ret: 5, rss: 7, calls: 9, restarts: 4, status: 16 };
+const W = { glyph: 10, model: 6, prefix: 3, kind: 6, elapsed: 6, tokens: 6, cost: 5, ret: 5, rss: 7, calls: 9, restarts: 4, status: 16, ctx: 5, teamCost: 6, turns: 5 };
+
+/** A teammate's liveness glyph, as the TUI's team group: `●` working, `○` ended, `—` unknown. */
+const TEAM_GLYPH: Record<string, [string, Color | undefined]> = {
+  active: ['●', 'cyan'],
+  recent: ['●', 'cyan'],
+  ended: ['○', undefined],
+  gone: ['○', undefined],
+  missing: ['—', 'yellow'],
+};
 
 const STATE_GLYPH: Record<string, [string, Color]> = {
   running: ['◐', 'cyan'],
@@ -96,17 +108,62 @@ function taskCells(t: unknown, now: number): Cell[] {
   ];
 }
 
+/** A teammate's row: the subagent columns plus context and turns; a member with no transcript has only its word. */
+function teammateCells(t: unknown, inner: number): Cell[] {
+  const state = stringAt(t, 'state') ?? '';
+  const [glyph, color] = TEAM_GLYPH[state] ?? ['·', undefined];
+  const wide = inner >= NARROW;
+  const cells: Cell[] = [{ text: `${glyph} ${stringAt(t, 'name') ?? DASH}`, width: W.glyph, color, key: 'teammate_state' }];
+  if (wide) cells.push({ text: family(stringAt(t, 'model')), width: W.model, dim: true });
+  if (state === 'missing') {
+    cells.push({ text: stringAt(t, 'status') ?? 'no transcript', color: 'yellow' });
+    return cells;
+  }
+  const elapsed = measured(t, 'elapsed');
+  const cost = measured(t, 'cost');
+  const approx = at(t, 'cost', 'approx') === true;
+  const human = measured(t, 'turns', 'human');
+  const machine = measured(t, 'turns', 'machine');
+  cells.push({ text: elapsed === null ? DASH : formatDuration(elapsed.value), width: W.elapsed, right: true });
+  if (wide) cells.push({ text: tokensOf(measured(t, 'context')), width: W.ctx, right: true, key: 'teammate_context' });
+  cells.push(
+    { text: tokensOf(measured(t, 'tokens')), width: W.tokens, right: true, key: 'teammate_tokens' },
+    { text: cost === null ? DASH : `${approx ? '≈' : ''}${cents(cost.value)}`, width: W.teamCost, right: true, key: 'teammate_cost' },
+    { text: human === null || machine === null ? DASH : `${human.value}/${machine.value}`, width: W.turns, right: true, key: 'teammate_turns' },
+    { text: stringAt(t, 'status') ?? '', key: 'teammate_waste', color: at(t, 'waste') ? 'yellow' : undefined },
+  );
+  return cells;
+}
+
+/** `team 3 · 1 active · ≈$0.48 · 2 of 3 read`, as the TUI's team group row. */
+function teamGroupText(team: unknown): string {
+  const parts = [`team ${at(team, 'members') ?? DASH} · ${at(team, 'active') ?? 0} active`];
+  const cost = measured(team, 'cost');
+  parts.push(cost === null ? DASH : `${cost.approx ? '≈' : ''}${formatUsd(cost.value)}`);
+  const waste = measured(team, 'waste');
+  if (waste !== null && waste.value > 0) parts.push(`wasted ≈${formatUsd(waste.value)}`);
+  const read = at(team, 'read');
+  const members = at(team, 'members');
+  if (typeof read === 'number' && typeof members === 'number' && read < members) parts.push(`${read} of ${members} read`);
+  return parts.join(' · ');
+}
+
 function listAt(obj: unknown, key: string): unknown[] {
   const v = at(obj, key);
   return Array.isArray(v) ? v : [];
 }
 
-/** `0/1 agents` as the TUI's panel summary: running over listed. */
+/** `0/1 agents` as the TUI's panel summary: running over listed; a team alone as `1/3 team`. */
 function agentsSummary(data: unknown): string | undefined {
   const agents = listAt(data, 'agents');
-  if (agents.length === 0) return undefined;
-  const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
-  return `${running}/${agents.length} agents`;
+  const parts: string[] = [];
+  if (agents.length > 0) {
+    const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
+    parts.push(`${running}/${agents.length} agents`);
+  }
+  const team = at(data, 'team');
+  if (team !== null && team !== undefined) parts.push(`${at(team, 'active') ?? 0}/${at(team, 'members') ?? 0} team`);
+  return parts.length === 0 ? undefined : parts.join(' · ');
 }
 
 export function renderAgents(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
@@ -116,6 +173,14 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = [];
   for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+  // The team under the subagents: the group row, then a row per member
+  // (the query's `teammates[]` are the rows only when `team` is present).
+  const team = at(data, 'team');
+  if (team !== null && team !== undefined) {
+    const missing = listAt(team, 'missing').length > 0;
+    rows.push(line(teamGroupText(team), { key: 'team_cost', ...(missing ? { color: 'yellow' as Color } : {}) }));
+    for (const t of listAt(data, 'teammates')) rows.push(row(teammateCells(t, inner), inner, 'teammate_state'));
+  }
   if (isMissing(data, 'mcp')) rows.push(line(`mcp: ${stringAt(data, 'mcp', 'hint') ?? DASH}`, { key: 'mcp_rss' }));
   for (const m of listAt(data, 'mcp')) rows.push(row(mcpCells(m), inner, 'mcp_rss'));
   for (const t of listAt(data, 'tasks')) rows.push(row(taskCells(t, now), inner));

@@ -1,0 +1,343 @@
+{
+  "advice_count": 3,
+  "advice_primary": "A32",
+  "agents": {
+    "approx": false,
+    "metric_id": "agent_state",
+    "unit": "count",
+    "value": 0
+  },
+  "agents_cost": null,
+  "api_calls": {
+    "approx": false,
+    "metric_id": "api_calls",
+    "unit": "count",
+    "value": 90
+  },
+  "attribution": [
+    {
+      "owner": "skill:ralph-skills:prd",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.10128815383126191
+      }
+    },
+    {
+      "owner": "skill:cctop:cctop",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.08256237809139018
+      }
+    },
+    {
+      "owner": "team",
+      "share": {
+        "approx": false,
+        "metric_id": "attribution",
+        "unit": "ratio",
+        "value": 0.053699292316790666
+      }
+    }
+  ],
+  "behaviour_flags": {
+    "cache_miss_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 0.0
+    },
+    "cron": false,
+    "high_parallel": false,
+    "long_context_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": 60.22091125673401
+    },
+    "subagent_pct": {
+      "approx": false,
+      "metric_id": "behaviour_flags",
+      "unit": "%",
+      "value": -0.0
+    },
+    "tips": [
+      "60% of your usage was at >150k context"
+    ]
+  },
+  "burn_rate": {
+    "approx": true,
+    "metric_id": "burn_rate",
+    "unit": "USD/h",
+    "value": 34.207213
+  },
+  "cache": {
+    "expected_rebuilds": null,
+    "expires_in": {
+      "approx": true,
+      "metric_id": "cache_expires_in",
+      "unit": "ms",
+      "value": 3597656
+    },
+    "hit_ratio": {
+      "approx": true,
+      "metric_id": "cache_hit_ratio",
+      "unit": "ratio",
+      "value": 0.9718526792321696
+    },
+    "last_miss_cause": null,
+    "miss_causes": {},
+    "misses": {
+      "hint": "run cctop install",
+      "source": "missing"
+    },
+    "recache_tokens_if_cold": {
+      "approx": true,
+      "metric_id": "cache_recache_if_cold",
+      "unit": "tokens",
+      "value": 140778
+    },
+    "source": "transcript",
+    "ttl": {
+      "approx": true,
+      "metric_id": "cache_ttl",
+      "unit": "enum",
+      "value": "1h"
+    },
+    "warm": {
+      "approx": true,
+      "metric_id": "cache_warm",
+      "unit": "bool",
+      "value": true
+    }
+  },
+  "context": {
+    "compactions": {
+      "approx": false,
+      "metric_id": "compactions",
+      "unit": "count",
+      "value": 0
+    },
+    "prefix": {
+      "approx": false,
+      "metric_id": "context_prefix",
+      "unit": "tokens",
+      "value": 61665
+    },
+    "ratio": {
+      "approx": true,
+      "metric_id": "context_size",
+      "unit": "ratio",
+      "value": 0.140778
+    },
+    "size": {
+      "approx": true,
+      "metric_id": "context_size",
+      "unit": "tokens",
+      "value": 140778
+    },
+    "turns_until_compaction": {
+      "approx": true,
+      "metric_id": "turns_until_compaction",
+      "unit": "turns",
+      "value": 24.750897210812198
+    },
+    "velocity": {
+      "approx": false,
+      "metric_id": "context_velocity",
+      "unit": "tokens/turn",
+      "value": 33381.496960000004
+    },
+    "window": {
+      "approx": true,
+      "metric_id": "context_window",
+      "unit": "tokens",
+      "value": 1000000
+    }
+  },
+  "cost": {
+    "approx": false,
+    "metric_id": "cost",
+    "unit": "USD",
+    "value": 10.15592095
+  },
+  "cost_by_model": {
+    "claude-fable-5-1": 8.334676750000002,
+    "claude-haiku-4-5-20251001": 0.054296,
+    "claude-sonnet-5": 1.7669482
+  },
+  "cost_combined": {
+    "approx": true,
+    "metric_id": "cost_combined",
+    "source": "mixed",
+    "unit": "USD",
+    "value": 10.63990315
+  },
+  "cost_gradient": {
+    "calls_per_turn": 6.0,
+    "cold": false,
+    "next_30_calls": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 1.778835
+    },
+    "per_call": {
+      "approx": true,
+      "metric_id": "cost_per_call",
+      "unit": "USD",
+      "value": 0.0592945
+    },
+    "per_turn": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.355767
+    },
+    "per_turn_at_100k": {
+      "approx": true,
+      "metric_id": "cost_per_turn",
+      "unit": "USD",
+      "value": 0.2946
+    }
+  },
+  "current_turn_elapsed": {
+    "approx": false,
+    "metric_id": "turn_elapsed",
+    "unit": "ms",
+    "value": 195896
+  },
+  "hooks_installed": false,
+  "input_rate": {
+    "approx": false,
+    "metric_id": "input_rate",
+    "unit": "tokens/min",
+    "value": 430296.2
+  },
+  "insights": {
+    "hint": "no ~/.claude/usage-data (run /insights), or a fixture",
+    "source": "missing"
+  },
+  "limit_weight_tier": 10.0,
+  "limits": {
+    "hint": "run cctop install",
+    "source": "missing"
+  },
+  "machine_turns": {
+    "approx": false,
+    "metric_id": "turn_number",
+    "unit": "count",
+    "value": 0
+  },
+  "otel": {
+    "hint": "run cctop with --otlp and export telemetry (cctop install --otel)",
+    "source": "missing"
+  },
+  "permission_waits": {
+    "hint": "run cctop install",
+    "source": "missing"
+  },
+  "queued_prompts": {
+    "approx": false,
+    "metric_id": "queued_prompts",
+    "unit": "count",
+    "value": 0
+  },
+  "session": {
+    "alive": false,
+    "cwd": "/home/user/project",
+    "effort": "high",
+    "fast_mode": false,
+    "model": "claude-fable-5-1",
+    "name": "session-d",
+    "permission_mode": "auto",
+    "pid": null,
+    "plan": {
+      "hint": "no ~/.claude.json tier",
+      "source": "missing"
+    },
+    "pr": null,
+    "session_id": "",
+    "session_name": null,
+    "thinking": null,
+    "title": "lorem ipsum dolor sit a",
+    "version": "2.1.269"
+  },
+  "team_cost": {
+    "members": 3,
+    "read": 2,
+    "share": {
+      "approx": true,
+      "metric_id": "team_cost",
+      "unit": "ratio",
+      "value": 0.045487462919246595
+    },
+    "usd": {
+      "approx": true,
+      "metric_id": "team_cost",
+      "source": "mixed",
+      "unit": "USD",
+      "value": 0.48398220000000003
+    }
+  },
+  "tokens": {
+    "cache_hit_ratio": {
+      "approx": false,
+      "metric_id": "cache_hit_ratio",
+      "unit": "ratio",
+      "value": 0.9718526792321696
+    },
+    "cache_read": {
+      "approx": false,
+      "metric_id": "cache_read",
+      "unit": "tokens",
+      "value": 11097059
+    },
+    "cache_ttl": "OneHour",
+    "cache_write": {
+      "approx": false,
+      "metric_id": "cache_write",
+      "unit": "tokens",
+      "value": 320258
+    },
+    "fresh_input": {
+      "approx": false,
+      "metric_id": "fresh_input",
+      "unit": "tokens",
+      "value": 1141
+    },
+    "output": {
+      "approx": false,
+      "metric_id": "output",
+      "unit": "tokens",
+      "value": 85105
+    },
+    "thinking": {
+      "approx": false,
+      "metric_id": "thinking",
+      "unit": "tokens",
+      "value": 39541
+    }
+  },
+  "tokens_to_ctx": {
+    "approx": true,
+    "metric_id": "tokens_to_ctx",
+    "unit": "tokens",
+    "value": 22075
+  },
+  "tool_calls": {
+    "approx": false,
+    "metric_id": "tool_calls",
+    "unit": "count",
+    "value": 97
+  },
+  "turns": {
+    "approx": false,
+    "metric_id": "turn_number",
+    "unit": "count",
+    "value": 8
+  }
+}

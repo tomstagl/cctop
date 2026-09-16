@@ -8,8 +8,11 @@
 //! hook spool's pending calls, the usage — never from a prompt, a
 //! description or a result's text.
 
+use std::path::PathBuf;
+
 use crate::agents::{Agent, State as AgentState, IDLE_MS};
 use crate::metrics::cost::{Cost, Source};
+use crate::team::{self, Liveness};
 use crate::transcript::TaskStatus;
 use crate::ui::State;
 
@@ -429,6 +432,153 @@ pub fn totals(rows: &[AgentRow]) -> Totals {
     }
 }
 
+/// One teammate's row (team PRD §4.3): the subagent columns plus what only
+/// a session has — its context and its turns.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeammateRow {
+    pub name: String,
+    pub agent_type: String,
+    pub model: String,
+    pub session_id: Option<String>,
+    pub path: Option<PathBuf>,
+    pub state: Liveness,
+    pub started_at: Option<i64>,
+    pub elapsed_ms: Option<i64>,
+    /// Its own Panel-1 figure: the input of its last API call.
+    pub context: u64,
+    pub tokens: u64,
+    pub output_tokens: u64,
+    /// Its own ledger and priced tail; `None` without a transcript or a
+    /// priceable call.
+    pub cost: Option<Cost>,
+    /// `(human, machine)`.
+    pub turns: (usize, usize),
+    pub waste: Option<team::Waste>,
+}
+
+impl TeammateRow {
+    /// The status word beside the row: `idle <age>`, `ended`, `gone`,
+    /// `no transcript`, or nothing while it works.
+    pub fn status_word(&self) -> Option<String> {
+        match self.waste {
+            Some(team::Waste {
+                reason: team::WasteReason::Idle,
+                idle_ms: Some(ms),
+                ..
+            }) => Some(format!("idle {}", crate::coach::short_duration(ms))),
+            Some(team::Waste {
+                reason: team::WasteReason::Errored,
+                ..
+            }) => Some("errored".into()),
+            _ => self.state.word().map(str::to_string),
+        }
+    }
+}
+
+/// The team's group row: counts, the sum with the worst mark once, waste.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeamTotals {
+    pub name: String,
+    pub source: team::Source,
+    pub members: usize,
+    pub read: usize,
+    pub active: usize,
+    /// `None` when nothing could be priced.
+    pub cost: Option<Cost>,
+    pub waste_usd: f64,
+    /// In `team::WasteReason::ALL` order.
+    pub waste_by_reason: [f64; 2],
+    pub missing: Vec<String>,
+    pub looked_in: Vec<PathBuf>,
+}
+
+/// One teammate's row.
+pub fn teammate_row(state: &State, team: &team::Team, m: &team::Teammate) -> TeammateRow {
+    let now = state.clock_ms();
+    let alive = m.liveness(now, team.source);
+    TeammateRow {
+        name: m.name.clone(),
+        agent_type: m.agent_type.clone(),
+        model: m.model.clone(),
+        session_id: m.session_id.clone(),
+        path: m.path.clone(),
+        state: alive,
+        started_at: m.first_line_at,
+        elapsed_ms: m.elapsed_ms(now, alive),
+        context: m.agg.context_size(),
+        tokens: m.agg.total.total(),
+        output_tokens: m.agg.total.output,
+        cost: m.cost(),
+        turns: m.turns(),
+        waste: m.waste(now, alive),
+    }
+}
+
+/// Every teammate's row in `sort` order (the subagents' keys, within the
+/// group); empty without a team.
+pub fn teammate_rows(state: &State, sort: Sort, ascending: bool) -> Vec<TeammateRow> {
+    let Some(team) = &state.team else {
+        return Vec::new();
+    };
+    let mut out: Vec<TeammateRow> = team
+        .members
+        .values()
+        .map(|m| teammate_row(state, team, m))
+        .collect();
+    let key = |r: &TeammateRow| -> (f64, f64) {
+        let cost = r.cost.map_or(0.0, |c| c.usd);
+        let waste = r.waste.map_or(0.0, |w| w.usd);
+        match sort {
+            Sort::Spend => (cost, waste),
+            Sort::Waste => (waste, cost),
+            Sort::Elapsed => (r.elapsed_ms.unwrap_or(0) as f64, cost),
+            Sort::Started => (r.started_at.unwrap_or(0) as f64, cost),
+        }
+    };
+    out.sort_by(|a, b| {
+        let (ka, kb) = (key(a), key(b));
+        let ord =
+            kb.0.partial_cmp(&ka.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(kb.1.partial_cmp(&ka.1).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.name.cmp(&b.name));
+        if ascending {
+            ord.reverse()
+        } else {
+            ord
+        }
+    });
+    out
+}
+
+/// The group row over the team; `None` without one.
+pub fn team_totals(state: &State, rows: &[TeammateRow]) -> Option<TeamTotals> {
+    let team = state.team.as_ref()?;
+    let now = state.clock_ms();
+    let mut waste_by_reason = [0.0; 2];
+    for r in rows {
+        if let Some(w) = r.waste {
+            let i = team::WasteReason::ALL
+                .iter()
+                .position(|x| *x == w.reason)
+                .expect("every reason is listed");
+            waste_by_reason[i] += w.usd;
+        }
+    }
+    Some(TeamTotals {
+        name: team.name.clone(),
+        source: team.source,
+        members: team.members.len(),
+        read: team.read(),
+        active: rows.iter().filter(|r| r.state.is_alive()).count(),
+        cost: team.cost(now),
+        waste_usd: waste_by_reason.iter().sum(),
+        waste_by_reason,
+        missing: team.missing(now, state.session.alive),
+        looked_in: team.looked_in.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,6 +647,98 @@ mod tests {
         format!(
             "<task-notification><task-id>{id}</task-id><status>{status}</status><summary>s</summary>{result}</task-notification>"
         )
+    }
+
+    /// Fixture D as `cctop query` loads it, at the lead's clock.
+    fn state_d() -> State {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path))
+    }
+
+    #[test]
+    fn teammate_rows_on_fixture_d_and_none_without_a_team() {
+        let s = state_d();
+        let rows = teammate_rows(&s, Sort::Spend, false);
+        assert_eq!(rows.len(), 3);
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "diff-pane-research",
+                "diff-pane-research-2",
+                "diff-pane-research-3"
+            ],
+            "by spend: the exact ledger, the priced copy, the missing one"
+        );
+        let real = &rows[0];
+        assert_eq!(real.state, Liveness::Ended);
+        assert_eq!(real.status_word().as_deref(), Some("ended"));
+        assert!(!real.cost.unwrap().approx);
+        assert_eq!(real.turns, (0, 1));
+        assert_eq!(real.context, 62_275);
+        assert_eq!(real.tokens, 327_638);
+        assert_eq!(real.elapsed_ms, Some(948_371), "its span, it ended");
+        let priced = &rows[1];
+        assert_eq!(priced.state, Liveness::Active, "isActive in the team file");
+        assert!(priced.cost.unwrap().approx);
+        assert_eq!(priced.status_word(), None);
+        assert!(
+            priced.waste.is_none(),
+            "its last line is newer than the clock"
+        );
+        let missing = &rows[2];
+        assert_eq!(missing.state, Liveness::Missing);
+        assert_eq!(missing.cost, None);
+        assert_eq!(missing.status_word().as_deref(), Some("no transcript"));
+        let t = team_totals(&s, &rows).unwrap();
+        assert_eq!((t.members, t.read, t.active), (3, 2, 1));
+        assert_eq!(t.missing, ["diff-pane-research-3"]);
+        assert!(t.cost.unwrap().approx);
+        assert_eq!(t.waste_usd, 0.0);
+        // The other sorts keep every row and only reorder.
+        for sort in [Sort::Waste, Sort::Elapsed, Sort::Started] {
+            assert_eq!(teammate_rows(&s, sort, false).len(), 3);
+            assert_eq!(teammate_rows(&s, sort, true).len(), 3);
+        }
+        assert_eq!(
+            teammate_rows(&s, Sort::Started, false)[0].name,
+            "diff-pane-research-2",
+            "the newest start first"
+        );
+        // No team: no rows, no totals.
+        let a = state_with(vec![agent("0000000000000000a", 3, false, false)], T0);
+        assert!(teammate_rows(&a, Sort::Spend, false).is_empty());
+        assert!(team_totals(&a, &[]).is_none());
+    }
+
+    #[test]
+    fn a_teammate_silent_for_five_minutes_is_idle_on_fixture_d() {
+        // Ten minutes after the priced copy's last line, with the team file
+        // still saying `isActive: true`: alive by Claude Code's flag, no
+        // API call for `IDLE_MS`, nothing in flight — its current turn's
+        // cost is wasted as `idle`, and the group row says so.
+        let mut s = state_d();
+        let last = s.team.as_ref().unwrap().members["diff-pane-research-2"]
+            .last_line_at
+            .unwrap();
+        s.clock_override = true;
+        s.now_ms = last + 10 * 60 * 1000;
+        let rows = teammate_rows(&s, Sort::Waste, false);
+        let idle = &rows[0];
+        assert_eq!(idle.name, "diff-pane-research-2");
+        assert_eq!(idle.state, Liveness::Active);
+        let w = idle.waste.unwrap();
+        assert_eq!(w.reason, team::WasteReason::Idle);
+        assert!(w.usd > 0.0);
+        assert!(w.idle_ms.unwrap() >= 10 * 60 * 1000);
+        assert_eq!(idle.status_word().as_deref(), Some("idle 10m"));
+        let t = team_totals(&s, &rows).unwrap();
+        assert!((t.waste_usd - w.usd).abs() < 1e-12);
+        assert_eq!(t.waste_by_reason[0], w.usd, "idle is the first reason");
+        assert_eq!(t.waste_by_reason[1], 0.0);
+        // The ended one and the missing one waste nothing.
+        assert!(rows[1..].iter().all(|r| r.waste.is_none()));
     }
 
     #[test]

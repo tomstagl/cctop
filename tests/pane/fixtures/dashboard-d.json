@@ -1,0 +1,574 @@
+{
+  "cost_combined": {
+    "approx": true,
+    "metric_id": "cost_combined",
+    "source": "mixed",
+    "unit": "USD",
+    "value": 10.63990315
+  },
+  "exposed": true,
+  "header": {
+    "cwd": "/home/user/project",
+    "elapsed": "47:31",
+    "line": "cctop  claude-fable-5-1 · turn 8 · 47:31 · ENDED 15:04 · /home/user/project · v2.1.269",
+    "model": "claude-fable-5-1",
+    "phase": {
+      "glyph": "●",
+      "tokens": [
+        "2c +144",
+        "silent 3:00",
+        "▸ steer window"
+      ],
+      "word": "DELEGATING"
+    },
+    "pr": null,
+    "session": "session-d",
+    "turn": 8,
+    "version": "2.1.269"
+  },
+  "lines": {
+    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "l1": "○14% ○— ○59m ◐3 ▸",
+    "l2": "○○○◐"
+  },
+  "nudge": {
+    "acting": false,
+    "class": "NEXT",
+    "id": "A32",
+    "line": "Edited 1 src file, no test/build run yet — queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "tag": "NEXT · turn 8"
+  },
+  "rows": [
+    {
+      "detail": [
+        {
+          "text": "+33k/turn",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "autocompact 967k",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "826k left",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "compactions 0",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "re-reads 0",
+          "tone": "dim"
+        }
+      ],
+      "digit": 1,
+      "name": "Context",
+      "values": [
+        {
+          "text": "▇▇▇▇▇▇",
+          "tone": "accent"
+        },
+        {
+          "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+          "tone": "dim"
+        },
+        {
+          "text": " prefix 56k · inputs ≈11k · results ≈20k · thinking 36k · harness ≈12k",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "≈$10.6",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$34.2/h",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$/call ≈$.06",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "$/turn ≈$.36",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "next 30c ≈$1.8",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "team ≈$0.48 (5 %, 2 of 3 read)",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "skill:ralph-skills…",
+          "tone": "dim"
+        }
+      ],
+      "digit": 2,
+      "name": "Tokens",
+      "values": [
+        {
+          "text": "cache read 11.10M",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "write 320k",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "output 85k",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "warm 59m ≈",
+          "tone": "ok"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "misses 1 (model_changed 111k)",
+          "tone": "warn"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "60% of your usage was at >150k context",
+          "tone": "dim"
+        }
+      ],
+      "digit": 3,
+      "name": "Limits",
+      "values": [
+        {
+          "text": "no status line",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "weight ×10 (fable)",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "long_context 60 %",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "elapsed 3:15 · 4 api calls · 3 tool calls",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "hooks 2 (54ms)",
+          "tone": "dim"
+        }
+      ],
+      "digit": 4,
+      "name": "Turn",
+      "values": [
+        {
+          "text": "DELEGATING · 2c +144 · silent 3:00 · ▸ steer window",
+          "tone": "accent"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "api ≈1:38 · tools 0:04",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "Other 3",
+          "tone": "dim"
+        }
+      ],
+      "digit": 5,
+      "name": "Tools",
+      "values": [
+        {
+          "text": "97 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "3 err",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "explore 42 (1 ✗)",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "buildlint 7 (1 ✗)",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "test 3",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "Read 16",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "Edit 11",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "AskUserQuestion 4",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "top ctx Ba…",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "detail": [],
+      "digit": 6,
+      "name": "Agents",
+      "values": [
+        {
+          "text": "team ≈$0.48",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "2 of 3 read",
+          "tone": "warn"
+        }
+      ]
+    },
+    {
+      "detail": [],
+      "digit": 7,
+      "name": "Files",
+      "values": [
+        {
+          "text": "8 touched",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "d93e76.md E×1 W×1",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "f58ab3.md R×1",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "15:03 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Agent ✓ 72",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "15:03 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Agent lorem ipsum dolor sit amet co… ▶",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "15:03 ",
+          "tone": "dim"
+        },
+        {
+          "text": "note ",
+          "tone": "dim"
+        },
+        {
+          "text": "/model",
+          "tone": "fg"
+        }
+      ],
+      "digit": 8,
+      "name": "Events",
+      "values": [
+        {
+          "text": "15:04 ",
+          "tone": "dim"
+        },
+        {
+          "text": "api ",
+          "tone": "crit"
+        },
+        {
+          "text": "cost-state $10.16 · api 19:38 · retries…",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "15:04 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Agent ✓ 72",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "15:04 ",
+          "tone": "dim"
+        },
+        {
+          "text": "tool ",
+          "tone": "dim"
+        },
+        {
+          "text": "Agent lorem ipsum dolor sit a…",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "detail": [
+        {
+          "text": "LATER A01 cache miss: model → fable-5-1 · 111k re…",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "LATER A10 `lorem_ipsum_dolor_sit_amet_co…` blocke…",
+          "tone": "dim"
+        }
+      ],
+      "digit": 9,
+      "name": "Advisor",
+      "values": [
+        {
+          "text": "NEXT A32",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "next cache-miss → when the slot frees · cache m…",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "snoozed —",
+          "tone": "dim"
+        }
+      ]
+    }
+  ],
+  "schema": 1,
+  "session_mode": "interactive",
+  "start_line": null,
+  "tiles": [
+    {
+      "approx": true,
+      "figure": "14",
+      "glyph": "○",
+      "id": "context",
+      "level": "quiet",
+      "name": "context",
+      "source": "transcript",
+      "sub1": "140k of 1.00M",
+      "sub2": "≈$.06/call",
+      "unit": "%"
+    },
+    {
+      "approx": true,
+      "figure": "59",
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "name": "cache",
+      "source": "transcript",
+      "sub1": "warm · 59m (1h) TTL",
+      "sub2": "misses 1 (last model_changed)",
+      "unit": "m"
+    },
+    {
+      "approx": false,
+      "figure": "—",
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "name": "limits",
+      "source": "status line",
+      "sub1": "no status line",
+      "sub2": "",
+      "unit": "%"
+    },
+    {
+      "approx": false,
+      "figure": "3",
+      "glyph": "◐",
+      "id": "rework",
+      "level": "watch",
+      "name": "rework",
+      "source": "transcript",
+      "sub1": "edits 3 ✓ none 17m",
+      "sub2": "",
+      "unit": ""
+    }
+  ]
+}

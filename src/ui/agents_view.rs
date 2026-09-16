@@ -12,9 +12,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use crate::agent_ledger::{self, AgentRow, Sort, WasteReason, WorkflowGroup};
+use crate::agent_ledger::{
+    self, AgentRow, Sort, TeamTotals, TeammateRow, WasteReason, WorkflowGroup,
+};
 use crate::agents::State as AgentState;
 use crate::metrics::cost::Source;
+use crate::team::Liveness;
 use crate::ui::fmt;
 use crate::ui::panel::Handled;
 use crate::ui::State;
@@ -32,6 +35,8 @@ pub struct AgentsUi {
     pub selected: usize,
     /// Workflow runs whose agents are listed under their group row.
     pub expanded: BTreeSet<String>,
+    /// The team group row alone, its members folded away (Enter on it).
+    pub team_collapsed: bool,
 }
 
 pub fn open(state: &mut State) {
@@ -51,17 +56,24 @@ pub enum Entry {
         member: bool,
     },
     Group(WorkflowGroup),
+    /// The team's group row (team PRD §4.3), under the subagents.
+    TeamGroup(TeamTotals),
+    /// The team's column header, under its group row.
+    TeamColumns,
+    Teammate(TeammateRow),
 }
 
 /// The visible list: agents outside any workflow in sort order, then one
-/// group row per run (its agents beneath it when expanded).
+/// group row per run (its agents beneath it when expanded), then the team
+/// as a second group with its members sorted by the same key.
 pub fn entries(state: &State, ui: &AgentsUi) -> Vec<Entry> {
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
-    entries_of(state, ui, &rows)
+    let team = agent_ledger::teammate_rows(state, ui.sort, ui.ascending);
+    entries_of(state, ui, &rows, &team)
 }
 
 /// `entries` over rows already built (the render prices the agents once).
-fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow]) -> Vec<Entry> {
+fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow], team: &[TeammateRow]) -> Vec<Entry> {
     let groups = agent_ledger::workflow_groups(state, rows);
     let mut out: Vec<Entry> = rows
         .iter()
@@ -85,6 +97,13 @@ fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow]) -> Vec<Entry> {
             );
         }
     }
+    if let Some(totals) = agent_ledger::team_totals(state, team) {
+        out.push(Entry::TeamGroup(totals));
+        if !ui.team_collapsed {
+            out.push(Entry::TeamColumns);
+            out.extend(team.iter().cloned().map(Entry::Teammate));
+        }
+    }
     out
 }
 
@@ -100,6 +119,7 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> Handled {
                     ui.expanded.insert(g.run.clone());
                 }
             }
+            Some(Entry::TeamGroup(_)) => ui.team_collapsed = !ui.team_collapsed,
             _ => return Handled::No,
         },
         KeyCode::Char('s') => {
@@ -223,6 +243,71 @@ pub fn group_line(g: &WorkflowGroup, expanded: bool) -> String {
     )
 }
 
+/// The text of one teammate's row, cut to `WIDTH` (team PRD §4.3): glyph,
+/// name, model family, elapsed, context, tokens, cost with its mark, turns
+/// as human/machine, and the status word. A member with no transcript has
+/// no figures to align, only the word.
+pub fn teammate_line(r: &TeammateRow) -> String {
+    let glyph = r.state.glyph();
+    let name = fmt::clip(&r.name, 8);
+    let model = fmt::clip(&fmt::model_family(&r.model), 6);
+    if r.state == Liveness::Missing {
+        return fmt::clip(
+            &format!(" {glyph} {name:<8} {model:<6}  no transcript"),
+            WIDTH,
+        );
+    }
+    let cost = match r.cost {
+        Some(c) if c.approx => format!("≈{}", cents(c.usd).trim()),
+        Some(c) => cents(c.usd).trim().to_string(),
+        None => "—".to_string(),
+    };
+    let (human, machine) = r.turns;
+    let status = r.status_word().unwrap_or_default();
+    let line = format!(
+        " {glyph} {name:<8} {model:<6} {:>6} {:>5} {:>6} {cost:>6} {:>4} {status}",
+        elapsed(r.elapsed_ms),
+        fmt::tokens(r.context),
+        fmt::tokens(r.tokens),
+        format!("{human}/{machine}"),
+    );
+    fmt::clip(line.trim_end(), WIDTH)
+}
+
+/// The team's column header, aligned with `teammate_line`.
+pub fn team_columns_line() -> String {
+    format!(
+        "   {:<8} {:<6} {:>6} {:>5} {:>6} {:>6} {:>4}",
+        "name", "model", "time", "ctx", "tok", "$", "turns"
+    )
+}
+
+/// The team's group row: `team 5 · 3 active · ≈$31.15 · wasted ≈$4.10 ·
+/// 4 of 5 read` — the read count only when a transcript is missing.
+pub fn team_group_line(t: &TeamTotals, collapsed: bool) -> String {
+    let mut s = format!(
+        " {} {} · {} active",
+        if collapsed { "▸" } else { "team" },
+        t.members,
+        t.active
+    );
+    match t.cost {
+        Some(c) => s.push_str(&format!(
+            " · {}{}",
+            if c.approx { "≈" } else { "" },
+            fmt::usd(c.usd)
+        )),
+        None => s.push_str(" · —"),
+    }
+    if t.waste_usd > 0.0 {
+        s.push_str(&format!(" · wasted ≈{}", fmt::usd(t.waste_usd)));
+    }
+    if t.read < t.members {
+        s.push_str(&format!(" · {} of {} read", t.read, t.members));
+    }
+    fmt::clip(&s, WIDTH)
+}
+
 /// The header line: count, running, spend and waste.
 pub fn header_line(t: &agent_ledger::Totals) -> String {
     let spend = if t.cost.source == Source::Unpriced {
@@ -273,7 +358,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let ui = &state.agents_ui;
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
     let totals = agent_ledger::totals(&rows);
-    let list = entries_of(state, ui, &rows);
+    let team = agent_ledger::teammate_rows(state, ui.sort, ui.ascending);
+    let list = entries_of(state, ui, &rows, &team);
     let dim = state.theme.dim();
     let block = Block::default().borders(Borders::ALL).title(format!(
         "{}  ↕{}{}  (s/S sort, j/k, Enter expand, Esc back) ",
@@ -291,7 +377,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         dim,
     ))];
     let footer = footer_lines(&totals);
-    let body = inner.height.saturating_sub(1 + footer.len() as u16 + 1) as usize;
+    if rows.is_empty() {
+        lines.push(Line::from(Span::styled(" no subagents yet", dim)));
+    }
+    let body = inner
+        .height
+        .saturating_sub(lines.len() as u16 + footer.len() as u16 + 1) as usize;
     let first = ui.selected.saturating_sub(body.saturating_sub(1));
     // Narrower than the columns (the pane at 56): cut with a mark rather
     // than mid-word at the frame.
@@ -320,14 +411,28 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
                     dim
                 },
             )),
+            Entry::TeamGroup(t) => Line::from(Span::styled(
+                cut(team_group_line(t, ui.team_collapsed)),
+                if t.missing.is_empty() {
+                    dim
+                } else {
+                    state.theme.warn()
+                },
+            )),
+            Entry::TeamColumns => Line::from(Span::styled(cut(team_columns_line()), dim)),
+            Entry::Teammate(r) => {
+                let style = match r.state {
+                    Liveness::Active | Liveness::Recent => state.theme.accent(),
+                    Liveness::Missing => state.theme.warn(),
+                    Liveness::Ended | Liveness::Gone => Style::default(),
+                };
+                Line::from(Span::styled(cut(teammate_line(r)), style))
+            }
         };
         if i == ui.selected {
             line = line.style(Style::default().add_modifier(Modifier::REVERSED));
         }
         lines.push(line);
-    }
-    if list.is_empty() {
-        lines.push(Line::from(Span::styled(" no subagents yet", dim)));
     }
     lines.push(Line::from(Span::styled(
         "─".repeat(inner.width.min(WIDTH as u16) as usize),
@@ -606,6 +711,137 @@ mod tests {
         assert_eq!(app.state.agents_ui.selected, 0);
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(app.state.overlay, None);
+    }
+
+    /// Fixture D with its team beside the file (the config path).
+    fn fixture_app_d() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.state.team = crate::load::load_team(&path, &app.state);
+        app
+    }
+
+    #[test]
+    fn the_team_group_on_fixture_d() {
+        let mut app = fixture_app_d();
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.state.overlay, Some(OWNER));
+        insta::assert_snapshot!("agents_d_120x30", render_to_string(&app, 120, 30));
+        insta::assert_snapshot!("agents_d_56x20", render_to_string(&app, 56, 20));
+        let out = render_to_string(&app, 120, 30);
+        assert!(out.contains("Agents ─ 0 · 0 running · —"), "{out}");
+        assert!(out.contains("no subagents yet"), "{out}");
+        // The group row: three members, one active (the config's
+        // `isActive`), the sum marked once, one transcript missing.
+        assert!(
+            out.contains(" team 3 · 1 active · ≈$0.48 · 2 of 3 read"),
+            "{out}"
+        );
+        assert!(
+            out.contains("   name     model    time   ctx    tok      $ turns"),
+            "{out}"
+        );
+        // Sorted by spend: the exact one (ended, Claude Code's number) first.
+        let ended = out.lines().find(|l| l.contains("○ diff-pa")).unwrap();
+        assert!(ended.contains("haiku"), "{ended}");
+        assert!(
+            ended.contains("  0.31 ") && ended.contains(" 0/1 ended"),
+            "{ended}"
+        );
+        assert!(!ended.contains("≈"), "its cost-state is exact: {ended}");
+        let priced = out.lines().find(|l| l.contains("● diff-pa")).unwrap();
+        assert!(priced.contains(" ≈0.17 "), "priced while it runs: {priced}");
+        let missing = out.lines().find(|l| l.contains("— diff-pa")).unwrap();
+        assert!(missing.contains("no transcript"), "{missing}");
+        // Every row fits the pane's width.
+        for l in out.lines().filter(|l| l.contains("diff-pa")) {
+            let past: String = l
+                .chars()
+                .skip(1 + WIDTH)
+                .take_while(|c| *c != '│')
+                .collect();
+            assert!(past.trim().is_empty(), "{l}");
+        }
+        // Enter on the group row folds the members away, and back.
+        let list = entries(&app.state, &app.state.agents_ui);
+        assert_eq!(list.len(), 5, "group, columns, three members");
+        assert!(matches!(list[0], Entry::TeamGroup(_)));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.state.agents_ui.team_collapsed);
+        let out = render_to_string(&app, 120, 30);
+        assert!(out.contains(" ▸ 3 · 1 active"), "{out}");
+        assert!(!out.contains("no transcript"), "{out}");
+        assert_eq!(entries(&app.state, &app.state.agents_ui).len(), 1);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!app.state.agents_ui.team_collapsed);
+        // Sort by started: the real teammate joined first.
+        app.handle_key(key('s'));
+        app.handle_key(key('s'));
+        app.handle_key(key('s'));
+        assert_eq!(app.state.agents_ui.sort, Sort::Started);
+        let list = entries(&app.state, &app.state.agents_ui);
+        let names: Vec<&str> = list
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Teammate(r) => Some(r.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "diff-pane-research-2",
+                "diff-pane-research",
+                "diff-pane-research-3"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_gone_teammate_after_the_directory_went() {
+        // The transcripts alone, read long after: no ledger, no config, no
+        // recent line — the still-running copy is `gone`.
+        let mut app = fixture_app_d();
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        let lead = crate::load::team_lead(&path, &app.state);
+        let layout = crate::team::Layout {
+            config: None,
+            scan_dirs: vec![path.with_extension("").join("teammates")],
+            watch: None,
+        };
+        app.state.clock_override = true;
+        app.state.now_ms = app.state.last_line_at_ms.unwrap() + 3_600_000;
+        app.state.team = crate::team::load(
+            &lead,
+            &layout,
+            &app.state.tools.agent_spawns,
+            None,
+            &Pricing::bundled(),
+            app.state.now_ms,
+        );
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let out = render_to_string(&app, 120, 30);
+        assert!(
+            out.contains(" team 3 · 0 active · ≈$0.48 · 2 of 3 read"),
+            "{out}"
+        );
+        let gone = out.lines().find(|l| l.contains(" gone")).unwrap();
+        assert!(
+            gone.contains("○ diff-pa") && gone.contains("≈0.17"),
+            "{gone}"
+        );
+        assert!(out.contains("no transcript"), "{out}");
     }
 
     #[test]
