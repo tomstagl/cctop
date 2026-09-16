@@ -315,6 +315,13 @@ pub struct CostBreakdown {
     /// Tokens of agents on models the price table does not know: in no
     /// dollar figure above, named on the breakdown line instead.
     pub unpriced_agent_tokens: u64,
+    /// The team's part (team PRD §4.1): Σ the teammates' own figures,
+    /// `≈` while any works or is missing; `None` without a team.
+    pub team: Option<Cost>,
+    /// `team ÷ combined`.
+    pub team_share: f64,
+    /// Teammates with a transcript, of the members known.
+    pub team_read: (usize, usize),
 }
 
 /// What the main transcript says about one subagent: its launch and its
@@ -1779,8 +1786,9 @@ impl State {
     /// subagents' own usage under `agents`.
     pub fn attribution_top(&self, n: usize) -> Vec<(String, f64)> {
         let agents = self.agents_usage().total_input();
+        let team = self.team_usage().total_input();
         let main = self.agg.total.total_input();
-        let total = (main + agents) as f64;
+        let total = (main + agents + team) as f64;
         if total == 0.0 {
             return Vec::new();
         }
@@ -1793,9 +1801,23 @@ impl State {
         if agents > 0 {
             v.push(("agents".to_string(), agents as f64 / total));
         }
+        if team > 0 {
+            v.push(("team".to_string(), team as f64 / total));
+        }
         v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         v.truncate(n);
         v
+    }
+
+    /// The team's money (team PRD §4.1), when this session leads one.
+    pub fn team_cost(&self) -> Option<Cost> {
+        self.team.as_ref().and_then(|t| t.cost(self.clock_ms()))
+    }
+
+    /// The session's whole spend: the ledger, the main responses after it,
+    /// the agents' calls after it, and the team's own figures.
+    pub fn cost_combined(&self) -> Option<Cost> {
+        self.cost.combined(self.agents.values(), self.team_cost())
     }
 
     /// Subagent spend: `(usd, share of the session)` when priceable — the
@@ -1803,8 +1825,17 @@ impl State {
     /// ledger holds the agents' earlier calls, so the share is not derived
     /// by adding them to it again).
     pub fn agents_cost(&self) -> Option<(f64, f64)> {
-        let combined = self.cost.combined(self.agents.values());
-        self.agents_share_of(combined)
+        self.agents_share_of(self.cost_combined())
+    }
+
+    /// Team spend: `(usd, share of the session, read, members)` when this
+    /// session leads a team with a priceable member.
+    pub fn team_cost_share(&self) -> Option<(f64, f64, usize, usize)> {
+        let team = self.team.as_ref()?;
+        let c = self.team_cost()?;
+        let total = self.cost_combined().map(|x| x.usd).unwrap_or(c.usd);
+        let share = if total > 0.0 { c.usd / total } else { 0.0 };
+        Some((c.usd, share, team.read(), team.members.len()))
     }
 
     /// `(agents' priced spend, share of `combined`)`; `None` when no agent
@@ -1835,11 +1866,11 @@ impl State {
         // and once for the whole; `combined` is derived, not recomputed.
         let agents_after = self.cost.agents_after(self.agents.values());
         let current = self.cost.current();
-        let combined = match (current, agents_after) {
-            (Some(c), Some(a)) => Some(c.plus(a)),
-            (Some(c), None) => Some(c),
-            (None, a) => a,
-        };
+        let team = self.team_cost();
+        let combined = [current, agents_after, team]
+            .into_iter()
+            .flatten()
+            .reduce(Cost::plus);
         let headline = if include { combined } else { current }?;
         let since = match (self.cost.since(), agents_after.filter(|_| include)) {
             (Some(m), Some(a)) => Some(m.plus(a)),
@@ -1854,6 +1885,7 @@ impl State {
             .filter(|a| pricing.price(&a.model).is_none())
             .map(|a| a.usage.total())
             .sum();
+        let total = combined.map(|c| c.usd).unwrap_or(0.0);
         Some(CostBreakdown {
             headline,
             combined: combined.unwrap_or(headline),
@@ -1863,7 +1895,28 @@ impl State {
             agents_share: agents.map(|(_, s)| s).unwrap_or(0.0),
             any_agents: self.agents_usage().total() > 0,
             unpriced_agent_tokens,
+            team,
+            team_share: team
+                .filter(|_| total > 0.0)
+                .map(|t| t.usd / total)
+                .unwrap_or(0.0),
+            team_read: self
+                .team
+                .as_ref()
+                .map(|t| (t.read(), t.members.len()))
+                .unwrap_or((0, 0)),
         })
+    }
+
+    /// The teammates' usage, summed over their transcripts.
+    pub fn team_usage(&self) -> crate::metrics::Usage {
+        let mut u = crate::metrics::Usage::default();
+        if let Some(t) = &self.team {
+            for m in t.members.values() {
+                u.add(&m.agg.total);
+            }
+        }
+        u
     }
 
     /// `/usage`'s behaviour flags for this session.

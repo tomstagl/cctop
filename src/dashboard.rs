@@ -216,8 +216,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Dashboard {
         session_mode: engine.session_mode,
         lines: c.lines.clone(),
         cost_combined: state
-            .cost
-            .combined(state.agents.values())
+            .cost_combined()
             .map(|c| crate::query::CostValue::new(c, "cost_combined")),
     }
 }
@@ -497,6 +496,14 @@ fn row_tokens(state: &State) -> Row {
             "agents ≈{} ({:.0} %)",
             fmt::usd(usd),
             share * 100.0
+        ))]);
+    }
+    if let (Some(t), Some((_, share, read, members))) = (state.team_cost(), state.team_cost_share())
+    {
+        detail.push(vec![fg(crate::ui::panels::tokens::team_part(
+            t,
+            share,
+            (read, members),
         ))]);
     }
     for (name, share) in state.attribution_top(1) {

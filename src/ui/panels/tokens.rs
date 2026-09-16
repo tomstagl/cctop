@@ -19,9 +19,27 @@ impl Tokens {
         let mut u = state.agg.total;
         if state.tokens_include_agents {
             u.add(&state.agents_usage());
+            u.add(&state.team_usage());
         }
         u
     }
+}
+
+/// `team ≈$31.15 (76 %, 5 of 5)`, or `(… 4 of 5 read)` when a transcript
+/// is missing — the breakdown line's team part (team PRD §4.2), shared with
+/// dashboard row 2 and `cctop report`.
+pub fn team_part(t: cost::Cost, share: f64, (read, members): (usize, usize)) -> String {
+    let mark = if t.approx { "≈" } else { "" };
+    let read = if read < members {
+        format!("{read} of {members} read")
+    } else {
+        format!("{read} of {members}")
+    };
+    format!(
+        "team {mark}{} ({:.0} %, {read})",
+        fmt::usd(t.usd),
+        share * 100.0
+    )
 }
 
 impl Panel for Tokens {
@@ -43,10 +61,10 @@ impl Panel for Tokens {
         }
         if key.code == KeyCode::Char('a') {
             state.tokens_include_agents = !state.tokens_include_agents;
-            let msg = if state.tokens_include_agents {
-                "tokens: main + subagents"
-            } else {
-                "tokens: main session only"
+            let msg = match (state.tokens_include_agents, state.team.is_some()) {
+                (true, true) => "tokens: main + subagents + team",
+                (true, false) => "tokens: main + subagents",
+                (false, _) => "tokens: main session only",
             };
             state.set_toast(msg);
             return Handled::Yes;
@@ -103,10 +121,12 @@ impl Panel for Tokens {
             None => l6.push(Span::styled("cost —", dim)),
         }
         let any_agents = breakdown.is_some_and(|b| b.any_agents);
+        let any_team = breakdown.is_some_and(|b| b.team.is_some());
         let rates = cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
         if let Some(h) = rates.usd_per_hour {
-            // The rate is the main transcript's: agents have no turn.
-            let suffix = if any_agents { " main" } else { "" };
+            // The rate is the main transcript's: agents have no turn, and
+            // a team's burn rate is a follow-up (team PRD §11).
+            let suffix = if any_agents || any_team { " main" } else { "" };
             l6.push(Span::styled(format!(" ({}/h{suffix})", fmt::usd(h)), dim));
         }
         l6.push(Span::styled("  ·  ", dim));
@@ -116,10 +136,11 @@ impl Panel for Tokens {
         )));
         lines.push(Line::from(l6));
 
-        // Where the headline comes from, when agents spent anything: the
-        // first two figures add up to it; `agents` is the whole session's
-        // agent spend as a share of the combined figure.
-        if let Some(b) = breakdown.filter(|b| b.any_agents) {
+        // Where the headline comes from, when agents or a team spent
+        // anything: the first two figures add up to it; `agents` is the
+        // whole session's agent spend as a share of the combined figure,
+        // `team` the teammates' own figures (team PRD §4.2).
+        if let Some(b) = breakdown.filter(|b| b.any_agents || b.team.is_some()) {
             let mut l = vec![Span::raw(" ")];
             match b.ledger {
                 Some(ledger) => {
@@ -134,21 +155,23 @@ impl Panel for Tokens {
                     l.push(Span::raw(format!("main ≈{}", fmt::usd(main))));
                 }
             }
-            match b.agents {
-                Some(a) => {
-                    l.push(Span::styled(" · ", dim));
-                    l.push(Span::raw(format!(
-                        "agents ≈{} ({:.0} %)",
-                        fmt::usd(a.usd),
-                        b.agents_share * 100.0
-                    )));
-                }
-                None => {
-                    l.push(Span::styled(" · ", dim));
-                    l.push(Span::styled(
-                        format!("agents — {}", fmt::tokens(state.agents_usage().total())),
-                        dim,
-                    ));
+            if b.any_agents {
+                match b.agents {
+                    Some(a) => {
+                        l.push(Span::styled(" · ", dim));
+                        l.push(Span::raw(format!(
+                            "agents ≈{} ({:.0} %)",
+                            fmt::usd(a.usd),
+                            b.agents_share * 100.0
+                        )));
+                    }
+                    None => {
+                        l.push(Span::styled(" · ", dim));
+                        l.push(Span::styled(
+                            format!("agents — {}", fmt::tokens(state.agents_usage().total())),
+                            dim,
+                        ));
+                    }
                 }
             }
             // Agents on a model the table does not know are in no dollar
@@ -158,6 +181,12 @@ impl Panel for Tokens {
                     format!(" · unpriced {}", fmt::tokens(b.unpriced_agent_tokens)),
                     dim,
                 ));
+            }
+            // The team: `≈` only while a teammate works or is priced after
+            // its ledger; `N of M read` names the transcripts not found.
+            if let Some(t) = b.team {
+                l.push(Span::styled(" · ", dim));
+                l.push(Span::raw(team_part(t, b.team_share, b.team_read)));
             }
             lines.push(Line::from(l));
         }
@@ -371,6 +400,66 @@ mod tests {
         assert!(out.contains("  $9.90 ("), "{out}");
         assert!(out.contains("ledger $9.90 · agents ≈$0.13 (1 %)"), "{out}");
         assert!(out.contains("main only"), "{out}");
+    }
+
+    /// Fixture D loaded the way `cctop run --session` loads it: the lead's
+    /// lines, its (absent) subagents and its team beside the file.
+    fn fixture_app_d() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.state.session.ended_at_ms = app.state.last_line_at_ms;
+        app.state.team = crate::load::load_team(&path, &app.state);
+        app
+    }
+
+    #[test]
+    fn tokens_panel_on_fixture_d_folds_the_team_in() {
+        let mut app = fixture_app_d();
+        assert!(app.state.team.is_some());
+        app.state.open = Some(2);
+        insta::assert_snapshot!("tokens_d_120x30", render_to_string(&app, 120, 30));
+        insta::assert_snapshot!("tokens_d_56x20", render_to_string(&app, 56, 20));
+        let out = render_to_string(&app, 120, 30);
+        // The headline is the lead's exact ledger plus the team's part,
+        // `≈` because one teammate still runs (priced) and one has no
+        // transcript; the breakdown says so with `2 of 3 read`.
+        assert!(out.contains("≈ $10.6 ("), "{out}");
+        assert!(out.contains("/h main)"), "{out}");
+        assert!(
+            out.contains("ledger $10.2 · team ≈$0.48 (5 %, 2 of 3 read)"),
+            "{out}"
+        );
+        assert!(!out.contains("agents"), "no subagents on D: {out}");
+        // The team's tokens are a top-3 share on line 10.
+        assert!(out.contains("where:") && out.contains("team "), "{out}");
+        // `a` takes the team out with the agents: the lead's ledger alone,
+        // exact.
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(!app.state.tokens_include_agents);
+        let out = render_to_string(&app, 120, 30);
+        assert!(out.contains("  $10.2 ("), "{out}");
+        assert!(out.contains("main only"), "{out}");
+        assert!(
+            out.contains("ledger $10.2 · team ≈$0.48 (5 %, 2 of 3 read)"),
+            "the breakdown still names the team: {out}"
+        );
+        assert_eq!(
+            app.state.toast.as_ref().map(|t| t.0.as_str()),
+            Some("tokens: main session only")
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert_eq!(
+            app.state.toast.as_ref().map(|t| t.0.as_str()),
+            Some("tokens: main + subagents + team")
+        );
     }
 
     #[test]
