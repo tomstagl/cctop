@@ -965,6 +965,11 @@ pub struct HookInfo {
 pub struct CostState {
     #[serde(rename = "totalCostUSD", default)]
     pub total_cost_usd: f64,
+    /// The writing process's start, epoch ms: two Claude Code processes can
+    /// share one transcript (a `--resume` beside a live session, a bridge),
+    /// each keeping its own running total (`harness_facts::cost_state`).
+    #[serde(default)]
+    pub start_time: Option<i64>,
     /// Milliseconds.
     #[serde(rename = "totalAPIDuration", default)]
     pub total_api_duration: u64,

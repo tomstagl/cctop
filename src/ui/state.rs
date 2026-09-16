@@ -1889,7 +1889,7 @@ impl State {
         Some(CostBreakdown {
             headline,
             combined: combined.unwrap_or(headline),
-            ledger: self.cost.authoritative.as_ref().map(|c| c.total_cost_usd),
+            ledger: self.cost.ledger.usd(),
             since,
             agents: agents.map(|(usd, _)| Cost::priced(usd)),
             agents_share: agents.map(|(_, s)| s).unwrap_or(0.0),

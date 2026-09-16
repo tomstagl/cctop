@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::metrics::cost::Ledger;
 use crate::metrics::Aggregate;
 use crate::tools;
 use crate::transcript::Line;
@@ -111,13 +112,13 @@ fn figures(path: &Path) -> Option<SessionFigures> {
     let text = std::fs::read_to_string(path).ok()?;
     let mut agg = Aggregate::default();
     let mut stats = tools::Stats::default();
-    let mut cost_state = None;
+    let mut ledger = Ledger::default();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let Ok(l) = Line::parse(line) else { continue };
         agg.push(&l);
         stats.push(&l);
         if let Line::CostState(c) = &l {
-            cost_state = Some(c.clone());
+            ledger.push(c);
         }
     }
     if agg.human_turns() < MIN_TURNS {
@@ -126,10 +127,8 @@ fn figures(path: &Path) -> Option<SessionFigures> {
     let calls = stats.calls.len();
     let errors = stats.calls.iter().filter(|c| c.is_error).count();
     let mut by_family = BTreeMap::new();
-    if let Some(c) = &cost_state {
-        for (m, mu) in &c.model_usage {
-            *by_family.entry(family(m)).or_insert(0.0) += mu.cost_usd;
-        }
+    for (m, mu) in ledger.model_usage() {
+        *by_family.entry(family(m)).or_insert(0.0) += mu.cost_usd;
     }
     let errors_by_class = stats
         .errors_by_class()
@@ -139,7 +138,7 @@ fn figures(path: &Path) -> Option<SessionFigures> {
     Some(SessionFigures {
         turns: agg.human_turns(),
         api_calls: agg.api_calls(),
-        cost: cost_state.as_ref().map(|c| c.total_cost_usd),
+        cost: ledger.usd(),
         tokens: agg.total.total(),
         cache_hit: agg.total.cache_hit_ratio(),
         error_rate: (calls > 0).then(|| errors as f64 / calls as f64),
