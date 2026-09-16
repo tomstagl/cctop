@@ -25,6 +25,16 @@ pub enum State {
     Failed,
 }
 
+/// One API call of the agent — a `message.id` — with the usage of the
+/// message's last line (subagent transcripts stream `output_tokens`) and
+/// the time of its first.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentCall {
+    pub at_ms: Option<i64>,
+    pub model: String,
+    pub usage: Usage,
+}
+
 /// `agent-<id>.meta.json`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,10 +67,10 @@ pub struct Agent {
     /// the parent's line count. The inherited context in tokens is the
     /// cache read of the fork's first own call, `first_own_call`.
     pub inherited_context_len: Option<u64>,
-    /// Usage of the agent's first counted API call (a fork's first call
-    /// after the parent's replayed message): its cache read is the context
-    /// the fork inherited; `cache_write > cache_read` is a cold start.
-    pub first_own_call: Option<Usage>,
+    /// The agent's own API calls in order (a fork's replayed parent message
+    /// excluded), so a call can be placed before or after the ledger's
+    /// moment (`CostTracker::combined`). `usage` is their sum.
+    pub calls: Vec<AgentCall>,
     /// The workflow run this agent belongs to (`subagents/workflows/<run>/`).
     pub workflow: Option<String>,
     pub started_at: Option<i64>,
@@ -106,7 +116,7 @@ impl Agent {
             spawn_depth: meta.spawn_depth,
             is_fork: meta.is_fork,
             inherited_context_len: None,
-            first_own_call: None,
+            calls: Vec::new(),
             workflow: None,
             started_at: None,
             finished_at: None,
@@ -189,6 +199,9 @@ impl Agent {
                         self.usage.sub(counted);
                         self.usage.add(&usage);
                         *counted = usage;
+                        if let Some(c) = self.calls.last_mut() {
+                            c.usage = usage;
+                        }
                     }
                     _ if self.seen_ids.insert(a.message.id.clone()) => {
                         self.api_calls += 1;
@@ -197,11 +210,13 @@ impl Agent {
                         if !a.message.model.is_empty() {
                             self.model = a.message.model.clone();
                         }
+                        self.calls.push(AgentCall {
+                            at_ms: at,
+                            model: a.message.model.clone(),
+                            usage,
+                        });
                     }
                     _ => {}
-                }
-                if self.api_calls == 1 {
-                    self.first_own_call = self.last_message.as_ref().map(|(_, u)| *u);
                 }
                 let mut uses = 0;
                 for b in &a.message.content {
@@ -252,6 +267,13 @@ impl Agent {
             self.parent_message_id = Some(id.to_string());
         }
         self.parent_message_id.as_deref() == Some(id)
+    }
+
+    /// The agent's first own API call (a fork's first after the parent's
+    /// replayed message): its cache read is the context a fork inherited;
+    /// `cache_write > cache_read` is a cold start.
+    pub fn first_own_call(&self) -> Option<&AgentCall> {
+        self.calls.first()
     }
 
     /// Edits the agent made (Edit / Write / MultiEdit / NotebookEdit).
@@ -658,10 +680,16 @@ mod tests {
         assert_eq!(a.usage.output, 304);
         assert_eq!(a.usage.cache_read, 473_013);
         assert_eq!(
-            a.first_own_call.map(|u| (u.cache_read, u.output)),
+            a.first_own_call().map(|c| (c.usage.cache_read, c.usage.output)),
             Some((62_690, 118)),
             "the inherited context is the first own call's cache read; its usage is the message's last line"
         );
+        assert_eq!(a.calls.len(), 7);
+        assert_eq!(
+            a.calls.iter().map(|c| c.usage.output).sum::<u64>(),
+            a.usage.output
+        );
+        assert!(a.calls.iter().all(|c| c.at_ms.is_some()));
         assert_eq!(
             a.tool_calls, 6,
             "6 of its own; the `Agent` launch was the parent's"
@@ -779,7 +807,7 @@ mod tests {
             a.is_fork,
             "a `fork-context-ref` line marks a fork without its meta"
         );
-        assert_eq!(a.first_own_call.map(|u| u.cache_read), Some(60000));
+        assert_eq!(a.first_own_call().map(|c| c.usage.cache_read), Some(60000));
 
         // Without `fork-context-ref` nothing is skipped.
         let mut b = Agent::new("s", Meta::default());
