@@ -22,7 +22,7 @@ spawned it (its parent pid), falling back to the same discovery the TUI uses.
 
 ## Cost of registering it
 
-Measured after `cctop_agents` was added (0.3.1+): the nine tool schemas serialise to **3 138 bytes ≈ 784
+Measured after `cctop_agents` was added (0.4.0+): the nine tool schemas serialise to **3 138 bytes ≈ 784
 tokens** (`cctop mcp` → `tools/list`; a unit test keeps it under 800). That rides on every request of any
 session that has the server registered — which is exactly what Advisor rule
 A07 warns about. So:
