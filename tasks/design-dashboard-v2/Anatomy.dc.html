@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 34px 40px; display: flex; flex-direction: column; gap: 24px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 5px">
+    <div style="font-size: 22px; font-weight: 600; color: #D6DEE8">Three seconds, fifteen seconds, one keypress</div>
+    <div class="m" style="font-size: 12px; color: #6E7F93">the row budget at 122 columns, and the rules that decide what goes where</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start">
+
+    <div style="display: flex; flex-direction: column; gap: 3px">
+      <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7F93; margin-bottom: 6px">row budget · 26 rows</div>
+      <sc-for list="{{zones}}" as="z" hint-placeholder-count="9"><div style="display: grid; grid-template-columns: 30px minmax(0, 1fr) 34px; gap: 10px; align-items: center; padding: 7px 10px; border-radius: 4px; background: {{z.bg}}; border-left: 3px solid {{z.tone}}; min-height: {{z.h}}"><div class="m" style="font-size: 11px; color: {{z.tone}}">{{z.tag}}</div><div class="m" style="font-size: 12.5px; color: #C3CDDA">{{z.name}}</div><div class="m" style="font-size: 11px; text-align: right; color: #5D6B7D">{{z.rows}}</div></div></sc-for>
+      <div style="display: flex; justify-content: space-between; padding: 10px 12px; margin-top: 6px; border-radius: 4px; background: #121820">
+        <span class="m" style="font-size: 11.5px; color: #6E7F93">tiles today</span>
+        <span class="m" style="font-size: 11.5px; color: #E5605E">7 rows → 0</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 4px; background: #121820">
+        <span class="m" style="font-size: 11.5px; color: #6E7F93">rows freed for content</span>
+        <span class="m" style="font-size: 11.5px; color: #5FC77E">+9</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px">
+      <sc-for list="{{layers}}" as="l" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-radius: 7px; background: {{l.bg}}; border: 1px solid {{l.edge}}"><div style="display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap"><span class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: {{l.tone}}">{{l.title}}</span><span class="m" style="font-size: 11.5px; color: #5D6B7D">{{l.budget}}</span></div><div style="font-size: 14.5px; line-height: 1.5; color: #C3CDDA; text-wrap: pretty">{{l.lead}}</div><div style="display: flex; flex-direction: column; gap: 5px; margin-top: 3px"><sc-for list="{{l.points}}" as="p" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 13px minmax(0, 1fr); gap: 10px"><span class="m" style="font-size: 13px; color: {{l.tone}}">·</span><span style="font-size: 13.5px; line-height: 1.5; color: #8FA0B4; text-wrap: pretty">{{p}}</span></div></sc-for></div></div></sc-for>
+    </div>
+
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 6px">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">the rules the layout follows</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px"><sc-for list="{{rules}}" as="r" hint-placeholder-count="9"><div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 15px; border-radius: 6px; background: #121820"><div style="font-size: 14.5px; font-weight: 600; color: #D6DEE8; text-wrap: pretty">{{r.head}}</div><div style="font-size: 13px; line-height: 1.5; color: #8FA0B4; text-wrap: pretty">{{r.body}}</div></div></sc-for></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 6px">
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border-radius: 7px; background: #121820">
+      <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">colour carries state, never decoration</div>
+      <sc-for list="{{palette}}" as="p" hint-placeholder-count="6"><div style="display: grid; grid-template-columns: 74px 96px minmax(0, 1fr); gap: 12px; align-items: center"><span class="m" style="font-size: 11.5px; color: #5D6B7D">{{p.role}}</span><span class="m" style="font-size: 12.5px; padding: 2px 8px; border-radius: 3px; background: #0A0E12; color: {{p.hex}}">{{p.hex}}</span><span style="font-size: 13px; line-height: 1.45; color: #8FA0B4">{{p.use}}</span></div></sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border-radius: 7px; background: #121820">
+      <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">it has to read without colour too</div>
+      <div style="font-size: 13.5px; line-height: 1.5; color: #8FA0B4; text-wrap: pretty">NO_COLOR, a 16-colour terminal and a non-UTF-8 locale are all already handled in <span class="m" style="color: #C3CDDA">src/theme.rs</span>. The redesign keeps every state legible through glyph and position alone, so the fallbacks stay honest rather than becoming a degraded second design.</div>
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 2px"><sc-for list="{{glyphs}}" as="g" hint-placeholder-count="6"><div style="display: grid; grid-template-columns: 54px 44px minmax(0, 1fr); gap: 12px; align-items: baseline"><span class="m" style="font-size: 14px; color: {{g.tone}}">{{g.utf}}</span><span class="m" style="font-size: 12.5px; color: #5D6B7D">{{g.ascii}}</span><span style="font-size: 13px; color: #8FA0B4">{{g.use}}</span></div></sc-for></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      zones: [
+        { tag: '', name: 'status', rows: '1', tone: '#4CC2C2', bg: '#101820', h: '30px' },
+        { tag: '▸', name: 'act — the one thing', rows: '3', tone: '#5FC77E', bg: '#0F1A15', h: '56px' },
+        { tag: '1', name: 'context + anatomy', rows: '2', tone: '#E2B04A', bg: '#141109', h: '42px' },
+        { tag: '3', name: 'limits', rows: '1', tone: '#E2B04A', bg: '#141109', h: '30px' },
+        { tag: '2', name: 'cache', rows: '1', tone: '#E2B04A', bg: '#141109', h: '30px' },
+        { tag: '2', name: 'spend', rows: '1', tone: '#E2B04A', bg: '#141109', h: '30px' },
+        { tag: '4', name: 'running · turn', rows: '2', tone: '#8B9BB0', bg: '#0E141B', h: '42px' },
+        { tag: '5 7', name: 'tools · files · agents', rows: '2', tone: '#8B9BB0', bg: '#0E141B', h: '42px' },
+        { tag: '8', name: 'event tail', rows: '2', tone: '#8B9BB0', bg: '#0E141B', h: '42px' }
+      ],
+      layers: [
+        {
+          title: 'first glance — 3 seconds', budget: '5 rows, fixed position', tone: '#5FC77E', bg: '#0F1A15', edge: '#1D3327',
+          lead: "What you read without stopping what you are doing, from across a desk. It must be in the same place every time, or you end up hunting instead of glancing.",
+          points: [
+            "Is it working or has it stopped on me — phase, the silent run, and a permission wait if there is one.",
+            "Do I need to act — exactly one call to action, wrapped rather than truncated, colour-coded NOW / NEXT / open.",
+            "Am I near a wall — context, the 5h limit and the cache as three meters with the same geometry, so a glance compares them.",
+            "What is this costing — the rate, not the running total: ≈$90/h and ≈$29/turn change behaviour, $22.50 does not.",
+            "Is the session healthy — one ribbon: rework, last check, denials, stale reads."
+          ]
+        },
+        {
+          title: 'second look — 15 seconds', budget: '8 rows, same screen, dimmer', tone: '#4CC2C2', bg: '#0E1A1C', edge: '#1B3338',
+          lead: "You read this when the top half said something was off. It sits below, in smaller and dimmer type, and it may truncate — because by the time you are reading it you already know which digit to press.",
+          points: [
+            "What is running right now and for how long, plus where the turn's wall-clock went.",
+            "The tool mix, the single biggest context consumer, the files that were touched or re-read.",
+            "The last few events as a TIME · KIND · WHAT grid rather than one ` · `-joined line.",
+            "The context bar's own legend — which slice of the window is prefix, results, inputs, thinking, harness."
+          ]
+        },
+        {
+          title: 'dig deeper — one keypress', budget: 'behind 1-9, full screen', tone: '#8B9BB0', bg: '#0D1116', edge: '#1B222A',
+          lead: "Nothing on the overview is deleted, only moved. A drill-down is where a table belongs: sortable, complete, no ellipsis, a Latin-letter mnemonic in the frame title so the way back is obvious.",
+          points: [
+            "The raw token sums, the per-model cost split, the turn ledger, the per-tool and per-file tables, the full event log.",
+            "Everything the overview had to truncate is here in full — which is what makes truncating it upstairs acceptable.",
+            "The digit is printed in the gutter of the row it belongs to, so the overview teaches its own navigation."
+          ]
+        }
+      ],
+      rules: [
+        { head: "One hero, or none at all", body: "Four big figures in four different units compete and cancel out. Meters with a shared geometry beat block digits: the same 5 rows carry denominators, thresholds and trend, and they compare at a glance." },
+        { head: "Numbers align down the page", body: "Fixed column stops for label, value, bar and percent. The eye scans a column, not a sentence. This is the single change that buys the most legibility per row." },
+        { head: "Never truncate the actionable line", body: "The coach's nudge wraps to a second line instead of losing its verb. Anything that can be cut mid-fact is, by definition, not first-glance material." },
+        { head: "Empty means gone", body: "6 Agents — costs two rows to say nothing. A zone that has nothing to report draws nothing and gives its rows to the zone below it." },
+        { head: "A unit belongs to its number", body: "Same cell run, same line, no exceptions. Today the % sits two rows under its digit and the cache tile's m collides with the word beside it." },
+        { head: "Say what an estimate is", body: "≈ marks that a number is derived. It does not tell a subscription user that ≈$22.50 is an API-equivalent price and not a bill. Some caveats need words." },
+        { head: "Colour is a signal, not a skin", body: "ok / warn / crit already exist in every bundled theme. Spend them on thresholds crossed — long_context at 78 %, 8 stale reads — and leave everything else foreground or dim." },
+        { head: "Degrade by dropping, not by squeezing", body: "Going narrow drops detail columns in a fixed order and keeps the grid. It never reflows first-glance facts into a different place — position is what makes a glance possible." },
+        { head: "The screen is read-only, and says so", body: "cctop never writes to Claude Code's files or speaks on its behalf. One dim clause in the footer earns more trust than a paragraph in the README." }
+      ],
+      palette: [
+        { role: 'fg', hex: '#D6DEE8', use: 'values — the numbers themselves' },
+        { role: 'dim', hex: '#5D6B7D', use: 'labels, units, separators, anything structural' },
+        { role: 'accent', hex: '#4CC2C2', use: 'the interactive affordance only: digits and keys' },
+        { role: 'ok', hex: '#5FC77E', use: 'headroom, a passing check, a warm cache' },
+        { role: 'warn', hex: '#E2B04A', use: 'a threshold the registry already defines' },
+        { role: 'crit', hex: '#E5605E', use: 'blocked, denied, or about to stop' }
+      ],
+      glyphs: [
+        { utf: '○ ◐ ●', ascii: '- + !', tone: '#5FC77E', use: 'the coach light, three levels' },
+        { utf: '◆', ascii: '?', tone: '#E2B04A', use: 'waiting on you' },
+        { utf: '▸', ascii: '>', tone: '#E2B04A', use: 'the one call to action' },
+        { utf: '▇ ▆ ▁', ascii: '# = -', tone: '#4CC2C2', use: 'meter fill, alternate slice, empty' },
+        { utf: '✓ ✗', ascii: 'v x', tone: '#5FC77E', use: 'a check that ran and its verdict' },
+        { utf: '↻', ascii: '~', tone: '#8FA0B4', use: 'resets in' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
