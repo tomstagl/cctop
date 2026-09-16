@@ -68,6 +68,26 @@ to correct. The code needs nothing: the width ladder (three cells at 80, the
 middle cell form at 28, the act line's tail at 66) is pinned to *body*
 columns, not to the terminal.
 
+**Settled 2026-09-16 (the session after this hand-off):** `~/.claude.json`
+holds `pluginPanes: { dockColumns: 137 }` — a persisted `ctrl+x` resize
+(item 10). `docs/claude-code-panels.md` §4 already has the rule: with that
+key set the dock is `min(columns − 70, max(24, dockColumns))`, and the
+ladder never runs. 142 → `min(72, 137) = 72`, body 71, viewport 70; this
+machine's 221-column markers read body 136 / viewport 84 (`137 − 1`,
+`221 − 137`) and, from an earlier render at `dockColumns` 81, body 80 /
+viewport 140. Two readings say **`bodyColumns = dock − 1`** (the grip
+only; `BORDER_COLUMNS` does not come out of a docked body) and
+`viewportColumns = columns − dock`. Whether the default ladder subtracts
+the same one column is still item 31's to read — under the override the
+four widths predict 39 / 61 / 91 / 129 (the `columns − 70` term binds
+until 207); with the key removed, `p3 − 1` predicts 39 / 58 / 71 / 89,
+four more than the PRD §3.6 table's `~35 / ~54 / ~67 / ~85`. If that
+holds, the PRD table and item 31's expected line move by four and the
+width ladder's brackets stay (58 sits at the middle-cell form's 28-per-cell
+edge — the one place to look). Item 31's Setup now carries the key and
+names the marker as the only source; `cctop pane status` does not read
+`pluginPanes` (a candidate addition, not asked for).
+
 ## First: live checks 25–32 (the person's; the session assists)
 
 The order that costs the fewest sessions: restart Claude Code so 0.7.0

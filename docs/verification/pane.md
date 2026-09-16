@@ -363,7 +363,9 @@ hooks are off or before its module is accepted.
     Setup: Claude Code 2.1.272, plugin 0.4.1 (`claude plugin marketplace
     update cctop && claude plugin update cctop@cctop`, then a restart),
     function hooks on, `cctop` binary installed, `--debug`; note the session
-    id (`ls -t ~/.cctop/pane | head -1` after the first prompt).
+    id (`!cctop pane status` prints it in its first line; `ls -t
+    ~/.cctop/pane | head -1` names whichever open pane heartbeat last,
+    which is another session's when several are open).
     Keys: one short prompt (`say ok`) with the pane closed; `!cctop pane
     status`; then `/cctop`; wait one poll (≤ 10 s).
     Expected: the transcript shows no `cctop:` line at start-up and the
@@ -373,8 +375,8 @@ hooks are off or before its module is accepted.
     status` shows the hooks-module line ✓; `/cctop` docks the pane, its
     header reads `hooks 2.1.272`, and every light is filled within one poll
     (no `waiting for cctop`).
-    Claude Code version:
-    Result: pending
+    Claude Code version: 2.1.273
+    Result: pass, 2026-09-16, Claude Code 2.1.273, plugin 0.7.0
 
 26. **The Agents view's columns and the combined cost** (the agent-costs
     PRD). The pane's Agents view lists each subagent as the TUI's agents
@@ -477,10 +479,15 @@ hooks are off or before its module is accepted.
     row at 80, the middle cell form at 28, the act line's tail at 66 and
     its full copy at 72) is pinned to those four widths.
     Setup: as item 28; `~/.cctop/pane/<session>.json` holds `bodyColumns`
-    after each render.
+    after each render — the marker is the only source (`pane.tsx` writes
+    no width line to the debug log; `cctop pane status` prints the
+    marker's figure as `docked (N columns)`). A persisted `ctrl+x` resize,
+    `pluginPanes.dockColumns` in `~/.claude.json`, replaces the ladder
+    with `min(columns − 70, max(24, dockColumns))`
+    (`docs/claude-code-panels.md` §4): remove the key with Claude Code
+    stopped to read the default, or record which of the two was set.
     Keys: resize the terminal to 110, 132, 162 and 200 columns, `/cctop`
-    at each, and read `bodyColumns` from the marker file (or the pane's
-    debug log line `cctop: rendered … columns`).
+    at each, and read `bodyColumns` from the marker file.
     Expected: `bodyColumns` 35, 54, 67, 85 (±1 for the grip) at the four
     terminal widths; at 35 two short cells per row and no `a: advisor`
     tail, at 54 two short cells and the short act copy, at 67 two middle
@@ -576,3 +583,54 @@ the prompt was removed:
   cctop/tools in Pane from terminal: settled in 1.1ms`) and the inverse
   moved to `Tools`; a `2` typed into the empty composer stayed there and
   switched nothing. No `refused` or `hook failed` line in the debug log.
+
+### Run notes (2026-09-16, the person's own session, plugin 0.7.0)
+
+The person ran Claude Code 2.1.273 (`claude --debug`, `tui: "fullscreen"`, a
+221-column terminal, `pluginPanes.dockColumns: 74` in `~/.claude.json`) with
+plugin 0.7.0 from the marketplace cache, session `28dc94bc`, and the agent
+read the debug log (`~/.claude/debug/28dc94bc-….txt`, 21:46:49 – 21:52:43
+UTC) and the marker from inside that session. Observed, verbatim:
+
+- Item 25's log half, on the release build: 0 lines match `hook failed`,
+  `Invalid Date` or `takes a non-negative`, and 0 match `refused`. Grep
+  with `| grep -v auto-mode`: the auto-mode classifier echoes every Bash
+  command into the log, so a grep for the pattern counts itself once. The
+  load line reads `hooks module cctop loaded (worker, environment 1, tier
+  user); events: session.start,turn.start,turn.complete,session.compact,tool.call,command.run,skill.prompt,ui.close,ui.render`
+  — longer than section A's expected text, which predates `turn.*`,
+  `session.compact`, `tool.call`, `skill.prompt` and `ui.close`. Then
+  `$.command.register (cctop): /cctop-pane listed`, `session.start settled
+  in 112.6ms`, `ui.open cctop cctop (unasked, 221 columns): placed` 660 ms
+  after the load line (the persisted `{ open, view }` of item 14 reopening
+  the pane), `fullscreen boot canary: healthy`. The known benign
+  `userConfig` warning is present at 21:46:49.945.
+- Item 13's log half: `ui.open … placed` at 21:46:50.945, the first
+  `ui.render settled in 34.5ms` at 21:46:51.307; 486 renders in six
+  minutes, 481 of them under 20 ms, the slowest 44.9 ms.
+- Item 23: `!cctop pane status` printed seven `✓` lines including
+  `terminal 221 columns` and `pane open, docked (73 columns)` and exited 0.
+- Items 18 and 25's marker half: `{"version":"0.7.0", …, "loaded":true,
+  "open":true, "visibility":"visible", "placement":"dock",
+  "bodyColumns":73, "viewportColumns":147}` with ISO timestamps;
+  `loadedAt` 21:46:50.784, `openedAt` 21:46:50.953 (169 ms apart),
+  `heartbeatAt` moving.
+- Item 31's arithmetic, a third reading: `dockColumns` 74 → `min(221 − 70,
+  max(24, 74))` = 74, body 73 (`dock − 1`), viewport 147 (`columns − dock`)
+  — the same two rules as the hand-off's 137 and 81 readings. The default
+  ladder is still unread (the key was set).
+- Items 28–30's pointer half: fourteen `ui.press cctop/… in Pane from
+  terminal` lines settled in 0.4–3.8 ms — the view bar (`tools`, `agents`,
+  `files`, `events`, `coach`, `overview`), five cells (`cell-context`,
+  `cell-cache`, `cell-work`, `cell-tools`, `cell-cost`) and two act lines
+  (`act-0-2`, `act-0-0`); twelve `$.ui.status (cctop)` lines, the first
+  `○0% ○— ○— ○—`, the next `○5% ○2% ○59m ○ok`.
+- A second session (`3113c1cc`) was heartbeating the same 73 / 147 from
+  plugin **0.4.1**: it loaded its module at 21:14:31, eleven minutes before
+  `installed_plugins.json`'s `lastUpdated` 21:25:53 moved the cache to
+  0.7.0, and a hooks module is read once at session start. It had no debug
+  log (no `--debug`); a restart is what moves it to 0.7.0.
+
+These are the agent's readings of the log and the marker, not a person's
+`Result:` entries; item 25's `Result:` stays pending until the person
+confirms the header badge and the filled lights at the terminal.
