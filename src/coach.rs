@@ -39,10 +39,10 @@ pub struct Light {
     pub id: &'static str,
     pub level: Level,
     pub glyph: char,
-    /// The figure a tile enlarges (`412k`, `41m`, `62%`, `3`); `—` when the
+    /// The light's figure (`412k`, `41m`, `62%`, `3 open`); `—` when the
     /// source is absent.
     pub number: String,
-    /// The tile's numeric figure and its unit, for the block digits.
+    /// The numeric figure and its unit, when the light has one.
     pub figure: Option<f64>,
     pub unit: &'static str,
     /// The light's row after the glyph and name (`412k ▇▇▇▇▁▁▁▁▁▁ 41% ·

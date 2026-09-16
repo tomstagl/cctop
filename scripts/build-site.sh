@@ -57,11 +57,12 @@ for path in sorted(glob.glob("themes/*.toml")):
 # mockup: the fenced block after "## What it looks like" (the terminal view):
 # the ledger's digits become callouts that the legend below repeats, the four
 # lights' names and the nudge are marked, the key line is dimmed
+# Console: the cells' digits (`1: ctx`) and the `a:` / `0:` keys become
+# callouts, the act line is marked, the rule line is dimmed.
 mockup = html.escape(must_search(r"## What it looks like\n\n```\n(.*?)\n```", readme, "the terminal mockup fence", re.S))
-mockup = must_sub(r"^ (\d) ([A-Z][a-z]+) ", r' <b class="co">\1</b> <span class="t">\2</span> ', mockup, "the ledger digits", re.M)
-mockup = must_sub(r"([○◐●◆]) (context|cache|limits|rework)\b", r'\1 <span class="t">\2</span>', mockup, "the four lights' names")
-mockup = must_sub(r"^( ▸ .*)$", r'<b class="nudge">\1</b>', mockup, "the nudge line", re.M)
-mockup = must_sub(r"^( \?help .*)$", r'<span class="d">\1</span>', mockup, "the footer key line", re.M)
+mockup = must_sub(r"(^| )([1-6a0]): ", r'\1<b class="co">\2</b>: ', mockup, "the cells' digits", re.M)
+mockup = must_sub(r"^( ▸ .*)$", r'<b class="nudge">\1</b>', mockup, "the act line", re.M)
+mockup = must_sub(r"^(─── \w+ ─+ .*)$", r'<span class="d">\1</span>', mockup, "the rule line", re.M)
 # panel mockup: the fenced block under "**Panel view.**" in the same section
 panel_mockup = html.escape(must_search(r"\*\*Panel view\.\*\*.*?\n```\n(.*?)\n```", readme, "the panel-view fence", re.S))
 panel_mockup = must_sub(r"╭(coach|[○◐●] \w+)", r'╭<span class="t">\1</span>', panel_mockup, "the panel-view card title")

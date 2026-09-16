@@ -224,7 +224,7 @@ GUIDE = {
         "● is the coach's strongest signal and the nudge beside it says what to do: interrupt a cascade with the missing fact, restore to a checkpoint after a correction streak, add the allow rule for a denial streak, run the check before the commit. ◐ is the ordinary reminder to verify before the edits pile up.", ["A32", "A33", "A36", "A38", "A45", "A43", "A44", "A40"]),
 }
 
-# How each reading shows on screen, taken from the dashboard in the README.
+# How each reading shows on screen, taken from the panels and Console's bodies.
 READS = {
     "session_status": "○ IDLE · 0s", "turn_number": "turn 14", "turn_elapsed": "52:41",
     "effort": "auto · medium · Max", "process_cpu": "3%", "process_rss": "412 MB",
@@ -255,11 +255,11 @@ READS = {
 # slug, number, name, blurb, metrics.md section, margin note (html)
 PANELS = [
     ("header", "top", "Header",
-     "The line above the tiles: the session at a glance — its model, the turn, how long it has run, the phase it is in and what it is waiting on.",
+     "Console's first row: the session at a glance — its model, the turn, how long it has run, and the phase cell with the turn's elapsed time.",
      "Header", "The header is drawn in every view, terminal and docked."),
     ("coach", "c", "Coach",
-     "The four lights the dashboard's tiles enlarge — context, cache, limits, rework — and the one nudge the coach keeps beside them.",
-     "Coach", "○ quiet · ◐ watch · ● act. <kbd>c</kbd> opens the card; the tiles are the same four lights."),
+     "The four lights behind Console's cells — context, cache, limits, rework — and the one nudge the coach keeps on the act line.",
+     "Coach", "○ quiet · ◐ watch · ● act. <kbd>c</kbd> opens the card; the cells read the same four lights."),
     ("context", "1", "Context",
      "How full the context window is, how fast it's filling, and how many turns are left before the next compaction rewrites it.",
      "Context", "Amber inside Claude Code's own warn band (20k under the autocompact threshold), red at the block."),
@@ -389,8 +389,8 @@ rows = "\n".join(
     '\n<li><a href="events.html"><span class="n">8</span><span class="t"><b>Events</b><span>The chronological stream of tool, hook, permission and compaction events behind every other panel.</span></span></a></li>'
     f'\n<li><a href="advisor.html"><span class="n">9</span><span class="t"><b>Advisor</b><span>All {RULE_COUNT} rules the coach checks, the class each fires in, what triggers it, and what to do about it.</span></span></a></li>'
 )
-index_body = opener("Guide", "Panel by panel", "What the four lights, the nudge and each of the nine panels show, what every reading means, and what to actually do when it moves. Each entry says how the reading appears on screen, what it tells you, the change to make, and where the number comes from.",
-    'The numbers are the ledger digits on screen: <kbd>1</kbd>–<kbd>9</kbd> open a panel full-screen, <kbd>c</kbd> the coach card.', h1="Every reading, explained",
+index_body = opener("Guide", "Panel by panel", "What Console's cells and bodies, the coach's four lights and each of the nine panels show, what every reading means, and what to actually do when it moves. Each entry says how the reading appears on screen, what it tells you, the change to make, and where the number comes from.",
+    'The numbers are the panels\': on Console a cell\'s digit opens its body, <kbd>Enter</kbd> the panel behind it full-screen, and inside a panel <kbd>1</kbd>–<kbd>9</kbd> switch; <kbd>c</kbd> is the coach card.', h1="Every reading, explained",
     extra=f'\n    <ul class="toc">{rows}</ul>')
 page("index", "Panel guide", "What every cctop panel and reading means, why it matters, and what to do about it.", index_body)
 
