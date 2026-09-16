@@ -1,10 +1,12 @@
 # PRD: dashboard v2 — zones, meters and one colour language
 
-**Status:** v1.0 · 2026-09-16 — proposed, nothing implemented
+**Status:** v2.0 · 2026-09-16 — proposed, nothing implemented. v1.0 left the layout open between three directions; the dogfood and a pane-contract sweep closed it on **Console** (§3.6, §4).
 **Target:** cctop ≥ 0.3.1 attached to Claude Code CLI 2.1.272 on macOS/Linux; the TUI and the function-hooks pane change together, `cctop query dashboard` changes with them.
 **Depends on:** `tasks/prd-cctop.md` v1.1 (the nine panels, the metrics registry, the query interface) · `tasks/prd-cctop-coach.md` v1.3 (the four lights, the nudge slot, the urgency model) · `tasks/prd-cctop-pane.md` v1.2 (the second front-end).
 **Supersedes:** `tasks/plan-dashboard-big-figures.md` §1 and §3 — the block-digit tiles and the nine-row ledger. The one-object rule of §2 (`dashboard::snapshot`, every surface draws it verbatim) is kept and extended.
-**Design:** the canvas *cctop Dashboard Redesign* — page *Redesign* (Before, Main, Responsive, Anatomy, Audit), page *Colour & k9s* (Color, K9s). Working files in `tasks/design-dashboard-v2/`.
+**Design:** the canvas *cctop Dashboard Redesign* — pages *Redesign*, *Colour & k9s*, *Directions*, *Console*. Working files in `tasks/design-dashboard-v2/`, with a standalone clickable prototype at `tasks/design-dashboard-v2/prototype.html`.
+
+> **v2.0 changes.** The layout question is settled by use rather than by argument: the current dashboard was dogfooded, the data changed behaviour and the rendering did not survive the pane. So §4 is Console — a fixed header of whole-area targets over one body — and the `layout = tiles | zones` comparison arm v1.0's plan demanded is dropped, because the comparison happened. §3.6 adds three constraints traced out of `claude-code.d.ts` and `docs/claude-code-panels.md` that invalidate parts of v1.0: the pane is 35–85 columns and never 122, it has four colours and no hex, and the engine draws the clickable chrome itself. §6 is rewritten from "navigation and chrome" to the target model, §7 gains four target FRs, and §10 records what closed the question. US-102 and US-103 are rewritten, US-109 is new, US-106 narrows to the rule line; US-101, US-104, US-105, US-107 and US-108 stand unchanged.
 
 > Assumptions taken without pausing:
 > A. The reader is one developer with a live session, glancing at the dashboard every few minutes while working elsewhere. They are not studying it.
@@ -129,67 +131,76 @@ k9s has had a decade and an impatient audience on the same questions. Two of its
 
 **Negative lesson 2 — issue #3589, closed as not planned.** A request to sort failing pods above healthy ones during incidents, with a full severity ordering. The maintainers declined. In a layout whose shape you have learned, a row that moves when something breaks costs more than it saves: you lose the position you navigate by at the moment you can least afford to. **This corrects the redesign**: zones keep fixed positions and never reorder by urgency (FR-4).
 
-## 4. The dashboard
+### 3.6 What the pane actually is
 
-### 4.1 Three reading distances
+Three constraints, traced out of `plugin/.claude/types/claude-code.d.ts` and `docs/claude-code-panels.md` rather than assumed. Each invalidates something v1.0 drew.
 
-| Distance | Budget at 122 columns | Contents |
-|---|---|---|
-| **First glance** — 3 s | 9 rows, fixed positions | status line · act band (3) · three meters + the anatomy legend (4) · spend (1) |
-| **Second look** — 15 s | 6 rows, dimmer, may truncate | running tool + turn timings (2) · tools + files + agents (2) · event tail (2) |
-| **Dig deeper** — one keypress | full screen behind `1`–`9` | every table, sortable, filterable, no ellipsis |
+**The dock is 35–85 columns, never 122.** `docs/claude-code-panels.md` §4: `p3(columns) = min(floor(columns × 0.45), 90, columns − 70)`, then `BORDER_COLUMNS = 4` and `DOCK_GRIP_COLUMNS = 1` come out of it. Ninety is a hard cap.
 
-Twenty-one rows at 122 columns including the footer, against twenty-four today — and it carries a three-row act band instead of one, denominators on every meter, the running tool promoted out of a dim detail line, and the events as a grid instead of one ` · `-joined line.
+| terminal | dock | body | |
+|---|---|---|---|
+| 110 | 40 | ~35 | the narrowest dock there is |
+| 132 | 59 | ~54 | |
+| 162 | 72 | ~67 | **the design centre** |
+| 200 | 90 | ~85 | the cap |
+| 240 | 90 | ~85 | still the cap |
+| < 110 | — | — | no dock: an inline band above the prompt |
 
-### 4.2 The zones
+Every screen in v1.0 captioned "the pane" at 122 columns was the standalone terminal split. The pane has never been that wide and cannot be.
+
+**The pane has four colours, and they are the person's.** `plugin/hooks/views/frame.tsx`: *"Colours are Claude Code theme keys, not palette names, so the pane follows the person's theme."* `ACCENT = 'suggestion'`, `OK = 'success'`, `WARN = 'warning'`, `CRIT = 'error'`, borders are dimmed default text, and `Color` is `'green' | 'yellow' | 'red' | 'cyan'` — plus `dimColor`, `bold`, `inverse`. **There is no hex and no way to ask for one.** So §5.2's series ramp is a TUI-only affordance; the pane must carry the same meaning through the alternating fill glyph alone, which promotes the `stacked_bar` defect in US-105 from a nicety to a pane correctness bug.
+
+**The engine draws the clickable chrome itself.** `ButtonProps`: `Button` is "every surface's pressable leaf"; the terminal draws `[ label ]`, or `1: label` when `plain` — "the hotkey in the accent color, a colon, the label". Under the pointer it inverts with no hook run. `dimColor` is "dim at rest … and at full strength under the pointer or the focus". `hover` applies label styles "while the nearest enclosing keyed `Box`, or given a `scope` its group, is hovered". A `hotkey` is one digit or one lowercase letter, and a bare digit presses from an empty composer.
+
+None of that is cctop's to draw, and none of it can be restyled. v1.0's hand-drawn digit map was cctop painting an affordance the engine paints better.
+
+## 4. Console
+
+### 4.1 The shape
+
+A header that never moves, and one body that fills every remaining row.
 
 ```
- cctop  opus-5 · turn 1 · 52:11 · ~/code/cctop · v2.1.272            ● WORKING  52:11  ·  159 calls  1 err
-
- ▸ OPEN   steer window — 4 tool calls and 1:56 since Claude last spoke to you          type now to redirect
-          nothing to fix — no advice queued, none snoozed                                        9 advisor
- ○ ok     rework 0  ·  ✓ cargo test 10s  ·  0 denied  ·  ⚠ 8 stale reads  ·  agents.rs ×3  ·  git +0/−0
-
- 1 context    350k/1.00M   ▇▇▆▆▆▆▇▇▆▆▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ 35 %   616k to autocompact  ·  +0/turn  ·  0 compactions
-       fixed 65k   transient 42k   yours ≈131k
- 3 limits     5h 4 %       ▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  4 %   ↻ 4h06  ·  7d 22 %  ·  ×5 opus  ·  long ctx 78 %
- 2 cache      warm 59m     ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▁ 98 %   1h TTL  ·  0 misses  ·  re-writes 350k when cold
- 2 spend      ≈$22.50      API-equivalent                        ≈$90/h  ·  ≈$.19/call  ·  ≈$29/turn  ·  not a bill
-
- 4 running    Bash  cargo fmt --all && make check > /tmp/check.log                                            0:03
-              api ≈21:17  ·  tools 22:14  ·  159 api calls  ·  1 steer  ·  waiting on you —
- 5 tools      explore 69  test 39  implement 30 (1 ✗)  read 1  write 2              top ctx  Read …/agents.rs  10k
- 7 files      27 touched  ·  agent_ledger.rs W×1 IDE  ·  task_notification.rs W×1 IDE            6 agents  —
-
- 8 05:53  tool  Bash  cargo fmt --all && make check > /tmp/check.log     05:52  hook  PostToolBatch
-   05:52  tool  Bash  cargo test harness_facts 2>&1 | grep -c ok         05:52  tool  Bash  ✓ 94 tok
-
- ?help   1-9 panels   c coach   a ask   t theme   q quit                               read-only · nothing is sent
+ cctop  opus-5 · t1 · 52:11                        ● WORKING 52:11
+ 1:ctx 35% 616k left             2:5h 4% ↻4h06
+ 3:cache 59m 1h TTL              4:spend ≈$22.50 ≈$90/h
+ 5:✓ test 10s · rework 0         6:159 calls · 1 err
+ ▸ steer window · 4c 1:56                                 a:advisor
+─── events ────────────────────────────────── 0 home  ·  ? keys ───
+  05:53  tool  Bash  cargo fmt --all && make check > /tmp/check.log
+  05:52  hook        PostToolBatch
+  05:52  tool  Bash  ✓ 94 tokens to context
+  …
 ```
 
-**Status line.** `cctop` in accent, the session facts dim, the phase cell right-aligned in its level colour. The version moves to `?help`.
+- **Row 1 — identity.** `cctop`, the model, turn, elapsed and cwd; the phase cell right-aligned in its level colour. Fixed.
+- **Rows 2–4 — the glance.** Six cells, three per row at ≥ 80 columns, two below. Each cell is one whole-area target (§6). Fixed positions, never reordered (FR-4).
+- **Row 5 — act.** The coach's slot, wrapped rather than cut, with `a:advisor` right-aligned. The whole line is a target. A pending permission wait or `AskUserQuestion` pre-empts the nudge and paints the line `crit`.
+- **Row 6 — the rule.** The open body's name, and the only navigation cctop draws itself: `0 home` and `? keys`.
+- **Rows 7+ — the body.** Every remaining row, one thing shown properly.
 
-**Act band — three rows, always drawn, never truncated.** Row 1 is the one thing, prefixed by class (`NOW` crit · `NEXT` warn · `OPEN` ok when the only thing worth saying is that a steer window is open · dim when quiet). Row 2 is the action half, wrapped rather than cut, with `9 advisor` right-aligned. Row 3 is the health ribbon — rework, last check, denials, stale reads, uncommitted — which replaces the rework tile's bare `0` with a state word. A pending permission wait or `AskUserQuestion` pre-empts the nudge and paints the band `crit`: it is the most expensive state on the machine and today it is only in panel 4.
+Twelve rows of chrome-plus-body at 85 columns and thirteen at 54, against the current pane's seven rows of tiles before anything else is drawn.
 
-**Meters — one geometry, four rows.** Column stops at 122: digit gutter 0–2, label 3, value right-aligned to 14, meter 27–57, percent right-aligned to 58, detail from 65. `context` carries the stacked anatomy bar and one legend row; `limits` is the 5-hour window with 7-day, weight and the long-context flag as detail; `cache` is the countdown. `spend` has no denominator, so it keeps the label and value columns and leaves the meter lane to the words `API-equivalent` — a bar without a denominator is a lie, and the registry is explicit that a subscription is not billed per token.
+### 4.2 The bodies
 
-**Second look — four rows.** What is running and for how long; where the turn's wall-clock went; the tool mix with the single biggest context consumer; files, with agents right-aligned. Then the event tail as a `TIME · KIND · WHAT` grid in two columns.
+Eight, one per target, sharing one frame. Each is a full-height view of what its cell summarises; §6's table gives the registry ids behind each.
 
-**Empty means gone (FR-5).** A zone with nothing to report draws nothing and gives its rows to the zone below. `6 Agents —` and its blank detail row stop existing; agents appears as a right-aligned clause on the files row when there are any.
+`context` · `limits` · `cache` · `cost` · `work` · `tools` · `advisor` · `events` (the default and the way home).
 
-### 4.3 The responsive ladder
+The nine panels collapse into these eight: Header becomes row 1, Turn folds into the phase cell and `work`, Agents rides `tools`, Files rides `work`, Advisor becomes `advisor`.
 
-Positions never move; detail columns give way in a declared order.
+### 4.3 The width ladder
 
-| Width | Form |
-|---|---|
-| ≥ 100 | as above; 30-cell meters |
-| 60–99 | 16-cell meters; meter detail loses its third and fourth clause; the event tail keeps two rows and one column; label/value/percent stops keep their geometry |
-| < 60 | first glance only: status, act band (2 rows), three meters at 8 cells, spend, what is running, and a key map naming every panel that is no longer drawn |
+Positions never move; cells lose their trailing clause, then their second column.
 
-Claude Code un-docks the pane below `MIN_DOCK_COLUMNS = 110`, so the narrow form is the ordinary inline pane, not an edge case.
+| body columns | header cells | cell text | act line |
+|---|---|---|---|
+| ≥ 80 | 3 per row, 2 rows | `ctx 35% · 616k left` | full, with `a:advisor` right-aligned |
+| 52–79 | 2 per row, 3 rows | `ctx 35% 616k left` | full at ≥ 72, shortened below |
+| 35–51 | 2 per row, 3 rows | `ctx 35%` | shortened, no right-aligned tail |
+| inline (< 35) | the one-line strip, not individually addressable | — | the act line only |
 
-The give-way order is declared once and applied until the screen fits, instead of the four successive `if need(...) > h` tests in `compose()`: blank separators → meter detail clauses → event tail → tools/files/agents → turn timings → anatomy legend. The act band and the three meters never give way, and the last zone drawn takes the leftover height rather than leaving it blank (§3.1 dead height).
+The `< 110` case is not a dock at all: `InlinePanes` draws a band above the prompt whose rows come from `pluginPanes.inlineRows`. That form carries the act line and the strip, and nothing else.
 
 ## 5. Colour and encoding
 
@@ -225,37 +236,71 @@ The overview's three: `fixed` = prefix + harness · `transient` = thinking · `y
 
 The bar is not a chart of what happened; it is a list of levers, four of which are bolted down. Ordering the slices by agency and ramping the hue from dim to bright makes the bright block mean *this is the part you can move this afternoon* — without a legend, and without asking the reader to hold a second dictionary. It also keeps working with `NO_COLOR`, on a 16-colour terminal and in a non-UTF-8 locale, because lightness and the alternating glyph carry the order when hue cannot.
 
-## 6. Navigation and chrome
+## 6. Targets
 
-| FR | Change | From |
+### 6.1 The target is the cell, not the number
+
+A cell is **a keyed `Box` holding two or three `Button`s that share one `scope` and one `onPress`**. The whole area lights together on hover, any part of it clicks — padding included, which is drawn as a Button for exactly that reason — and each part keeps its own colour, which one Button with one label could not do.
+
+The digit is not drawn by cctop: a `plain` Button with `hotkey="1"` renders as `1: label` with the digit in the person's accent colour. Contiguous `1`–`6`, one per cell, plus `a` and `0`.
+
+### 6.2 The eight targets
+
+| key | cell | opens | reads |
+|---|---|---|---|
+| `1` | `ctx 35% · 616k left` | context | `context_size` `context_window` `turns_until_compaction` `context_anatomy` `context_velocity` `compactions` `file_rereads` |
+| `2` | `5h 4% · ↻ 4h06` | limits | `limit_5h` `limit_7d` `limit_reset` `limit_weight` `behaviour_flags` `limit_exhaustion` `other_sessions` |
+| `3` | `cache 59m · 1h TTL` | cache | `cache_warm` `cache_expires_in` `cache_ttl` `cache_misses` `cache_recache_if_cold` `cache_hit_ratio` |
+| `4` | `spend ≈$22.50 · ≈$90/h` | cost | `cost` `burn_rate` `cost_per_call` `cost_per_turn` `cache_read` `cache_write` `output` `thinking` `agents_cost` |
+| `5` | `✓ test 10s · rework 0` | work | `last_check` `coach_rework` `file_touches` `file_rereads` `uncommitted` `rewind_points` |
+| `6` | `159 calls · 1 err` | tools | `tool_calls` `tool_errors` `tool_p50` `tokens_to_ctx` `top_ctx` `bash_class` `error_class` |
+| `a` | the act line, whole | advisor | the coach object · `advice_saving` |
+| `0` | `0 home` in the rule line | events | D2 transcript · D4 hook spool |
+
+### 6.3 The five states
+
+| state | docked pane | standalone terminal |
 |---|---|---|
-| Per-view footer | the key hints are generated from the active view, so panel 5 advertises `s` sort and `/` filter where they apply | k9s header block |
-| `Ctrl-E` | collapse the meter block to its one-line form and give the rows to the tables; the act band never collapses | k9s `Ctrl-E` |
-| `w` | wide mode — rows wrap instead of being cut; the direct answer to §3.1's double truncation | k9s `Ctrl-W` |
-| `z` | faults only — hide every zone that is quiet | k9s `Ctrl-Z` |
-| `/` | filter the tools, files and events tables; `Esc` clears the filter before it leaves the view | k9s `/` |
-| `s` | sort by column on **every** table, named in the footer | k9s `Shift-O` |
-| `-` | previous view; a breadcrumb in the footer; `Esc` keeps meaning exactly one level up | k9s `[` `]` `-` |
-| `bg = "default"` | a theme may inherit the terminal background | k9s skins |
+| rest | plain Button: digit in the theme's accent, colon, label; secondary parts `dimColor` | same characters, accent digit, dim tail |
+| hover | the keyed Box lights through the shared scope, padding included; the Button under the pointer inverts — both the surface's own doing | **nothing**: no pointer. The one state the surfaces cannot share |
+| focus | the engine's focus ring; Enter presses; `dimColor` parts render full strength | no ring — the key is printed in the cell |
+| pressed | the body swaps in place, the header does not move; `ui.press` carries the cell's key | identical, handled in `app.rs` |
+| current | the open body's cell draws digit and label in `ok`, bold | identical |
 
-`:` fuzzy jump is **deferred** (§11) — it is the largest of these and the least evidenced.
+### 6.4 What is deferred
+
+`Ctrl-E` collapse, `z` faults-only, `/` filter, `s` sort and `-` previous view stay out of this PRD (US-107). Console needs none of them to work: the body *is* the drill-down, and `0` is the way back.
 
 ## 7. Functional requirements
 
-- **FR-1** `dashboard::snapshot` remains the only place a surface's contents are decided. The TUI, the pane and `cctop query dashboard` draw it verbatim. (There is **no** `cctop_dashboard` MCP tool — `src/mcp.rs` exposes eight and none of them is the dashboard. Adding one is out of scope.) A fixture-B test holds the two surfaces row-identical; **that harness does not exist yet** and US-103 builds it.
-- **FR-2** Every figure carries its unit in the same cell run, on the same line.
+**The object**
+
+- **FR-1** `dashboard::snapshot` remains the only place a surface's contents are decided. The TUI, the pane and `cctop query dashboard` draw it verbatim. There is **no** `cctop_dashboard` MCP tool — `src/mcp.rs` exposes eight and none is the dashboard — and this work does not add one.
+- **FR-2** The object is colour-free. A slice carries a *step index*, not a colour; each surface maps it through its own vocabulary. This is what lets the TUI use a ramp the pane cannot express (§3.6).
 - **FR-3** No fact is drawn twice on one screen.
-- **FR-4** Zone order is fixed and never reorders by urgency, value or recency.
-- **FR-5** A zone with nothing to report draws nothing and yields its rows.
-- **FR-6** The act band is never truncated mid-fact; it wraps. Every other zone may truncate, and every truncation is marked — no silent clip at the terminal edge.
-- **FR-7** `ok` / `warn` / `crit` are used only for a registry-defined threshold. Composition uses the §5.2 ramp.
-- **FR-8** Every state on the screen is legible with `NO_COLOR`, on 16 colours, and in a non-UTF-8 locale, through glyph and position alone.
-- **FR-9** A figure whose source is absent prints `—`, never `0`; a figure with no sample yet prints `—`, never a computed zero (§9, US-104).
-- **FR-10** An estimate that a reader could mistake for a hard fact carries a word, not only `≈`: cost is labelled API-equivalent.
-- **FR-11** The give-way order is declared once as data and applied in order until the layout fits; the last zone drawn absorbs leftover height.
-- **FR-12** The footer is generated from the active view.
+- **FR-4** Cells keep fixed positions and never reorder by urgency, value or recency (k9s #3589, §3.5).
+- **FR-5** A body with nothing to report says so in one line; it does not draw an empty frame.
+
+**Reading**
+
+- **FR-6** Every figure carries its unit in the same cell run, on the same line.
+- **FR-7** The act line is never truncated mid-fact; it wraps. Every other truncation is marked.
+- **FR-8** `ok` / `warn` / `crit` are used only for a threshold the registry defines. Composition uses the §5.2 ramp in the TUI and glyph alternation in the pane.
+- **FR-9** Every state is legible with `NO_COLOR`, on 16 colours, in a non-UTF-8 locale, and **in the pane, which has none of those fallbacks and cannot detect the font** — through glyph and position alone.
+- **FR-10** A bar never carries meaning alone: every bar has its number beside it, so a font that renders `▇` a fraction narrow costs alignment and not meaning.
+- **FR-11** A figure whose source is absent prints `—`, never `0`; a figure with no sample yet prints `—`, never a computed zero.
+- **FR-12** An estimate a reader could mistake for a hard fact carries a word, not only `≈`.
+
+**Targets**
+
+- **FR-13** A target is an area. Every cell of it presses, padding included, and hovering any part lights all of it.
+- **FR-14** cctop draws no hotkey chrome. Digits and their accent colouring are the engine's `plain` Button rendering.
+- **FR-15** Hotkeys are contiguous and one-to-one with the cells.
+- **FR-16** The pane reads `schema` and, on a mismatch, renders one line naming the cctop it needs — never an indefinite wait.
 
 ## 8. User stories
+
+> **correctness — ships on the layout that exists today, changes no schema**
 
 ### US-101: Two readers of one session must not disagree about cost
 **Description:** As a user, I want every surface reading one session to report one cost, so that a 2250× gap between two windows is impossible.
@@ -267,28 +312,6 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 - [ ] The registry row for `cost` gains the caveat if both readings are legitimate at different points
 - [ ] Turn state, separately: panel 4's field is labelled for what it reads (the turn) and the header's for the phase classifier, so the two can differ without reading as a contradiction. A turn-ended-while-tools-run fixture (`scripts/anonymise-transcript.py`, never hand-edited) pins what each says
 - [ ] Ships on the layout that exists today and changes no schema
-
-### US-102: The zone layout, TUI
-**Description:** As a user, I want status, act, meters, second look and events in fixed positions, so that a glance always lands in the same place.
-
-**Acceptance Criteria:**
-- [ ] `src/ui/dashboard.rs` composes the §4.2 zones; `tile_block`, `tile_rows` and `big_digits` are deleted with their tests, and `FOUR_TILES` / `TWO_TILES` / `L1_TILES` / `TILE_WIDTH` go with them
-- [ ] Column stops per §4.2; a test asserts every composed row is **≤ `width` cells measured before render** (a ratatui `TestBackend` buffer is `width` cells by construction, so measuring post-render is vacuous) at 40 / 60 / 80 / 100 / 122, on both surfaces
-- [ ] FR-5: a zone with no content emits no row; `6 Agents —` is gone and agents rides the files row
-- [ ] FR-3: the phase cell appears once; `warm`, `≈$/call` and the context percent appear once each
-- [ ] Insta snapshots regenerated at 40 × 24, 60 × 51, 80 × 40, 100 × 30, 122 × 24
-
-### US-103: The zone layout, pane
-**Description:** As a user of the docked pane, I want the same screen the terminal draws.
-
-**Acceptance Criteria:**
-- [ ] `plugin/hooks/views/overview.tsx` draws the same zones; `tileRows`, `tileLines`, `engineTiles`, `TILES_MIN`, `L2_MAX`, `type Tile` and `tileOf` are deleted, and `dashboardOf`'s hard `tiles` requirement with them
-- [ ] `frame.tsx`'s `bigDigits` / `BIG_GLYPHS` is deleted **in the same commit** as `tileLines`, its only caller
-- [ ] **A fixture-B row-identity harness is built.** It does not exist today: `coach.test.ts` covers the Coach card, `overview.test.ts` uses fixture A and regexes rather than Rust-rendered rows, and the `-b` dashboard fixtures are generated but read by no test
-- [ ] The pane reads `schema` and renders one line naming the cctop it needs, instead of waiting forever on `dashboardOf → null`. There is no binary pin; the pane probes `cctop query --help`
-- [ ] The digit model is resolved with the schema, not after: `Model.unfolded`, `overview.toggle`, `viewOfDigit` and `pane.tsx:253–255` all hang off it
-- [ ] The narrow form (< `MIN_DOCK_COLUMNS`) is §4.3's, not a truncation of the wide one
-- [ ] `scripts/pane-fixtures.sh` regenerated for both fixtures
 
 ### US-104: Honest figures
 **Description:** As a user, I want a number to say what it knows and to admit what it does not.
@@ -314,12 +337,56 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 - [ ] A rendered-buffer assertion that the context bar's spans carry only colours from `Theme::series(n)` — five lines over the buffer, not a grep, and not "enforced by review"
 - [ ] `docs/metrics.md` gains the encoding note for `context_anatomy`; the panel guide gains §5.3's sentence in plain words
 
-### US-106: Per-view footer and the un-truncate key
-**Description:** As a user, I want each view to name its own keys, and a way to see what a row cut off.
+> **Console**
+
+### US-102: The Console object
+**Description:** As every surface, I want one object that decides what Console shows, so the pane and the terminal cannot disagree.
 
 **Acceptance Criteria:**
-- [ ] `Panel::keys(&State) -> Vec<(&str, &str)>` on the trait, default empty; the footer is generated from the active view. There are **three** footer sites: `src/ui/dashboard.rs::FOOTER`, `src/ui/coach_view.rs:26`, and a hard-coded string at `src/app.rs:815`
-- [ ] `w` toggles wide mode — rows wrap instead of cutting — on both surfaces, with a rule for a zone taller than the screen
+- [ ] `src/dashboard.rs` schema `1 → 2` (current value verified at `src/dashboard.rs:203`): `tiles` out; `header`, `act`, `cells: Vec<Cell>`, `body: Body` in
+- [ ] `Cell` is `{ key: char, id, label: Line, opens: &'static str, active: bool }` — `label` is a `Line` of segments so a cell can be several Buttons sharing a press (FR-13)
+- [ ] A slice carries `step: u8` into `Theme::series(n)`, **not** a colour (FR-2)
+- [ ] `Body` is `{ id, title, keys, rows: Vec<Line> }`, one of the eight in §4.2
+- [ ] The object is **not** width-aware. `snapshot` stops cutting at `ROW_WIDTH`; each surface cuts once at its own width. This removes the double cut without a `--columns` flag, a resize re-poll, or rows cut for a stale width (v1.0's plan had no caller story for any of it: `src/query.rs:394` is `pub fn dashboard(state)` with no width, `src/main.rs:114` declares `Dashboard` as a bare unit variant, and `poller.ts:135` sends no width)
+- [ ] The digit question is settled **before** the schema is written, not after: `key` is a wire field
+- [ ] `src/query.rs`, `docs/query.md:47` follow; `src/main.rs:114`'s clap help is rewritten
+- [ ] `scripts/pane-fixtures.sh` regenerated for both fixtures
+
+### US-103: Console in the terminal
+**Description:** As a user at a terminal, I want the header and one body.
+
+**Acceptance Criteria:**
+- [ ] `src/ui/dashboard.rs` draws §4.1; `tile_block`, `tile_rows`, `FOUR_TILES`, `TWO_TILES`, `L1_TILES`, `TILE_WIDTH` are deleted, and `big_digits` + `BIG` + `mod big_tests` from `src/ui/widgets.rs` with them
+- [ ] `TWO_TILES` and `L1_TILES` gate **ledger** decisions, not tile ones — `with_detail = width >= TWO_TILES` (`:236`) and the narrow `ledger_row` form (`:230`, `:189–194`). Both need replacements, not deletions
+- [ ] Digits `1`–`6`, `a`, `0` swap the body; `Esc` returns to `events`; the header never moves
+- [ ] A test asserts every composed row is **≤ `width` cells measured before render** (a `TestBackend` buffer is `width` cells by construction, so measuring after render is vacuous) at 35 / 54 / 67 / 85 / 122
+- [ ] `src/theme.rs:532`'s `assert!(text.contains("1 Context"))` is a plain assertion inside `dashboard_no_color_is_monochrome`; `INSTA_UPDATE` will not fix it
+- [ ] `src/dashboard.rs:922–1022` asserts `rows.len() == 9`, `digit == i+1`, both `ROW_WIDTH` bounds, `tiles.len() == 4` and `schema == 1` — all of it is rewritten
+- [ ] Insta snapshots regenerated at 35 / 54 / 67 / 85 / 122
+
+### US-109: Console in the pane
+**Description:** As a user of the docked pane, I want the cells to be real clickable areas in the engine's own chrome.
+
+**Acceptance Criteria:**
+- [ ] `plugin/hooks/views/overview.tsx` draws §4.1; `tileRows`, `tileLines`, `engineTiles`, `TILES_MIN`, `L2_MAX`, `type Tile`, `tileOf` are deleted, and `dashboardOf`'s hard `if (!Array.isArray(tiles)) return null` with them
+- [ ] `frame.tsx`'s `bigDigits` / `BIG_GLYPHS` is deleted **in the same commit** as `tileLines`, its only caller (`overview.tsx:17`, `:569`; asserted at `tests/pane/overview.test.ts:20,127–139`)
+- [ ] A cell is a keyed `Box` of `plain` Buttons sharing a `scope` and one `onPress`; the padding is a Button (FR-13)
+- [ ] No cctop-drawn digit chrome (FR-14)
+- [ ] The three-way context split survives on `dimColor` and glyph alternation alone — **the pane has no ramp** (§3.6)
+- [ ] `TILES_MIN` also gates the pane's detail rows at `overview.tsx:635`; that needs a replacement
+- [ ] The pane's digit model changes with it: `Model.unfolded` (`model.ts:113,186`), `overview.toggle` (`:145,301–305`), `viewOfDigit` (`overview.tsx:717`), dispatcher `pane.tsx:253–255`
+- [ ] FR-16: read `schema`, render one line on a mismatch. There is no binary pin — `plugin/.claude-plugin/plugin.json` carries only the plugin's version and the pane probes `cctop query --help` (`poller.ts:55–67`, `model.ts:334–342`), so a schema-2 pane on a schema-1 binary otherwise waits forever
+- [ ] **A fixture-B row-identity harness is built.** It does not exist: `coach.test.ts` covers the Coach card, `overview.test.ts` uses fixture A and regexes rather than Rust-rendered rows, and the `-b` dashboard fixtures are generated but read by no test
+- [ ] Four assumptions go to `docs/verification/pane.md` as `Result: pending` (CLAUDE.md): whether a `plain` Button with no hotkey draws only its label; whether the hover scope covers a Button whose label is only spaces; whether six Buttons in one band can each claim a bare digit; and the real `bodyColumns` at 35 / 54 / 67 / 85
+
+> **after Console**
+
+### US-106: Per-view keys in the rule line
+**Description:** As a user, I want each body to name its own keys where Console already draws a rule line.
+
+**Acceptance Criteria:**
+- [ ] The rule line's right half is `Body::keys`, already on the object (US-102), so there is no new trait. The three legacy footer strings — `src/ui/dashboard.rs::FOOTER`, `src/ui/coach_view.rs:26`, and the hard-coded one at `src/app.rs:815` — reduce to two, since Console has no footer
+- [ ] `?` expands the rule line into the full key map for the open body, and collapses again
 - [ ] Both appear in the footer and the help overlay
 - [ ] Live-terminal verification goes to `docs/verification/pane.md` as `Result: pending` (CLAUDE.md). That file already carries 28 pending items, which is itself the argument for keeping this story to two
 
@@ -346,8 +413,17 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 
 ## 9. What this does not answer
 
-- **`:` fuzzy jump** (§6) is deferred. cctop has roughly a dozen destinations, digits reach nine of them, and the evidence that the remaining three need a command grammar is weak. Revisit when the count passes fifteen.
-- **Whether zones actually read better than tiles.** This document asserts it and does not measure it. The predecessor's own plan committed to a dogfood week that never happened, so the design being replaced was never evaluated either. **The layout change ships behind `layout = tiles | zones` on the exposure machinery coach Phase 7 already built, and the tiles are deleted only when the arm says so** (plan §1.2). Everything measured in §3 justifies US-101, US-104 and US-105; none of it justifies deleting the tiles.
-- **Whether the overview should keep a hero number at all.** This document says no — meters with a shared geometry beat one big figure, and four big figures in four units beat nothing. If the dogfood says a single spend or context figure is missed from across a room, it returns as *one* figure with its unit attached.
-- **The ledger's `Panel::ledger` contract.** Zones no longer map one-to-one onto panels (`agents` rides `files`, `cache` and `spend` both carry digit `2`). Whether `Panel` keeps a ledger method or the zones become their own table is a plan-level decision (plan §2, Phase 1).
-- **Whether §3.2's turn divergence is a defect or two honest answers.** A code question, not a design one. US-101 settles it with a fixture; the redesign does not depend on the outcome.
+- **Whether six cells are the right six.** They are the four budgets plus health plus volume, which is what the current four lights and the row ledger between them already say. If the dogfood on Console says one is never pressed, it becomes a line in another body rather than a cell.
+- **The inline form below 110 columns.** §4.3 gives it the act line and the strip. Nobody has used cctop inline for a working week, so this is the least evidenced part of the design.
+- **Whether `0` or `Esc` is the way home.** Both are wired; which one people reach for is a dogfood question.
+- **The deferred chrome** (US-107). It stays deferred until something in Console actually needs it.
+
+## 10. What settled the layout
+
+v1.0 could not answer whether zones beat tiles and said so, and its plan demanded a `layout = tiles | zones` arm on the coach's exposure machinery before the tiles could be deleted. That gate is met, by use rather than by instrumentation:
+
+- the current dashboard was **used**, and the data changed behaviour — so the readings, the thresholds and the registry behind them are evidence-backed and none of them changes here;
+- the rendering did not survive the pane — *"it looks just ugly in the panel"* — and §3.6 says why in numbers: seven mandatory tile rows in a viewport that is 35–85 columns wide and short;
+- three directions were built as clickable prototypes at the real widths and compared, and Console was chosen.
+
+So this PRD deletes the tiles without an A/B arm, and the plan no longer carries one. What it does carry instead is §3.6's constraints, which is the part v1.0 was actually missing: not a preference between two layouts, but the shape of the surface both were being drawn for.
