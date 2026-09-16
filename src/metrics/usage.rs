@@ -1003,6 +1003,47 @@ mod tests {
         assert_eq!(agg.human_turns(), 1);
     }
 
+    /// `159 api calls · 159 tool calls` (PRD dashboard-v2 US-104): two
+    /// counters, not one standing in for the other. `api_calls` is the
+    /// turn's distinct `message.id`s, `tool_calls` its `tool_use` blocks;
+    /// they coincide when every response carries exactly one call (fixture
+    /// E, the screenshot's shape) and part when one carries several or none
+    /// (fixture A's last turn: 52 responses, 125 calls).
+    #[test]
+    fn api_calls_and_tool_calls_are_distinct_counters() {
+        let count = |lines: &[Line]| {
+            let mut ids = std::collections::HashSet::new();
+            let mut uses = 0;
+            for l in lines {
+                if let Line::Assistant(a) = l {
+                    if a.is_api_error() {
+                        continue;
+                    }
+                    ids.insert(a.message.id.clone());
+                    uses += a
+                        .message
+                        .content
+                        .iter()
+                        .filter(|b| matches!(b, crate::transcript::AssistantBlock::ToolUse { .. }))
+                        .count();
+                }
+            }
+            (ids.len(), uses)
+        };
+        let e = parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-e.jsonl"))
+            .unwrap();
+        let agg = Aggregate::from_lines(&e);
+        let t = agg.current_turn().unwrap();
+        assert_eq!((t.api_calls, t.tool_calls), (6, 6));
+        assert_eq!(count(&e[20..]), (6, 6), "one tool_use per response");
+
+        let a = parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl"))
+            .unwrap();
+        let agg = Aggregate::from_lines(&a);
+        let t = agg.turns.iter().rev().find(|t| t.api_calls > 0).unwrap();
+        assert_eq!((t.api_calls, t.tool_calls), (52, 125));
+    }
+
     #[test]
     fn turn_duration_hooks_queue_and_away_from_system_lines() {
         let lines = fixture("session-a");

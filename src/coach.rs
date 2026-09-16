@@ -995,10 +995,21 @@ pub fn rework_light(state: &State) -> Light {
         _ => {}
     }
     let issues = fails + corrections + blocked;
-    let number = if issues > 0 {
-        issues.to_string()
+    // A state, not a count: `0` meant healthy and no data alike. What is
+    // open, else what is unchecked, else `ok` — and `—` before the session
+    // has called anything to judge.
+    let (number, figure, unit) = if issues > 0 {
+        (format!("{issues} open"), Some(issues as f64), "open")
+    } else if edits > 0 {
+        (
+            format!("{edits} unchecked"),
+            Some(edits as f64),
+            "unchecked",
+        )
+    } else if state.tools.calls.is_empty() && check.is_none() {
+        ("—".to_string(), None, "")
     } else {
-        edits.to_string()
+        ("ok".to_string(), Some(0.0), "ok")
     };
     let mut lines = vec![match &check {
         Some((cmd, ok, at)) => format!(
@@ -1037,8 +1048,8 @@ pub fn rework_light(state: &State) -> Light {
         level,
         glyph: level.glyph(),
         number,
-        figure: Some(if issues > 0 { issues } else { edits } as f64),
-        unit: "",
+        figure,
+        unit,
         text: parts.join(" · "),
         alt: None,
         source: "transcript",
@@ -1108,6 +1119,7 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
         }
         if let Some(t) = turn {
             let run = t.calls_since_text;
+            let mut added_ctx = None;
             if run > 0 {
                 let added: u64 = state
                     .tools
@@ -1117,7 +1129,13 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
                     .take(run)
                     .map(|c| c.result_tokens_est)
                     .sum();
-                tokens.push(format!("{run}c +{}", fmt::tokens(added)));
+                // The silent run, spelled (`4c +145`, PRD dashboard-v2
+                // US-104): the calls since Claude last wrote prose here,
+                // the context they added as the last token — the card's
+                // 52 cells cut the tail, and the tail is the figure that
+                // matters least, never the steer window.
+                tokens.push(format!("{run} {}", if run == 1 { "call" } else { "calls" }));
+                added_ctx = Some(format!("+{} ctx", fmt::tokens(added)));
             }
             // Silence: since the model last wrote prose, or since the
             // person last spoke (the prompt, an answer), whichever is later.
@@ -1138,6 +1156,9 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
             }
             if (1..=5).contains(&run) {
                 tokens.push("▸ steer window".into());
+            }
+            if let Some(ctx) = added_ctx {
+                tokens.push(ctx);
             }
         }
     } else {
@@ -1332,7 +1353,7 @@ mod tests {
             c.line(80),
             "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ queue: 'run builds and test suites longer than a …"
         );
-        assert_eq!(c.line(56), "○14% ○— ○59m ●1 ▸");
+        assert_eq!(c.line(56), "○14% ○— ○59m ●1 open ▸");
         assert_eq!(c.line(30), "○○○●");
         assert_eq!(c.queued, 0);
         let n = c.nudge.as_ref().unwrap();
@@ -1356,7 +1377,7 @@ mod tests {
         assert_eq!(c.lights[3].lines[1], "fails: Denied 4 · Other 2");
         assert_eq!(
             c.state.line,
-            "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window"
+            "COMMITTING · 4 calls · silent 3:09 · ▸ steer window…"
         );
     }
 
@@ -1512,7 +1533,9 @@ mod tests {
         let l = rework_light(&s);
         assert_eq!(l.level, Level::Quiet);
         assert_eq!(l.text, "edits 0 ✓ none");
-        assert_eq!(l.number, "0");
+        // No call, no check: nothing to judge yet — never a healthy `0`.
+        assert_eq!(l.number, "—");
+        assert_eq!(l.figure, None);
         // An edit, then three failures in a row: act, with the prefix.
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:01:02Z","message":{"id":"e1","model":"claude-opus-5","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/p/src/a.rs","old_string":"a","new_string":"b"}}],"usage":{"output_tokens":1}}}"#).unwrap());
         s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:01:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#).unwrap());
@@ -1528,7 +1551,8 @@ mod tests {
         let l = rework_light(&s);
         assert_eq!(l.level, Level::Act);
         assert_eq!(l.text, "3 fails ▸git push · edits 1 ✓ none 10m");
-        assert_eq!(l.number, "3");
+        assert_eq!(l.number, "3 open");
+        assert_eq!((l.figure, l.unit), (Some(3.0), "open"));
         assert!(l.lines[1].starts_with("fails: "), "{:?}", l.lines);
         // A passing test run clears the edits and the streak (a success ends it).
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:12:10Z","message":{"id":"t","model":"claude-opus-5","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"command":"cargo test"}}],"usage":{"output_tokens":1}}}"#).unwrap());
@@ -1537,6 +1561,9 @@ mod tests {
         let l = rework_light(&s);
         assert_eq!(l.level, Level::Quiet);
         assert_eq!(l.text, "edits 0 ✓ cargo test 6m ago");
+        // Healthy is a word, not the `0` that also meant no data.
+        assert_eq!(l.number, "ok");
+        assert_eq!((l.figure, l.unit), (Some(0.0), "ok"));
         assert!(
             l.lines[0].starts_with("last check `cargo test` ok 6m ago"),
             "{:?}",
@@ -1566,9 +1593,16 @@ mod tests {
         s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T00:05:50Z").unwrap();
         let st = state_line(&s, SessionMode::Interactive);
         assert_eq!(st.kind, "EXPLORING");
+        // Spelled, the tokens no longer all fit the card's 52 cells: the
+        // context figure is last and takes the marked cut (Console's act
+        // line wraps instead, PRD dashboard-v2 FR-7). The tokens are whole.
         assert_eq!(
             st.line,
-            "EXPLORING · 3c +3.0k · silent 3:50 · ▸ steer window"
+            "EXPLORING · 3 calls · silent 3:50 · ▸ steer window …"
+        );
+        assert_eq!(
+            st.tokens,
+            ["3 calls", "silent 3:50", "▸ steer window", "+3.0k ctx"]
         );
         // Waiting on a question.
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:05:55Z","message":{"id":"q","model":"claude-opus-5","content":[{"type":"tool_use","id":"q","name":"AskUserQuestion","input":{"questions":[]}}],"usage":{"output_tokens":1}}}"#).unwrap());

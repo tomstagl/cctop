@@ -24,7 +24,7 @@
   },
   "lines": {
     "l0": "○60k ≈$.04 · ○cache 59m · ○5h — · ◐edits 3",
-    "l1": "○6% ○— ○59m ◐3",
+    "l1": "○6% ○— ○59m ◐3 unchecked",
     "l2": "○○○◐"
   },
   "nudge": null,
@@ -88,7 +88,7 @@
     {
       "detail": [
         {
-          "text": "$1.17",
+          "text": "$1.17 API-equivalent",
           "tone": "fg"
         },
         {
@@ -561,7 +561,7 @@
       "source": "transcript",
       "sub1": "edits 3 ✓ none 6m",
       "sub2": "",
-      "unit": ""
+      "unit": "unchecked"
     }
   ]
 }

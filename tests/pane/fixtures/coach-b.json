@@ -62,15 +62,15 @@
         "fails: Denied 4 · Other 2",
         "rewind 0 checkpoints this turn"
       ],
-      "number": "1",
+      "number": "1 open",
       "source": "transcript",
       "text": "1 correction · edits 3 ✓ none 9h00 · commit 0s unchecked",
-      "unit": ""
+      "unit": "open"
     }
   ],
   "lines": {
     "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ queue: 'run builds and test suites longer than a …",
-    "l1": "○14% ○— ○59m ●1 ▸",
+    "l1": "○14% ○— ○59m ●1 open ▸",
     "l2": "○○○●"
   },
   "model": "claude-sonnet-5",
@@ -105,11 +105,12 @@
   "start_line": null,
   "state": {
     "kind": "COMMITTING",
-    "line": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",
+    "line": "COMMITTING · 4 calls · silent 3:09 · ▸ steer window…",
     "tokens": [
-      "4c +180",
+      "4 calls",
       "silent 3:09",
-      "▸ steer window"
+      "▸ steer window",
+      "+180 ctx"
     ]
   },
   "suppressed": [],

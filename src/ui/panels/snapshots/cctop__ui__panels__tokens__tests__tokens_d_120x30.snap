@@ -8,7 +8,7 @@ expression: "render_to_string(&app, 120, 30)"
 │ fresh in                                                                                                        1.3k │
 │ output      ▇                                                                                                    92k │
 │  └ thinking                                                                                                      42k │
-│ cache hit 96 %  ·  ≈ $10.6 ($34.2/h main)  ·  in 430k/min                                                            │
+│ cache hit 96 %  ·  ≈ $10.6 ($34.2/h main)  ·  in 430k/min  ·  API-equivalent                                         │
 │ ledger $10.2 · team ≈$0.48 (5 %, 2 of 3 read)                                                                        │
 │ per turn ▁▁▄▃▂▁█▂   last turn 817k · $0.47                                                                           │
 │ ≈$0.06/call · ≈$0.36/turn (≈$0.29 at 100k) · next 30c ≈$1.78                                                         │

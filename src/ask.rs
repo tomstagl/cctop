@@ -27,7 +27,7 @@ pub fn compose(state: &State, panel: u8) -> Option<String> {
             fmt::tokens(ctx.window),
             ctx.ratio() * 100.0,
             fmt::tokens(ctx.prefix),
-            fmt::tokens(ctx.velocity.max(0.0) as u64),
+            ctx.velocity.map(|v| fmt::tokens(v.max(0.0) as u64)).unwrap_or_else(|| "—".into()),
             ctx.turns_until_compaction().map(|n| format!(", autocompact in ~{} turns", n.ceil() as u64)).unwrap_or_default()
         ),
         2 => format!(

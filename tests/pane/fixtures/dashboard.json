@@ -26,7 +26,7 @@
   },
   "lines": {
     "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ queue: 'run make check, fix failures' or /goal",
-    "l1": "◐40% ○— ○50m ◐1 ▸",
+    "l1": "◐40% ○— ○50m ◐1 open ▸",
     "l2": "◐○○◐"
   },
   "nudge": {
@@ -96,7 +96,7 @@
     {
       "detail": [
         {
-          "text": "≈$10.0",
+          "text": "≈$10.0 API-equivalent",
           "tone": "fg"
         },
         {
@@ -144,7 +144,7 @@
           "tone": "dim"
         },
         {
-          "text": "mcp:lorem ipsum dolo 80 %",
+          "text": "mcp:lorem ipsu…",
           "tone": "dim"
         }
       ],
@@ -566,7 +566,7 @@
       "source": "transcript",
       "sub1": "1 · correction",
       "sub2": "edits 1 ✓ none 20m",
-      "unit": ""
+      "unit": "open"
     }
   ]
 }

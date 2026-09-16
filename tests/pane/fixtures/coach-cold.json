@@ -62,15 +62,15 @@
         "fails: Denied 4 · Other 2",
         "rewind 0 checkpoints this turn"
       ],
-      "number": "1",
+      "number": "1 open",
       "source": "transcript",
       "text": "1 correction · edits 3 ✓ none 8h57",
-      "unit": ""
+      "unit": "open"
     }
   ],
   "lines": {
     "l0": "◐193k ≈$.11/call (cold: next call ≈$1.9) · ◐cache 193k · ○5h — · ◐corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
-    "l1": "◐19% ○— ◐193k ◐1 ▸",
+    "l1": "◐19% ○— ◐193k ◐1 open ▸",
     "l2": "◐◐○◐"
   },
   "model": "claude-opus-5",
@@ -112,10 +112,11 @@
   "start_line": null,
   "state": {
     "kind": "PLANNING",
-    "line": "PLANNING · 1c +83 · ▸ steer window",
+    "line": "PLANNING · 1 call · ▸ steer window · +83 ctx",
     "tokens": [
-      "1c +83",
-      "▸ steer window"
+      "1 call",
+      "▸ steer window",
+      "+83 ctx"
     ]
   },
   "suppressed": [],

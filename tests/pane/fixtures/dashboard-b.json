@@ -15,9 +15,10 @@
     "phase": {
       "glyph": "●",
       "tokens": [
-        "4c +180",
+        "4 calls",
         "silent 3:09",
-        "▸ steer window"
+        "▸ steer window",
+        "+180 ctx"
       ],
       "word": "COMMITTING"
     },
@@ -28,7 +29,7 @@
   },
   "lines": {
     "l0": "○142k ≈$.03 · ○cache 59m · ○5h — · ●corrections 1 · ▸ queue: 'run builds and test suites longer than a …",
-    "l1": "○14% ○— ○59m ●1 ▸",
+    "l1": "○14% ○— ○59m ●1 open ▸",
     "l2": "○○○●"
   },
   "nudge": {
@@ -106,7 +107,7 @@
     {
       "detail": [
         {
-          "text": "$18.7",
+          "text": "$18.7 API-equivalent",
           "tone": "fg"
         },
         {
@@ -226,7 +227,7 @@
       "name": "Turn",
       "values": [
         {
-          "text": "COMMITTING · 4c +180 · silent 3:09 · ▸ steer window",
+          "text": "COMMITTING · 4 calls · silent 3:09 · ▸ steer window…",
           "tone": "accent"
         },
         {
@@ -547,7 +548,7 @@
       "source": "transcript",
       "sub1": "1 · correction",
       "sub2": "edits 3 ✓ none 9h00",
-      "unit": ""
+      "unit": "open"
     }
   ]
 }

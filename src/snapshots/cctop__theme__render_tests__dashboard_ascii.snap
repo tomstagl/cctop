@@ -8,16 +8,16 @@ expression: text
  40   396k of 1.00M           50   warm . 50m (1h) TTL
     % ~$.08/call                 m misses 2 (last tools_c…
 
-     - limits                     + rework
- —   no status line           1   1 . correction
-   %                              edits 1 v none 20m
+     - limits                        + rework
+ —   no status line           1      1 . correction
+   %                            open edits 1 v none 20m
 
  > Edited 1 src file, no test/build run yet … NEXT · turn 14
 
  1 Context   ################------------------------ prefi.
              +50k/turn . autocompact 967k . 570k left . com.
  2 Tokens    cache read 32.97M . write 597k . output 67k . .
-             $9.90 . $16.3/h . $/call ~$.08 . $/turn ~$.66 .
+             $9.90 API-equivalent . $16.3/h . $/call ~$.08 .
  3 Limits    no status line . weight x3 (sonnet) . long_con.
              83% of your usage was at >150k context
  4 Turn      IDLE 0s . api ~5:13 . tools 3:24

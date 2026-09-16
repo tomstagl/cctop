@@ -136,10 +136,10 @@ impl Panel for Context {
             Span::raw(" "),
             Span::styled(sparkline(&state.theme, &v.history, 12), accent),
         ];
-        if v.velocity > 0.0 {
+        if let Some(velocity) = v.velocity.filter(|v| *v > 0.0) {
             trend.push(Span::raw(format!(
                 "  +{}/turn",
-                fmt::tokens(v.velocity as u64)
+                fmt::tokens(velocity as u64)
             )));
             if let Some(n) = v.turns_until_compaction() {
                 let mark = if v.threshold_learned { "" } else { " est" };

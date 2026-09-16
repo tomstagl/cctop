@@ -350,7 +350,13 @@ fn tile(l: &coach::Light, state: &State) -> Tile {
                 ),
                 [] => (String::new(), String::new()),
             };
-            (l.number.clone(), first, second)
+            // The rework light's number is a state word; the block digits
+            // draw its figure and the word sits in the unit's place.
+            (
+                l.figure.map(|f| format!("{f:.0}")).unwrap_or("—".into()),
+                first,
+                second,
+            )
         }
     };
     Tile {
@@ -390,10 +396,11 @@ fn row_context(state: &State) -> Row {
             fmt::tokens(a.harness)
         )),
     ];
-    let mut parts: Vec<Line> = vec![vec![fg(format!(
-        "+{}/turn",
-        fmt::tokens(v.velocity.max(0.0) as u64)
-    ))]];
+    // `—` until a second turn has made a call: no sample, not zero growth.
+    let mut parts: Vec<Line> = vec![vec![fg(match v.velocity {
+        Some(velocity) => format!("+{}/turn", fmt::tokens(velocity.max(0.0) as u64)),
+        None => "—/turn".into(),
+    })]];
     parts.push(vec![fg(format!(
         "autocompact {}",
         fmt::tokens(v.threshold)
@@ -419,7 +426,12 @@ fn row_context(state: &State) -> Row {
         .values()
         .filter(|f| f.reread_warning())
         .count();
-    parts.push(vec![fg(format!("re-reads {rereads}"))]);
+    // Every file counted is past the registry's ⚠ (≥ 3 reads, no edit).
+    parts.push(vec![if rereads > 0 {
+        seg(format!("re-reads {rereads} ⚠"), Tone::Warn)
+    } else {
+        fg(format!("re-reads {rereads}"))
+    }]);
     Row {
         digit: 1,
         name: "Context",
@@ -466,8 +478,9 @@ fn row_tokens(state: &State) -> Row {
     let values = joined(parts);
     let mut detail: Vec<Line> = Vec::new();
     if let Some(b) = state.cost_breakdown() {
+        // The list price of the same calls, not a bill (registry `cost`).
         detail.push(vec![fg(format!(
-            "{}{}",
+            "{}{} API-equivalent",
             if b.headline.approx { "≈" } else { "" },
             fmt::usd(b.headline.usd)
         ))]);
@@ -854,7 +867,7 @@ fn row_files(state: &State) -> Row {
         .take(2)
         .map(|f| {
             format!(
-                "{} re-read ×{}",
+                "{} re-read ×{} ⚠",
                 std::path::Path::new(&f.path)
                     .file_name()
                     .map(|s| s.to_string_lossy().into_owned())
@@ -873,9 +886,10 @@ fn row_files(state: &State) -> Row {
             format!("uncommitted +{a} −{d} across {n} files")
         })]);
     }
+    // Files changed under the model (an IDE edit, a stale-read recovery).
     let stale = files.iter().filter(|f| f.stale).count();
     if stale > 0 {
-        detail.push(vec![seg(format!("{stale} stale"), Tone::Warn)]);
+        detail.push(vec![seg(format!("{stale} stale files"), Tone::Warn)]);
     }
     Row {
         digit: 7,
@@ -1141,7 +1155,8 @@ mod tests {
             text_of(&d.rows[2].values)
         );
         assert!(
-            text_of(&d.rows[3].values).starts_with("COMMITTING · 4c +180"),
+            text_of(&d.rows[3].values)
+                .starts_with("COMMITTING · 4 calls · silent 3:09 · ▸ steer window"),
             "{}",
             text_of(&d.rows[3].values)
         );
