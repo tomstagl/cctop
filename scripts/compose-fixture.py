@@ -36,6 +36,22 @@ identifiers:
                lead and its subagent)
   --shell-failed  a background Bash launch and the `failed` notification
                of that shell task (which must never create an agent)
+  --teammate   the spine's team (team PRD US-001): every transcript in the
+               given project directory (or the one file given) whose first
+               ten lines carry `teamName == session-<spine id8>` is copied
+               verbatim to `<out>/teammates/<sessionId>.jsonl` (the spine
+               keeps its timestamps). Two members are then composed from
+               the spine's own `teammate_spawned` segment (the `Agent` call
+               and its result, copied with fresh ids and the name suffixed
+               `-2` / `-3`): `-2` gets a copy of the first found teammate's
+               transcript under its new name and session id, cut before its
+               `cost-state` (a teammate still running: priced) and shifted
+               by its segment's delta; `-3` gets no transcript (missing)
+  --team-config  a live team's `config.json`, used as the shape (member
+               keys, `backendType`, `isActive`, `tmuxPaneId`) and written
+               as `<out>.team.json` naming the spine's team: the lead, the
+               found teammates (`isActive: false`, they ended), `-2` and
+               `-3` (`isActive: true`). Needs --teammate
 
 The spine's own `subagents/` directory is copied verbatim beside the
 output (`<out>/subagents/`, `<out>` being the output path without
@@ -44,9 +60,11 @@ output (`<out>/subagents/`, `<out>` being the output path without
 usage: compose-fixture.py <spine.jsonl> --denials F --task F --synthetic F
                           --interrupt F --compaction F --ask F --context F
                           --gitop F --continued F --agent-killed F
-                          --shell-failed F <out.jsonl>
+                          --shell-failed F --teammate DIR --team-config F
+                          <out.jsonl>
 """
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -54,6 +72,7 @@ import shutil
 import sys
 
 GAP_S = 45  # seconds between the spine's last line and the first splice
+HEAD_SCAN_LINES = 10  # `teamName` is on line 4 of every teammate transcript seen
 
 
 def load(path):
@@ -372,6 +391,167 @@ def copy_agent(source_session, task_id, out_dir, delta):
             print(f"  {rel}/{name} (shifted {delta})", file=sys.stderr)
 
 
+def team_of(session_id):
+    """The team a session leads: `session-` and its first eight characters."""
+    return "session-" + session_id[:8]
+
+
+def head_team(path):
+    """`(teamName, agentName, sessionId)` from the first HEAD_SCAN_LINES of a
+    transcript, or None when no line carries the team keys."""
+    with open(path) as f:
+        for i, line in enumerate(f):
+            if i >= HEAD_SCAN_LINES:
+                break
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if o.get("teamName") and o.get("agentName"):
+                return o["teamName"], o["agentName"], o.get("sessionId")
+    return None
+
+
+def find_teammates(source, team):
+    """Every transcript under `source` (a project directory, or one file)
+    whose head names `team`: `[(path, agentName, sessionId)]`, by name."""
+    paths = [source] if os.path.isfile(source) else sorted(
+        os.path.join(source, n) for n in os.listdir(source) if n.endswith(".jsonl")
+    )
+    out = []
+    for p in paths:
+        head = head_team(p)
+        if head and head[0] == team:
+            out.append((p, head[1], head[2]))
+    return sorted(out, key=lambda x: x[1])
+
+
+def seg_teammate_spawns(lines):
+    """The spine's `Agent` calls that made a teammate, each with its
+    `teammate_spawned` result: `[(call, result)]`."""
+    idx = by_uuid(lines)
+    out = []
+    for o in lines:
+        tur = o.get("toolUseResult")
+        if not (isinstance(tur, dict) and tur.get("status") == "teammate_spawned"):
+            continue
+        parent = idx.get(o.get("parentUuid"))
+        if parent is None:
+            continue
+        out.append((lines[parent], o))
+    return out
+
+
+def fresh(seed, prefix=""):
+    """A deterministic replacement id: `prefix` and 24 hex characters of a
+    hash, or a uuid shape without a prefix."""
+    h = hashlib.sha1(seed.encode()).hexdigest()
+    if prefix:
+        return prefix + h[:24]
+    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
+def relabel_spawn(call, result, name, team):
+    """A copy of a spawn segment for a member called `name`: the call's
+    `Agent` tool_use names it, the result's `teammate_spawned` ids are
+    `<name>@<team>`, and every id that must be unique in a transcript
+    (uuids, `message.id`, `requestId`, the tool_use id) is fresh."""
+    call, result = json.loads(json.dumps(call)), json.loads(json.dumps(result))
+    old_tu = result["message"]["content"][0]["tool_use_id"]
+    new_tu = fresh(old_tu + name, "toolu_")
+    call["uuid"] = fresh(call["uuid"] + name)
+    call["message"]["id"] = fresh(call["message"]["id"] + name, "msg_")
+    if call.get("requestId"):
+        call["requestId"] = fresh(call["requestId"] + name, "req_")
+    for b in tool_uses(call):
+        if b.get("id") == old_tu:
+            b["id"] = new_tu
+            if isinstance(b.get("input"), dict) and "name" in b["input"]:
+                b["input"]["name"] = name
+    result["uuid"] = fresh(result["uuid"] + name)
+    result["parentUuid"] = call["uuid"]
+    if "sourceToolAssistantUUID" in result:
+        result["sourceToolAssistantUUID"] = call["uuid"]
+    for b in result["message"]["content"]:
+        if isinstance(b, dict) and b.get("tool_use_id") == old_tu:
+            b["tool_use_id"] = new_tu
+    tur = result["toolUseResult"]
+    tur["name"] = name
+    tur["team_name"] = team
+    for k in ("agent_id", "teammate_id"):
+        if k in tur:
+            tur[k] = f"{name}@{team}"
+    return [call, result]
+
+
+def copy_teammate(src, dst, name, session_id, delta, cut_cost_state):
+    """A teammate transcript copied as member `name` of the same team under
+    `session_id`, every timestamp moved by `delta`; without its `cost-state`
+    when `cut_cost_state` (a teammate still running). Returns the lines
+    written."""
+    n = 0
+    with open(src) as f, open(dst, "w") as out:
+        for line in f:
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if cut_cost_state and o.get("type") == "cost-state":
+                continue
+            if "agentName" in o:
+                o["agentName"] = name
+            for k in ("sessionId", "session_id"):
+                if k in o:
+                    o[k] = session_id
+            if ts(o):
+                o["timestamp"] = fmt(ts(o) + delta)
+            out.write(json.dumps(o, ensure_ascii=False, separators=(",", ":")) + "\n")
+            n += 1
+    return n
+
+
+def epoch_ms(t):
+    return int(t.timestamp() * 1000)
+
+
+def compose_team_config(live, team, lead_id, lead_cwd, created_at, members):
+    """The live config as the shape, naming the spine's team: `members` is
+    `[(name, agentType, model, color, prompt, joinedAt ms, isActive)]`; the
+    lead member is rewritten in place and every `tmux` member is a copy of
+    the live one with the member's own fields."""
+    cfg = json.loads(json.dumps(live))
+    cfg["name"] = team
+    cfg["leadSessionId"] = lead_id
+    cfg["leadAgentId"] = f"team-lead@{team}"
+    cfg["createdAt"] = created_at
+    lead = next((m for m in cfg["members"] if m.get("backendType") == "in-process"), None)
+    template = next((m for m in cfg["members"] if m.get("backendType") == "tmux"), None)
+    if lead is None or template is None:
+        sys.exit("compose-fixture: --team-config needs a live team with a lead and a tmux member")
+    lead["agentId"] = cfg["leadAgentId"]
+    lead["name"] = "team-lead"
+    lead["cwd"] = lead_cwd
+    lead["joinedAt"] = created_at
+    out = [lead]
+    for i, (name, agent_type, model, color, prompt, joined_at, is_active) in enumerate(members):
+        m = json.loads(json.dumps(template))
+        m.update({
+            "agentId": f"{name}@{team}",
+            "name": name,
+            "agentType": agent_type or m.get("agentType", ""),
+            "model": model or m.get("model", ""),
+            "color": color or m.get("color", ""),
+            "prompt": prompt if prompt is not None else m.get("prompt", ""),
+            "joinedAt": joined_at,
+            "tmuxPaneId": f"%{i}",
+            "cwd": lead_cwd,
+            "isActive": is_active,
+        })
+        out.append(m)
+    cfg["members"] = out
+    return cfg
+
+
 def main():
     args = sys.argv[1:]
     opts = {}
@@ -425,10 +605,67 @@ def main():
         if launcher == "Agent":
             agents.append((len(segments), opts[name], task_id))
         segments.append(seg)
+    team_members = []  # (name, agentType, model, color, prompt, joinedAt ms, isActive)
+    priced = None  # (segment index, source teammate path, name, session id)
+    if "teammate" in opts:
+        team = team_of(session_id)
+        found = find_teammates(opts["teammate"], team)
+        if not found:
+            sys.exit(f"compose-fixture: no transcript of {team} under {opts['teammate']}")
+        spawns = seg_teammate_spawns(spine)
+        if not spawns:
+            sys.exit("compose-fixture: the spine has no teammate_spawned result")
+        team_dir = os.path.join(out_dir, "teammates")
+        shutil.rmtree(team_dir, ignore_errors=True)
+        os.makedirs(team_dir)
+        spawn_of = {r["toolUseResult"].get("name"): (c, r) for c, r in spawns}
+        for path, name, sid in found:
+            shutil.copyfile(path, os.path.join(team_dir, f"{sid}.jsonl"))
+            c, r = spawn_of.get(name, spawns[0])
+            tur = r["toolUseResult"]
+            inp = next((b.get("input") or {} for b in tool_uses(c) if b.get("id") == r["message"]["content"][0]["tool_use_id"]), {})
+            team_members.append((name, tur.get("agent_type"), tur.get("model"), tur.get("color"), inp.get("prompt"), epoch_ms(ts(r)), False))
+            print(f"teammate: {name} copied ({sid}.jsonl)", file=sys.stderr)
+        base_path, base_name, base_sid = found[0]
+        call, result = spawn_of.get(base_name, spawns[0])
+        inp = next((b.get("input") or {} for b in tool_uses(call) if b.get("id") == result["message"]["content"][0]["tool_use_id"]), {})
+        tur = result["toolUseResult"]
+        for n, suffix in ((2, "-2"), (3, "-3")):
+            name = base_name + suffix
+            seg = relabel_spawn(call, result, name, team)
+            if n == 2:
+                priced = (len(segments), base_path, name, fresh(base_sid + suffix))
+            segments.append(seg)
+            print(f"teammate: {name} spawn segment ({'priced' if n == 2 else 'missing'})", file=sys.stderr)
     deltas = []
     out = splice(spine, segments, session_id, cwd, deltas)
     for idx, source, task_id in agents:
         copy_agent(source, task_id, out_dir, deltas[idx])
+    if priced:
+        idx, source, name, sid = priced
+        dst = os.path.join(out_dir, "teammates", f"{sid}.jsonl")
+        n = copy_teammate(source, dst, name, sid, deltas[idx], cut_cost_state=True)
+        # The spliced result carries the spawn time; the -3 member joined
+        # one segment later and never wrote a line.
+        spawn_results = [o for o in out if isinstance(o.get("toolUseResult"), dict) and o["toolUseResult"].get("status") == "teammate_spawned"]
+        by_name = {o["toolUseResult"].get("name"): o for o in spawn_results}
+        for member in (name, name[: -len("-2")] + "-3"):
+            r = by_name[member]
+            tur = r["toolUseResult"]
+            team_members.append((member, tur.get("agent_type"), tur.get("model"), tur.get("color"), None, epoch_ms(ts(r)), True))
+        print(f"  teammates/{sid}.jsonl: {n} lines as {name}, shifted {deltas[idx]}, cost-state cut", file=sys.stderr)
+    if "team-config" in opts:
+        if not team_members:
+            sys.exit("compose-fixture: --team-config needs --teammate")
+        with open(opts["team-config"]) as f:
+            live = json.load(f)
+        first_ts = min(t for t in (ts(o) for o in out) if t)
+        cfg = compose_team_config(live, team_of(session_id), session_id, cwd, epoch_ms(first_ts), team_members)
+        cfg_path = out_dir + ".team.json"
+        with open(cfg_path, "w") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"{len(cfg['members'])} members → {cfg_path}", file=sys.stderr)
     with open(out_path, "w") as f:
         for o in out:
             f.write(json.dumps(o, ensure_ascii=False, separators=(",", ":")) + "\n")

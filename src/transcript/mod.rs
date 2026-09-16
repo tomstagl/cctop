@@ -143,6 +143,32 @@ impl Line {
         }
     }
 
+    /// The session the line belongs to (`sessionId`), on the line kinds
+    /// that carry it with a timestamp.
+    pub fn session_id(&self) -> Option<&str> {
+        match self {
+            Line::User(u) => u.session_id.as_deref(),
+            Line::Assistant(a) => a.session_id.as_deref(),
+            Line::System(s) => s.session_id.as_deref(),
+            Line::Attachment(a) => a.session_id.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// `(team, member)` — `teamName` and `agentName` — when the line is a
+    /// teammate's. Both are labels: the team is `session-<lead id8>`, the
+    /// member the role the lead named it.
+    pub fn team(&self) -> Option<(&str, &str)> {
+        let (team, agent) = match self {
+            Line::User(u) => (u.team_name.as_deref(), u.agent_name.as_deref()),
+            Line::Assistant(a) => (a.team_name.as_deref(), a.agent_name.as_deref()),
+            Line::System(s) => (s.team_name.as_deref(), s.agent_name.as_deref()),
+            Line::Attachment(a) => (a.team_name.as_deref(), a.agent_name.as_deref()),
+            _ => (None, None),
+        };
+        Some((team?, agent?))
+    }
+
     /// ISO-8601 timestamp, for the line kinds that carry one.
     pub fn timestamp(&self) -> Option<&str> {
         match self {
@@ -189,6 +215,11 @@ pub struct UserLine {
     pub timestamp: Option<String>,
     pub version: Option<String>,
     pub cwd: Option<String>,
+    pub session_id: Option<String>,
+    /// A teammate's transcript names its member and its team on every
+    /// line (`teams` in `harness_facts`); the lead's carries neither.
+    pub agent_name: Option<String>,
+    pub team_name: Option<String>,
     #[serde(default)]
     pub is_meta: bool,
     #[serde(default)]
@@ -598,6 +629,9 @@ pub struct AssistantLine {
     pub timestamp: Option<String>,
     pub version: Option<String>,
     pub cwd: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub team_name: Option<String>,
     pub request_id: Option<String>,
     /// Effort level in force for this response (`low`/`medium`/`high`…).
     pub effort: Option<String>,
@@ -816,6 +850,9 @@ pub struct SystemLine {
     pub parent_uuid: Option<String>,
     pub timestamp: Option<String>,
     pub version: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub team_name: Option<String>,
     #[serde(default)]
     pub subtype: String,
     /// `turn_duration`: milliseconds of the turn that just ended.
@@ -1083,6 +1120,7 @@ mod tests {
     use super::tests_support::fixture;
     use super::*;
     use std::collections::HashMap;
+    use std::path::Path;
 
     #[test]
     fn every_line_parses_to_a_known_variant_except_the_expected_set() {
@@ -1135,6 +1173,55 @@ mod tests {
         assert_eq!(counts["continued-in"], 1);
         assert_eq!(counts["pr-link"], 1);
         assert_eq!(counts["file-history-delta"], 16);
+    }
+
+    #[test]
+    fn fixture_d_lead_and_teammates_parse_and_carry_the_team_keys() {
+        // The lead's lines carry no team key; every user / assistant /
+        // system / attachment line of a teammate's transcript carries both,
+        // from line 4 (`harness_facts::teams`).
+        let lead = fixture("session-d");
+        assert_eq!(lead.len(), 722);
+        assert!(lead.iter().all(|l| l.team().is_none()));
+        let sid = lead.iter().find_map(Line::session_id).unwrap();
+        assert_eq!(sid, "afd065d3-054a-5984-b05e-c46a3fa0a9ca");
+        let expected_unknown = ["mode", "atis-latch", "last-prompt", "agent-setting"];
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d/teammates");
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let lines = parse_file(&path).unwrap();
+            let mut first_team_line = None;
+            for (i, l) in lines.iter().enumerate() {
+                if let Line::Unknown(v) = l {
+                    let ty = v["type"].as_str().unwrap();
+                    assert!(expected_unknown.contains(&ty), "unexpected Unknown {ty}");
+                }
+                let keyed = matches!(
+                    l,
+                    Line::User(_) | Line::Assistant(_) | Line::System(_) | Line::Attachment(_)
+                );
+                assert_eq!(
+                    l.team().is_some(),
+                    keyed,
+                    "line {} of {}",
+                    i + 1,
+                    path.display()
+                );
+                if keyed && first_team_line.is_none() {
+                    first_team_line = Some(i + 1);
+                }
+            }
+            assert_eq!(first_team_line, Some(4));
+            let (team, agent) = lines.iter().find_map(Line::team).unwrap();
+            assert_eq!(team, format!("session-{}", &sid[..8]));
+            // The file is `<sessionId>.jsonl`, the id its lines carry.
+            let own = lines.iter().find_map(Line::session_id).unwrap();
+            assert_eq!(path.file_stem().unwrap().to_str().unwrap(), own);
+            names.push(agent.to_string());
+        }
+        names.sort();
+        assert_eq!(names, ["diff-pane-research", "diff-pane-research-2"]);
     }
 
     #[test]

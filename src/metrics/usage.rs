@@ -337,6 +337,13 @@ pub struct Aggregate {
     pub boundaries: Vec<Boundary>,
     /// The Claude Code version that wrote the transcript (first seen).
     pub version: Option<String>,
+    /// The transcript's own `sessionId` (first seen): a fixture has no
+    /// registry entry, so this is where its id comes from.
+    pub session_id: Option<String>,
+    /// `(teamName, agentName)` of the first line carrying them: set only
+    /// when the transcript is a teammate's, so a teammate attached as the
+    /// main session shows its team.
+    pub team: Option<(String, String)>,
     /// Interrupts, in order: `(turn, tool calls so far)`.
     pub interrupts: Vec<(usize, usize)>,
     /// The `/model`, `/effort`, `/clear` … lines seen, with the turn.
@@ -411,6 +418,12 @@ impl Aggregate {
     pub fn push(&mut self, line: &Line) {
         if self.version.is_none() {
             self.version = line.version().map(str::to_string);
+        }
+        if self.session_id.is_none() {
+            self.session_id = line.session_id().map(str::to_string);
+        }
+        if self.team.is_none() {
+            self.team = line.team().map(|(t, a)| (t.to_string(), a.to_string()));
         }
         match line {
             Line::User(u) => {
@@ -813,6 +826,37 @@ mod tests {
     fn fixture(name: &str) -> Vec<Line> {
         parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl")))
             .unwrap()
+    }
+
+    #[test]
+    fn aggregate_records_the_session_id_and_a_teammates_team() {
+        let lead = Aggregate::from_lines(&fixture("session-d"));
+        assert_eq!(
+            lead.session_id.as_deref(),
+            Some("afd065d3-054a-5984-b05e-c46a3fa0a9ca")
+        );
+        assert_eq!(lead.team, None, "the lead's lines carry no team key");
+        let teammate = parse_file(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/session-d/teammates/85424f6c-500e-5993-641b-0a66d897a888.jsonl"),
+        )
+        .unwrap();
+        let agg = Aggregate::from_lines(&teammate);
+        assert_eq!(
+            agg.team,
+            Some(("session-afd065d3".into(), "diff-pane-research".into()))
+        );
+        assert_eq!(
+            agg.session_id.as_deref(),
+            Some("85424f6c-500e-5993-641b-0a66d897a888")
+        );
+        // A teammate is a session like any other to the aggregate.
+        assert_eq!(agg.api_calls(), 8);
+        assert_eq!(agg.human_turns(), 0, "its prompts are teammate messages");
+        assert!(!agg.turns.is_empty());
+        assert!(fixture("session-a").iter().all(|l| l.team().is_none()));
+        assert_eq!(Aggregate::from_lines(&fixture("session-b")).team, None);
+        assert_eq!(Aggregate::from_lines(&fixture("session-c")).team, None);
     }
 
     #[test]

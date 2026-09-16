@@ -58,6 +58,42 @@ pub mod first_seen {
     pub const PER_TURN_EFFORT: Version = Version(2, 1, 269);
     /// `continued-in` (what `/clear` leaves in the old transcript), `sessionKind`.
     pub const CONTINUED_IN: Version = Version(2, 1, 270);
+    /// `agentName` / `teamName` on every `user`, `assistant`, `system` and
+    /// `attachment` line of a teammate's transcript. The oldest teammate
+    /// transcript on this machine (2.1.232) has them from line 4; the
+    /// version that introduced them is not known, so this is an upper
+    /// bound (team PRD §10.3).
+    pub const TEAM_NAME: Version = Version(2, 1, 232);
+}
+
+/// How Claude Code records an agent team (read on this machine's 19 team
+/// directories and 23 teammate transcripts, 2.1.232 – 2.1.272; the keys are
+/// in `docs/teams.md`).
+pub mod teams {
+    /// `~/.claude/teams/<team>/` goes when the team ends; the teammates'
+    /// transcripts stay. Membership after the fact comes from the
+    /// transcripts' `teamName`, never from the directory.
+    pub const DIR_REMOVED_AT_END: bool = true;
+    /// A `config.json` member (`agentId`, `agentType`, `backendType`, `cwd`,
+    /// `joinedAt`, `name`, `tmuxPaneId`, and on spawned teammates `color`,
+    /// `isActive`, `model`, `planModeRequired`, `prompt`) carries no session
+    /// id: the transcript is found by `teamName == <team dir>` and
+    /// `agentName == member.name`.
+    pub const MEMBER_HAS_SESSION_ID: bool = false;
+    /// Claude Code's own liveness flag on a `tmux` member (absent on the
+    /// lead, whose `backendType` is `in-process`).
+    pub const LIVENESS_KEY: &str = "isActive";
+    /// The team directory's name: `session-` and the first eight characters
+    /// of the lead's session id; `teamName` on a teammate's lines equals it.
+    pub const NAME_PREFIX: &str = "session-";
+    pub const LEAD_ID_CHARS: usize = 8;
+    /// The first line carrying the team keys is line 4 of every teammate
+    /// transcript seen (after `agent-setting`, `mode`, `permission-mode`);
+    /// a head scan reads at most this many lines.
+    pub const HEAD_SCAN_LINES: usize = 10;
+    /// A teammate writes `cost-state` like the lead: at its end or a bridge
+    /// (20 of 23 transcripts, all ended), never while it runs.
+    pub const COST_STATE_AT_END: bool = true;
 }
 
 /// What Claude Code's `cost-state` line holds (read on the 2.1.247 – 2.1.272
@@ -222,6 +258,24 @@ mod tests {
         assert_eq!(effort_cost_index("claude-fable-5-1", "max"), Some(1.74));
         assert_eq!(effort_cost_index("claude-sonnet-5", "low"), Some(0.47));
         assert_eq!(effort_cost_index("claude-opus-5", "high"), None);
+    }
+
+    #[test]
+    fn team_facts() {
+        assert!(first_seen::TEAM_NAME.at_most(Some("2.1.232")));
+        assert!(first_seen::TEAM_NAME <= first_seen::COMPACT_BOUNDARY);
+        // The two booleans are read by the collector's discovery order
+        // (config → spawns → head scan), so they are consts, not tests.
+        assert_eq!(teams::LIVENESS_KEY, "isActive");
+        assert_eq!(
+            format!(
+                "{}{}",
+                teams::NAME_PREFIX,
+                &"83f0e9b9-08a9-41a4-84a0-3fb55e77b8a2"[..teams::LEAD_ID_CHARS]
+            ),
+            "session-83f0e9b9"
+        );
+        assert_eq!(teams::HEAD_SCAN_LINES, 10);
     }
 
     #[test]
