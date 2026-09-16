@@ -1,0 +1,21 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Redesign" },
+    { "id": "page-2", "name": "Colour & k9s" }
+  ],
+  "artboards": [
+    { "file": "Before.dc.html",     "x": 0,    "y": 0,    "w": 1120, "h": 1340, "page": "page-1" },
+    { "file": "Main.dc.html",       "x": 1220, "y": 0,    "w": 1120, "h": 900,  "page": "page-1", "is_interactive": true },
+    { "file": "Responsive.dc.html", "x": 2440, "y": 0,    "w": 1120, "h": 1560, "page": "page-1" },
+    { "file": "Anatomy.dc.html",    "x": 0,    "y": 1700, "w": 1120, "h": 1800, "page": "page-1" },
+    { "file": "Audit.dc.html",      "x": 1220, "y": 1700, "w": 1120, "h": 2520, "page": "page-1", "print": "flow" },
+    { "file": "Color.dc.html",      "x": 0,    "y": 0,    "w": 1120, "h": 1800, "page": "page-2", "print": "flow" },
+    { "file": "K9s.dc.html",        "x": 1220, "y": 0,    "w": 1120, "h": 1820, "page": "page-2", "print": "flow" }
+  ],
+  "annotations": [
+    { "id": "start-here", "x": 0, "y": -150, "w": 1120, "page": "page-1", "text": "Today's pane, redrawn from its own render path with the session in your screenshot — same numbers as the redesign beside it, so the comparison is like for like." },
+    { "id": "try-it", "x": 1220, "y": -150, "w": 1120, "page": "page-1", "text": "This one is live: the chips switch terminal width and open the drill-downs.\nThe tweaks above the artboard switch theme (all six bundled ones) and the alert state." },
+    { "id": "colour-answer", "x": 0, "y": -150, "w": 1120, "page": "page-2", "text": "The short answer to why thinking is red: it should not be. Every number on this page was computed with the palette validator, not judged by eye." }
+  ],
+  "launch": { "view": "canvas", "page": "page-2" }
+}

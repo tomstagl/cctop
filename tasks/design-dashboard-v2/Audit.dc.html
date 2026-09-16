@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 34px 40px; display: flex; flex-direction: column; gap: 22px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 5px">
+    <div style="font-size: 22px; font-weight: 600; color: #D6DEE8">Is every number earning its place?</div>
+    <div class="m" style="font-size: 12px; color: #6E7F93">57 figures on the overview, checked against <span style="color: #4CC2C2">src/metrics/registry.rs</span> and <span style="color: #4CC2C2">docs/metrics.md</span></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px"><sc-for list="{{tally}}" as="v" hint-placeholder-count="5"><div style="display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 6px; background: #121820; border-top: 2px solid {{v.tone}}"><div class="m" style="font-size: 26px; font-weight: 600; color: {{v.tone}}">{{v.n}}</div><div class="m" style="font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: {{v.tone}}">{{v.label}}</div><div style="font-size: 12.5px; line-height: 1.4; color: #8394A7">{{v.note}}</div></div></sc-for></div>
+
+  <sc-for list="{{groups}}" as="g" hint-placeholder-count="5"><div style="display: flex; flex-direction: column; gap: 9px; margin-top: 6px"><div style="display: flex; align-items: baseline; gap: 10px"><span class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: {{g.tone}}">{{g.title}}</span><span style="font-size: 13px; color: #6E7F93">{{g.rule}}</span></div><div style="display: flex; flex-direction: column; gap: 1px"><sc-for list="{{g.items}}" as="i" hint-placeholder-count="10"><div style="display: grid; grid-template-columns: 250px 118px minmax(0, 1fr); gap: 16px; padding: 9px 14px; border-radius: 4px; background: {{i.bg}}"><div class="m" style="font-size: 12.5px; color: #D6DEE8; overflow-wrap: anywhere">{{i.figure}}</div><div class="m" style="font-size: 11px; color: #5D6B7D">{{i.src}}</div><div style="font-size: 13.5px; line-height: 1.5; color: #96A5B7; text-wrap: pretty">{{i.why}}</div></div></sc-for></div></div></sc-for>
+
+  <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 10px; padding: 16px 18px; border-radius: 7px; background: #1A1217; border: 1px solid #45252C">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #E2B04A">two readings that look like a contradiction — one is, one is not</div>
+    <div style="font-size: 13.5px; line-height: 1.55; color: #B9C4D1; text-wrap: pretty">Checked against the code after this audit was first written, these turn out to be two different situations. The cost pair is not a code defect at all — both sides read the same accessor and the formatter cannot produce both strings from one state, so those two boxes came from different moments. The turn pair is real, and is two sources honestly answering two different questions under one label. Kept here because both are arguments for the same rule: <span class="m" style="color: #E2B04A">a screen that prints one reading in two places invites this confusion</span>, in a bug report and in a reader&#39;s head.</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 2px"><sc-for list="{{clashes}}" as="c" hint-placeholder-count="2"><div style="display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: 5px; background: #120E11"><div class="m" style="font-size: 12.5px; color: #E5605E">{{c.a}}</div><div class="m" style="font-size: 12.5px; color: #E2B04A">{{c.b}}</div><div style="font-size: 12.5px; line-height: 1.45; color: #8394A7">{{c.note}}</div></div></sc-for></div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var mk = function (items, bg) { return items.map(function (i) { return { figure: i[0], src: i[1], why: i[2], bg: bg }; }); };
+    return {
+      tally: [
+        { n: '14', label: 'first glance', tone: '#5FC77E', note: "Fixed position, always drawn, readable across a desk." },
+        { n: '19', label: 'second look', tone: '#4CC2C2', note: "Same screen, lower half, smaller type." },
+        { n: '13', label: 'dig deeper', tone: '#8B9BB0', note: "Behind a digit. Nothing is lost, only moved." },
+        { n: '7', label: 'fix', tone: '#E2B04A', note: "Shown today in a way that misleads." },
+        { n: '4', label: 'cut', tone: '#E5605E', note: "Printed twice, or a dash carrying no fact." }
+      ],
+      groups: [
+        {
+          title: 'first glance', tone: '#5FC77E',
+          rule: "answers a question you ask every few minutes: is it working, do I need to act, am I near a wall, what is this costing",
+          items: mk([
+            ['phase + silent timer', 'phase · D2 D4', "Is Claude working or stopped? The silent run is the honest stuck-detector — 1:56 with no prose and 4 tool calls is the moment to steer, and the coach already knows it."],
+            ['waiting on you', 'waiting · D2 D4', "Currently only in panel 4. A pending permission dialog stops the session dead; it is the most expensive state on the machine and deserves the loudest slot, not a drill-down."],
+            ['running tool + its clock', 'tool_last_call · D2', "Promoted out of row 5's dim detail line. Bash at 0:03 versus Bash at 4:00 is the difference between working and hung."],
+            ['context 350k / 1.00M + 616k left', 'context_size · D2 D3', "The wall you hit most often. Keep the size, the window and the remaining headroom together — a bare 35 % means nothing without its denominator."],
+            ['5h limit 4 % ↻ 4h06', 'limit_5h · D3', "Account-wide and shared with your other sessions, so it can move without you doing anything."],
+            ['cache warm 59m, 1h TTL', 'cache_expires_in · D3 D2', "A countdown with a decision attached: reply before it expires or pay the re-write."],
+            ['spend ≈$22.50 · ≈$90/h · ≈$29/turn', 'cost · burn_rate · D11 D9', "Rate beats total. $90/h is what makes someone change what they are doing; the running total rarely does."],
+            ['health: rework, last check, denials', 'coach_rework · last_check', "Four words that say whether the session is productive or spinning. Replaces the rework tile's bare 0."]
+          ], '#101820'),
+        },
+        {
+          title: 'second look', tone: '#4CC2C2',
+          rule: "stays on the same screen, below the fold of attention, in smaller and dimmer type",
+          items: mk([
+            ['context anatomy: prefix / results / inputs / thinking / harness', 'context_anatomy · D2', "Excellent diagnostic, wrong prominence. Make it the colouring of the context bar plus one legend line, not a row of its own."],
+            ['+0/turn velocity, autocompact 967k, compactions', 'context_velocity · D2 D3', "Needed when context is climbing, noise when it is not."],
+            ['7d 22 %, weight ×5 (opus), long_context 78 %', 'limit_weight · behaviour_flags · D2 D12', "long_context 78 % explains why the 5h bar will move fast. Registry says show it at ≥10 %; at 78 % it should be amber, not plain white."],
+            ['api ≈21:17 · tools 22:14 · steers 1', 'api_time · steers · D11 D2', "Where the wall-clock went. A post-mortem number, not a live one."],
+            ['tool mix: explore 69 · test 39 · implement 30', 'bash_class · D2', "The shape of the session. Useful once you already suspect something."],
+            ['top ctx Read …/agents.rs 10k', 'top_ctx · D2', "The single most actionable line in row 5 and the one the ellipsis eats first."],
+            ['files touched, IDE edits, re-reads', 'file_touches · file_rereads · D8', "Keep the counts here; push the per-file list behind 7."],
+            ['event tail', 'D2 D4', "Keep three or four, but as a TIME · KIND · WHAT grid. Today it is three events ` · `-joined on one line with every payload truncated — the least readable row on the screen."]
+          ], '#0E141B'),
+        },
+        {
+          title: 'dig deeper', tone: '#8B9BB0',
+          rule: "behind a digit — nothing is deleted, it stops competing for the first three seconds",
+          items: mk([
+            ['cache read 31.53M · write 320k · output 140k', 'cache_read · output · D2', "A big impressive number that changes no decision. The hit ratio and the cost already carry the meaning; the raw sums belong in panel 2."],
+            ['$/call ≈$.19 · next 30c ≈$5.6', 'cost_per_call · D2 D9', "Projections for a question you ask deliberately, not continuously."],
+            ['v2.1.272', 'D1', "Only matters when a parser has gone stale against a newer claude. Move it to ?help."],
+            ['last session $1.19 · 1d 13h · +0/−0', 'D1 D7', "Interesting on turn 1, dead weight after. Worse, it sits in the slot the coach's nudge uses — which teaches you to skip the row that will later carry the one thing you must read."],
+            ['per-file list, agents, advisor history', 'D8 D2a', "Already have panels. Let them do the work."]
+          ], '#0D1116'),
+        },
+        {
+          title: 'fix — shown today in a way that misleads', tone: '#E2B04A',
+          rule: "these are not layout problems; the number as printed says something untrue or unreadable",
+          items: mk([
+            ['≈$22.5', 'cost · D11 D9', "The registry is explicit: \"Subscription plans have no per-token bill; the figure is the API-equivalent list price.\" The ≈ does not carry that. Label it API-equivalent or someone will read it as a bill."],
+            ['rework 0', 'coach_rework · D1 D7', "A 0 that means healthy is indistinguishable from a 0 that means no data yet. Health is a state, not a count — say ok, or say what is open."],
+            ['+0/turn on turn 1', 'context_velocity · D2', "Velocity is an EMA over per-turn deltas. On turn 1 there is no sample, so +0 asserts context is not growing when the honest answer is unknown. Print — until there are two turns."],
+            ['elapsed 0:00 beside 159 api calls', 'turn_elapsed · D2', "Same row, mutually exclusive claims. The header says 52:11."],
+            ['159 api calls · 159 tool calls', 'api_calls · tool_calls · D2', "Two different metrics landing on the same integer. Distinct message ids and tool_use blocks rarely match exactly — worth confirming one is not standing in for the other."],
+            ['8 stale', 'file_rereads · D8', "Eight stale what? Add the noun, and give it the ⚠ the registry already defines at ≥3."],
+            ['4c +145', 'D2', "The densest, most useful signal on the screen and completely unreadable. It means four tool calls since Claude last wrote to you, +145 tokens of context. Spell it."]
+          ], '#141109'),
+        },
+        {
+          title: 'cut', tone: '#E5605E',
+          rule: "printed twice, or a dash pretending to be a fact",
+          items: mk([
+            ['4 Turn value row', 'phase · D2', "Character-for-character the header's phase cell. One of them has to go, and the header is the one people look at."],
+            ['warm 59m in row 2', 'cache_warm · D3', "Already the cache tile's whole subject."],
+            ['\"78% of your usage was at >150k context\"', 'behaviour_flags · D2', "Restates long_context 78 % on the line directly above it, in words."],
+            ['next — · snoozed — · agents —', 'D2a', "Three dashes taking three rows to say nothing is there. Draw these only when they have something to report; 6 Agents alone costs two rows including a blank detail line."]
+          ], '#170F11'),
+        }
+      ],
+      clashes: [
+        { a: 'panel 2 · Tokens & Cost      cost  $0.000', b: 'row 2 · Tokens              ≈$22.5', note: "NOT a defect. Both call state.cost.current(), and fmt::usd prints three decimals only below $0.01 — one state cannot render both. Those two boxes are from different moments." },
+        { a: 'panel 4 · Turn        state idle · elapsed —', b: 'header + row 4         ● WORKING · silent 1:56', note: "Real, and arguably correct. The panel reads the turn; the header reads the phase classifier. A turn that ended while tools still run gives both answers. The bug is that nothing says which is which." }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

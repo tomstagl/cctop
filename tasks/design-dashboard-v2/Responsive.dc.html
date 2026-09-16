@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 34px 40px; display: flex; flex-direction: column; gap: 24px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 5px">
+    <div style="font-size: 22px; font-weight: 600; color: #D6DEE8">Getting narrow without getting worse</div>
+    <div class="m" style="font-size: 12px; color: #6E7F93">Claude Code un-docks the pane below 110 columns (<span style="color: #4CC2C2">MIN_DOCK_COLUMNS</span>) — the 40-column form is not an edge case, it is the inline pane</div>
+  </div>
+
+  <sc-for list="{{screens}}" as="s" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 10px"><div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap"><span class="m" style="font-size: 13px; font-weight: 600; color: {{s.tone}}">{{s.title}}</span><span style="font-size: 13.5px; color: #8FA0B4">{{s.note}}</span></div><div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap"><div style="border-radius: 7px; border: 1px solid #1A222B; padding: 12px 15px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 18px; width: max-content"><sc-for list="{{s.rows}}" as="row" hint-placeholder-count="24"><div class="r"><sc-for list="{{row}}" as="g" hint-placeholder-count="10"><span style="color: {{g.c}}; font-weight: {{g.w}}">{{g.t}}</span></sc-for></div></sc-for></div><div style="display: flex; flex-direction: column; gap: 7px; max-width: 300px; min-width: 210px"><sc-for list="{{s.drops}}" as="d" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 9px"><span class="m" style="font-size: 12px; color: {{s.tone}}">·</span><span style="font-size: 13px; line-height: 1.45; color: #8FA0B4; text-wrap: pretty">{{d}}</span></div></sc-for></div></div></div></sc-for>
+
+  <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 8px; padding: 16px 18px; border-radius: 7px; background: #121820">
+    <div class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: #4CC2C2">the give-way order, written down once</div>
+    <div style="font-size: 13.5px; line-height: 1.55; color: #96A5B7; text-wrap: pretty">Today the order lives in <span class="m" style="color: #C3CDDA">compose()</span> as four successive <span class="m" style="color: #C3CDDA">if need(...) &gt; h</span> tests, and the result at 80×40 is nine blank rows at the bottom while rows above are truncated. Make it one declared list, applied in order until the screen fits — and let the last zone take the leftover height instead of leaving it empty.</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 7px; margin-top: 3px"><sc-for list="{{order}}" as="o" hint-placeholder-count="8"><span class="m" style="font-size: 12px; padding: 5px 11px; border-radius: 4px; background: #0A0E12; color: {{o.tone}}">{{o.label}}</span></sc-for></div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1180}}'>
+var PALETTES = {
+  'default-dark':    { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644' },
+  'default-light':   { bg:'#F1F3F6', fg:'#1A212C', dim:'#5A6577', accent:'#177F86', ok:'#2F8F58', warn:'#C7911E', crit:'#C9403F', border:'#D5DAE2' },
+  'nord':            { bg:'#2E3440', fg:'#D8DEE9', dim:'#4C566A', accent:'#88C0D0', ok:'#A3BE8C', warn:'#EBCB8B', crit:'#BF616A', border:'#434C5E' },
+  'gruvbox':         { bg:'#282828', fg:'#EBDBB2', dim:'#7C6F64', accent:'#83A598', ok:'#B8BB26', warn:'#FABD2F', crit:'#FB4934', border:'#504945' },
+  'catppuccin-mocha':{ bg:'#1E1E2E', fg:'#CDD6F4', dim:'#6C7086', accent:'#89DCEB', ok:'#A6E3A1', warn:'#F9E2AF', crit:'#F38BA8', border:'#45475A' },
+  'btop':            { bg:'#000000', fg:'#EEEEEE', dim:'#555555', accent:'#C2A0FF', ok:'#5AD08D', warn:'#F5B347', crit:'#FF5C57', border:'#4E4E4E' }
+};
+
+function sg(text, role, bold) { return { t: String(text), r: role || 'fg', b: !!bold }; }
+function lw(line) { var n = 0; for (var i = 0; i < line.length; i++) n += Array.from(line[i].t).length; return n; }
+function at(line, col, role) { var n = col - lw(line); if (n > 0) line.push(sg(' '.repeat(n), role || 'dim')); return line; }
+function spread(line, right, cols) {
+  var n = cols - lw(line) - lw(right);
+  line.push(sg(' '.repeat(n > 0 ? n : 1), 'dim'));
+  for (var i = 0; i < right.length; i++) line.push(right[i]);
+  return line;
+}
+// The terminal's own truncation: cut at `cols`, ellipsis on the segment that crosses.
+function fit(line, cols) {
+  var out = [], used = 0;
+  for (var i = 0; i < line.length; i++) {
+    if (used >= cols) break;
+    var a = Array.from(line[i].t);
+    if (used + a.length <= cols) { out.push(line[i]); used += a.length; }
+    else { out.push({ t: a.slice(0, Math.max(0, cols - used - 1)).join('') + '…', r: line[i].r, b: line[i].b }); used = cols; }
+  }
+  return out;
+}
+function clip(s, n) { var a = Array.from(String(s)); return a.length <= n ? String(s) : a.slice(0, Math.max(0, n - 1)).join('') + '…'; }
+function bar(pct, w, fillRole, emptyRole) {
+  var f = Math.max(0, Math.min(w, Math.round(pct / 100 * w)));
+  if (f === 0 && pct > 0) f = 1;              // 4 % must not draw as empty
+  if (f === w && pct < 100) f = w - 1;        // nor 98 % as full
+  return [sg('▇'.repeat(f), fillRole), sg('▁'.repeat(w - f), emptyRole || 'border')];
+}
+
+class Screens {
+  constructor(alert) { this.props = { alert: alert }; }
+
+  // The context bar, stacked by anatomy. Slices alternate ▇/▆ like stacked_bar()
+  // in src/ui/widgets.rs, so the breakdown survives NO_COLOR.
+  ctxBar(w) {
+    var slices = [[44, 'accent'], [82, 'ok'], [49, 'warn'], [42, 'crit'], [21, 'dim']];
+    var filled = Math.round(0.35 * w), out = [], used = 0, acc = 0, total = 238;
+    for (var i = 0; i < slices.length; i++) {
+      acc += slices[i][0];
+      var end = Math.min(filled, Math.round(acc / total * filled));
+      if (end > used) { out.push(sg((i % 2 === 0 ? '▇' : '▆').repeat(end - used), slices[i][1])); used = end; }
+    }
+    if (used < filled) { out.push(sg('▇'.repeat(filled - used), 'dim')); used = filled; }
+    out.push(sg('▁'.repeat(Math.max(0, w - used)), 'border'));
+    return out;
+  }
+
+  actBand(cols) {
+    var a = this.props.alert || 'quiet', wide = cols >= 100, out = [];
+    if (cols < 60) {
+      if (a === 'blocked') {
+        out.push([sg(' ▸ ', 'crit', true), sg('blocked: `cd …` denied', 'fg', true)]);
+        out.push([sg(' ● ', 'crit'), sg('tell Claude the alternative', 'crit')]);
+      } else if (a === 'nudge') {
+        out.push([sg(' ▸ ', 'warn', true), sg('context ≈4 turns to compact', 'fg', true)]);
+        out.push([sg(' ◐ ', 'warn'), sg('compact at a clean stop', 'warn')]);
+      } else {
+        out.push([sg(' ▸ ', 'ok', true), sg('steer window · 4c · 1:56 silent', 'fg', true)]);
+        out.push([sg(' ○ ', 'ok'), sg('ok', 'ok'), sg(' · ', 'border'), sg('✓ test 10s', 'ok'), sg(' · ', 'border'), sg('⚠ 8 stale', 'warn')]);
+      }
+      return out.map(function (l) { return at(l, cols); });
+    }
+    var head = { blocked: ['crit', 'NOW'], nudge: ['warn', 'NEXT'], quiet: ['ok', 'OPEN'] }[a];
+    var copy = {
+      blocked: [wide ? '`cd …` blocked the turn — auto mode denied this command shape' : 'blocked: `cd …` denied by auto mode',
+                wide ? 'tell Claude the alternative — it cannot run this' : 'tell Claude the alternative', 'A45 · call 6 · +4 queued'],
+      nudge:   [wide ? 'context is filling — 616k to autocompact at +146k/turn ≈ 4 turns' : 'context filling — ≈4 turns to autocompact',
+                wide ? 'compact at a clean stop, or hand off to a fresh session' : 'compact at a clean stop', 'A21 · turn 6 · saves ≈350k'],
+      quiet:   [wide ? 'steer window — 4 tool calls and 1:56 since Claude last spoke to you' : 'steer window — 4 calls, 1:56 silent',
+                'nothing to fix — no advice queued, none snoozed', 'type now to redirect']
+    }[a];
+    var l1 = [sg(' ▸ ', head[0], true), sg(head[1], head[0], true)]; at(l1, 10); l1.push(sg(copy[0], 'fg', true));
+    out.push(wide ? spread(l1, [sg(copy[2], 'dim')], cols) : at(l1, cols));
+    var l2 = []; at(l2, 10); l2.push(sg(copy[1], a === 'quiet' ? 'dim' : (a === 'blocked' ? 'crit' : 'warn')));
+    out.push(wide ? spread(l2, [sg('9 advisor', 'accent')], cols) : at(l2, cols));
+    var hg = { blocked: ['●', 'crit', 'spinning'], nudge: ['◐', 'warn', 'watch'], quiet: ['○', 'ok', 'ok'] }[a];
+    var l3 = [sg(' ' + hg[0] + ' ', hg[1]), sg(hg[2], hg[1], true)]; at(l3, 10);
+    if (a === 'blocked') {
+      l3.push(sg('rework 3', 'crit', true)); l3.push(sg('  ·  ', 'border')); l3.push(sg('✗ cargo test 22m', 'crit'));
+      l3.push(sg('  ·  ', 'border')); l3.push(sg('4 denied', 'crit')); l3.push(sg('  ·  ', 'border')); l3.push(sg('git +180/−0', 'warn'));
+    } else {
+      l3.push(sg('rework 0', 'ok')); l3.push(sg('  ·  ', 'border')); l3.push(sg('✓ cargo test 10s', 'ok'));
+      l3.push(sg('  ·  ', 'border')); l3.push(sg('0 denied', 'dim')); l3.push(sg('  ·  ', 'border')); l3.push(sg('⚠ 8 stale reads', 'warn'));
+      if (wide) { l3.push(sg('  ·  ', 'border')); l3.push(sg('agents.rs re-read ×3', 'warn')); l3.push(sg('  ·  ', 'border')); l3.push(sg('git +0/−0', 'dim')); }
+    }
+    out.push(at(l3, cols));
+    return out;
+  }
+
+  overview(cols) {
+    var out = [];
+    if (cols >= 100) {
+      var h = [sg('  cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11 · ~/code/cctop · v2.1.272', 'dim')];
+      out.push(spread(h, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg('  52:11', 'fg'), sg('  ·  159 calls  ', 'dim'), sg('1 err', 'warn')], cols));
+      out.push([]);
+      out = out.concat(this.actBand(cols));
+      out.push([]);
+      var m = function (digit, label, value, pct, barSegs, detail) {
+        var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+        at(l, 3); l.push(sg(label, 'fg', true));
+        at(l, 14); l.push(sg(value, 'fg'));
+        at(l, 27); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+        at(l, 58); l.push(sg(pct, 'fg', true));
+        at(l, 65); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+        return at(l, cols);
+      };
+      out.push(m(1, 'context', '350k/1.00M', '35 %', this.ctxBar(30),
+        [sg('616k', 'fg'), sg(' to autocompact  ·  ', 'dim'), sg('+0', 'fg'), sg('/turn  ·  ', 'dim'), sg('0', 'fg'), sg(' compactions', 'dim')]));
+      out.push(at([sg('       prefix ', 'dim'), sg('44k', 'accent'), sg('  results ', 'dim'), sg('≈82k', 'ok'), sg('  inputs ', 'dim'), sg('≈49k', 'warn'), sg('  thinking ', 'dim'), sg('42k', 'crit'), sg('  harness ', 'dim'), sg('≈21k', 'dim')], cols));
+      out.push(m(3, 'limits', '5h 4 %', ' 4 %', bar(4, 30, 'ok'),
+        [sg('↻ 4h06', 'fg'), sg('  ·  7d ', 'dim'), sg('22 %', 'fg'), sg('  ·  ', 'border'), sg('×5', 'warn'), sg(' opus  ·  long ctx ', 'dim'), sg('78 %', 'warn')]));
+      out.push(m(2, 'cache', 'warm 59m', '98 %', bar(98, 30, 'ok'),
+        [sg('1h', 'fg'), sg(' TTL  ·  ', 'dim'), sg('0', 'ok'), sg(' misses  ·  re-writes ', 'dim'), sg('350k', 'fg'), sg(' when cold', 'dim')]));
+      var sp = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+      at(sp, 3); sp.push(sg('spend', 'fg', true));
+      at(sp, 14); sp.push(sg('≈$22.50', 'fg', true));
+      at(sp, 27); sp.push(sg('API-equivalent', 'dim'));
+      at(sp, 65); sp.push(sg('≈$90', 'warn', true)); sp.push(sg('/h  ·  ', 'dim')); sp.push(sg('≈$.19', 'fg')); sp.push(sg('/call  ·  ', 'dim')); sp.push(sg('≈$29', 'warn')); sp.push(sg('/turn  ·  not a bill', 'dim'));
+      out.push(at(sp, cols));
+      out.push([]);
+      var r = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+      at(r, 3); r.push(sg('running', 'fg', true));
+      at(r, 14); r.push(sg('Bash', 'accent')); r.push(sg('  cargo fmt --all && make check > /tmp/check.log', 'fg'));
+      out.push(spread(r, [sg('0:03', 'fg', true)], cols));
+      var t4 = []; at(t4, 14);
+      t4.push(sg('api ', 'dim')); t4.push(sg('≈21:17', 'fg')); t4.push(sg('  ·  tools ', 'dim')); t4.push(sg('22:14', 'fg'));
+      t4.push(sg('  ·  ', 'border')); t4.push(sg('159', 'fg')); t4.push(sg(' api calls  ·  ', 'dim')); t4.push(sg('1', 'fg')); t4.push(sg(' steer  ·  waiting on you ', 'dim')); t4.push(sg('—', 'dim'));
+      out.push(at(t4, cols));
+      var t5 = [sg(' ', 'dim'), sg('5', 'accent', true), sg(' ', 'dim')];
+      at(t5, 3); t5.push(sg('tools', 'fg', true));
+      at(t5, 14); t5.push(sg('explore ', 'dim')); t5.push(sg('69', 'fg')); t5.push(sg('  test ', 'dim')); t5.push(sg('39', 'fg')); t5.push(sg('  implement ', 'dim')); t5.push(sg('30', 'fg')); t5.push(sg(' (', 'dim')); t5.push(sg('1 ✗', 'warn')); t5.push(sg(')  read ', 'dim')); t5.push(sg('1', 'fg')); t5.push(sg('  write ', 'dim')); t5.push(sg('2', 'fg'));
+      out.push(spread(t5, [sg('top ctx  ', 'dim'), sg('Read …/agents.rs', 'fg'), sg('  10k', 'warn')], cols));
+      var t7 = [sg(' ', 'dim'), sg('7', 'accent', true), sg(' ', 'dim')];
+      at(t7, 3); t7.push(sg('files', 'fg', true));
+      at(t7, 14); t7.push(sg('27', 'fg')); t7.push(sg(' touched  ·  ', 'dim')); t7.push(sg('agent_ledger.rs', 'fg')); t7.push(sg(' W×1 IDE  ·  ', 'dim')); t7.push(sg('task_notification.rs', 'fg')); t7.push(sg(' W×1 IDE', 'dim'));
+      out.push(spread(t7, [sg('6 agents  ', 'accent'), sg('—', 'dim')], cols));
+      out.push([]);
+      var e = [sg(' ', 'dim'), sg('8', 'accent', true), sg(' ', 'dim')];
+      at(e, 3); e.push(sg('05:53', 'dim')); at(e, 10); e.push(sg('tool', 'accent')); at(e, 16); e.push(sg('Bash', 'fg')); at(e, 22); e.push(sg('cargo fmt --all && make check > /tmp/check.log', 'fg'));
+      at(e, 74); e.push(sg('05:52', 'dim')); at(e, 81); e.push(sg('hook', 'accent')); at(e, 87); e.push(sg('PostToolBatch', 'fg'));
+      out.push(at(e, cols));
+      var e2 = []; at(e2, 3); e2.push(sg('05:52', 'dim')); at(e2, 10); e2.push(sg('tool', 'accent')); at(e2, 16); e2.push(sg('Bash', 'fg')); at(e2, 22); e2.push(sg('cargo test harness_facts 2>&1 | grep -c ok', 'fg'));
+      at(e2, 74); e2.push(sg('05:52', 'dim')); at(e2, 81); e2.push(sg('tool', 'accent')); at(e2, 87); e2.push(sg('Bash', 'fg')); at(e2, 93); e2.push(sg('✓', 'ok')); e2.push(sg(' 94 tok', 'dim'));
+      out.push(at(e2, cols));
+      out.push([]);
+      var f = [sg(' ', 'dim'), sg('?', 'accent', true), sg('help', 'dim'), sg('   ', 'dim'), sg('1-9', 'accent', true), sg(' panels   ', 'dim'), sg('c', 'accent', true), sg(' coach   ', 'dim'), sg('a', 'accent', true), sg(' ask   ', 'dim'), sg('t', 'accent', true), sg(' theme   ', 'dim'), sg('q', 'accent', true), sg(' quit', 'dim')];
+      out.push(spread(f, [sg('read-only · nothing is sent', 'dim')], cols));
+      return out;
+    }
+    if (cols >= 60) {
+      var h8 = [sg('  cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11', 'dim')];
+      out.push(spread(h8, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg('  52:11 · 159c ', 'dim'), sg('1 err', 'warn')], cols));
+      out.push([]);
+      out = out.concat(this.actBand(cols));
+      out.push([]);
+      var m8 = function (digit, label, value, pct, barSegs, detail) {
+        var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+        at(l, 3); l.push(sg(label, 'fg', true));
+        at(l, 12); l.push(sg(value, 'fg'));
+        at(l, 24); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+        at(l, 41); l.push(sg(pct, 'fg', true));
+        at(l, 48); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+        return at(l, cols);
+      };
+      out.push(m8(1, 'context', '350k/1.00M', '35 %', this.ctxBar(16), [sg('616k', 'fg'), sg(' to autocompact', 'dim')]));
+      out.push(at([sg('     prefix ', 'dim'), sg('44k', 'accent'), sg(' results ', 'dim'), sg('≈82k', 'ok'), sg(' inputs ', 'dim'), sg('≈49k', 'warn'), sg(' think ', 'dim'), sg('42k', 'crit'), sg(' harness ', 'dim'), sg('≈21k', 'dim')], cols));
+      out.push(m8(3, 'limits', '5h 4 %', ' 4 %', bar(4, 16, 'ok'), [sg('↻ 4h06', 'fg'), sg('  ·  7d ', 'dim'), sg('22 %', 'fg')]));
+      out.push(m8(2, 'cache', 'warm 59m', '98 %', bar(98, 16, 'ok'), [sg('1h', 'fg'), sg(' TTL  ·  ', 'dim'), sg('0', 'ok'), sg(' misses', 'dim')]));
+      var sp8 = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+      at(sp8, 3); sp8.push(sg('spend', 'fg', true)); at(sp8, 12); sp8.push(sg('≈$22.50', 'fg', true));
+      at(sp8, 24); sp8.push(sg('≈$90', 'warn', true)); sp8.push(sg('/h · ', 'dim')); sp8.push(sg('≈$.19', 'fg')); sp8.push(sg('/call · ', 'dim')); sp8.push(sg('≈$29', 'warn')); sp8.push(sg('/turn', 'dim'));
+      out.push(at(sp8, cols));
+      out.push([]);
+      var r8 = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+      at(r8, 3); r8.push(sg('running', 'fg', true)); at(r8, 12); r8.push(sg('Bash', 'accent')); r8.push(sg(' cargo fmt --all && make check…', 'fg'));
+      out.push(spread(r8, [sg('0:03', 'fg', true)], cols));
+      var t58 = [sg(' ', 'dim'), sg('5', 'accent', true), sg(' ', 'dim')];
+      at(t58, 3); t58.push(sg('tools', 'fg', true)); at(t58, 12);
+      t58.push(sg('explore ', 'dim')); t58.push(sg('69', 'fg')); t58.push(sg(' test ', 'dim')); t58.push(sg('39', 'fg')); t58.push(sg(' impl ', 'dim')); t58.push(sg('30', 'fg')); t58.push(sg(' (', 'dim')); t58.push(sg('1 ✗', 'warn')); t58.push(sg(')  top ctx ', 'dim')); t58.push(sg('10k', 'warn'));
+      out.push(at(t58, cols));
+      var t78 = [sg(' ', 'dim'), sg('7', 'accent', true), sg(' ', 'dim')];
+      at(t78, 3); t78.push(sg('files', 'fg', true)); at(t78, 12);
+      t78.push(sg('27', 'fg')); t78.push(sg(' touched · ', 'dim')); t78.push(sg('2', 'fg')); t78.push(sg(' IDE edits · ', 'dim')); t78.push(sg('agents.rs', 'fg')); t78.push(sg(' ×3 re-read', 'warn'));
+      out.push(at(t78, cols));
+      out.push([]);
+      var e8 = [sg(' ', 'dim'), sg('8', 'accent', true), sg(' ', 'dim')];
+      at(e8, 3); e8.push(sg('05:53', 'dim')); at(e8, 10); e8.push(sg('tool', 'accent')); at(e8, 16); e8.push(sg('Bash', 'fg')); at(e8, 22); e8.push(sg('cargo fmt --all && make check…', 'fg'));
+      out.push(at(e8, cols));
+      var e82 = []; at(e82, 3); e82.push(sg('05:52', 'dim')); at(e82, 10); e82.push(sg('hook', 'accent')); at(e82, 16); e82.push(sg('PostToolBatch', 'fg'));
+      at(e82, 44); e82.push(sg('05:52', 'dim')); at(e82, 51); e82.push(sg('tool', 'accent')); at(e82, 57); e82.push(sg('Bash ', 'fg')); e82.push(sg('✓', 'ok')); e82.push(sg(' 94', 'dim'));
+      out.push(at(e82, cols));
+      out.push([]);
+      var f8 = [sg(' ', 'dim'), sg('?', 'accent', true), sg('help  ', 'dim'), sg('1-9', 'accent', true), sg(' panels  ', 'dim'), sg('c', 'accent', true), sg(' coach  ', 'dim'), sg('t', 'accent', true), sg(' theme  ', 'dim'), sg('q', 'accent', true)];
+      out.push(at(f8, cols));
+      return out;
+    }
+    // Below MIN_DOCK_COLUMNS: the inline pane. First glance only, plus the key map.
+    var h4 = [sg(' cctop', 'accent', true), sg(' opus-5 t1', 'dim')];
+    out.push(spread(h4, [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11', 'dim')], cols));
+    out = out.concat(this.actBand(cols));
+    var self = this;
+    var m4 = function (digit, label, value, barSegs, detail) {
+      var l = [sg(' ', 'dim'), sg(String(digit), 'accent', true), sg(' ', 'dim')];
+      at(l, 3); l.push(sg(label, 'fg'));
+      at(l, 15 - Array.from(value).length); l.push(sg(value, 'fg', true));
+      at(l, 16); for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]);
+      at(l, 25); for (var j = 0; j < detail.length; j++) l.push(detail[j]);
+      return at(l, cols);
+    };
+    out.push(m4(1, 'ctx', '35 %', this.ctxBar(8), [sg('616k', 'fg'), sg(' left', 'dim')]));
+    out.push(m4(3, '5h', '4 %', bar(4, 8, 'ok'), [sg('↻ ', 'dim'), sg('4h06', 'fg')]));
+    out.push(m4(2, 'cache', '59m', bar(98, 8, 'ok'), [sg('1h', 'fg'), sg(' TTL', 'dim')]));
+    // spend has no denominator, so it drops out of the meter grid rather than faking a bar
+    var s4 = [sg(' ', 'dim'), sg('2', 'accent', true), sg(' ', 'dim')];
+    at(s4, 3); s4.push(sg('spend', 'fg'));
+    at(s4, 11); s4.push(sg('≈$22.50', 'fg', true)); s4.push(sg(' · ', 'border')); s4.push(sg('≈$90', 'warn')); s4.push(sg('/h · ', 'dim')); s4.push(sg('≈$29', 'warn')); s4.push(sg('/turn', 'dim'));
+    out.push(at(s4, cols));
+    var r4 = [sg(' ', 'dim'), sg('4', 'accent', true), sg(' ', 'dim')];
+    at(r4, 3); r4.push(sg('▸ ', 'accent')); r4.push(sg('Bash cargo fmt…', 'fg'));
+    out.push(spread(r4, [sg('0:03', 'fg', true)], cols));
+    var k4 = [sg(' ', 'dim'), sg('1', 'accent', true), sg('ctx ', 'dim'), sg('2', 'accent', true), sg('$ ', 'dim'), sg('3', 'accent', true), sg('lim ', 'dim'), sg('4', 'accent', true), sg('turn ', 'dim'), sg('5', 'accent', true), sg('tool ', 'dim'), sg('7', 'accent', true), sg('file ', 'dim'), sg('8', 'accent', true), sg('ev', 'dim')];
+    out.push(at(k4, cols));
+    return out;
+  }
+}
+class Component extends DCLogic {
+  renderVals() {
+    var p = PALETTES['default-dark'];
+    var s = new Screens('quiet');
+    var paint = function (cols) {
+      return s.overview(cols).map(function (l) {
+        if (!l.length) return [{ t: ' '.repeat(cols), c: p.dim, w: '400' }];
+        return l.map(function (g) { return { t: g.t, c: p[g.r] || p.fg, w: g.b ? '600' : '400' }; });
+      });
+    };
+    return {
+      screens: [
+        { title: '122 columns', tone: '#5FC77E', note: 'docked pane, or a standalone terminal — everything fits, nothing is cut',
+          rows: paint(122),
+          drops: ["Every first-glance fact and every second-look fact, in full.", "The 30-cell meters resolve to ~3 % per cell, fine enough to watch a bar move within a turn.", "Detail columns on the right of each meter carry the thresholds and the reset clocks."] },
+        { title: '80 columns', tone: '#E2B04A', note: 'the common split — first-glance zone untouched, detail columns give way',
+          rows: paint(80),
+          drops: ["Meters shrink 30 → 16 cells; the label, value and percent columns keep their stops so the block still scans vertically.", "Meter detail loses its third and fourth clause: 7d, weight and long_context move behind 3.", "The event tail keeps two rows but drops the second column.", "Nothing moves position. Context is still the first meter, spend is still the fourth."] },
+        { title: '40 columns', tone: '#4CC2C2', note: 'the inline pane below MIN_DOCK_COLUMNS — five facts and a key map',
+          rows: paint(40),
+          drops: ["Only first-glance survives: phase, the act line, three meters, spend, and what is running.", "Meters drop to 12 cells and lose their percent column — the value column already carries it.", "The second-look zone is replaced by its key map, so the way to the missing detail is on screen.", "Compare with today's 40-column form, which prints ○14% ○— ○59m ●1 ▸ — four lights with no way to tell which is which."] }
+      ],
+      order: [
+        { label: '1 · blank separators', tone: '#5D6B7D' },
+        { label: '2 · meter detail clauses', tone: '#5D6B7D' },
+        { label: '3 · event tail', tone: '#8FA0B4' },
+        { label: '4 · tools / files / agents', tone: '#8FA0B4' },
+        { label: '5 · turn timings', tone: '#8FA0B4' },
+        { label: '6 · context anatomy legend', tone: '#E2B04A' },
+        { label: 'never · act line', tone: '#5FC77E' },
+        { label: 'never · the three meters', tone: '#5FC77E' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
