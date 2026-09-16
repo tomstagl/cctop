@@ -33,7 +33,9 @@ impl Panel for TurnPanel {
         let now = state.clock_ms();
         let turn = state.agg.current_turn();
 
-        // Line 1: phase · elapsed · api calls · api vs tool time · retries
+        // Line 1: the phase (the classifier over the last calls, labelled
+        // as such — the header's word is the same classifier), then the
+        // turn's own facts: elapsed · api calls · api vs tool time · retries
         let mut l1 = vec![Span::raw(" ")];
         if let Some((phase, run)) = state.tools.phase_now() {
             if turn.is_some_and(|t| t.duration_ms.is_none()) || state.tools.running().is_some() {
@@ -43,7 +45,9 @@ impl Panel for TurnPanel {
                     }
                     _ => phase.word().to_string(),
                 };
-                l1.push(Span::styled(format!("{word} ×{run}  "), accent));
+                l1.push(Span::styled("phase ", dim));
+                l1.push(Span::styled(format!("{word} ×{run}"), accent));
+                l1.push(Span::styled(" · ", dim));
             }
         }
         match turn {
@@ -53,7 +57,7 @@ impl Panel for TurnPanel {
                     .map(fmt::duration_ms)
                     .unwrap_or_else(|| "—".into());
                 l1.push(Span::raw(format!(
-                    "elapsed {el}   api {} calls",
+                    "turn elapsed {el} · api {} calls",
                     t.api_calls
                 )));
                 if t.api_ms > 0 || t.tool_ms > 0 {
@@ -117,7 +121,8 @@ impl Panel for TurnPanel {
         } else if state.session.alive && turn.is_some_and(|t| t.duration_ms.is_none()) {
             l2.push(Span::styled("● thinking", accent));
         } else {
-            l2.push(Span::styled("idle", dim));
+            // Not the coach's IDLE (no turn running): only that no call is.
+            l2.push(Span::styled("no call running", dim));
         }
 
         // Line 3: edits ✓ last check · steers · interrupts
@@ -333,8 +338,8 @@ mod tests {
         // The session ended with an interrupt, which is not a turn: the
         // panel shows the last real turn (52 API calls, cut after 19:54).
         assert!(out.contains("4 Turn ─ 19:54"), "{out}");
-        assert!(out.contains("elapsed 19:54   api 52 calls"), "{out}");
-        assert!(out.contains("idle"), "{out}");
+        assert!(out.contains("turn elapsed 19:54 · api 52 calls"), "{out}");
+        assert!(out.contains("no call running"), "{out}");
         assert!(out.contains("hooks —   permission waits —"), "{out}");
         // Retry time from the fixture's cost-state (2.9 s).
         assert!(out.contains("retries 0:02"), "{out}");
@@ -354,7 +359,7 @@ mod tests {
         });
         let out = render_to_string(&app, 64, 60);
         assert!(
-            out.contains("elapsed 0:50   api 1 calls · api 0:02"),
+            out.contains("phase WORKING ×1 · turn elapsed 0:50 · api 1 calls · api 0:02"),
             "{out}"
         );
         assert!(

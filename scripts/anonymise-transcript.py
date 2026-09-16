@@ -37,7 +37,10 @@ Shapes the parsers classify are preserved without their content:
   session id with `--team` when anonymising a teammate transcript or a
   team config (the file's own `sessionId` is the teammate's).
 
-usage: anonymise-transcript.py <in.jsonl> <out.jsonl> [--max-str N] [--team LEAD_ID]
+`--lines N` keeps the first N lines of the transcript, whole and in order —
+a point in time, the way `--session … --lines N` reads one — for a fixture
+that pins a moment rather than a session.
+usage: anonymise-transcript.py <in.jsonl> <out.jsonl> [--max-str N] [--team LEAD_ID] [--lines N]
        anonymise-transcript.py <in.jsonl> <out-dir>/ …    # named <hid(sessionId)>.jsonl
        anonymise-transcript.py <config.json> <out.json> … # one JSON document
 """
@@ -315,10 +318,14 @@ def main():
     global MAX_STR, TEAM
     argv = sys.argv[1:]
     args = []
+    lines = None
     i = 0
     while i < len(argv):
         if argv[i] == "--max-str":
             MAX_STR = int(argv[i + 1])
+            i += 2
+        elif argv[i] == "--lines":
+            lines = int(argv[i + 1])
             i += 2
         elif argv[i] == "--team":
             lead = argv[i + 1]
@@ -338,7 +345,9 @@ def main():
         return
     rows = []
     with open(src) as f:
-        for line in f:
+        for n, line in enumerate(f, 1):
+            if lines is not None and n > lines:
+                break
             try:
                 o = json.loads(line)
             except json.JSONDecodeError:

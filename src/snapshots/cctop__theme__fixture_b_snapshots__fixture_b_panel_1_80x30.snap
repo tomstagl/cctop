@@ -5,7 +5,7 @@ expression: "render_to_string(&app, 80, 30)"
 ┌ Turn ledger — 6 turns · ↕#↓  (s/S sort, j/k, Enter calls, Esc back) ─────────┐
 │   # START       DUR  API    READ   WRITE  FRESH    OUT  THINK    COST EFFORT │
 │  6C 14:48:16 8h 40m    4    602k    2.1k      8   1.6k    355   $0.36 medium │
-│  5  14:33:20   0:07    7   3.34M     10k     14   2.6k   1.2k   $1.84 xhigh  │
+│  5  14:33:20  14:51    7   3.34M     10k     14   2.6k   1.2k   $1.84 xhigh  │
 │  4  14:19:14  12:38   50  14.86M     77k    100    42k    21k   $9.26 max    │
 │  3  14:18:10   0:33    2    503k    2.6k      4   2.2k   1.2k   $0.33 max    │
 │  2  14:06:36  10:25   35   7.43M    108k     70    45k    28k   $5.95 max    │

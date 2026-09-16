@@ -106,8 +106,13 @@ pub struct Turn {
     pub started_at: Option<String>,
     /// Timestamp of the last line seen in this turn.
     pub last_at: Option<String>,
-    /// Exact duration from the `turn_duration` system line, when it arrived.
+    /// Exact duration from the `turn_duration` system line, when it arrived
+    /// — and cleared again by a response after it: Claude Code writes one
+    /// per attempt, and re-drives the same prompt (after `/login`) with no
+    /// new user line, so the turn is open again until the next one.
     pub duration_ms: Option<u64>,
+    /// Responses that arrived after a `turn_duration`, reopening the turn.
+    pub reopened: usize,
     /// Distinct API responses.
     pub api_calls: usize,
     /// API-error lines seen in this turn (never counted as calls).
@@ -194,15 +199,23 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// Wall time so far: exact once `turn_duration` arrived, else `now − start`.
+    /// Wall time so far: exact once `turn_duration` arrived; else to the
+    /// turn's end when the next turn closed it (`ended_at`, its last line);
+    /// else `now − start`.
     pub fn elapsed_ms(&self, now_ms: i64) -> Option<i64> {
         if let Some(d) = self.duration_ms {
             return Some(d as i64);
         }
-        self.started_at
+        let start = self
+            .started_at
+            .as_deref()
+            .and_then(crate::metrics::cost::parse_ts_ms)?;
+        let end = self
+            .ended_at
             .as_deref()
             .and_then(crate::metrics::cost::parse_ts_ms)
-            .map(|s| (now_ms - s).max(0))
+            .unwrap_or(now_ms);
+        Some((end - start).max(0))
     }
 }
 
@@ -450,6 +463,7 @@ impl Aggregate {
                     self.last_ts = Some((ts, LastKind::User));
                 }
                 if starts_turn {
+                    self.close_open_turn();
                     self.turns.push(Turn {
                         number: self.turns.len() + 1,
                         prompt_id: u.prompt_id.clone(),
@@ -674,6 +688,18 @@ impl Aggregate {
         }
     }
 
+    /// The next turn is starting: a turn still open without a
+    /// `turn_duration` (reopened by a response after its own, or never
+    /// given one) ended at its last line, not at whatever `now` a reader
+    /// has.
+    fn close_open_turn(&mut self) {
+        if let Some(t) = self.turns.last_mut() {
+            if t.duration_ms.is_none() && t.ended_at.is_none() {
+                t.ended_at = t.last_at.clone();
+            }
+        }
+    }
+
     /// Record a boundary the transcript cannot show (a resume or fork seen
     /// by the hook spool).
     pub fn push_boundary(&mut self, kind: BoundaryKind, at_ms: i64) {
@@ -757,6 +783,15 @@ impl Aggregate {
         }
         if !self.seen_ids.insert(a.message.id.clone()) {
             return; // another block of a response already counted
+        }
+        if t.duration_ms.is_some() {
+            // The turn went on after its `turn_duration`: the harness
+            // re-drove the prompt. Fixture E is the screenshot that opened
+            // PRD dashboard-v2 §3.2 — a 205 ms attempt, `/login`, then 316
+            // calls under `elapsed 0:00`.
+            t.duration_ms = None;
+            t.ended_at = None;
+            t.reopened += 1;
         }
         let u = Usage::from_api(&a.message.usage);
         if t.api_calls == 0 {
@@ -938,6 +973,36 @@ mod tests {
         assert_eq!(agg.context_size(), last.context_size);
     }
 
+    /// A response after `turn_duration` reopens the turn (fixture E, the
+    /// re-driven prompt): the duration is cleared, not kept as `0:00`
+    /// under three hundred calls.
+    #[test]
+    fn a_response_after_turn_duration_reopens_the_turn() {
+        let lines =
+            parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-e.jsonl"))
+                .unwrap();
+        let mut agg = Aggregate::default();
+        for l in &lines[..20] {
+            agg.push(l);
+        }
+        let t = agg.current_turn().unwrap();
+        assert_eq!((t.number, t.duration_ms, t.reopened), (1, Some(205), 0));
+        assert!(t.ended_at.is_some());
+        for l in &lines[20..27] {
+            agg.push(l);
+        }
+        let t = agg.current_turn().unwrap();
+        assert_eq!((t.number, t.duration_ms, t.reopened), (1, None, 1));
+        assert!(t.ended_at.is_none());
+        // The second block of the same response reopens nothing again.
+        for l in &lines[27..] {
+            agg.push(l);
+        }
+        let t = agg.current_turn().unwrap();
+        assert_eq!((t.reopened, t.api_calls, t.tool_calls), (1, 6, 6));
+        assert_eq!(agg.human_turns(), 1);
+    }
+
     #[test]
     fn turn_duration_hooks_queue_and_away_from_system_lines() {
         let lines = fixture("session-a");
@@ -969,11 +1034,17 @@ mod tests {
         assert_eq!(agg.away.len(), 1);
         assert!(agg.away[0].at.is_some());
         assert!(!agg.away[0].content.is_empty());
-        // Live elapsed for a turn without turn_duration.
+        // A past turn without turn_duration (turn 4: a prompt the next one
+        // superseded 6 s later, no response) ended at its last line — its
+        // own prompt — not at whatever `now` a reader has; live elapsed is
+        // for the turn still open.
         let t = &agg.turns[3];
         assert!(t.duration_ms.is_none());
         let start = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref().unwrap()).unwrap();
-        assert_eq!(t.elapsed_ms(start + 5_000), Some(5_000));
+        assert_eq!(t.elapsed_ms(start + 5_000), Some(0));
+        let mut live = t.clone();
+        live.ended_at = None;
+        assert_eq!(live.elapsed_ms(start + 5_000), Some(5_000));
         assert_eq!(agg.turns[2].elapsed_ms(0), Some(95_830));
         // API + tool time never exceeds the turn's wall time (first to last
         // line), and both are non-trivial on a real turn. Note `turn_duration`

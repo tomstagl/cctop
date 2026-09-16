@@ -637,7 +637,7 @@ fn row_turn(state: &State, c: &Coach) -> Row {
     let mut detail: Vec<Line> = Vec::new();
     if let Some(t) = t {
         detail.push(vec![dim(format!(
-            "elapsed {} · {} api calls · {} tool calls",
+            "turn elapsed {} · {} api calls · {} tool calls",
             t.elapsed_ms(state.clock_ms())
                 .map(fmt::duration_ms)
                 .unwrap_or_else(|| "—".into()),
@@ -969,6 +969,67 @@ mod tests {
         s.session.ended_at_ms = s.last_line_at_ms;
         let e = Engine::for_state(&s);
         (s, e)
+    }
+
+    /// The first `n` lines of a fixture, the clock at its last line.
+    fn fixture_at(name: &str, n: usize) -> (State, Engine) {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("fixtures/session-{name}.jsonl"));
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap().iter().take(n) {
+            s.apply(l);
+        }
+        s.session.ended_at_ms = s.last_line_at_ms;
+        let e = Engine::for_state(&s);
+        (s, e)
+    }
+
+    /// PRD dashboard-v2 §3.2's second pair (US-101): the header said
+    /// `WORKING · silent 1:56` while row 4 said `elapsed 0:00 · 159 api
+    /// calls`. Fixture E is that session's first 66 lines: a 205 ms attempt
+    /// that Claude Code closed with `turn_duration`, a `/login`, then the
+    /// same prompt re-driven with no new user line. The turn reopens on the
+    /// next response, so the header's phase word and row 4's turn agree at
+    /// every line, and each names what it reads.
+    #[test]
+    fn fixture_e_header_and_row_4_read_one_open_turn() {
+        // The attempt: closed, 205 ms, nothing counted.
+        let (s, e) = fixture_at("e", 20);
+        let t = s.agg.current_turn().unwrap();
+        assert_eq!(t.duration_ms, Some(205));
+        assert_eq!((t.reopened, t.api_calls), (0, 0));
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.phase.word, "IDLE");
+        assert_eq!(
+            d.rows[3].detail[0].text,
+            "turn elapsed 0:00 · 0 api calls · 0 tool calls"
+        );
+
+        // The re-driven prompt's first response: the turn is open again.
+        let (s, e) = fixture_at("e", 27);
+        let t = s.agg.current_turn().unwrap();
+        assert_eq!((t.duration_ms, t.reopened, t.api_calls), (None, 1, 1));
+        assert!(crate::coach::turn_running(&s));
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.phase.word, "THINKING");
+        assert_eq!(
+            d.rows[3].detail[0].text,
+            "turn elapsed 1:06 · 1 api calls · 0 tool calls"
+        );
+
+        // Six calls later: one phase word, one elapsed, on both.
+        let (s, e) = fixture_at("e", 66);
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.phase.word, "EXPLORING");
+        assert_eq!(d.header.phase.word, coach::snapshot(&s, &e).state.kind);
+        assert_eq!(
+            d.rows[3].detail[0].text,
+            "turn elapsed 1:50 · 6 api calls · 6 tool calls"
+        );
+        let t = s.agg.current_turn().unwrap();
+        assert_eq!(t.elapsed_ms(s.clock_ms()), Some(110_844));
+        assert_eq!(t.reopened, 1);
     }
 
     #[test]
