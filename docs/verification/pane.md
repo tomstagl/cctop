@@ -376,6 +376,25 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+26. **The Agents view's columns and the combined cost** (the agent-costs
+    PRD). The pane's Agents view lists each subagent as the TUI's agents
+    view does — type, model family, time, tokens, `≈$`, `ret`, waste with
+    its reason — and the Overview's row 2 prints the combined cost with its
+    mark, row 6 `wasted ≈$X` once an agent was killed or came back empty.
+    Setup: as item 25; a session that launched two agents, one of them
+    stopped with `TaskStop` while it ran (`Explore` something, then stop it
+    from the task list), one that returned.
+    Keys: `/cctop agents` (or the view bar); then the Overview.
+    Expected: two agent rows within one poll of the task notifications;
+    the stopped one `✗ … killed` with its dollars, the returned one with a
+    `ret` count and `0.00`; below 58 body columns the model and `ret`
+    columns are gone and the waste column stays; the Overview's row 2 reads
+    `≈$…` with `agents ≈$… (N %)` in its detail and row 6 ends with
+    `wasted ≈$…`; `cctop query agents --session <id> | jq .totals` agrees
+    with the rows.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window
