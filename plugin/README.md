@@ -145,6 +145,24 @@ The `/cctop` skill runs it first and relays the lines verbatim before it
 falls back to `cctop split`, so a session without the pane still tells you
 exactly why. `--json` prints the same report as data.
 
+Once a plugin with the hooks module is installed, a `compatibility` line
+pairs it with the Claude Code that runs it. The plugin version is the one the
+session loaded (the marker's) when the module runs, else the installed one;
+what it was tested with is the module's `TESTED_WITH` (the header's `hooks
+…` light), read from the marker or from the install's `hooks/model.ts`:
+
+```
+  ✓ cctop plugin 0.7.0 tested with Claude Code 2.1.273
+  ! Claude Code 2.1.280 is newer than cctop plugin 0.7.0 was tested with (2.1.273); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
+  ✗ cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3) → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code
+```
+
+The ✗ comes from a short table of pairs known to fail (`KNOWN_INCOMPATIBLE`
+in `src/pane.rs`), checked before the `TESTED_WITH` comparison; the `!` is
+the general case, a Claude Code the module has not been tested against. The
+table ships with the cctop binary, so the line is only as current as
+`brew upgrade cctop`.
+
 ## Enabling function hooks
 
 Function hooks are early access. Put the flag where every session sees it —
