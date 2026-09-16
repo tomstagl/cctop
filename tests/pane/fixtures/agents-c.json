@@ -15,7 +15,7 @@
         "approx": false,
         "metric_id": "agent_state",
         "unit": "ms",
-        "value": 152377
+        "value": 81229
       },
       "fork_context_messages": null,
       "id": "a2de915228d5f40fe",
@@ -70,7 +70,7 @@
         "approx": false,
         "metric_id": "agent_state",
         "unit": "ms",
-        "value": 42499
+        "value": 39566
       },
       "fork_context_messages": 32,
       "id": "a9a92645226d3a561",

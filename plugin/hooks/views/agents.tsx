@@ -35,7 +35,8 @@ function wasteText(a: unknown): string {
   const usd = measured(waste, 'usd');
   const reason = stringAt(waste, 'reason') ?? '';
   const idle = at(waste, 'idle_ms');
-  const label = reason === 'no_return' ? 'no ret' : reason === 'idle' && typeof idle === 'number' ? `idle ${shortDuration(idle)}` : reason;
+  // `reason` is the query's enum value (`failed`, `killed`, `no_ret`, `idle`); the TUI prints it with a space.
+  const label = reason === 'idle' && typeof idle === 'number' ? `idle ${shortDuration(idle)}` : reason.replace('_', ' ');
   const amount = usd === null || stringAt(waste, 'usd', 'source') === 'unpriced' ? DASH : cents(usd.value);
   return `${amount} ${label}`;
 }

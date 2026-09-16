@@ -127,13 +127,7 @@ impl Panel for Agents {
                 AgentState::Failed => ("✗", state.theme.crit()),
             };
             let elapsed = a.elapsed_ms(now).map(fmt::duration_ms).unwrap_or_default();
-            let model = a
-                .model
-                .trim_start_matches("claude-")
-                .split('-')
-                .next()
-                .unwrap_or("")
-                .to_string();
+            let model = fmt::model_family(&a.model);
             // A fork's inherited context: the cache read of its first own
             // call (`fork-context-ref.contextLength` is not tokens).
             let inherited = a

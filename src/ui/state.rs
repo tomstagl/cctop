@@ -312,6 +312,9 @@ pub struct CostBreakdown {
     pub agents_share: f64,
     /// Any agent has usage: the breakdown line is drawn.
     pub any_agents: bool,
+    /// Tokens of agents on models the price table does not know: in no
+    /// dollar figure above, named on the breakdown line instead.
+    pub unpriced_agent_tokens: u64,
 }
 
 /// What the main transcript says about one subagent: its launch and its
@@ -1368,13 +1371,11 @@ impl State {
                 },
                 _ => None,
             };
-            let spawn = self
-                .tools
-                .agent_spawns
-                .last()
-                .cloned()
-                .expect("just pushed");
-            self.note_agent_spawn(&spawn, sync_chars);
+            // One spawn per `tool_result` block on the line.
+            let new: Vec<tools::AgentSpawn> = self.tools.agent_spawns[spawns_before..].to_vec();
+            for spawn in &new {
+                self.note_agent_spawn(spawn, sync_chars);
+            }
         }
         if let Some(n) = line.task_notification() {
             self.note_task_notification(n);
@@ -1480,6 +1481,7 @@ impl State {
                 a.hook_tool_ms = h.hook_tool_ms;
                 a.hook_tool_errors = h.hook_tool_errors;
                 a.hook_pre_calls = h.hook_pre_calls;
+                a.carry_hook_state(h);
             }
             self.agents.insert(id.clone(), a);
         }
@@ -1797,6 +1799,13 @@ impl State {
     /// ledger holds the agents' earlier calls, so the share is not derived
     /// by adding them to it again).
     pub fn agents_cost(&self) -> Option<(f64, f64)> {
+        let combined = self.cost.combined(self.agents.values());
+        self.agents_share_of(combined)
+    }
+
+    /// `(agents' priced spend, share of `combined`)`; `None` when no agent
+    /// is priceable.
+    fn agents_share_of(&self, combined: Option<Cost>) -> Option<(f64, f64)> {
         let pricing = self.cost.pricing();
         let mut usd = 0.0;
         let mut any = false;
@@ -1809,11 +1818,7 @@ impl State {
         if !any {
             return None;
         }
-        let total = self
-            .cost
-            .combined(self.agents.values())
-            .map(|c| c.usd)
-            .unwrap_or(usd);
+        let total = combined.map(|c| c.usd).unwrap_or(usd);
         Some((usd, if total > 0.0 { usd / total } else { 0.0 }))
     }
 
@@ -1822,19 +1827,29 @@ impl State {
     /// ledger, what was priced after it, and the agents' whole spend.
     pub fn cost_breakdown(&self) -> Option<CostBreakdown> {
         let include = self.tokens_include_agents;
-        let combined = self.cost.combined(self.agents.values());
-        let headline = if include {
-            combined
-        } else {
-            self.cost.current()
-        }?;
+        // The agents' calls are walked once for the part after the ledger
+        // and once for the whole; `combined` is derived, not recomputed.
         let agents_after = self.cost.agents_after(self.agents.values());
+        let current = self.cost.current();
+        let combined = match (current, agents_after) {
+            (Some(c), Some(a)) => Some(c.plus(a)),
+            (Some(c), None) => Some(c),
+            (None, a) => a,
+        };
+        let headline = if include { combined } else { current }?;
         let since = match (self.cost.since(), agents_after.filter(|_| include)) {
             (Some(m), Some(a)) => Some(m.plus(a)),
             (Some(m), None) => Some(m),
             (None, a) => a,
         };
-        let agents = self.agents_cost();
+        let agents = self.agents_share_of(combined);
+        let pricing = self.cost.pricing();
+        let unpriced_agent_tokens = self
+            .agents
+            .values()
+            .filter(|a| pricing.price(&a.model).is_none())
+            .map(|a| a.usage.total())
+            .sum();
         Some(CostBreakdown {
             headline,
             combined: combined.unwrap_or(headline),
@@ -1843,6 +1858,7 @@ impl State {
             agents: agents.map(|(usd, _)| Cost::priced(usd)),
             agents_share: agents.map(|(_, s)| s).unwrap_or(0.0),
             any_agents: self.agents_usage().total() > 0,
+            unpriced_agent_tokens,
         })
     }
 

@@ -245,8 +245,8 @@ test('agents on fixture C: the columns of the TUI agents view, waste with its re
   fits(lines, 80);
   // (354 828 tokens: the pane's formatTokens rounds to 355k where the
   // TUI's fmt::tokens truncates to 354k — a pre-existing difference.)
-  has(lines, /^✗ Explore\s+sonnet\s+2:32\s+355k\s+0\.18\s+41\s+0\.18 killed$/);
-  has(lines, /^✓ fork\s+sonnet\s+0:42\s+485k\s+0\.13\s+517\s+0\.00$/);
+  has(lines, /^✗ Explore\s+sonnet\s+1:21\s+355k\s+0\.18\s+41\s+0\.18 killed$/);
+  has(lines, /^✓ fork\s+sonnet\s+0:39\s+485k\s+0\.13\s+517\s+0\.00$/);
   assert.equal(lines.filter((r) => /^[✗✓◐] /.test(r)).length, 2);
   assert.deepEqual(frameTitles(rawRows('agents', model, 80)), ['6 Agents & MCP ─ 0/2 agents']);
   // The rows are sorted by spend, as the query returns them; the totals
@@ -256,7 +256,7 @@ test('agents on fixture C: the columns of the TUI agents view, waste with its re
   assert.ok(Math.abs(totals.waste.value - 0.18) < 0.005);
   const narrow = rows('agents', model, 50);
   fits(narrow, 50);
-  has(narrow, /^✗ Explore\s+2:32\s+355k\s+0\.18\s+0\.18 killed$/);
+  has(narrow, /^✗ Explore\s+1:21\s+355k\s+0\.18\s+0\.18 killed$/);
 });
 
 test('agents: MCP servers, restarts and background tasks', () => {

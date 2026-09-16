@@ -57,7 +57,12 @@ pub enum Entry {
 /// group row per run (its agents beneath it when expanded).
 pub fn entries(state: &State, ui: &AgentsUi) -> Vec<Entry> {
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
-    let groups = agent_ledger::workflow_groups(state, &rows);
+    entries_of(state, ui, &rows)
+}
+
+/// `entries` over rows already built (the render prices the agents once).
+fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow]) -> Vec<Entry> {
+    let groups = agent_ledger::workflow_groups(state, rows);
     let mut out: Vec<Entry> = rows
         .iter()
         .filter(|r| r.workflow.is_none())
@@ -142,19 +147,8 @@ fn elapsed(ms: Option<i64>) -> String {
     }
 }
 
-/// The model family: `opus`, `sonnet`, `haiku`, `fable`.
-fn family(model: &str) -> String {
-    model
-        .trim_start_matches("claude-")
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .to_string()
-}
-
 /// The text of one agent's row, cut to `WIDTH`.
-pub fn agent_line(r: &AgentRow, now_ms: i64) -> String {
-    let _ = now_ms;
+pub fn agent_line(r: &AgentRow) -> String {
     let glyph = match r.state {
         AgentState::Running => "◐",
         AgentState::Done => "✓",
@@ -195,7 +189,7 @@ pub fn agent_line(r: &AgentRow, now_ms: i64) -> String {
         &format!(
             " {glyph} {:<8} {:<6} {:>6} {:>5} {cost} {ret}  {waste}{inherited}",
             fmt::clip(&r.agent_type, 8),
-            fmt::clip(&family(&r.model), 6),
+            fmt::clip(&fmt::model_family(&r.model), 6),
             elapsed(r.elapsed_ms),
             fmt::tokens(r.tokens),
         ),
@@ -277,10 +271,9 @@ pub fn footer_lines(t: &agent_ledger::Totals) -> [String; 2] {
 
 pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let ui = &state.agents_ui;
-    let now = state.clock_ms();
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
     let totals = agent_ledger::totals(&rows);
-    let list = entries(state, ui);
+    let list = entries_of(state, ui, &rows);
     let dim = state.theme.dim();
     let block = Block::default().borders(Borders::ALL).title(format!(
         "{}  ↕{}{}  (s/S sort, j/k, Enter expand, Esc back) ",
@@ -306,7 +299,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     for (i, e) in list.iter().enumerate().skip(first).take(body.max(1)) {
         let mut line = match e {
             Entry::Agent { row, member } => {
-                let text = agent_line(row, now);
+                let text = agent_line(row);
                 let text = cut(if *member {
                     format!("  {}", text.trim_start())
                 } else {
@@ -515,6 +508,15 @@ mod tests {
                 cold,
                 i == 4, // the idle one keeps a call pending
             );
+            if i == 4 {
+                // Its tool answered, the next API call never came: idle.
+                a.push(
+                    &TLine::parse(
+                        r#"{"type":"user","timestamp":"2026-01-01T00:04:30Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"}]}}"#,
+                    )
+                    .unwrap(),
+                );
+            }
             if i >= 17 {
                 a.workflow = Some("wf_abc-123".into());
             }
