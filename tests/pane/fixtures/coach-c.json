@@ -1,0 +1,97 @@
+{
+  "agents": "agents 1 run · 26%",
+  "exposed": true,
+  "lights": [
+    {
+      "alt": "60k ▇▁▁▁▁▁▁▁▁▁ 6% · re-reads 60k/call",
+      "approx": true,
+      "figure": 6.0,
+      "glyph": "○",
+      "id": "context",
+      "level": "quiet",
+      "lines": [
+        "next 4c ≈$.15 · fresh ≈$.23",
+        "threshold 967k · 906k left · prefix 58k (97 %)"
+      ],
+      "number": "60k",
+      "source": "transcript",
+      "text": "60k ▇▁▁▁▁▁▁▁▁▁ 6% · ≈$.04/call",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": true,
+      "figure": 59.0,
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "lines": [
+        "hit ratio 98 % · misses 0",
+        "TTL 1h (observed)",
+        "re-write if cold 60k ≈$.38"
+      ],
+      "number": "59m",
+      "source": "transcript",
+      "text": "warm 59m (1h) ≈",
+      "unit": "m"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": 3.0,
+      "glyph": "◐",
+      "id": "rework",
+      "level": "watch",
+      "lines": [
+        "no check yet this session",
+        "fails: Other 2",
+        "rewind 0 checkpoints this turn"
+      ],
+      "number": "3",
+      "source": "transcript",
+      "text": "edits 3 ✓ none 6m",
+      "unit": ""
+    }
+  ],
+  "lines": {
+    "l0": "○60k ≈$.04 · ○cache 59m · ○5h — · ◐edits 3",
+    "l1": "○6% ○— ○59m ◐3",
+    "l2": "○○○◐"
+  },
+  "model": "claude-opus-5",
+  "next": null,
+  "next_row": "next     —",
+  "nudge": null,
+  "nudges_this_hour": 0,
+  "queued": 0,
+  "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
+  "recent": [],
+  "schema": 1,
+  "session": "session-c",
+  "session_mode": "machine",
+  "snoozed": [],
+  "snoozed_row": "snoozed  —",
+  "start_line": null,
+  "state": {
+    "kind": "COMMITTING",
+    "line": "COMMITTING",
+    "tokens": []
+  },
+  "suppressed": [],
+  "turn": 6
+}

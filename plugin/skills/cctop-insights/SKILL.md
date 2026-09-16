@@ -17,7 +17,7 @@ All commands accept `--session <id|name|pid>` (default: the session you are in, 
 | Which turns cost what | `cctop query ledger --last 20` |
 | Tool usage, slow/noisy tools, context pushed by results | `cctop query tools` |
 | Files touched, re-reads | `cctop query files` |
-| Subagents, MCP servers, background tasks | `cctop query agents` |
+| Subagents (cost, what came back, wasted spend and why), MCP servers, background tasks | `cctop query agents` |
 | What should I do now / next (the coach: four lights, the one nudge, what is next or snoozed) | `cctop query coach` |
 | Current ranked recommendations with evidence and explanation | `cctop query advice` |
 | What is in the fixed prefix (CLAUDE.md, tool schemas, MCP) | `cctop query prefix` |
@@ -54,6 +54,9 @@ If `cctop` is not on PATH, say so and give the install line (`brew install <tap>
 
 **"Will I hit the rate limit?"**
 `cctop query summary | jq .limits` → `five_hour`, `exhaustion_ms`, `other_live_sessions`; if `source` is `missing`, say the shim is not installed and offer `cctop install`. Give used %, reset time, projected exhaustion and whether other live sessions are contributing. If exhaustion is before reset, suggest moving exploration to a cheaper model or pausing heavy work.
+
+**"Which of my agents wasted money?"**
+`cctop query agents | jq '{totals, agents: [.agents[] | select(.waste != null) | {type, status: .status.value, cost: .cost.value, waste: .waste.usd.value, reason: .waste.reason}]}'`. `totals.waste_by_reason` splits the wasted dollars by `failed` (the notification, a workflow journal entry or the 60 s heuristic), `killed` (a TaskStop), `no_ret` (completed with nothing in its result) and `idle` (running, silent for five minutes, no tool pending); `cold_starts` and `returned_ratio` are costs of the design, not waste. Every agent dollar is priced (`≈`); `summary.cost_combined` is the session's whole spend with the agents in it, `summary.cost` the main transcript's alone.
 
 **"What does TOKENS→CTX mean?"**
 `cctop query explain tokens_to_ctx` and restate the definition and caveat in one sentence each.

@@ -1,0 +1,432 @@
+[
+  {
+    "at_ms": 1788375599965,
+    "kind": "tool",
+    "text": "Bash git log lorem.HEAD --oneline && echo --- && git diff lorem_.HEAD --stat ▶"
+  },
+  {
+    "at_ms": 1788375601970,
+    "kind": "tool",
+    "text": "Bash ✓ 259"
+  },
+  {
+    "at_ms": 1788375606654,
+    "kind": "tool",
+    "text": "Bash find l -path lorem_ipsum_do -prune -o -iname lorem_ipsum_dolor_sit_ -print lorem_ipsum_ echo ---; find l -path lorem_ipsum_do -prune -o -iname lorem_ipsum_dolor_sit_amet_conse -print 2>/dev/null ▶"
+  },
+  {
+    "at_ms": 1788375606986,
+    "kind": "tool",
+    "text": "Bash ✓ 90"
+  },
+  {
+    "at_ms": 1788375610342,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/26a31b… ▶"
+  },
+  {
+    "at_ms": 1788375610381,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/9bba5c… ▶"
+  },
+  {
+    "at_ms": 1788375610428,
+    "kind": "tool",
+    "text": "Read ✓ 500"
+  },
+  {
+    "at_ms": 1788375610432,
+    "kind": "tool",
+    "text": "Read ✓ 225"
+  },
+  {
+    "at_ms": 1788375621964,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 55ms"
+  },
+  {
+    "at_ms": 1788375621970,
+    "kind": "note",
+    "text": "turn done in 0:26"
+  },
+  {
+    "at_ms": 1788375838464,
+    "kind": "tool",
+    "text": "Agent lorem ipsum dolor sit amet co… ▶"
+  },
+  {
+    "at_ms": 1788375841527,
+    "kind": "tool",
+    "text": "Agent ✓ 266"
+  },
+  {
+    "at_ms": 1788375844855,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 63ms"
+  },
+  {
+    "at_ms": 1788375844860,
+    "kind": "note",
+    "text": "turn done in 0:22"
+  },
+  {
+    "at_ms": 1788375888992,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 50ms"
+  },
+  {
+    "at_ms": 1788375888995,
+    "kind": "note",
+    "text": "turn done in 1:06"
+  },
+  {
+    "at_ms": 1788375964185,
+    "kind": "tool",
+    "text": "Bash git log -1 lorem_ipsum_d lorem_ip echo ---; ls lorem_ | grep lorem_ipsum_dolor_sit_a ▶"
+  },
+  {
+    "at_ms": 1788375964461,
+    "kind": "tool",
+    "text": "Bash ✓ 373"
+  },
+  {
+    "at_ms": 1788375970872,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 51ms"
+  },
+  {
+    "at_ms": 1788375970878,
+    "kind": "note",
+    "text": "turn done in 0:09"
+  },
+  {
+    "at_ms": 1788376003531,
+    "kind": "tool",
+    "text": "Bash git status --short && echo --- && git log --oneline -5 && echo --- && git branch -vv && echo --- && git remote -v ▶"
+  },
+  {
+    "at_ms": 1788376003930,
+    "kind": "tool",
+    "text": "Bash ✓ 296"
+  },
+  {
+    "at_ms": 1788376013807,
+    "kind": "tool",
+    "text": "Bash gh pr list --head lorem_ipsum_dolor_sit_amet_c --state lor lorem echo ---; gh pr list --head lore --state lor 2>&1 | head -5 ▶"
+  },
+  {
+    "at_ms": 1788376017529,
+    "kind": "tool",
+    "text": "Bash ✓ 65"
+  },
+  {
+    "at_ms": 1788376024915,
+    "kind": "tool",
+    "text": "Bash gh pr view lo --json lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiu --jq lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do echo --- gh pr view lo --json lorem_ipsum_dol… ▶"
+  },
+  {
+    "at_ms": 1788376030524,
+    "kind": "tool",
+    "text": "Bash ✓ 182"
+  },
+  {
+    "at_ms": 1788376041238,
+    "kind": "tool",
+    "text": "Bash git diff lorem_ipsum_d.HEAD --stat ▶"
+  },
+  {
+    "at_ms": 1788376041498,
+    "kind": "tool",
+    "text": "Bash ✓ 192"
+  },
+  {
+    "at_ms": 1788376046476,
+    "kind": "tool",
+    "text": "Bash git show lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_d.md 2>&1 | head -3 echo --- git show lorem_i --stat | head -20 ▶"
+  },
+  {
+    "at_ms": 1788376046774,
+    "kind": "tool",
+    "text": "Bash ✓ 207"
+  },
+  {
+    "at_ms": 1788376057190,
+    "kind": "tool",
+    "text": "Bash git diff lore lorem_ipsum -- lorem_ipsum_dolor_sit_amet_consectetur_adipiscin.md lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit.md lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_d… ▶"
+  },
+  {
+    "at_ms": 1788376059478,
+    "kind": "tool",
+    "text": "Bash ✓ 1"
+  },
+  {
+    "at_ms": 1788376064506,
+    "kind": "tool",
+    "text": "Bash git diff lore lorem_ipsum --stat echo lorem_ip lorem_ipsum_dol git diff lore lorem_ipsum lorem_ipsum_d ▶"
+  },
+  {
+    "at_ms": 1788376064803,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1788376070923,
+    "kind": "tool",
+    "text": "Bash git log lorem_ipsum --oneline --all | grep -i lorem_ipsum_dolor_sit_amet_ lor lorem_ipsum | head -5 gh pr list --search lorem_ipsum_dolor_s --state lor 2>&1 | head -5 ▶"
+  },
+  {
+    "at_ms": 1788376074190,
+    "kind": "tool",
+    "text": "Bash ✓ 51"
+  },
+  {
+    "at_ms": 1788376083008,
+    "kind": "tool",
+    "text": "Bash git log --format='%h lor lor --date=iso -3 echo --- git log lorem_ipsum --oneline | grep -i lorem_ipsum_dolor lor lorem_ipsum git show lorem_ipsum -- lorem_ipsum_dolor_sit_amet_consectetur_adipiscing… ▶"
+  },
+  {
+    "at_ms": 1788376083457,
+    "kind": "tool",
+    "text": "Bash ✓ 114"
+  },
+  {
+    "at_ms": 1788376092352,
+    "kind": "tool",
+    "text": "Bash git log lorem_ipsum --oneline lorem_ipsum_dolor_si -- lorem_ipsum_dolor_sit_amet_co.md lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor.md lorem_ipsum_dolor_sit_amet_conse… ▶"
+  },
+  {
+    "at_ms": 1788376092657,
+    "kind": "tool",
+    "text": "Bash ✓ 18"
+  },
+  {
+    "at_ms": 1788376105926,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 65ms"
+  },
+  {
+    "at_ms": 1788376105932,
+    "kind": "note",
+    "text": "turn done in 1:46"
+  },
+  {
+    "at_ms": 1788376138810,
+    "kind": "tool",
+    "text": "Bash git checkout lore && git pull lorem_ lore --ff-only ▶"
+  },
+  {
+    "at_ms": 1788376143254,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1788376146881,
+    "kind": "note",
+    "text": "destructive git: git branch -d"
+  },
+  {
+    "at_ms": 1788376146881,
+    "kind": "tool",
+    "text": "Bash git branch -d lorem_ipsum_dolor_sit_amet_c && git push lorem_ --delete lorem_ipsum_dolor_sit_amet_c ▶"
+  },
+  {
+    "at_ms": 1788376151373,
+    "kind": "api",
+    "text": "Bash ✗ error"
+  },
+  {
+    "at_ms": 1788376155201,
+    "kind": "tool",
+    "text": "Bash git lorem_ips --heads lorem_ lorem_ipsum_dolor_sit_amet_co git branch -a | grep lorem_ipsum_dolor_sit_amet_c ▶"
+  },
+  {
+    "at_ms": 1788376166078,
+    "kind": "tool",
+    "text": "Bash ✓ 11"
+  },
+  {
+    "at_ms": 1788376169306,
+    "kind": "tool",
+    "text": "Bash git push lorem_ --delete lorem_ipsum_dolor_sit_amet_c 2>&1 ▶"
+  },
+  {
+    "at_ms": 1788376183800,
+    "kind": "api",
+    "text": "Bash ✗ error"
+  },
+  {
+    "at_ms": 1788376187872,
+    "kind": "tool",
+    "text": "Bash git lorem lorem_ --prune 2>&1 git lorem_ips --heads lorem_ lorem_ipsum_dolor_sit_amet_c echo --- git push lorem_ lorem_ipsum_dolor_sit_amet_consectetur_a 2>&1 ▶"
+  },
+  {
+    "at_ms": 1788376201645,
+    "kind": "tool",
+    "text": "Bash ✓ 151"
+  },
+  {
+    "at_ms": 1788376206225,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 54ms"
+  },
+  {
+    "at_ms": 1788376206230,
+    "kind": "note",
+    "text": "turn done in 1:10"
+  },
+  {
+    "at_ms": 1788376220902,
+    "kind": "tool",
+    "text": "Bash for l in lorem_ipsum_dolor_sit_amet_co lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_co do echo lore $l lorem git -C lore status --short --branc… ▶"
+  },
+  {
+    "at_ms": 1788376223588,
+    "kind": "tool",
+    "text": "Bash ✓ 203"
+  },
+  {
+    "at_ms": 1788376232805,
+    "kind": "tool",
+    "text": "Bash for l in lorem_ipsum_dolor_sit_amet_co lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_co do echo lore $l lorem git -C lore lorem --prune lorem do… ▶"
+  },
+  {
+    "at_ms": 1788376249427,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1788376255956,
+    "kind": "tool",
+    "text": "Bash for l in lorem_ipsum_dolor_sit_amet_co lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_co do echo lore $l lorem git -C lore status --short --branc… ▶"
+  },
+  {
+    "at_ms": 1788376263692,
+    "kind": "tool",
+    "text": "Bash ✓ 215"
+  },
+  {
+    "at_ms": 1788376271085,
+    "kind": "tool",
+    "text": "Bash git -C lorem_ipsum_dolor_sit_amet_co remote show lorem_ -n 2>&1 | grep lorem branch\" git -C lorem_ipsum_dolor_sit_amet_consectetur_adipiscing remote show lorem_ -n 2>&1 | grep lorem branch\" ▶"
+  },
+  {
+    "at_ms": 1788376277791,
+    "kind": "tool",
+    "text": "Bash ✓ 7"
+  },
+  {
+    "at_ms": 1788376281713,
+    "kind": "tool",
+    "text": "Bash git -C lorem_ipsum_dolor_sit_amet_co lorem_ipsum_ lorem_ipsum_dolor_sit_am 2>&1 git -C lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_ lorem_ipsum_dolor_sit_am 2>&1 ▶"
+  },
+  {
+    "at_ms": 1788376284075,
+    "kind": "tool",
+    "text": "Bash ✓ 12"
+  },
+  {
+    "at_ms": 1788376287476,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_co && git checkout lore && git pull --ff-only lorem_ lore ▶"
+  },
+  {
+    "at_ms": 1788376292054,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1788376295260,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing && git checkout lorem_ && git pull --ff-only lorem_ lorem_ ▶"
+  },
+  {
+    "at_ms": 1788376298763,
+    "kind": "tool",
+    "text": "Bash ✓ 376"
+  },
+  {
+    "at_ms": 1788376302422,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_a && git pull --ff-only lorem_ lore 2>&1 ▶"
+  },
+  {
+    "at_ms": 1788376306884,
+    "kind": "tool",
+    "text": "Bash ✓ 500"
+  },
+  {
+    "at_ms": 1788376310362,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_am.com && git diff --name-only lore lorem_ipsum_d ▶"
+  },
+  {
+    "at_ms": 1788376312692,
+    "kind": "tool",
+    "text": "Bash ✓ 2"
+  },
+  {
+    "at_ms": 1788376315650,
+    "kind": "tool",
+    "text": "Bash git pull --ff-only lorem_ lorem_ 2>&1 ▶"
+  },
+  {
+    "at_ms": 1788376319708,
+    "kind": "tool",
+    "text": "Bash ✓ 54"
+  },
+  {
+    "at_ms": 1788376327194,
+    "kind": "hook",
+    "text": "Stop hooks 1 ran, 52ms"
+  },
+  {
+    "at_ms": 1788376327201,
+    "kind": "note",
+    "text": "turn done in 1:50"
+  },
+  {
+    "at_ms": 1788376372201,
+    "kind": "tool",
+    "text": "Agent lorem ipsum dolor sit amet co… ▶"
+  },
+  {
+    "at_ms": 1788376372201,
+    "kind": "cost",
+    "text": "model sonnet-5 → opus-5"
+  },
+  {
+    "at_ms": 1788376373712,
+    "kind": "tool",
+    "text": "Agent ✓ 266"
+  },
+  {
+    "at_ms": 1788376454878,
+    "kind": "tool",
+    "text": "TaskStop lorem ipsum dolor ▶"
+  },
+  {
+    "at_ms": 1788376454891,
+    "kind": "tool",
+    "text": "TaskStop ✓ 49"
+  },
+  {
+    "at_ms": 1788376499951,
+    "kind": "tool",
+    "text": "Bash cat > lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lore lorem_i lorem_ipsum l lorem_ merge lo lor lorem lore lore lore lor … ▶"
+  },
+  {
+    "at_ms": 1788376499951,
+    "kind": "compact",
+    "text": "context 171k → 60k (≈ inferred)"
+  },
+  {
+    "at_ms": 1788376501832,
+    "kind": "tool",
+    "text": "Bash ✓ 72"
+  },
+  {
+    "at_ms": 1788376501832,
+    "kind": "api",
+    "text": "cost-state $1.17 · api 4:45 · retries 0:00"
+  }
+]
