@@ -110,8 +110,10 @@ class Component extends DCLogic {
         }
       ],
       clashes: [
-        { a: 'panel 2 · Tokens & Cost      cost  $0.000', b: 'row 2 · Tokens              ≈$22.5', note: "NOT a defect. Both call state.cost.current(), and fmt::usd prints three decimals only below $0.01 — one state cannot render both. Those two boxes are from different moments." },
-        { a: 'panel 4 · Turn        state idle · elapsed —', b: 'header + row 4         ● WORKING · silent 1:56', note: "Real, and arguably correct. The panel reads the turn; the header reads the phase classifier. A turn that ended while tools still run gives both answers. The bug is that nothing says which is which." }
+        { a: 'panel 2 · Tokens & Cost      cost  $0.000', b: 'row 2 · Tokens              ≈$22.5',
+          note: "Real, and the most valuable finding here. cost.rs:172 has two branches; $0.000 without ≈ needs the authoritative one, ≈$22.5 needs un-consumed estimates — and a cost-state line sets the first while clearing the second. Two readers at different points in one transcript. A 2250× gap, in src/metrics/, not in a renderer." },
+        { a: 'panel 4 · Turn        state idle · elapsed —', b: 'header + row 4         ● WORKING · silent 1:56',
+          note: "Also real, but arguably correct. The panel reads the turn; the header reads the phase classifier. A turn that ended while tools still run gives both answers honestly. What is wrong is that one label covers two questions." }
       ]
     };
   }
