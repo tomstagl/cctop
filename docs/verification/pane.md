@@ -7,9 +7,14 @@ Its module lives in `plugin/hooks/pane.tsx`.
 Two kinds of checks live here:
 
 - **Automated** checks run in CI and on every story (`npm run typecheck`,
-  `npm test`, `claude plugin validate --strict ./plugin`, `cargo test`). The
-  headless load check below is automated too, but it needs the `claude` CLI on
-  the machine, so it is run by hand and its result recorded.
+  `npm test`, `cargo test`). The headless load check below and everything
+  else that needs the `claude` CLI (`claude plugin validate --strict
+  ./plugin`, the contract surface against the installed Claude Code, the
+  version pins) run in CI's `contract` job — on every push and daily, against
+  the latest Claude Code release — through `scripts/check-contract.sh`
+  (`make check-contract` here). The job writes §A's result line to its step
+  summary; a person copies it into the `Last automated run:` line below when
+  recording a run by hand.
 - **Live** checks need a person at a real terminal (a docked pane at a given
   width, hotkeys, `/reload-plugins`, CPU, latency, `cctop split` in tmux or
   Apple Terminal). An agent never marks these as passed.
