@@ -3,7 +3,7 @@ source: src/ui/coach_view.rs
 expression: "render_to_string(&app, 56, 20)"
 ---
 ╭coach ─ session-b ─────────────────── opus-5 · turn 2 ╮
-│ IMPLEMENTING · 30c +8.4k · silent 7m                 │
+│ IMPLEMENTING · 30 calls · silent 7m · +8.4k ctx      │
 ├──────────────────────────────────────────────────────┤
 │ ◐ context  227k ▇▇▁▁▁▁▁▁▁▁ 23% · ≈$.13/call          │
 │ ○ cache    warm 59m (1h) ≈                           │

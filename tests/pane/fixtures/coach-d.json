@@ -62,15 +62,15 @@
         "fails: Other 3",
         "rewind 1 checkpoints this turn"
       ],
-      "number": "3",
+      "number": "3 unchecked",
       "source": "transcript",
       "text": "edits 3 ✓ none 17m",
-      "unit": ""
+      "unit": "unchecked"
     }
   ],
   "lines": {
     "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
-    "l1": "○14% ○— ○59m ◐3 ▸",
+    "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },
   "model": "claude-fable-5-1",
@@ -112,11 +112,12 @@
   "start_line": null,
   "state": {
     "kind": "DELEGATING",
-    "line": "DELEGATING · 2c +144 · silent 3:00 · ▸ steer window",
+    "line": "DELEGATING · 2 calls · silent 3:00 · ▸ steer window…",
     "tokens": [
-      "2c +144",
+      "2 calls",
       "silent 3:00",
-      "▸ steer window"
+      "▸ steer window",
+      "+144 ctx"
     ]
   },
   "suppressed": [],

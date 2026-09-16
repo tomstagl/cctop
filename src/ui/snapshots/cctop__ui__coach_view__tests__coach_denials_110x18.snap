@@ -3,7 +3,7 @@ source: src/ui/coach_view.rs
 expression: "render_to_string(&app, 110, 18)"
 ---
 ╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  NOW A45 · denial-streak
-│ PLANNING · 5c +490 · silent 13m · ▸ steer window     │  rm is denied by your rules
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · … │  rm is denied by your rules
 ├──────────────────────────────────────────────────────┤
 │ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │  evidence  NOW · fired at call 6 · +4 queued (n)
 │ ○ cache    warm 1h00 (1h) ≈                          │  retires   on turn end · since turn 5

@@ -134,6 +134,12 @@ impl Panel for Tokens {
             "in {}/min",
             fmt::tokens(rates.input_tokens_per_min as u64)
         )));
+        if breakdown.is_some() {
+            // Subscription plans have no per-token bill: the dollars on
+            // this line are the list price of the same calls (registry
+            // `cost`). Last, so a narrow panel clips the label, not a figure.
+            l6.push(Span::styled("  ·  API-equivalent", dim));
+        }
         lines.push(Line::from(l6));
 
         // Where the headline comes from, when agents or a team spent
@@ -383,6 +389,9 @@ mod tests {
         assert!(out.contains("≈ $10.0 ("), "{out}");
         assert!(out.contains("/h main)"), "{out}");
         assert!(out.contains("in ") && out.contains("/min"), "{out}");
+        // The dollars are list price, not a bill: said at the line's end.
+        let out80 = render_to_string(&app, 80, 51);
+        assert!(out80.contains("/min  ·  API-equivalent"), "{out80}");
         assert!(
             out.contains("ledger $9.90 · since ≈$0.13 · agents ≈$0.13 (1 %)"),
             "{out}"

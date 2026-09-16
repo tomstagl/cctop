@@ -15,9 +15,10 @@
     "phase": {
       "glyph": "●",
       "tokens": [
-        "2c +144",
+        "2 calls",
         "silent 3:00",
-        "▸ steer window"
+        "▸ steer window",
+        "+144 ctx"
       ],
       "word": "DELEGATING"
     },
@@ -28,7 +29,7 @@
   },
   "lines": {
     "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
-    "l1": "○14% ○— ○59m ◐3 ▸",
+    "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },
   "nudge": {
@@ -98,7 +99,7 @@
     {
       "detail": [
         {
-          "text": "≈$10.6",
+          "text": "≈$10.6 API-equivalent",
           "tone": "fg"
         },
         {
@@ -146,7 +147,7 @@
           "tone": "dim"
         },
         {
-          "text": "skill:ralph-skills…",
+          "text": "ski…",
           "tone": "dim"
         }
       ],
@@ -242,7 +243,7 @@
       "name": "Turn",
       "values": [
         {
-          "text": "DELEGATING · 2c +144 · silent 3:00 · ▸ steer window",
+          "text": "DELEGATING · 2 calls · silent 3:00 · ▸ steer window…",
           "tone": "accent"
         },
         {
@@ -568,7 +569,7 @@
       "source": "transcript",
       "sub1": "edits 3 ✓ none 17m",
       "sub2": "",
-      "unit": ""
+      "unit": "unchecked"
     }
   ]
 }

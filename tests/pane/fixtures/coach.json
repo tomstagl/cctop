@@ -62,15 +62,15 @@
         "fails: Other 4 · Denied 1",
         "rewind 1 checkpoints this turn"
       ],
-      "number": "1",
+      "number": "1 open",
       "source": "transcript",
       "text": "1 correction · edits 1 ✓ none 20m",
-      "unit": ""
+      "unit": "open"
     }
   ],
   "lines": {
     "l0": "◐396k ≈$.08 · ○cache 50m · ○5h — · ◐corrections 1 · ▸ queue: 'run make check, fix failures' or /goal",
-    "l1": "◐40% ○— ○50m ◐1 ▸",
+    "l1": "◐40% ○— ○50m ◐1 open ▸",
     "l2": "◐○○◐"
   },
   "model": "claude-sonnet-5",

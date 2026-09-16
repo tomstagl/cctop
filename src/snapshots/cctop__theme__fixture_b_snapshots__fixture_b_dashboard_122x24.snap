@@ -2,18 +2,18 @@
 source: src/theme.rs
 expression: "render_to_string(&app, w, h)"
 ---
- cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/pr…  ● COMMITTING · 4c +180 · silent 3:09 · ▸ steer …
-  ▄█ █ █   ○ context          █▀▀ █▀█   ○ cache                  ○ limits                ▄█   ● rework
-   █ ▀▀█   142k of 1.00M      ▀▀█ ▀▀█   warm · 59m (1h) T… ▀▀▀   no status line           █   1 · correction
-   ▀   ▀ % ≈$.03/call         ▀▀▀ ▀▀▀ m misses 0               %                          ▀   edits 3 ✓ none 9h00
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/pr…  ● COMMITTING · 4 calls · silent 3:09 · ▸ steer …
+  ▄█ █ █   ○ context          █▀▀ █▀█   ○ cache                  ○ limits                ▄█      ● rework
+   █ ▀▀█   142k of 1.00M      ▀▀█ ▀▀█   warm · 59m (1h) T… ▀▀▀   no status line           █      1 · correction
+   ▀   ▀ % ≈$.03/call         ▀▀▀ ▀▀▀ m misses 0               %                          ▀ open edits 3 ✓ none 9h00
  ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run builds and test suites longer than a …  LATER · turn 6
  1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 · results ≈180 · thinking 355 · harness ≈7…
              +146k/turn · autocompact 567k · 425k left · compactions 1 · since clear 23:29 · re-reads 0
  2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
-             $18.7 · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · skill:admit 1 %
+             $18.7 API-equivalent · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · skill:admit 1 %
  3 Limits    no status line · weight ×3 (sonnet) · long_context 89 %
              89% of your usage was at >150k context
- 4 Turn      COMMITTING · 4c +180 · silent 3:09 · ▸ steer window · api ≈3:48 · tools 8h 35m
+ 4 Turn      COMMITTING · 4 calls · silent 3:09 · ▸ steer window… · api ≈3:48 · tools 8h 35m
              turn elapsed 8h 40m · 4 api calls · 4 tool calls
  5 Tools     140 calls · 6 err · explore 39 (3 ✗) · commit 8 · test 8 · Read 30 · Edit 29 · AskUserQuestion 1 · top ctx R…
              Denied 4 · Other 2

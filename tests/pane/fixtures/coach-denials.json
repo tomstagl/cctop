@@ -62,15 +62,15 @@
         "fails: Denied 4 · Other 2",
         "rewind 1 checkpoints this turn"
       ],
-      "number": "4",
+      "number": "4 open",
       "source": "transcript",
       "text": "4 blocked · edits 3 ✓ none 18m",
-      "unit": ""
+      "unit": "open"
     }
   ],
   "lines": {
     "l0": "◐720k ≈$.37 · ○cache 1h00 · ○5h — · ●blocked 4 · ▸ tell Claude the alternative — it cannot run this",
-    "l1": "◐72% ○— ○1h00 ●4 ▸",
+    "l1": "◐72% ○— ○1h00 ●4 open ▸",
     "l2": "◐○○●"
   },
   "model": "claude-opus-5",
@@ -112,11 +112,12 @@
   "start_line": null,
   "state": {
     "kind": "PLANNING",
-    "line": "PLANNING · 5c +490 · silent 13m · ▸ steer window",
+    "line": "PLANNING · 5 calls · silent 13m · ▸ steer window · …",
     "tokens": [
-      "5c +490",
+      "5 calls",
       "silent 13m",
-      "▸ steer window"
+      "▸ steer window",
+      "+490 ctx"
     ]
   },
   "suppressed": [],

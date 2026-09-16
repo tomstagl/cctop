@@ -3,7 +3,7 @@ source: src/ui/coach_view.rs
 expression: "render_to_string(&app, 40, 14)"
 ---
 ╭coach ── opus-5 · turn 5 ─────────────╮
-│ PLANNING · 5c +490 · silent 13m · ▸… │
+│ PLANNING · 5 calls · silent 13m · ▸… │
 │ ◐ ctx 720k ≈$.37  ○ cache 1h00       │
 │ ○ 5h —            ● blocked 4 ✓no    │
 ├──────────────────────────────────────┤

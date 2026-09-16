@@ -62,15 +62,15 @@
         "fails: Other 1",
         "rewind 1 checkpoints this turn"
       ],
-      "number": "1",
+      "number": "1 unchecked",
       "source": "transcript",
       "text": "edits 1 ✓ none 5m",
-      "unit": ""
+      "unit": "unchecked"
     }
   ],
   "lines": {
     "l0": "◐193k ≈$.11 · ○cache 59m · ○5h — · ◐edits 1",
-    "l1": "◐19% ○— ○59m ◐1",
+    "l1": "◐19% ○— ○59m ◐1 unchecked",
     "l2": "◐○○◐"
   },
   "model": "claude-opus-5",
@@ -89,10 +89,11 @@
   "start_line": null,
   "state": {
     "kind": "EXPLORING",
-    "line": "EXPLORING · 14c +6.3k · silent 4:32",
+    "line": "EXPLORING · 14 calls · silent 4:32 · +6.3k ctx",
     "tokens": [
-      "14c +6.3k",
-      "silent 4:32"
+      "14 calls",
+      "silent 4:32",
+      "+6.3k ctx"
     ]
   },
   "suppressed": [

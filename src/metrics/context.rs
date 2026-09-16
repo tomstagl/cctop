@@ -42,8 +42,10 @@ pub struct ContextView {
     pub prefix: u64,
     /// Per-turn context sizes for turns that made an API call, oldest first.
     pub history: Vec<u64>,
-    /// EMA of Δsize per turn (compaction turns excluded).
-    pub velocity: f64,
+    /// EMA of Δsize per turn (compaction turns excluded); `None` until two
+    /// turns have made a call — one delta — so the first turn says `—`,
+    /// not `+0/turn` (PRD dashboard-v2 FR-11).
+    pub velocity: Option<f64>,
     pub compactions: Vec<Compaction>,
     /// The compactions come from the ≥ 30 % drop heuristic (transcripts
     /// before 2.1.263), not from `compact_boundary` lines.
@@ -73,10 +75,8 @@ impl ContextView {
 
     /// Turns until autocompact at the current velocity; `None` when not filling.
     pub fn turns_until_compaction(&self) -> Option<f64> {
-        if self.velocity <= 0.0 {
-            return None;
-        }
-        Some((self.threshold as f64 - self.size as f64).max(0.0) / self.velocity)
+        let velocity = self.velocity.filter(|v| *v > 0.0)?;
+        Some((self.threshold as f64 - self.size as f64).max(0.0) / velocity)
     }
 }
 
@@ -120,8 +120,7 @@ pub fn view(
     } else {
         Vec::new()
     };
-    let mut velocity = 0.0;
-    let mut have_velocity = false;
+    let mut velocity: Option<f64> = None;
     for i in 1..history.len() {
         let (prev, cur) = (history[i - 1], history[i]);
         let dropped = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
@@ -138,12 +137,10 @@ pub fn view(
             continue;
         }
         let delta = cur as f64 - prev as f64;
-        if have_velocity {
-            velocity = EMA_ALPHA * delta + (1.0 - EMA_ALPHA) * velocity;
-        } else {
-            velocity = delta;
-            have_velocity = true;
-        }
+        velocity = Some(match velocity {
+            Some(v) => EMA_ALPHA * delta + (1.0 - EMA_ALPHA) * v,
+            None => delta,
+        });
     }
     let observed = learned_threshold.or_else(|| compactions.iter().map(|c| c.before).max());
     let threshold = observed.unwrap_or_else(|| autocompact::threshold(window));
@@ -192,7 +189,7 @@ mod tests {
         assert_eq!(v.history[0], 78_509);
         assert!(v.compactions.is_empty());
         assert!(v.compactions_heuristic, "2.1.247 predates compact_boundary");
-        assert!(v.velocity > 0.0);
+        assert!(v.velocity.unwrap() > 0.0);
         assert_eq!(v.threshold, 967_000, "effective window − 13 000");
         assert!(!v.threshold_learned);
         let n = v.turns_until_compaction().unwrap();
@@ -274,8 +271,8 @@ mod tests {
         assert!(v.threshold_learned);
         // Velocity ignores the compaction step: deltas 50k, 50k, 30k.
         assert!(
-            v.velocity > 30_000.0 && v.velocity < 50_000.0,
-            "{}",
+            v.velocity.unwrap() > 30_000.0 && v.velocity.unwrap() < 50_000.0,
+            "{:?}",
             v.velocity
         );
         assert_eq!(v.size, 90_000);
@@ -301,10 +298,17 @@ mod tests {
 
     #[test]
     fn no_velocity_when_shrinking_or_single_turn() {
+        // One turn, one call: no delta yet — `None`, never a computed zero.
         let mut a = Aggregate::default();
         a.push(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"x","model":"m","content":[],"usage":{"input_tokens":10}}}"#).unwrap());
         let v = view(&a, None, None, None);
-        assert_eq!(v.velocity, 0.0);
+        assert_eq!(v.velocity, None);
+        assert_eq!(v.turns_until_compaction(), None);
+        // Two turns, the second smaller: a sample, and it says shrinking.
+        a.push(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:02Z","promptSource":"typed","message":{"role":"user","content":"more"}}"#).unwrap());
+        a.push(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"y","model":"m","content":[],"usage":{"input_tokens":8}}}"#).unwrap());
+        let v = view(&a, None, None, None);
+        assert_eq!(v.velocity, Some(-2.0));
         assert_eq!(v.turns_until_compaction(), None);
     }
 }
