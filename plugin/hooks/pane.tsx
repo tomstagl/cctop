@@ -101,7 +101,7 @@ function invalidateAt($: EngineInterface, now: number): void {
 // round trip since Claude Code 2.1.271 (issue #3), so this resolves once the
 // request is made.
 function invalidateNow($: EngineInterface): Promise<void> {
-  return $.clock.now().then((now) => invalidateAt($, now));
+  return clockNow($).then((now) => invalidateAt($, now));
 }
 
 // Arms (or re-arms) the hidden watch: if the engine asks for no tree within
@@ -190,7 +190,7 @@ async function requestRender($: EngineInterface): Promise<void> {
   if (renderTimer !== null || renderPending) return;
   renderPending = true;
   try {
-    const now = await $.clock.now();
+    const now = await clockNow($);
     const waited = invalidatedAt === null ? RENDER_MIN_MS : now - invalidatedAt;
     if (waited >= RENDER_MIN_MS) {
       invalidateAt($, now);
@@ -290,11 +290,79 @@ function apply($: EngineInterface, action: Action): void {
   replaceModel($, reduce(model, action));
 }
 
+// Every clock reading of the module: the host's when it resolves a number,
+// else the environment's own `Date.now()`. A contract change in the clock
+// (2.1.271 made it resolve a Promise; issue #3) then costs the session its
+// engine timestamps, not every hook: the self-check names it once.
+function clockNow($: EngineInterface): Promise<number> {
+  return $.clock.now().then(
+    (at) => (typeof at === 'number' && Number.isFinite(at) ? at : Date.now()),
+    () => Date.now(),
+  );
+}
+
+// What session.start found of the `$` surfaces the module cannot do without:
+// the clock resolves a number, HOME is set (the marker's path), the session
+// has an id. Never throws; `now` is the clock's answer or the fallback.
+type SelfCheck = { now: number; problems: string[] };
+
+const describe = (value: unknown): string => (value === null ? 'null' : typeof value);
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+async function selfCheck($: EngineInterface): Promise<SelfCheck> {
+  const problems: string[] = [];
+  let now = Date.now();
+  try {
+    const at = await $.clock.now();
+    if (typeof at === 'number' && Number.isFinite(at)) now = at;
+    else problems.push(`$.clock.now() resolved ${describe(at)}, not a number`);
+  } catch (err) {
+    problems.push(`$.clock.now() failed: ${message(err)}`);
+  }
+  try {
+    const home = await $.env.get('HOME');
+    if (typeof home !== 'string' || home === '') problems.push('$.env.get("HOME") is unset: no marker can be written');
+  } catch (err) {
+    problems.push(`$.env.get("HOME") failed: ${message(err)}`);
+  }
+  try {
+    const id = await $.session.id();
+    if (typeof id !== 'string' || id === '') problems.push(`$.session.id() answered ${describe(id)}, not a string`);
+  } catch (err) {
+    problems.push(`$.session.id() failed: ${message(err)}`);
+  }
+  return { now, problems };
+}
+
+// The one line the debug log gets at session.start: the module, the
+// contract it was built against and what the self-check found, so a
+// contract change reads as a cause (`cctop pane status` relays the marker's
+// `selfCheck`), not as a failure per hook.
+export function selfCheckLine(version: string | null, check: SelfCheck): string {
+  const who = `cctop: plugin ${version ?? '?'} (hooks contract ${TESTED_WITH}) loaded`;
+  if (check.problems.length === 0) return `${who}; self-check ok`;
+  return (
+    `${who}; self-check failed: ${check.problems.join('; ')} — ` +
+    `the Claude Code running this is newer than ${TESTED_WITH} and changed the contract, or the environment is unusual; ` +
+    'update the plugin (claude plugin marketplace update cctop && claude plugin update cctop@cctop) or report it with `claude --version`'
+  );
+}
+
+// After session.start's `next(e)`: the manifest first, so the line and the
+// marker name the version (a `-p` run used to write `version: null` — the
+// read lost the race), then the line, then the marker through noteSession.
+function announce($: EngineInterface, check: SelfCheck): Promise<void> {
+  return readVersion($).then(() => {
+    $.ui.log(selfCheckLine(model.version, check));
+    noteSession($);
+  });
+}
+
 // The slice of `$` the poller runs on: the validator follows `$` only into
 // functions declared in this file, so the calls are spelled here.
 function pollerEngine($: EngineInterface): PollerEngine {
   return {
-    clock: { now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn) },
+    clock: { now: () => clockNow($), every: (ms, fn) => $.clock.every(ms, fn) },
     process: { run: (argv, init) => $.process.run(argv, init) },
     session: { id: () => $.session.id() },
     fs: { write: (path, text) => $.fs.write(path, text) },
@@ -331,8 +399,8 @@ function detectBinary($: EngineInterface): Promise<void> {
 
 // The plugin's version for the marker file, from plugin.json under
 // `$.plugin.root`; stays null when the manifest cannot be read.
-function readVersion($: EngineInterface): void {
-  $.fs
+function readVersion($: EngineInterface): Promise<void> {
+  return $.fs
     .read(`${$.plugin.root}/${MANIFEST}`)
     .then((text) => {
       const version = (JSON.parse(text) as { version?: unknown }).version;
@@ -388,7 +456,7 @@ function followSession($: EngineInterface): void {
 }
 
 function readUsage($: EngineInterface): void {
-  Promise.all([$.session.usage(), $.clock.now()])
+  Promise.all([$.session.usage(), clockNow($)])
     .then(([usage, at]) => apply($, { type: 'usage', usage, at }))
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
 }
@@ -434,7 +502,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   await $.ui.open({ id: PANE_ID, title: 'cctop' });
   const opened = model.open;
   const label = view === undefined ? undefined : VIEWS.find((v) => v.view === view)?.label;
-  const openedAt = opened ? model.openedAt : await $.clock.now();
+  const openedAt = opened ? model.openedAt : await clockNow($);
   model = {
     ...model,
     open: true,
@@ -617,8 +685,10 @@ export const register: Register = (on) => {
   // Every hook below reads the clock through the host (one round trip, the
   // cost of the hook's own dispatch again) before its `next(e)`: the
   // timestamps are the engine's, so the pane and the marker agree with it.
+  // session.start checks the surfaces first and says once what it found.
   on('session.start', async ($, e, next) => {
-    apply($, { type: 'session.start', at: await $.clock.now() });
+    const check = await selfCheck($);
+    apply($, { type: 'session.start', at: check.now, selfCheck: check.problems.length === 0 ? 'ok' : check.problems.join('; ') });
     poller = makePoller($);
     await $.command.register({
       name: COMMAND,
@@ -627,9 +697,8 @@ export const register: Register = (on) => {
       immediate: true,
     });
     const result = await next(e);
+    void announce($, check);
     readModelName($);
-    readVersion($);
-    noteSession($);
     void detectBinary($).then(() => restorePane($, e.isInteractive));
     return result;
   }).catch(($, e, next) => {
@@ -640,7 +709,7 @@ export const register: Register = (on) => {
   // While the pane is closed the turn and tool hooks keep the books and
   // follow the session id, nothing else: no timer, no poll, no usage read.
   on('turn.start', async ($, e, next) => {
-    apply($, { type: 'turn.start', at: await $.clock.now() });
+    apply($, { type: 'turn.start', at: await clockNow($) });
     if (model.open) startUsageTimer($);
     poller?.reschedule();
     followSession($);
@@ -651,7 +720,7 @@ export const register: Register = (on) => {
   });
 
   on('turn.complete', async ($, e, next) => {
-    apply($, { type: 'turn.complete', at: await $.clock.now(), durationMs: e.durationMs, reason: e.reason });
+    apply($, { type: 'turn.complete', at: await clockNow($), durationMs: e.durationMs, reason: e.reason });
     stopUsageTimer();
     poller?.reschedule();
     const result = await next(e);
@@ -674,7 +743,7 @@ export const register: Register = (on) => {
   // `isError` and text length after. The result itself passes through
   // untouched; a call that throws beneath us is recorded as an error.
   on('tool.call', async ($, e, next) => {
-    const startedAt = await $.clock.now();
+    const startedAt = await clockNow($);
     apply($, { type: 'tool.start', name: e.tool, at: startedAt });
     let result: ToolCallResult | undefined;
     try {
@@ -685,7 +754,7 @@ export const register: Register = (on) => {
         type: 'tool.end',
         name: e.tool,
         startedAt,
-        at: await $.clock.now(),
+        at: await clockNow($),
         isError: result === undefined || result.isError === true,
         resultChars: result?.text?.length ?? 0,
       });
@@ -753,7 +822,7 @@ export const register: Register = (on) => {
   // The clock is read once per render, before the tree: the frame's time.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE_ID) return next(e);
-    const now = await $.clock.now();
+    const now = await clockNow($);
     noteRender($, e, now);
     const { Box, Text } = $.ui.resolve(e);
     try {
