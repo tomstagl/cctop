@@ -81,9 +81,23 @@ impl Panel for Context {
             Band::Warn => state.theme.warn(),
             Band::Blocked => state.theme.crit(),
         };
-        let fg = ratatui::style::Style::default().fg(state.theme.fg);
-        let parts: Vec<(u64, ratatui::style::Style)> =
-            anatomy.slices().iter().map(|(_, t)| (*t, fg)).collect();
+        // The slices in order of agency, coloured by the theme's series
+        // ramp (PRD dashboard-v2 §5): the fixed part (prefix, harness) on
+        // step 0, the transient part (thinking, dropped at the next
+        // boundary) on step 1, the part the person can move (inputs,
+        // results, prose) on step 2; what no slice claims is step 0. The
+        // status palette is for thresholds and says nothing here.
+        let series = state.theme.series(3);
+        let step = |i: usize| ratatui::style::Style::default().fg(series[i]);
+        let parts: Vec<(u64, ratatui::style::Style)> = vec![
+            (anatomy.prefix, step(0)),
+            (anatomy.harness, step(0)),
+            (anatomy.thinking, step(1)),
+            (anatomy.tool_inputs, step(2)),
+            (anatomy.tool_results, step(2)),
+            (anatomy.prose, step(2)),
+            (anatomy.unattributed, step(0)),
+        ];
         let mut g = vec![Span::raw(" ")];
         g.extend(stacked_bar(&state.theme, &parts, v.window, width));
 
@@ -96,12 +110,12 @@ impl Panel for Context {
             ),
             Span::styled(
                 format!(
-                    "   prefix {} · inputs {approx}{} · results {approx}{} · thinking {} · harness {approx}{} · prose {approx}{}",
+                    "   prefix {} · harness {approx}{} · thinking {} · inputs {approx}{} · results {approx}{} · prose {approx}{}",
                     fmt::tokens(anatomy.prefix),
+                    fmt::tokens(anatomy.harness),
+                    fmt::tokens(anatomy.thinking),
                     fmt::tokens(anatomy.tool_inputs),
                     fmt::tokens(anatomy.tool_results),
-                    fmt::tokens(anatomy.thinking),
-                    fmt::tokens(anatomy.harness),
                     fmt::tokens(anatomy.prose),
                 ),
                 dim,
@@ -226,11 +240,48 @@ mod tests {
         let out = render_to_string(&app, 60, 51);
         assert!(out.contains("1 Context ─ 40 % est"), "{out}");
         assert!(out.contains("396k / 1.00M est"), "{out}");
-        assert!(out.contains("prefix 60k · inputs ≈"), "{out}");
+        assert!(out.contains("prefix 60k · harness ≈"), "{out}");
         assert!(out.contains("59% until auto-compact"), "{out}");
         assert!(out.contains("harness ≈"), "{out}");
         assert!(out.contains("/turn → autocompact in ~"), "{out}");
         assert!(out.contains("compactions 0"), "{out}");
+    }
+
+    /// The bar's cells carry only the theme's series ramp (PRD dashboard-v2
+    /// US-105): the buffer, not the text — `dashboard_ascii` has no colour
+    /// to check. Panel 1's bar is the second row of the frame.
+    #[test]
+    fn the_bar_uses_only_the_series_ramp() {
+        use ratatui::backend::TestBackend;
+        use ratatui::style::Color;
+        use ratatui::Terminal;
+        let mut app = fixture_app();
+        app.state.open = Some(1);
+        app.set_theme("default-dark");
+        let mut term = Terminal::new(TestBackend::new(80, 30)).unwrap();
+        term.draw(|f| app.draw(f)).unwrap();
+        let buf = term.backend().buffer();
+        let series = app.state.theme.series(3);
+        let empty = app.state.theme.dim;
+        let mut filled = std::collections::BTreeSet::new();
+        for x in 2..78u16 {
+            let cell = &buf[(x, 1)];
+            let fg = cell.fg;
+            match cell.symbol() {
+                "▇" | "▆" => {
+                    assert!(series.contains(&fg), "cell {x}: {fg:?} not in {series:?}");
+                    filled.insert(format!("{fg:?}"));
+                }
+                "▁" => assert_eq!(fg, empty, "cell {x}"),
+                other => panic!("cell {x}: {other:?} is not a bar glyph"),
+            }
+        }
+        assert!(
+            filled.len() >= 2,
+            "fixture A's bar spans more than one step: {filled:?}"
+        );
+        assert!(!series.contains(&app.state.theme.ok) && !series.contains(&app.state.theme.crit));
+        assert_eq!(series[0], Color::Rgb(0x51, 0x6A, 0x69));
     }
 
     #[test]
