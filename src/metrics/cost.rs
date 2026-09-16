@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::agents::Agent;
-use crate::transcript::{CacheTtl, CostState, Line};
+use crate::transcript::{CacheTtl, CostState, Line, ModelUsage};
 
 use super::usage::{Aggregate, Usage};
 
@@ -166,13 +166,63 @@ impl Cost {
     }
 }
 
+/// Claude Code's own accounting for one transcript: the latest `cost-state`
+/// of every process that wrote one, keyed by its `startTime`. A `--resume`
+/// beside the live session or a bridge appends a second process's running
+/// total to the same file, so the last line alone can be a fraction of the
+/// session — or `$0`, from a process that did nothing
+/// (`harness_facts::cost_state::PER_PROCESS`).
+#[derive(Debug, Clone, Default)]
+pub struct Ledger {
+    by_process: BTreeMap<Option<i64>, CostState>,
+}
+
+impl Ledger {
+    pub fn push(&mut self, c: &CostState) {
+        self.by_process.insert(c.start_time, c.clone());
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_process.is_empty()
+    }
+
+    /// Processes that wrote a ledger.
+    pub fn processes(&self) -> usize {
+        self.by_process.len()
+    }
+
+    /// `totalCostUSD` summed over the processes.
+    pub fn total_usd(&self) -> f64 {
+        self.by_process.values().map(|c| c.total_cost_usd).sum()
+    }
+
+    /// `None` without a ledger.
+    pub fn usd(&self) -> Option<f64> {
+        (!self.is_empty()).then(|| self.total_usd())
+    }
+
+    /// Every process's `modelUsage`, in process order.
+    pub fn model_usage(&self) -> impl Iterator<Item = (&String, &ModelUsage)> {
+        self.by_process.values().flat_map(|c| c.model_usage.iter())
+    }
+}
+
+/// A ledger below this share of what the transcript's own lines are worth
+/// is missing a process (its ledger is still to come) and must not present
+/// a confident figure: the priced estimate stands in, marked `≈`. Fixture
+/// A's estimate is within 5 % of its ledger; the real gaps were 4× and ∞.
+const LEDGER_COVERS: f64 = 1.10;
+
 /// Running cost over a transcript: authoritative up to the last `cost-state`,
 /// estimated after it.
 #[derive(Debug, Clone, Default)]
 pub struct CostTracker {
     pricing: Pricing,
-    /// Latest `cost-state` seen.
+    /// Latest `cost-state` line seen — one process's counters (retries,
+    /// durations). The money is in `ledger`.
     pub authoritative: Option<CostState>,
+    /// The latest `cost-state` per process.
+    pub ledger: Ledger,
     /// The ledger's moment: the last line timestamp seen before the latest
     /// `cost-state` (the line itself carries none; it is written at session
     /// end or on a bridge, 1–5 lines after the last timestamped one).
@@ -185,6 +235,11 @@ pub struct CostTracker {
     seen: std::collections::HashSet<String>,
     /// True if any model since the last cost-state has no price.
     unknown_model: bool,
+    /// Usage (per model) of every response in the transcript, never
+    /// cleared: what the lines are worth, the floor under any ledger.
+    all: BTreeMap<String, Usage>,
+    /// Ids counted in `all`.
+    all_seen: std::collections::HashSet<String>,
 }
 
 impl CostTracker {
@@ -213,16 +268,20 @@ impl CostTracker {
         match line {
             Line::CostState(c) => {
                 self.authoritative = Some(c.clone());
+                self.ledger.push(c);
                 self.authoritative_at_ms = self.last_line_at_ms;
                 self.since.clear();
                 self.seen.clear();
                 self.unknown_model = false;
             }
             Line::Assistant(a) => {
+                let u = Usage::from_api(&a.message.usage);
+                if self.all_seen.insert(a.message.id.clone()) {
+                    self.all.entry(a.message.model.clone()).or_default().add(&u);
+                }
                 if !self.seen.insert(a.message.id.clone()) {
                     return;
                 }
-                let u = Usage::from_api(&a.message.usage);
                 self.since
                     .entry(a.message.model.clone())
                     .or_default()
@@ -243,15 +302,35 @@ impl CostTracker {
             .sum()
     }
 
-    /// Best current figure for the main transcript: the ledger plus what
-    /// came after it. `None` when there is no cost-state and no priceable
-    /// model at all.
+    /// Priced estimate of the whole transcript, ledger or not.
+    fn all_usd(&self) -> f64 {
+        self.all
+            .iter()
+            .filter_map(|(m, u)| self.pricing.estimate(u, m))
+            .sum()
+    }
+
+    /// Best current figure for the main transcript: every process's ledger
+    /// plus what came after the last one. A ledger that covers less than
+    /// the transcript's own lines are worth (`LEDGER_COVERS`) is another
+    /// process's, and the estimate stands in until this one's arrives —
+    /// two readers of one file never disagree by a process. `None` when
+    /// there is no cost-state and no priceable model at all.
     pub fn current(&self) -> Option<Cost> {
         let since = self.since_usd();
         let any_since = self.since.values().any(|u| u.total() > 0);
-        match &self.authoritative {
-            Some(c) if any_since => Some(Cost::ledger(c.total_cost_usd).plus(Cost::priced(since))),
-            Some(c) => Some(Cost::ledger(c.total_cost_usd)),
+        match self.ledger.usd() {
+            Some(ledgered) => {
+                let mut c = Cost::ledger(ledgered);
+                if any_since {
+                    c = c.plus(Cost::priced(since));
+                }
+                let all = self.all_usd();
+                if all > c.usd * LEDGER_COVERS {
+                    return Some(Cost::priced(all));
+                }
+                Some(c)
+            }
             None if any_since && !self.unknown_model => Some(Cost::priced(since)),
             None if any_since => Some(Cost::priced(since)).filter(|c| c.usd > 0.0),
             None => None,
@@ -308,13 +387,11 @@ impl CostTracker {
             .reduce(Cost::plus)
     }
 
-    /// Per-model breakdown: authoritative `modelUsage` cost plus estimates.
+    /// Per-model breakdown: every process's `modelUsage` cost plus estimates.
     pub fn by_model(&self) -> BTreeMap<String, f64> {
         let mut out = BTreeMap::new();
-        if let Some(c) = &self.authoritative {
-            for (m, mu) in &c.model_usage {
-                *out.entry(m.clone()).or_insert(0.0) += mu.cost_usd;
-            }
+        for (m, mu) in self.ledger.model_usage() {
+            *out.entry(m.clone()).or_insert(0.0) += mu.cost_usd;
         }
         for (m, u) in &self.since {
             if let Some(e) = self.pricing.estimate(u, m) {
@@ -746,6 +823,101 @@ mod tests {
         assert!((all.usd - (end.usd + fork_usd)).abs() < 1e-9);
         assert_eq!(all.source, Source::Mixed);
         assert!(all.approx);
+    }
+
+    /// A main-transcript response of `out` output tokens on `model`.
+    fn response(i: usize, model: &str, out: u64) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"2026-09-14T09:{:02}:00.000Z","message":{{"id":"m{i}","model":"{model}","content":[{{"type":"text","text":"x"}}],"usage":{{"output_tokens":{out}}}}}}}"#,
+            i % 60
+        ))
+        .unwrap()
+    }
+
+    /// One process's `cost-state`: its own running total, its `startTime`.
+    fn cost_state(start_time: i64, usd: f64) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"cost-state","totalCostUSD":{usd},"startTime":{start_time},"modelUsage":{{}}}}"#
+        ))
+        .unwrap()
+    }
+
+    /// `current().usd` of a reader that stopped after each line.
+    fn readers(lines: &[Line]) -> Vec<Option<Cost>> {
+        let mut t = CostTracker::new(Pricing::bundled());
+        lines
+            .iter()
+            .map(|l| {
+                t.push(l);
+                t.current()
+            })
+            .collect()
+    }
+
+    /// PRD dashboard-v2 §3.2, as the corpus shows it (`harness_facts::
+    /// cost_state::PER_PROCESS`): two processes append to one transcript
+    /// and each writes its own ledger. Session `ab339470` on this machine
+    /// ends on a $7.15 ledger after a $29.04 one — a reader past the last
+    /// line said $7, a reader one line earlier said $29. The ledgers are
+    /// summed, and no reader over the file reports less than an earlier one.
+    #[test]
+    fn two_processes_ledgers_are_summed_not_replaced() {
+        let model = "claude-opus-5";
+        let out = 20_000;
+        let per_call = out as f64 * output_price(model);
+        let mut lines: Vec<Line> = (0..8).map(|i| response(i, model, out)).collect();
+        // Process A's ledger covers six of the eight calls; B's the other two.
+        lines.push(cost_state(1, 6.0 * per_call));
+        lines.push(cost_state(2, 2.0 * per_call));
+        let seen = readers(&lines);
+
+        // After A's ledger the file holds calls A never billed: the figure
+        // stays the estimate of all eight, marked, not A's six confident.
+        let after_a = seen[8].unwrap();
+        assert!(after_a.approx);
+        assert!((after_a.usd - 8.0 * per_call).abs() < 1e-9);
+        // After B's ledger both are in: the sum, exact.
+        let after_b = seen[9].unwrap();
+        assert!(!after_b.approx);
+        assert_eq!(after_b.source, Source::Ledger);
+        assert!((after_b.usd - 8.0 * per_call).abs() < 1e-9);
+        // No reader reports less than the reader one line before it.
+        for w in seen.windows(2) {
+            let (a, b) = (w[0].map_or(0.0, |c| c.usd), w[1].map_or(0.0, |c| c.usd));
+            assert!(b + 1e-9 >= a, "{a} then {b}");
+        }
+        // The old reading: the last line alone.
+        let mut t = CostTracker::new(Pricing::bundled());
+        lines.iter().for_each(|l| t.push(l));
+        assert_eq!(t.ledger.processes(), 2);
+        assert!((t.authoritative.as_ref().unwrap().total_cost_usd - 2.0 * per_call).abs() < 1e-9);
+    }
+
+    /// The screenshot that opened the PRD: `$0.000` beside `≈$22.5`. A
+    /// process that did nothing writes a `$0` ledger into a busy session's
+    /// file (the three empty sessions in the corpus have exactly that line);
+    /// the reader that consumed it must not go from `≈$22.5` to `$0.000`.
+    #[test]
+    fn a_do_nothing_process_ledger_does_not_zero_the_session() {
+        let model = "claude-opus-5";
+        let mut lines: Vec<Line> = (0..8).map(|i| response(i, model, 20_000)).collect();
+        let before = readers(&lines)[7].unwrap();
+        assert!(before.approx && before.usd > 1.0);
+        lines.push(cost_state(2, 0.0));
+        let after = readers(&lines)[8].unwrap();
+        assert!(
+            (after.usd - before.usd).abs() < 1e-9,
+            "{} then {}",
+            before.usd,
+            after.usd
+        );
+        assert!(after.approx);
+        // Its ledger is kept: the process's own $0 joins the sum when the
+        // busy process's ledger arrives.
+        lines.push(cost_state(1, before.usd));
+        let end = readers(&lines)[9].unwrap();
+        assert!(!end.approx);
+        assert!((end.usd - before.usd).abs() < 1e-9);
     }
 
     /// An agent with one priced call per `(timestamp, output tokens)`.

@@ -115,6 +115,16 @@ pub mod cost_state {
     /// with a timestamp. The nearest timestamped line is a `system` line
     /// 1–5 lines above; a live session has no ledger until it ends.
     pub const WRITTEN_AT: &str = "session end (after last-prompt) or bridge-session; no timestamp";
+    /// `totalCostUSD` is the *writing process's* running total, not the
+    /// transcript's: `startTime` names the process, and two processes can
+    /// append to one file (a `--resume` beside the live session, a bridge),
+    /// each writing its own ledger. 130 cost-states in 91 sessions on
+    /// 2026-09-16: every one carries `startTime`; 2 sessions hold two
+    /// processes' ledgers, the later line the smaller total (a $29 session
+    /// ending on a $7 ledger; a $0 ledger from a process that did nothing is
+    /// the same shape). The session's figure is the sum of the latest ledger
+    /// per `startTime`, never the last line alone.
+    pub const PER_PROCESS: bool = true;
 }
 
 /// The `<task-notification>` a finished agent, background shell command or
