@@ -1,0 +1,24 @@
+---
+source: src/ui/agents_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+┌ Agents ─ 2 · 0 running · ≈$0.31 · wasted ≈$0.18 (58 %┐
+│   type     model    time   tok    ≈$   ret  waste    │
+│ ✗ Explore  sonnet  2m 32  354k  0.18    41   0.18 ki…│
+│ ✓ fork     sonnet    42s  485k  0.13   517   0.00  ↰…│
+│──────────────────────────────────────────────────────│
+│ waste: failed 0.00 · killed 0.18 · no ret 0.00 · idl…│
+│ cold starts 1 (≈$0.05 writes) · 62.6 % of output ret…│
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

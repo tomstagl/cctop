@@ -440,6 +440,7 @@ pub struct State {
     pub events: crate::events::Log,
     pub events_ui: EventsUi,
     pub ledger_ui: crate::ui::ledger_view::LedgerUi,
+    pub agents_ui: crate::ui::agents_view::AgentsUi,
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
