@@ -430,6 +430,13 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>Priced usage of every subagent transcript (incl. <code>subagents/workflows/**</code>) and its share of the session's total</dd>
 <dt>Measured</dt><dd class="meta">USD · from the subagent's transcript · the price table · ≈ (priced from the table) · <a href="../metrics.html#agents_cost">how</a></dd>
 </dl></article>
+<article class="entry" id="team_cost">
+<div class="mg">
+<h3>Team cost</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ over the teammates of the team this session leads, each from its own transcript: its <code>cost-state.totalCostUSD</code> where one exists, plus its priced calls after that line (all of them while it has none); members found from <code>~/.claude/teams/&lt;team&gt;/config.json</code>, the lead's <code>teammate_spawned</code> results and a scan of the transcripts naming the team (<code>teamName == session-&lt;lead id8&gt;</code>). Part of <code>cost_combined</code>, toggled with the agents by <code>a</code></dd>
+<dt>Measured</dt><dd class="meta">USD · from D12 · D2c · Claude Code's own cost record · the price table · ≈ for a teammate's calls after its last cost-state, or all of them while it runs; ≈ and "N of M read" when a transcript is missing · <a href="../metrics.html#team_cost">how</a></dd>
+</dl></article>
 <article class="entry" id="limit_weight">
 <div class="mg">
 <h3>Limit weight</h3>

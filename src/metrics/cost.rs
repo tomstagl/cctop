@@ -168,7 +168,7 @@ impl Cost {
 
 /// Running cost over a transcript: authoritative up to the last `cost-state`,
 /// estimated after it.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CostTracker {
     pricing: Pricing,
     /// Latest `cost-state` seen.

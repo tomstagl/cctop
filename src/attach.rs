@@ -219,6 +219,26 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     if let Some(teams) = crate::agents::teams_dir() {
         app.state.teammates = crate::agents::teammates(&teams, &app.state.session.session_id);
     }
+    // The team's own transcripts (team PRD): the config every 2 s, the
+    // head scan on directory events once a team is known, one tailer per
+    // member.
+    let lead = crate::load::team_lead(transcript, &app.state);
+    let name = crate::team::team_name(&lead.session_id);
+    let layout = crate::team::Layout::for_transcript(
+        transcript,
+        name.as_deref(),
+        crate::agents::teams_dir().as_deref(),
+    );
+    let mut team = crate::team::TeamWatcher::watch(
+        lead,
+        layout,
+        crate::baseline::default_projects_dir(),
+        app.state.cost.pricing().clone(),
+    );
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        let now = state.clock_ms();
+        team.poll(&mut state.team, &state.tools.agent_spawns, now);
+    }));
     // The transcript itself.
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
         app.sources.push(Box::new(t) as Box<dyn LineSource>);
@@ -263,6 +283,7 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
     if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
+    app.state.team = crate::load::load_team(transcript, &app.state);
     app.tick();
 }
 
