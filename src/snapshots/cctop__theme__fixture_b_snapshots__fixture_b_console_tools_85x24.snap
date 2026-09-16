@@ -1,0 +1,28 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 85, 24)"
+---
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
+   builds and test suites longer than a …  LATER · turn 6
+─── tools ─────────────────────────────────────────────── 0: home  ·  Enter panel ───
+  TOOL / CLASS        CALLS    ERR       p50     →CTX     LAST
+  Bash·explore           39      3    ≈206ms      11k     8h54
+  Read                   30      0     ≈77ms      13k     9h00
+  Edit                   29      0     ≈93ms     1.1k     9h00
+  Bash·commit             8      0     ≈1.7s      342     0:03
+  Bash·test               8      0    ≈13.2s     1.1k     9h01
+  Bash·implement          6      2     ≈2.9s      379     8h42
+
+  140 calls   6 errors Denied 4   4 denied
+  top ctx  Read /home/user/project/src/f58ab3…  500
+
+
+
+
+
+
+
+ ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

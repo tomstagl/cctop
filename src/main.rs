@@ -111,7 +111,7 @@ enum QueryWhat {
     Agents,
     /// Ranked Advisor recommendations with explanations.
     Advice,
-    /// The dashboard object: header, four tiles, the nudge, nine ledger rows.
+    /// The Console object: header, six cells, the act line, eight bodies.
     Dashboard,
     /// The coach object: state line, four lights, the nudge, next, snoozed.
     Coach {

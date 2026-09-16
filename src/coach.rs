@@ -1250,8 +1250,14 @@ mod tests {
         let c = snapshot(&s, &e);
         assert_eq!(c.start_line.as_deref(), Some(cut(&line).as_str()));
         assert!(c.quiet_row.starts_with("  insights "), "{}", c.quiet_row);
+        // Console's act line carries the start line while there is no nudge.
         let d = crate::dashboard::snapshot(&s, &e);
-        assert!(d.start_line.is_some() && d.nudge.is_none());
+        assert!(d.act.nudge.is_none());
+        assert!(
+            crate::dashboard::text_of(&d.act.line).starts_with("insights "),
+            "{}",
+            crate::dashboard::text_of(&d.act.line)
+        );
         // The privacy contract across every consumer: no never-display
         // field of `usage-data` or `~/.claude.json` reaches a query, the
         // report, the export or a rendered panel.

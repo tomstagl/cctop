@@ -161,7 +161,7 @@ test('the Coach tab draws the card, sets the status line once per change and fil
   await settle();
   await settle();
   const { tree, rows: lines } = await render(72);
-  assert.ok(lines[0].startsWith('cctop  Coach  [Overview]  [Tools]'), lines[0]);
+  assert.ok(lines[0].startsWith('cctop  Coach  Overview  Tools'), lines[0]);
   assert.ok(lines.some((r) => r.includes('IDLE 4m · python3 - lor… ok 8m ago')), JSON.stringify(lines));
   // The status line under the prompt is the L0 form at 72 body columns → L1 (< 80).
   const c = coachOf(prompt)!;

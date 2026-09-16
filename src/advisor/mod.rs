@@ -1098,6 +1098,13 @@ impl Engine {
         std::mem::take(&mut self.pending_events)
     }
 
+    /// The Events rows not yet drained: a reader that evaluates once (`cctop
+    /// query`) folds them into the events body itself, so its rows are the
+    /// TUI's, which drained them into `State::events`.
+    pub fn pending_events(&self) -> &[CoachEvent] {
+        &self.pending_events
+    }
+
     /// `x`: snooze for five human turns; the third snooze of a rule lasts
     /// the session. Returns what happened, for the toast.
     pub fn snooze(&mut self, rule: &'static str, turn: usize, now: i64) -> String {

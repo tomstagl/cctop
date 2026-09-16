@@ -144,7 +144,7 @@ test('the view bar names the views, the current one inverse, and a press switche
       [undefined, 'Advisor', true, 'advisor'],
     ],
   );
-  assert.equal(rows[0], 'cctop  [Coach]  Overview  [Tools]  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.equal(rows[0], 'cctop  Coach  Overview  Tools  Agents  Files  Events  Advisor');
   assert.ok(inverseTexts(tree).includes(' Overview '), 'the current view is drawn inverse');
 
   const before = $.ui.invalidates['ui.render'] ?? 0;
@@ -155,7 +155,7 @@ test('the view bar names the views, the current one inverse, and a press switche
   assert.deepEqual(stored($), { open: true, view: 'tools' });
   const after = await render(80);
   assert.match(after.rows[2], /^│ TOOL\s+N\s+ERR/);
-  assert.equal(after.rows[0], 'cctop  [Coach]  [Overview]  Tools  [Agents]  [Files]  [Events]  [Advisor]');
+  assert.equal(after.rows[0], 'cctop  Coach  Overview  Tools  Agents  Files  Events  Advisor');
   assert.ok(inverseTexts(after.tree).includes(' Tools '));
 });
 
@@ -165,24 +165,24 @@ test('the view bar wraps at narrow widths and never overflows', async () => {
   for (const columns of [40, 50, 60, 80]) {
     const { rows } = await render(columns);
     for (const row of rows) assert.ok(row.length <= columns, `row wider than ${columns}: ${JSON.stringify(row)}`);
-    assert.ok(rows[0].startsWith('cctop  [Coach]  Overview'), rows[0]);
-    const barRows = rows.filter((r) => /\[[A-Z][a-z]+\]/.test(r) && !r.startsWith('╭'));
-    // One row from 73 columns (the bar reserves `[ ]` around each Button).
+    assert.ok(rows[0].startsWith('cctop  Coach  Overview'), rows[0]);
+    // The harness draws a plain Button as the engine does, the bare label;
+    // the bar still reserves the `[ ]` a surface may draw, so it wraps
+    // into two rows below 73 columns.
+    const barRows = rows.filter((r) => /^(cctop  )?(Coach|Overview|Tools|Agents|Files|Events|Advisor)\b/.test(r) && !r.startsWith('╭') && !r.startsWith(' cctop'));
     assert.equal(barRows.length, columns >= 73 ? 1 : 2, JSON.stringify(barRows));
-    assert.ok(barRows.some((r) => r.includes('[Advisor]')), JSON.stringify(barRows));
+    assert.ok(barRows.some((r) => r.includes('Advisor')), JSON.stringify(barRows));
   }
 });
 
-test('inline placement draws the header, Context and Limits without the view bar', async () => {
+test('inline placement draws the strip without the view bar', async () => {
   const { run, render } = await boot();
   await run('tools');
   const { tree, rows } = await render(80, 'inline');
   assert.deepEqual(buttons(tree), []);
   assert.match(rows[0], /^○ IDLE · turn 0/, JSON.stringify(rows));
-  assert.ok(rows.some((r) => /(^|\s)Context(\s|$)/.test(r)), JSON.stringify(rows));
-  assert.ok(rows.some((r) => /(^|\s)Limits(\s|$)/.test(r)), JSON.stringify(rows));
   assert.ok(
-    !rows.some((r) => /\[[A-Z][a-z]+\]/.test(r) || r.startsWith('TOOL') || r.includes('Tokens & Cost') || r.includes('waiting on')),
+    !rows.some((r) => /^(cctop  )?(Coach|Overview|Tools)\b/.test(r) || r.startsWith('TOOL') || r.includes('Tokens & Cost') || r.includes('waiting on')),
     JSON.stringify(rows),
   );
   // The docked form of the same model draws the bar and the Tools view.

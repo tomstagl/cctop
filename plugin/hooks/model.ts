@@ -110,8 +110,8 @@ export type Model = {
   coachToastTurn: number | null;
   /** The last `$.ui.status` line the coach set; set again only when it changes. */
   coachStatus: string | null;
-  /** The Overview's ledger rows 1–4 unfolded inline (their digits). */
-  unfolded: number[];
+  /** Console's open body (its id); events, the way home, by default. */
+  body: string;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -142,7 +142,7 @@ export type Action =
   | { type: 'coach.why'; why: boolean }
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
-  | { type: 'overview.toggle'; digit: number };
+  | { type: 'overview.body'; id: string };
 
 export function initialModel(): Model {
   return {
@@ -183,7 +183,7 @@ export function initialModel(): Model {
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
-    unfolded: [],
+    body: 'events',
   };
 }
 
@@ -298,11 +298,8 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
     case 'coach.status':
       return model.coachStatus === action.status ? model : { ...model, coachStatus: action.status };
-    case 'overview.toggle':
-      return {
-        ...model,
-        unfolded: model.unfolded.includes(action.digit) ? model.unfolded.filter((d) => d !== action.digit) : [...model.unfolded, action.digit],
-      };
+    case 'overview.body':
+      return model.body === action.id ? model : { ...model, body: action.id };
   }
 }
 

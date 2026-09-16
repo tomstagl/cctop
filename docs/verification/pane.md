@@ -422,6 +422,76 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+28. **A plain Button with no hotkey draws only its label** (Console,
+    PRD dashboard-v2 US-109). Every part of a Console cell after the first
+    — the rest of the label, the padding — is a `plain` Button without a
+    `hotkey`; the d.ts says such a Button draws the label alone. If the
+    engine draws chrome around it, the cells stop being one run of text.
+    Setup: as item 25, plugin 0.7.0 (Console), cctop 0.6.0 or newer, a
+    docked pane at 162 columns (67 body columns) on a live session.
+    Keys: `/cctop`; look at rows 2–4 of the Overview.
+    Expected: each cell reads `1: ctx 35% 616k left` as one run — the digit
+    in the accent colour, a colon, the label, no brackets and no second
+    digit anywhere in the row; the three (two below 80 body columns) cells
+    of a row sit at the same column stops as the TUI's at the same width
+    (`cctop run --once --session <id> --size 67x24`, the same characters).
+    Claude Code version:
+    Result: pending
+
+29. **The hover scope lights a Button whose label is only spaces**
+    (Console). A cell's padding is a Button of spaces so that the whole
+    area presses and lights (FR-13); the d.ts says a `scope` lights every
+    element drawn with it while any is hovered, and says nothing about a
+    label of spaces.
+    Setup: as item 28, a terminal with mouse reporting on.
+    Keys: hover the empty tail of a cell (the spaces after `616k left`),
+    then the digit, then the label; click the tail.
+    Expected: hovering any part inverts the whole cell — digit, label and
+    padding together, and nothing of the neighbouring cell; a click on the
+    padding swaps the body exactly as a click on the digit does (the rule
+    line reads `─── context …`); the act line lights and presses as one
+    area too, `a: advisor` included.
+    Claude Code version:
+    Result: pending
+
+30. **Six Buttons in one band each claim a bare digit** (Console, FR-15).
+    The cells carry `hotkey` `1`–`6`, the act line `a`, home `0`; the
+    d.ts says a digit presses from an empty composer and that of two
+    Buttons on one hotkey the later wins — it does not say six digits in
+    one pane are all honoured.
+    Setup: as item 28, the composer empty.
+    Keys: `1`, `2`, `3`, `4`, `5`, `6`, `a`, `0` in turn; then type a
+    character into the composer and press `3`.
+    Expected: each digit swaps the body (the rule line names it and that
+    cell alone turns green and bold), `a` opens the advisor body, `0`
+    returns to events; with text in the composer the digit goes to the
+    composer and nothing swaps; nothing else in Claude Code reacts to the
+    digits (no view switch, no dialog).
+    Claude Code version:
+    Result: pending
+
+31. **The real `bodyColumns` at 35 / 54 / 67 / 85** (Console, PRD
+    dashboard-v2 §3.6). The dock arithmetic — `min(floor(columns × 0.45),
+    90, columns − 70)`, then the borders and the grip — was traced from the
+    binary, not measured on a screen; the width ladder (three cells per
+    row at 80, the middle cell form at 28, the act line's tail at 66 and
+    its full copy at 72) is pinned to those four widths.
+    Setup: as item 28; `~/.cctop/pane/<session>.json` holds `bodyColumns`
+    after each render.
+    Keys: resize the terminal to 110, 132, 162 and 200 columns, `/cctop`
+    at each, and read `bodyColumns` from the marker file (or the pane's
+    debug log line `cctop: rendered … columns`).
+    Expected: `bodyColumns` 35, 54, 67, 85 (±1 for the grip) at the four
+    terminal widths; at 35 two short cells per row and no `a: advisor`
+    tail, at 54 two short cells and the short act copy, at 67 two middle
+    cells, at 85 three wide cells with the full act copy; the pane's rows
+    at each width are the TUI's at `--size <bodyColumns>x24`, row for row,
+    the footer aside; below 110 columns no dock, the inline strip above the
+    prompt: the status line, the engine's usage line, the coach's line, the
+    act line.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

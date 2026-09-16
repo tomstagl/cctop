@@ -2,27 +2,27 @@
 source: src/theme.rs
 expression: "render_to_string(&app, w, h)"
 ---
- cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/pr…  ● COMMITTING · 4 calls · silent 3:09 · ▸ steer …
-  ▄█ █ █   ○ context          █▀▀ █▀█   ○ cache                  ○ limits                ▄█      ● rework
-   █ ▀▀█   142k of 1.00M      ▀▀█ ▀▀█   warm · 59m (1h) T… ▀▀▀   no status line           █      1 · correction
-   ▀   ▀ % ≈$.03/call         ▀▀▀ ▀▀▀ m misses 0               %                          ▀ open edits 3 ✓ none 9h00
- ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run builds and test suites longer than a …  LATER · turn 6
- 1 Context   ▇▇▇▇▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ prefix 49k · inputs ≈538 · results ≈180 · thinking 355 · harness ≈7…
-             +146k/turn · autocompact 567k · 425k left · compactions 1 · since clear 23:29 · re-reads 0
- 2 Tokens    cache read 28.46M · write 311k · output 107k · warm 59m ≈
-             $18.7 API-equivalent · $1.01/h · $/call ≈$.03 · $/turn ≈$.50 · next 30c ≈$1.0 · skill:admit 1 %
- 3 Limits    no status line · weight ×3 (sonnet) · long_context 89 %
-             89% of your usage was at >150k context
- 4 Turn      COMMITTING · 4 calls · silent 3:09 · ▸ steer window… · api ≈3:48 · tools 8h 35m
-             turn elapsed 8h 40m · 4 api calls · 4 tool calls
- 5 Tools     140 calls · 6 err · explore 39 (3 ✗) · commit 8 · test 8 · Read 30 · Edit 29 · AskUserQuestion 1 · top ctx R…
-             Denied 4 · Other 2
- 6 Agents    —
-
- 7 Files     44 touched · 40cde3.md E×1 · c1c889.rs E×2 IDE edit · commit 0:00 ago
-
- 8 Events    23:29 api cost-state $18.75 · api 22:14 · retries… · 23:29 note /clear · continued in a new session · 23:28 …
-             23:28 tool Bash ✓ 49 · 23:28 tool Bash git commit -m "$(cat lorem_i lorem… · 23:27 tool Bash ✓ 16
- 9 Advisor   LATER A10 · next — · snoozed —
-
- ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · PR #121 · v2.1.270      ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left                  2: 5h — · no status line                3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h               5: ✓ python3 -… 9h01 · rework 1 open    6: 140 calls · 6 err
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run builds and test suites longer than a …     a: advisor
+   LATER · turn 6
+─── events ─────────────────────────────────────────────────────────────────────────────────── 0: home  ·  Enter panel ───
+  23:29  api    cost-state $18.75 · api 22:14 · retries 0:00
+  23:29  note   /clear · continued in a new session
+  23:28  coach  LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09
+  23:28  tool   Bash ✓ 49
+  23:28  tool   Bash git commit -m "$(cat lorem_i lorem lore lor lorem_i lorem_ip lorem_i lorem_i in lor install lore lor…
+  23:27  tool   Bash ✓ 16
+  23:27  tool   Bash git push lorem_ lore 2>&1 ▶
+  23:27  tool   Bash ✓ 32
+  23:27  cost   model opus-5 → sonnet-5
+  23:27  tool   Bash git commit -m "$(cat lorem_i lorem_ipsu lorem_i lore cctop lor lorem_ip add lor lorem view lorem_ lo…
+  23:25  tool   AskUserQuestion ✓ 83
+  14:49  tool   AskUserQuestion ▶
+  14:49  api    API error: invalid_request 400
+  14:49  compactcompacted auto 567k → 230k in 1:20
+  14:48  note   interrupted after 6 calls
+  14:47  api    API error: request failed
+  14:46  tool   TaskUpdate ✓ 5
+ ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q
