@@ -8,27 +8,33 @@ import { renderToText } from './render';
 import { fixture } from './fixture';
 import { initialModel, reduce, type Action, type Binary, type Model } from '../../plugin/hooks/model';
 import {
-  L2_MAX,
+  ACT_FULL,
+  ACT_TAIL,
+  MID_CELL,
   NEEDS_BINARY,
-  TILES_MIN,
+  SCHEMA,
+  THREE_CELLS,
+  cellForm,
   dashboardOf,
-  engineTiles,
   renderOverview,
-  viewOfDigit,
+  schemaMismatch,
+  schemaOf,
+  wrap,
   type OverviewActions,
 } from '../../plugin/hooks/views/overview';
-import { BIG_GLYPHS, bigDigits } from '../../plugin/hooks/views/frame';
 
-// The Overview (plan B) from the fixtures: `cctop query dashboard` on
-// fixture A (tests/pane/fixtures/dashboard.json) drawn at 40 / 50 / 72 / 100
-// body columns; a turn started at T0 with Bash running since T0 + 2 s, drawn
-// 48 s in, for the engine-side rows.
+// Console (PRD dashboard-v2 §4) from the fixtures: `cctop query dashboard`
+// (schema 2) on fixture A (tests/pane/fixtures/dashboard.json) and fixture B
+// (dashboard-b.json), drawn at the widths the dock actually gives — 54, 67,
+// 85 — and the standalone 122; a turn started at T0 with Bash running since
+// T0 + 2 s, drawn 48 s in, for the engine-side rows.
 const T0 = Date.UTC(2026, 8, 12, 12, 0, 0);
 const NOW = T0 + 48_000;
-const el = fakeElements(new Map());
+const presses = new Map<string, () => void>();
+const el = fakeElements(presses);
 const repo = join(__dirname, '..', '..', '..');
 
-type Options = { usage?: boolean; summary?: boolean; dashboard?: boolean | unknown; binary?: Binary; unfolded?: number[] };
+type Options = { usage?: boolean; summary?: boolean; dashboard?: boolean | unknown; binary?: Binary; body?: string };
 
 function build(opts: Options = {}): Model {
   const actions: Action[] = [
@@ -42,8 +48,8 @@ function build(opts: Options = {}): Model {
   if (opts.summary ?? true) actions.push({ type: 'query', verb: 'summary', data: fixture('summary') });
   const dash = opts.dashboard ?? true;
   if (dash !== false) actions.push({ type: 'query', verb: 'dashboard', data: dash === true ? fixture('dashboard') : dash });
-  const model = actions.reduce(reduce, initialModel());
-  return opts.unfolded === undefined ? model : { ...model, unfolded: opts.unfolded };
+  if (opts.body !== undefined) actions.push({ type: 'overview.body', id: opts.body });
+  return actions.reduce(reduce, initialModel());
 }
 
 function raw(model: Model, columns: number, placement: 'dock' | 'inline' = 'dock', actions?: OverviewActions): string[] {
@@ -87,155 +93,182 @@ function buttons(tree: RenderElement): Node[] {
 
 const THEME_KEYS: Record<string, string> = { success: 'green', warning: 'yellow', error: 'red', suggestion: 'cyan' };
 
-test('the first turn draws the insights line where the nudge goes, and nothing when quiet', () => {
-  const quiet = { ...(fixture('dashboard') as Record<string, unknown>), nudge: null, start_line: null };
-  has(raw(build({ dashboard: quiet }), 100), /^ quiet · nothing to act on/);
-  const start = { ...quiet, start_line: 'insights 2026-08-16 · 12 sessions here · p50 42 min · 18 prompts · satisfied 80 %' };
-  const d = dashboardOf(start)!;
-  assert.equal(d.startLine, start.start_line);
-  const lines = raw(build({ dashboard: start }), 100);
-  has(lines, /^ insights 2026-08-16 · 12 sessions here/);
-  assert.ok(!lines.some((l) => l.includes('quiet · nothing')), JSON.stringify(lines));
-  // The control arm of the coach's own measurement shows no nudge and says so.
-  const off = { ...(fixture('dashboard') as Record<string, unknown>), nudge: null, exposed: false };
-  assert.equal(dashboardOf(off)!.exposed, false);
-  has(raw(build({ dashboard: off }), 100), /^ coach off \(control arm\)/);
-});
-
-test('the dashboard fixture parses into tiles, a nudge and nine rows', () => {
-  const d = dashboardOf(fixture('dashboard'));
-  assert.ok(d !== null);
-  assert.equal(d.tiles.length, 4);
+test('the dashboard fixture parses into six cells, an act line and eight bodies (schema 2)', () => {
+  const raw = fixture('dashboard') as Record<string, unknown>;
+  assert.equal(schemaOf(raw), SCHEMA);
+  const d = dashboardOf(raw)!;
+  assert.equal(d.cells.length, 6);
   assert.deepEqual(
-    d.tiles.map((t) => t.id),
-    ['context', 'cache', 'limits', 'rework'],
+    d.cells.map((c) => c.key),
+    ['1', '2', '3', '4', '5', '6'],
   );
-  assert.equal(d.rows.length, 9);
   assert.deepEqual(
-    d.rows.map((r) => r.digit),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    d.cells.map((c) => c.opens),
+    ['context', 'limits', 'cache', 'cost', 'work', 'tools'],
   );
-  assert.ok(d.headerLine.startsWith('cctop  claude-sonnet-5 · turn 14'), d.headerLine);
-  assert.equal(d.phase.word, 'IDLE');
-  assert.ok(d.nudge !== null && d.nudge.line.startsWith('Edited 1 src file, no test/build run yet'), JSON.stringify(d.nudge));
-  assert.equal(d.tiles[0].figure, '40');
-  assert.equal(d.tiles[0].unit, '%');
-  assert.equal(dashboardOf(null), null);
-  assert.equal(dashboardOf({ tiles: 'x' }), null);
-});
-
-test('the block font is 3 × 3 per glyph, one cell between digits', () => {
-  for (const [c, rows] of Object.entries(BIG_GLYPHS)) {
-    assert.equal(rows.length, 3, c);
-    for (const r of rows) assert.equal([...r].length, 3, `${c}: ${JSON.stringify(r)}`);
+  for (const c of d.cells) {
+    assert.ok(c.short.length > 0, c.id);
+    assert.ok(textOf(c.short.map((s) => s.text)).length <= textOf(c.label.map((s) => s.text)).length, c.id);
   }
-  const lines = bigDigits('41', 'error');
+  assert.equal(d.act.key, 'a');
+  assert.equal(d.act.opens, 'advisor');
+  assert.equal(d.bodies.length, 8);
   assert.deepEqual(
-    lines.map((l) => l.map((s) => s.text).join('')),
-    ['█ █  ▄█', '▀▀█   █', '  ▀   ▀'],
+    d.bodies.map((b) => b.key),
+    ['1', '2', '3', '4', '5', '6', 'a', '0'],
   );
-  assert.equal(lines[0][0].color, 'error');
-  assert.equal(bigDigits('—')[1][0].text, '▀▀▀');
+  const ctx = d.bodies.find((b) => b.id === 'context')!;
+  assert.deepEqual(
+    ctx.slices.map((s) => [s.label, s.step]),
+    [
+      ['prefix', 0],
+      ['harness', 0],
+      ['thinking', 1],
+      ['inputs', 2],
+      ['results', 2],
+    ],
+  );
+  // A step is carried by weight, never a colour: s0 dim, s2 bold.
+  const barRow = ctx.rows.find((r) => r.some((s) => s.text.startsWith('▇')))!;
+  const fill = barRow.find((s) => s.text.startsWith('▇'))!;
+  assert.equal(fill.color, undefined);
+  assert.ok(fill.dim === true || fill.bold === true || (fill.dim === undefined && fill.bold === undefined));
+  assert.equal(d.phase.word, 'IDLE');
+  assert.ok(d.headerLine.startsWith('cctop  claude-sonnet-5 · turn 14'), d.headerLine);
 });
 
-for (const columns of [50, 72, 100]) {
-  test(`overview at ${columns} columns: header, tiles two per row, the nudge, nine ledger rows`, () => {
-    const model = build();
+test('another schema draws one line naming the cctop this pane needs, never an indefinite wait (FR-16)', () => {
+  const old = { ...(fixture('dashboard') as Record<string, unknown>), schema: 1, tiles: [], rows: [] };
+  assert.equal(dashboardOf(old), null);
+  assert.equal(schemaOf(old), 1);
+  const lines = raw(build({ dashboard: old }), 85);
+  has(lines, /cctop 0\.6\.0 or newer needed: the binary sends dashboard schema 1, this pane draws 2/);
+  assert.ok(!lines.some((l) => l.includes('waiting for cctop')), JSON.stringify(lines));
+  assert.ok(schemaMismatch(3).startsWith('cctop newer than this pane needed'));
+  // No object at all: the wait, or the missing binary.
+  has(raw(build({ dashboard: false }), 85), 'waiting for cctop query dashboard…');
+  has(raw(build({ dashboard: false, binary: 'missing' }), 85), NEEDS_BINARY);
+});
+
+test('the width ladder: three cells per row at 80, two below; wide, mid and short forms; every row fits', () => {
+  const d = dashboardOf(fixture('dashboard'))!;
+  const model = build();
+  for (const columns of [122, 85, 67, 54, 35]) {
     const lines = raw(model, columns);
     fits(lines, columns);
-    assert.ok(lines[0].startsWith(' cctop  claude-sonnet-5 · turn 14'), lines[0]);
-    assert.ok(lines[0].includes('○ IDLE'), 'the phase cell: ' + lines[0]);
-    // Two tiles per row: the context and cache names on one line, limits and rework further down.
-    const names = lines.filter((l) => /[○◐●] (context|cache|limits|rework)/.test(l));
-    assert.ok(names.length >= 2, JSON.stringify(lines));
-    assert.ok(names[0].includes('context') && names[0].includes('cache'), names[0]);
-    has(lines, /^ ▸ Edited 1 src file, no test\/build run yet/);
-    for (let d = 1; d <= 9; d++) assert.ok(lines.some((l) => new RegExp(`^ ?${d} `).test(l)), `row ${d}: ${JSON.stringify(lines)}`);
-    has(lines, /^ ?1 Context\s+▇/);
-    has(lines, /^ ?9 Advisor\s+NEXT A32/);
-    // The detail rows sit under their value rows from 50 columns.
-    has(lines, /^ {13}\S/);
+    const perRow = columns >= THREE_CELLS ? 3 : 2;
+    const cw = Math.floor((columns - 2) / perRow);
+    const form = cellForm(columns, cw);
+    // Row 2 starts with cell 1 in the form the width gives.
+    const cell1 = textOf(form(d.cells[0]).map((s) => s.text));
+    assert.ok(lines[1].startsWith(` 1: ${[...cell1].slice(0, Math.max(1, cw - 4)).join('')}`), `${columns}: ${lines[1]}`);
+    // The rows the cells take: two at three per row, three at two.
+    const cellRows = lines.filter((l) => /^ [1-6]: /.test(l)).length;
+    assert.equal(cellRows, perRow === 3 ? 2 : 3, `${columns}: ${cellRows} cell rows`);
+    if (columns >= THREE_CELLS) assert.equal(form(d.cells[0]), d.cells[0].label);
+    else if (cw >= MID_CELL) assert.equal(form(d.cells[0]), d.cells[0].mid);
+    else assert.equal(form(d.cells[0]), d.cells[0].short);
+    // The rule line names the open body, events by default, with `0: home`.
+    const rule = lines.find((l) => l.startsWith('─── events '))!;
+    assert.ok(rule !== undefined && rule.includes('0: home'), `${columns}: ${rule}`);
+    assert.ok([...rule].length <= columns);
+  }
+});
+
+test('cells are keyed Boxes of plain Buttons sharing one scope and one press; the open cell is Text; a press opens the body', () => {
+  const opened: string[] = [];
+  const actions: OverviewActions = { open: (id) => opened.push(id) };
+  // With tools open: five cell Buttons (the open cell is Text), `a` and `0`.
+  const tree = renderOverview(build({ body: 'tools' }), el, 85, 'dock', NOW, { el, actions });
+  const bs = buttons(tree);
+  const hotkeys = bs.map((b) => b.props?.hotkey).filter((h): h is string => typeof h === 'string');
+  assert.deepEqual(hotkeys.sort(), ['0', '1', '2', '3', '4', '5', 'a']);
+  // Home open: every cell is a Button — contiguous 1–6, one per cell (FR-15) — and `0` is Text.
+  const home = renderOverview(build(), el, 85, 'dock', NOW, { el, actions });
+  const homeKeys = buttons(home).map((b) => b.props?.hotkey).filter((h): h is string => typeof h === 'string');
+  assert.deepEqual(homeKeys.sort(), ['1', '2', '3', '4', '5', '6', 'a']);
+  for (const b of bs) assert.equal(b.props?.plain, true, JSON.stringify(b.props));
+  // A cell's Buttons — the hotkeyed one, the rest of the label, the padding — share the scope.
+  const scoped = new Map<string, Node[]>();
+  walk(tree, (n) => {
+    if (n.type === 'Box' && typeof (n.props?.hover as { scope?: string } | undefined)?.scope === 'string') {
+      const scope = (n.props!.hover as { scope: string }).scope;
+      scoped.set(scope, buttons(n as unknown as RenderElement));
+    }
   });
-}
-
-test('below 50 columns the tiles collapse to the coach line, below 40 to its glyphs, and the rows keep their names', () => {
-  const model = build();
-  const d = dashboardOf(fixture('dashboard'))!;
-  const narrow = raw(model, 48);
-  fits(narrow, 48);
-  assert.ok(!narrow.some((l) => l.includes('▀▀▀')), 'no block digits');
-  has(narrow, ` ${d.lines.l1}`);
-  const tiny = raw(model, 36);
-  fits(tiny, 36);
-  has(tiny, ` ${d.lines.l2}`);
-  assert.ok(tiny.some((l) => /^ ?1 Context/.test(l)), JSON.stringify(tiny));
-  assert.equal(TILES_MIN, 50);
-  assert.equal(L2_MAX, 40);
-});
-
-test('ledger rows are plain Buttons: 5–9 open the view, 1–4 unfold their block and fold again', () => {
-  const pressed: number[] = [];
-  const actions: OverviewActions = { row: (d) => pressed.push(d) };
-  const model = build();
-  const tree = renderOverview(model, el, 72, 'dock', NOW, { el, actions });
-  const rows = buttons(tree);
   assert.deepEqual(
-    rows.map((b) => [b.props?.hotkey, b.props?.plain, b.props?.key]),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [String(d), true, `ledger-${d}`]),
+    [...scoped.keys()].sort(),
+    ['cctop-cell-advisor', 'cctop-cell-cache', 'cctop-cell-context', 'cctop-cell-cost', 'cctop-cell-limits', 'cctop-cell-work'],
   );
-  assert.deepEqual(rows.map((b) => String(b.props?.label).trim()), ['Context', 'Tokens', 'Limits', 'Turn', 'Tools', 'Agents', 'Files', 'Events', 'Advisor']);
-  assert.equal(viewOfDigit(5), 'tools');
-  assert.equal(viewOfDigit(9), 'advisor');
-  assert.equal(viewOfDigit(1), null);
-  // Unfolded rows 1 and 3 draw the Context and Limits frames beneath them.
-  const unfolded = raw(build({ unfolded: [1, 3] }), 72);
-  assert.ok(unfolded.some((l) => l.startsWith('╭1 Context')), JSON.stringify(unfolded));
-  assert.ok(unfolded.some((l) => l.startsWith('╭3 Limits')), JSON.stringify(unfolded));
-  assert.ok(!unfolded.some((l) => l.startsWith('╭2 Tokens')), JSON.stringify(unfolded));
-  const folded = raw(build(), 72);
-  assert.ok(!folded.some((l) => l.startsWith('╭')), 'no frames while folded');
-  // The model toggles.
-  const m1 = reduce(build(), { type: 'overview.toggle', digit: 2 });
-  assert.deepEqual(m1.unfolded, [2]);
-  assert.deepEqual(reduce(m1, { type: 'overview.toggle', digit: 2 }).unfolded, []);
-  assert.equal(pressed.length, 0);
+  for (const [scope, group] of scoped) {
+    assert.ok(group.length >= 2, `${scope} has ${group.length} Buttons`);
+    // The padding presses too: the last Button's label is spaces.
+    if (scope !== 'cctop-cell-advisor') assert.match(String(group[group.length - 1].props?.label), /^ +$/, scope);
+  }
+  // No cctop-drawn digit chrome (FR-14): the only Text that starts with a
+  // digit and a colon is the open cell's, the one state that is no target.
+  walk(tree, (n) => {
+    if (n.type === 'Text') assert.doesNotMatch(textOf(n.children), /^[1-5]: /, textOf(n.children));
+  });
+  // A press on any part of the cost cell opens cost (the padding here); on
+  // the act line, advisor; on home, events. The harness keeps `onPress` by key.
+  const cost = scoped.get('cctop-cell-cost')!;
+  presses.get(String(cost[cost.length - 1].props!.key))!();
+  presses.get(String(scoped.get('cctop-cell-advisor')![0].props!.key))!();
+  presses.get('cell-home')!();
+  assert.deepEqual(opened, ['cost', 'advisor', 'events']);
+  // The open cell is Text in green, bold — not a target — and the rule names its body.
+  assert.ok(keyed(tree).get('cell_tools')?.startsWith('6: '), keyed(tree).get('cell_tools'));
+  has(renderToText(tree, 85), /^─── tools /);
+  assert.ok(!buttons(home).some((b) => b.props?.hotkey === '0'));
 });
 
-test('before the binary answers the tiles read the engine, and a missing binary says so', () => {
-  const model = build({ dashboard: false });
-  const tiles = engineTiles(model);
-  assert.equal(tiles[0].figure, '40', 'the usage read: 396365 of 1M');
-  assert.equal(tiles[0].sub1, '396k of 1.0M');
-  assert.equal(tiles[1].figure, '—');
-  const lines = raw(model, 72);
-  fits(lines, 72);
-  assert.ok(lines[0].startsWith(' cctop  claude-sonnet-5 · turn 1'), lines[0]);
-  assert.ok(lines.some((l) => l.includes('◐ context')), JSON.stringify(lines));
-  has(lines, 'waiting for cctop query dashboard…');
-  const missing = raw(build({ dashboard: false, binary: 'missing' }), 72);
-  has(missing, NEEDS_BINARY);
-  // No usage read either: the context tile is `—`.
-  assert.equal(engineTiles(build({ dashboard: false, usage: false }))[0].figure, '—');
+test('the act line wraps rather than cuts, carries `a: advisor` at 66 columns, the short copy below 72, and a wait paints it red', () => {
+  const lines85 = raw(build(), 85);
+  const act = lines85.find((l) => l.startsWith(' ▸ '))!;
+  assert.ok(act.endsWith('a: advisor'), act);
+  assert.ok(act.includes('NEXT · turn 14') || lines85[lines85.indexOf(act) + 1].includes('NEXT · turn 14'), act);
+  const lines54 = raw(build(), 54);
+  const short = lines54.find((l) => l.startsWith(' ▸ '))!;
+  assert.ok(!short.includes('a: advisor'), short);
+  assert.ok(!short.includes(' — '), `short copy has the headline only: ${short}`);
+  assert.ok(ACT_TAIL < ACT_FULL);
+  // Wrapped at a space, indented, never mid-word; at most two rows.
+  const rows = wrap([{ text: 'alpha beta gamma delta epsilon' }], 12, 3);
+  assert.deepEqual(
+    rows.map((r) => textOf(r.map((s) => s.text))),
+    ['alpha beta ', '   gamma ', '   delta ', '   epsilon'],
+  );
+  const blocked = { ...(fixture('dashboard') as Record<string, unknown>), act: { key: 'a', opens: 'advisor', line: [{ text: '◆ ', tone: 'crit' }, { text: 'WAITING 1:56', tone: 'crit' }, { text: ' — ', tone: 'dim' }, { text: 'permission prompt open', tone: 'fg' }], short: [{ text: '◆ ', tone: 'crit' }, { text: 'WAITING 1:56', tone: 'crit' }], tag: '', blocked: true, acting: false } };
+  const tree = renderOverview(build({ dashboard: blocked }), el, 85, 'dock', NOW);
+  const reds: string[] = [];
+  walk(tree, (n) => {
+    if (n.type === 'Text' && n.props?.color === 'error') reds.push(textOf(n.children));
+  });
+  assert.ok(reds.some((t) => t.includes('WAITING 1:56')), JSON.stringify(reds));
+  assert.equal(dashboardOf(blocked)!.act.blocked, true);
 });
 
-test('the inline form keeps the flat header, gains the coach line, then Context and Limits', () => {
-  const lines = raw(build(), 80, 'inline');
-  fits(lines, 80);
+test('the inline form is the strip: the status line, the engine usage line, the coach line, the act line', () => {
+  const lines = raw(build(), 72, 'inline');
+  assert.equal(lines.length, 4, JSON.stringify(lines));
   assert.match(lines[0], /^● BUSY · turn 1 · 0:48 · claude-sonnet-5/);
-  const d = dashboardOf(fixture('dashboard'))!;
-  assert.equal(lines[1], d.lines.l1);
-  assert.ok(lines.some((l) => /^Context$/.test(l)), JSON.stringify(lines));
-  assert.ok(lines.some((l) => /^Limits$/.test(l)), JSON.stringify(lines));
-  assert.ok(!lines.some((l) => l.startsWith('╭') || /^ ?\d Context/.test(l)), 'no frames, no ledger inline');
+  assert.ok(lines[0].includes('bin shim'), lines[0]);
+  assert.match(lines[1], /^ context 396k \/ 1\.0M \(40 %\) · 5h 42 %, resets in/);
+  assert.match(lines[2], /^ [○◐●]/);
+  assert.match(lines[3], /^ ▸ /);
+  fits(lines, 72);
+  // Without the engine's usage read: the status line alone before the object.
+  assert.equal(raw(build({ usage: false, dashboard: false }), 72, 'inline').length, 1);
 });
 
-test('every keyed row is a metric id from docs/metrics.md and colours are theme keys only', () => {
+test('every keyed metric row is a metric id from docs/metrics.md and colours are theme keys only', () => {
   const doc = readFileSync(join(repo, 'docs', 'metrics.md'), 'utf8');
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));
   assert.ok(ids.size > 40, `metrics.md parsed ${ids.size} ids`);
-  const tree = renderOverview(build({ unfolded: [1, 2, 3, 4] }), el, 100, 'dock', NOW);
-  const keys = [...keyed(tree).keys()].filter((k) => !k.startsWith('ledger_'));
-  assert.ok(keys.length >= 10, `only ${keys.length} keyed rows`);
+  const tree = renderOverview(build(), el, 85, 'dock', NOW);
+  const keys = [...keyed(tree).keys()].filter((k) => !/^(cell|cells|rule|body|act)_/.test(k));
+  assert.ok(keys.length >= 2, `only ${keys.length} keyed rows: ${keys.join(', ')}`);
   for (const key of keys) assert.ok(ids.has(key), `row key ${key} is not a metric id`);
   let texts = 0;
   const visit = (node: RenderNode | undefined, inText: boolean): void => {
@@ -260,17 +293,24 @@ test('every keyed row is a metric id from docs/metrics.md and colours are theme 
   }
 });
 
-test('the nudge line carries its class tag and the tile levels colour the digits', () => {
-  const tree = renderOverview(build(), el, 100, 'dock', NOW);
-  const coloured: [string, string][] = [];
-  walk(tree, (n) => {
-    if (n.type === 'Text' && typeof n.props?.color === 'string') coloured.push([textOf(n.children).trim(), THEME_KEYS[n.props.color] ?? String(n.props.color)]);
-  });
-  // The context tile is watch-level on fixture A (396k of 1M): amber digits and name.
-  assert.ok(coloured.some(([t, c]) => t.includes('◐ context') && c === 'yellow'), JSON.stringify(coloured));
-  const lines = raw(build(), 100);
-  const nudge = lines.find((l) => l.startsWith(' ▸ '))!;
-  assert.ok(nudge.includes('NEXT · turn 14'), nudge);
-  const next = lines[lines.indexOf(nudge) + 1];
-  assert.ok(next.startsWith("   queue: 'run make check, fix failures' or /goal"), next);
+// The row-identity harness (US-109): fixture B's Console as the TUI renders
+// it (the insta snapshots at 54 / 67 / 85 columns, src/snapshots/) and as the
+// pane draws the same object (dashboard-b.json), row for row. The TUI's last
+// row is its footer, which the pane does not draw.
+test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns', () => {
+  const model = build({ dashboard: fixture('dashboard-b') });
+  for (const columns of [54, 67, 85]) {
+    const snap = readFileSync(join(repo, 'src', 'snapshots', `cctop__theme__fixture_b_snapshots__fixture_b_dashboard_${columns}x24.snap`), 'utf8');
+    const tui = snap
+      .split('\n---\n')[1]
+      .split('\n')
+      .map((l) => l.replace(/\s+$/, ''));
+    while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
+    tui.pop(); // the footer
+    const pane = raw(model, columns, 'dock', { open: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    assert.ok(tui.length >= 10, `${columns}: ${tui.length} TUI rows`);
+    for (let i = 0; i < tui.length; i++) {
+      assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}\n  tui:  ${JSON.stringify(tui[i])}\n  pane: ${JSON.stringify(pane[i])}`);
+    }
+  }
 });

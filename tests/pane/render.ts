@@ -130,6 +130,9 @@ function layout(node: RenderNode | null | undefined, width: number): string[] {
       return layoutText(textOf(el.children), p.wrap, width);
     case 'Button': {
       const label = typeof p.label === 'string' ? p.label : textOf(el.children);
+      // `plain`: the engine draws `1: label` (the hotkey in the accent, a
+      // colon, the label), or the label alone without a hotkey.
+      if (p.plain === true) return [truncate(typeof p.hotkey === 'string' ? `${p.hotkey}: ${label}` : label, width, 'end')];
       const hotkey = typeof p.hotkey === 'string' ? `${p.hotkey} ` : '';
       return [truncate(`[${hotkey}${label}]`, width, 'end')];
     }

@@ -351,6 +351,7 @@ impl Theme {
                 '✓' => 'v',
                 '✗' => 'x',
                 '▇' => '#',
+                '▆' => '=',
                 '▁' => '-',
                 '─' | '—' => '-',
                 '│' => '|',
@@ -642,7 +643,7 @@ mod render_tests {
             1,
             "NO_COLOR: every cell has the reset colour"
         );
-        assert!(text.contains("1 Context"), "{text}");
+        assert!(text.contains("1: ctx"), "{text}");
     }
 
     #[test]
@@ -653,7 +654,10 @@ mod render_tests {
             mono: false,
             ascii: true,
         };
-        let (text, _) = render(&app_with(caps));
+        // The context body: its bars are the gauges ASCII must survive.
+        let mut app = app_with(caps);
+        app.state.console_body = Some(0);
+        let (text, _) = render(&app);
         insta::assert_snapshot!("dashboard_ascii", text);
         assert!(text.contains("###"), "ASCII gauge: {text}");
         assert!(
@@ -704,17 +708,58 @@ mod fixture_b_snapshots {
         app
     }
 
-    /// The dashboard at the sizes plan B names, and every panel full-screen.
+    /// Console at the widths the dock gives (PRD dashboard-v2 §3.6: 35,
+    /// 54, 67, 85) and the standalone terminal (122), every body's rows
+    /// measured before render — a `TestBackend` buffer is `width` cells by
+    /// construction, so measuring after would be vacuous — and every panel
+    /// full-screen.
     #[test]
     fn dashboard_sizes_and_full_screen_panels() {
         let app = app();
-        for (w, h) in [(122, 24), (100, 30), (80, 40), (60, 51), (40, 24)] {
+        let d = app.dashboard();
+        for (w, h) in [(122, 24), (85, 24), (67, 24), (54, 24), (35, 24)] {
+            for open in 0..d.bodies.len() {
+                let rows = crate::ui::dashboard::compose(&app.state.theme, &d, w, h, open);
+                assert!(
+                    rows.len() <= h as usize,
+                    "{w}x{h} body {open}: {} rows",
+                    rows.len()
+                );
+                for r in &rows {
+                    let cells: usize = r.spans.iter().map(|s| s.content.chars().count()).sum();
+                    assert!(
+                        cells <= w as usize,
+                        "{w}x{h} body {open}: {cells} cells: {r:?}"
+                    );
+                }
+            }
             insta::assert_snapshot!(
                 format!("fixture_b_dashboard_{w}x{h}"),
                 render_to_string(&app, w, h)
             );
         }
         let mut app = app;
+        app.state.console_body = Some(0);
+        insta::assert_snapshot!(
+            "fixture_b_console_context_85x24",
+            render_to_string(&app, 85, 24)
+        );
+        app.state.console_body = Some(3);
+        insta::assert_snapshot!(
+            "fixture_b_console_cost_85x24",
+            render_to_string(&app, 85, 24)
+        );
+        app.state.console_body = Some(5);
+        insta::assert_snapshot!(
+            "fixture_b_console_tools_85x24",
+            render_to_string(&app, 85, 24)
+        );
+        app.state.console_body = Some(crate::dashboard::ADVISOR_BODY);
+        insta::assert_snapshot!(
+            "fixture_b_console_advisor_54x24",
+            render_to_string(&app, 54, 24)
+        );
+        app.state.console_body = None;
         for id in 1..=9u8 {
             app.state.overlay = Some(id);
             insta::assert_snapshot!(

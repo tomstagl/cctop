@@ -23,7 +23,7 @@ Usage: cctop query [OPTIONS] <COMMAND>
 Commands:
   summary   Session, context, tokens, cost, limits at a glance
   ledger    One row per turn
-  dashboard The dashboard object: header, four tiles, the nudge, nine ledger rows
+  dashboard The Console object: header, six cells, the act line, eight bodies
   coach     The coach object: state line, four lights, the nudge, next, snoozed
   tools     Per-tool statistics and the largest results
   files     Files touched
@@ -449,7 +449,7 @@ test('/clear between turns: the open pane follows the new id at the next turn, w
   assert.ok(after.every((argv) => argv[4] === NEXT), JSON.stringify(after));
   assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), JSON.stringify($.ui.logs));
   const rows = await render(80, 'inline');
-  assert.ok(rows.some((r) => r.includes('12k / 200k (6 %)')), `the new session’s context, read at once: ${JSON.stringify(rows)}`);
+  assert.ok(rows.some((r) => r.includes('context 12k / 200k (6 %)')), `the new session’s context, read at once: ${JSON.stringify(rows)}`);
   assert.ok(rows.some((r) => /turn 1\b/.test(r)), `the running turn is the new session’s first: ${JSON.stringify(rows)}`);
   assert.ok(!rows.some((r) => r.includes('stale')));
 });

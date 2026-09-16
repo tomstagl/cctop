@@ -1,4 +1,2697 @@
 {
+  "act": {
+    "acting": false,
+    "blocked": false,
+    "key": "a",
+    "line": [
+      {
+        "text": "▸ ",
+        "tone": "warn"
+      },
+      {
+        "text": "Edited 1 src file, no test/build run yet",
+        "tone": "bold"
+      },
+      {
+        "text": " — ",
+        "tone": "dim"
+      },
+      {
+        "text": "queue: 'run make check, fix failures' or /goal",
+        "tone": "fg"
+      }
+    ],
+    "nudge": "A32",
+    "opens": "advisor",
+    "short": [
+      {
+        "text": "▸ ",
+        "tone": "warn"
+      },
+      {
+        "text": "Edited 1 src file, no test/build run yet",
+        "tone": "bold"
+      }
+    ],
+    "tag": "NEXT · turn 14"
+  },
+  "bodies": [
+    {
+      "id": "context",
+      "key": "1",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  396k",
+            "tone": "bold"
+          },
+          {
+            "text": " of ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.00M est",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact ",
+            "tone": "dim"
+          },
+          {
+            "text": "967k",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "570k",
+            "tone": "warn"
+          },
+          {
+            "text": " left",
+            "tone": "dim"
+          },
+          {
+            "text": "   +50k/turn",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "prefix",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈60k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "harness",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈9.1k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▆",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈30k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "inputs",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.4k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "results",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈168k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s2"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  compactions ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   re-reads ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   stale ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact in ",
+            "tone": "dim"
+          },
+          {
+            "text": "~12 turns",
+            "tone": "fg"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  next 8c ≈$.66 · fresh ≈$.18",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  threshold 967k · 570k left · prefix 60k (15 %)",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "prefix",
+          "step": 0,
+          "tokens": 60582
+        },
+        {
+          "label": "harness",
+          "step": 0,
+          "tokens": 9068
+        },
+        {
+          "label": "thinking",
+          "step": 1,
+          "tokens": 30922
+        },
+        {
+          "label": "inputs",
+          "step": 2,
+          "tokens": 1378
+        },
+        {
+          "label": "results",
+          "step": 2,
+          "tokens": 168039
+        }
+      ],
+      "title": "context"
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  no status line — ",
+            "tone": "dim"
+          },
+          {
+            "text": "cctop install",
+            "tone": "fg"
+          },
+          {
+            "text": " adds the exact 5-hour and 7-day figures",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  weight   ",
+            "tone": "dim"
+          },
+          {
+            "text": "×3",
+            "tone": "warn"
+          },
+          {
+            "text": " sonnet — why the bar moves faster than the dollars",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  long ctx ",
+            "tone": "dim"
+          },
+          {
+            "text": "83 %",
+            "tone": "warn"
+          },
+          {
+            "text": " of usage was above 150k context",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  account-wide: other sessions draw from the same pool",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  83% of your usage was at >150k context",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  install the status line shim for the limits",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "limits"
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  warm ",
+            "tone": "ok"
+          },
+          {
+            "text": "50m",
+            "tone": "ok"
+          },
+          {
+            "text": " ≈ left of a ",
+            "tone": "dim"
+          },
+          {
+            "text": "1h",
+            "tone": "fg"
+          },
+          {
+            "text": " entry",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  misses      ",
+            "tone": "dim"
+          },
+          {
+            "text": "2",
+            "tone": "warn"
+          },
+          {
+            "text": "   last tools_changed (88k)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  hit ratio   ",
+            "tone": "dim"
+          },
+          {
+            "text": "98 %",
+            "tone": "ok"
+          }
+        ],
+        [
+          {
+            "text": "  re-write    ",
+            "tone": "dim"
+          },
+          {
+            "text": "396k",
+            "tone": "warn"
+          },
+          {
+            "text": " if it goes cold before the next call",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  hit ratio 98 % · misses 2 (last tools_changed)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  TTL 1h (observed)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  re-write if cold 396k ≈$.99",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  reply before the countdown ends, or the next call pays the re-write",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "cache"
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ≈$10.0",
+            "tone": "bold"
+          },
+          {
+            "text": "   API-equivalent list price — a subscription is not billed per token",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache read",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s2"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "32.97M",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache write",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "597k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "output",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "67k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "└ thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "30k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "fresh input",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "286",
+            "tone": "bold"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  cache hit ",
+            "tone": "dim"
+          },
+          {
+            "text": "98 %",
+            "tone": "ok"
+          },
+          {
+            "text": "   misses ",
+            "tone": "dim"
+          },
+          {
+            "text": "2",
+            "tone": "warn"
+          },
+          {
+            "text": "   burn ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$16.3/h",
+            "tone": "bold"
+          },
+          {
+            "text": "   $/call ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$.08",
+            "tone": "fg"
+          },
+          {
+            "text": "   next 30c ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$2.5",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "ledger ",
+            "tone": "dim"
+          },
+          {
+            "text": "$9.90",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "since ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$0.13",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "agents ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$0.13 (1 %)",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  spent by ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:lorem ipsum dolo 80 %",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "cache read",
+          "step": 2,
+          "tokens": 32969470
+        },
+        {
+          "label": "cache write",
+          "step": 1,
+          "tokens": 597024
+        },
+        {
+          "label": "output",
+          "step": 2,
+          "tokens": 67061
+        },
+        {
+          "label": "└ thinking",
+          "step": 1,
+          "tokens": 30922
+        },
+        {
+          "label": "fresh input",
+          "step": 0,
+          "tokens": 286
+        }
+      ],
+      "title": "cost"
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ✓ ",
+            "tone": "dim"
+          },
+          {
+            "text": "no check yet this session",
+            "tone": "bold"
+          },
+          {
+            "text": "  ·  1 unchecked edit",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  rework   ",
+            "tone": "dim"
+          },
+          {
+            "text": "1 open",
+            "tone": "warn"
+          },
+          {
+            "text": "   1 correction · edits 1 ✓ none 20m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "           fails: Other 4 · Denied 1",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  files    ",
+            "tone": "dim"
+          },
+          {
+            "text": "4 touched",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  git      ",
+            "tone": "dim"
+          },
+          {
+            "text": "+0/−0",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  rewind   1 checkpoint this turn",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  turn     ",
+            "tone": "dim"
+          },
+          {
+            "text": "52 api calls · 125 tool calls",
+            "tone": "fg"
+          },
+          {
+            "text": "   api 5:13 / tools 3:24",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "work"
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "TOOL / CLASS",
+            "tone": "dim"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "CALLS",
+            "tone": "dim"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "ERR",
+            "tone": "dim"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "p50",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "→CTX",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "LAST",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "214",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "2",
+            "tone": "warn"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.6s",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "152k",
+            "tone": "warn"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "9m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "RemoteTrigger",
+            "tone": "fg"
+          },
+          {
+            "text": "          ",
+            "tone": "dim"
+          },
+          {
+            "text": "16",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈4.3s",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "9.2k",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "32m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash·test",
+            "tone": "fg"
+          },
+          {
+            "text": "              ",
+            "tone": "dim"
+          },
+          {
+            "text": "15",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "3",
+            "tone": "warn"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈2.0s",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "3.9k",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "19m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "ToolSearch",
+            "tone": "fg"
+          },
+          {
+            "text": "              ",
+            "tone": "dim"
+          },
+          {
+            "text": "4",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈8ms",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "8",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "32m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read",
+            "tone": "fg"
+          },
+          {
+            "text": "                    ",
+            "tone": "dim"
+          },
+          {
+            "text": "3",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈22ms",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "2.2k",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "41m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "SendFeedback",
+            "tone": "fg"
+          },
+          {
+            "text": "            ",
+            "tone": "dim"
+          },
+          {
+            "text": "1",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈29ms",
+            "tone": "fg"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "44",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "41m",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  257 calls",
+            "tone": "bold"
+          },
+          {
+            "text": "   5 errors ",
+            "tone": "dim"
+          },
+          {
+            "text": "Other 4",
+            "tone": "warn"
+          },
+          {
+            "text": "   1 denied",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  top ctx  ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome lorem",
+            "tone": "fg"
+          },
+          {
+            "text": "  1.6k",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  agents   ",
+            "tone": "dim"
+          },
+          {
+            "text": "1 (0 running)",
+            "tone": "bold"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$0.13 (1 %)",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "           fork 0:42 485k done",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "tools"
+    },
+    {
+      "id": "advisor",
+      "key": "a",
+      "keys": "Enter coach",
+      "rows": [
+        [
+          {
+            "text": "  ▸ ",
+            "tone": "ok"
+          },
+          {
+            "text": "Edited 1 src file, no test/build run yet",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "    queue: 'run make check, fix failures' or /goal",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "    NEXT · since turn 14 · +2 queued (n)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "    saves avoids a hard stop",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  class    ",
+            "tone": "dim"
+          },
+          {
+            "text": "NEXT",
+            "tone": "warn"
+          },
+          {
+            "text": "   A32 · retires a test run or a read of an edited file",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  next     context-reset → next-row only · ctx 396k →…",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  snoozed  —",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  also",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  NEXT A23 ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  LATER A03 mcp:claude-in-chrome results: 152k since the last boundary (15 % of the window)",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "advisor"
+    },
+    {
+      "id": "events",
+      "key": "0",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:17",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "coach",
+            "tone": "accent"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "NEXT A32 fired · Edited 1 src file, no test/build run yet",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:17",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost-state $9.90 · api 18:45 · retries 0:02",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:17",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "note",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "interrupted after 125 calls",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:08",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 68",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:08",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 118",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:08",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:08",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 68",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 118",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 118",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 121",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lore ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome navigate lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 69",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 69",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 69",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:07",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 69",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome computer lorem ipsu ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 69",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "10:06",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "mcp:claude-in-chrome ✓ 118",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "events"
+    }
+  ],
+  "cells": [
+    {
+      "id": "context",
+      "key": "1",
+      "label": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "40%",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "570k left",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "40%",
+          "tone": "warn"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "570k left",
+          "tone": "fg"
+        }
+      ],
+      "opens": "context",
+      "short": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "40%",
+          "tone": "warn"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "label": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "mid": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "opens": "limits",
+      "short": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "label": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "50m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "50m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cache",
+      "short": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "50m≈",
+          "tone": "ok"
+        }
+      ]
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "label": [
+        {
+          "text": "spend ≈$10.0",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "≈$16.3/h",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "spend ≈$10.0",
+          "tone": "fg"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "≈$16.3/h",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cost",
+      "short": [
+        {
+          "text": "spend ≈$10.0",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "label": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "1 open",
+          "tone": "warn"
+        }
+      ],
+      "mid": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "1 open",
+          "tone": "warn"
+        }
+      ],
+      "opens": "work",
+      "short": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "label": [
+        {
+          "text": "257 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "5 err",
+          "tone": "warn"
+        }
+      ],
+      "mid": [
+        {
+          "text": "257 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "5 err",
+          "tone": "warn"
+        }
+      ],
+      "opens": "tools",
+      "short": [
+        {
+          "text": "257c ",
+          "tone": "fg"
+        },
+        {
+          "text": "5 err",
+          "tone": "warn"
+        }
+      ]
+    }
+  ],
   "cost_combined": {
     "approx": true,
     "metric_id": "cost_combined",
@@ -13,6 +2706,7 @@
     "line": "cctop  claude-sonnet-5 · turn 14 · 52:41 · ENDED 10:17 · /home/user/project · v2.1.247",
     "model": "claude-sonnet-5",
     "phase": {
+      "elapsed": "19:54",
       "glyph": "○",
       "tokens": [
         "0s"
@@ -29,544 +2723,6 @@
     "l1": "◐40% ○— ○50m ◐1 open ▸",
     "l2": "◐○○◐"
   },
-  "nudge": {
-    "acting": false,
-    "class": "NEXT",
-    "id": "A32",
-    "line": "Edited 1 src file, no test/build run yet — queue: 'run make check, fix failures' or /goal",
-    "tag": "NEXT · turn 14"
-  },
-  "rows": [
-    {
-      "detail": [
-        {
-          "text": "+50k/turn",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "autocompact 967k",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "570k left",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "compactions 0",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "re-reads 0",
-          "tone": "dim"
-        }
-      ],
-      "digit": 1,
-      "name": "Context",
-      "values": [
-        {
-          "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
-          "tone": "accent"
-        },
-        {
-          "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
-          "tone": "dim"
-        },
-        {
-          "text": " prefix 60k · inputs ≈1.4k · results ≈168k · thinking 30k · harness ≈9.1k",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "≈$10.0 API-equivalent",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$16.3/h",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$/call ≈$.08",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$/turn ≈$.66",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "next 30c ≈$2.5",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "agents ≈$0.13 (1 %)",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:lorem ipsu…",
-          "tone": "dim"
-        }
-      ],
-      "digit": 2,
-      "name": "Tokens",
-      "values": [
-        {
-          "text": "cache read 32.97M",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "write 597k",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "output 67k",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "warm 50m ≈",
-          "tone": "ok"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "misses 2 (tools_changed 88k)",
-          "tone": "warn"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "83% of your usage was at >150k context",
-          "tone": "dim"
-        }
-      ],
-      "digit": 3,
-      "name": "Limits",
-      "values": [
-        {
-          "text": "no status line",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "weight ×3 (sonnet)",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "long_context 83 %",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "turn elapsed 19:54 · 52 api calls · 125 tool calls",
-          "tone": "dim"
-        }
-      ],
-      "digit": 4,
-      "name": "Turn",
-      "values": [
-        {
-          "text": "IDLE 0s",
-          "tone": "accent"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "api ≈5:13 · tools 3:24",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "Other 4",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "Denied 1",
-          "tone": "dim"
-        }
-      ],
-      "digit": 5,
-      "name": "Tools",
-      "values": [
-        {
-          "text": "257 calls",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "5 err",
-          "tone": "warn"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "test 15 (3 ✗)",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:claude-in-chrome 214",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "RemoteTrigger 16",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "ToolSearch 4",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "top ctx mcp:claude-i…",
-          "tone": "dim"
-        }
-      ]
-    },
-    {
-      "detail": [],
-      "digit": 6,
-      "name": "Agents",
-      "values": [
-        {
-          "text": "0 run",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "1 %",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "fork 0:42 485k",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$0.13",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [],
-      "digit": 7,
-      "name": "Files",
-      "values": [
-        {
-          "text": "4 touched",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "ad450c.rs W×1",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "fc57f7.rs R×1",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "10:08 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:claude-in-chrome ✓ 118",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "10:08 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:claude-in-chrome computer lorem ips…",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "10:08 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:claude-i…",
-          "tone": "fg"
-        }
-      ],
-      "digit": 8,
-      "name": "Events",
-      "values": [
-        {
-          "text": "10:17 ",
-          "tone": "dim"
-        },
-        {
-          "text": "api ",
-          "tone": "crit"
-        },
-        {
-          "text": "cost-state $9.90 · api 18:45 · retries …",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "10:17 ",
-          "tone": "dim"
-        },
-        {
-          "text": "note ",
-          "tone": "dim"
-        },
-        {
-          "text": "interrupted after 125 calls",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "10:08 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "mcp:claude-i…",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "NEXT A23 ctx 396k → ≈$.08/call, ≈$.66/turn (was …",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "LATER A03 mcp:claude-in-chrome results: 152k sinc…",
-          "tone": "dim"
-        }
-      ],
-      "digit": 9,
-      "name": "Advisor",
-      "values": [
-        {
-          "text": "NEXT A32",
-          "tone": "warn"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "next context-reset → next-row only · ctx 396k →…",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "snoozed —",
-          "tone": "dim"
-        }
-      ]
-    }
-  ],
-  "schema": 1,
-  "session_mode": "interactive",
-  "start_line": null,
-  "tiles": [
-    {
-      "approx": true,
-      "figure": "40",
-      "glyph": "◐",
-      "id": "context",
-      "level": "watch",
-      "name": "context",
-      "source": "transcript",
-      "sub1": "396k of 1.00M",
-      "sub2": "≈$.08/call",
-      "unit": "%"
-    },
-    {
-      "approx": true,
-      "figure": "50",
-      "glyph": "○",
-      "id": "cache",
-      "level": "quiet",
-      "name": "cache",
-      "source": "transcript",
-      "sub1": "warm · 50m (1h) TTL",
-      "sub2": "misses 2 (last tools_changed)",
-      "unit": "m"
-    },
-    {
-      "approx": false,
-      "figure": "—",
-      "glyph": "○",
-      "id": "limits",
-      "level": "quiet",
-      "name": "limits",
-      "source": "status line",
-      "sub1": "no status line",
-      "sub2": "",
-      "unit": "%"
-    },
-    {
-      "approx": false,
-      "figure": "1",
-      "glyph": "◐",
-      "id": "rework",
-      "level": "watch",
-      "name": "rework",
-      "source": "transcript",
-      "sub1": "1 · correction",
-      "sub2": "edits 1 ✓ none 20m",
-      "unit": "open"
-    }
-  ]
+  "schema": 2,
+  "session_mode": "interactive"
 }

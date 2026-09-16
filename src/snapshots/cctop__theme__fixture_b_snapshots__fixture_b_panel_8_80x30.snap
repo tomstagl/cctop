@@ -31,4 +31,4 @@ expression: "render_to_string(&app, 80, 30)"
 │ 23:29:30 note   /clear · continued in a new session                          │
 │ 23:29:30 api    cost-state $18.75 · api 22:14 · retries 0:00                 │
 └──────────────────────────────────────────────────────────────────────────────┘
- ?help  1-9 open a panel full-screen  c coach  a ask  t theme  q
+ ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

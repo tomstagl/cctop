@@ -288,10 +288,14 @@ mod app_tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert!(app.state.ask.is_none());
         assert!(!app.state.tokens_include_agents);
-        // On the dashboard `a` asks about the nudge (panel 9).
+        // On the dashboard `A` asks about the nudge (panel 9); `a` is
+        // Console's advisor body.
         app.state.open = None;
         app.tick();
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(app.state.ask.is_none());
+        assert_eq!(app.state.console_body(), crate::dashboard::ADVISOR_BODY);
+        app.handle_key(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE));
         assert_eq!(app.state.ask.as_ref().map(|(p, _)| *p), Some(9));
     }
 }

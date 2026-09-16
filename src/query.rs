@@ -539,9 +539,9 @@ pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
     v
 }
 
-/// `cctop query dashboard`: the drawn form of the dashboard (header, four
-/// tiles, the nudge line, nine ledger rows of tagged segments cut at 118
-/// cells).
+/// `cctop query dashboard`: Console (schema 2) — the header, six cells,
+/// the act line and eight bodies of tagged segments, full length; each
+/// surface cuts at its own width.
 pub fn dashboard(state: &State) -> Value {
     let engine = advisor::Engine::for_state(state);
     serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null)
@@ -714,12 +714,13 @@ mod tests {
         );
         assert_eq!(s["cost_combined"]["source"], "mixed");
         assert!(s["agents_cost"].is_null(), "D has no subagents");
-        // Dashboard row 2's detail carries the same words as Panel 2.
+        // Console's cost body carries the same words as Panel 2.
         let dash = dashboard(&d);
-        let detail: String = dash["rows"][1]["detail"]
+        let detail: String = dash["bodies"][3]["rows"]
             .as_array()
             .unwrap()
             .iter()
+            .flat_map(|row| row.as_array().unwrap().iter())
             .filter_map(|seg| seg["text"].as_str())
             .collect();
         assert!(

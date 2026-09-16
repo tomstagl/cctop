@@ -38,16 +38,20 @@ pub const BINDINGS: &[Binding] = &[
         action: "help",
     },
     Binding {
-        keys: "1-9",
-        action: "open a panel full-screen",
+        keys: "1-6 · a · 0",
+        action: "open a body (a advisor, 0 home)",
     },
     Binding {
         keys: "Esc",
-        action: "back to the dashboard",
+        action: "home (events) · back from a panel",
     },
     Binding {
         keys: "Enter",
-        action: "act on nudge · ledger 1/2 · agents 6",
+        action: "the body's panel · nudge (advisor)",
+    },
+    Binding {
+        keys: "A",
+        action: "ask about the panel or nudge",
     },
     Binding {
         keys: "p",
@@ -508,8 +512,19 @@ impl App {
                 self.quit = true
             }
             KeyCode::Char('?') => self.help = true,
+            KeyCode::Enter
+                if self.state.open.is_none()
+                    && self.state.console_body() != crate::dashboard::ADVISOR_BODY =>
+            {
+                // Console: the open body's panel, full-screen.
+                let id = crate::dashboard::BODY_PANELS[self.state.console_body()];
+                if self.panels.iter().any(|p| p.id() == id) {
+                    self.state.open = Some(id);
+                    self.state.overlay = None;
+                }
+            }
             KeyCode::Enter => {
-                // Act on the nudge from the dashboard: the coach view's Enter.
+                // The advisor body: act on the nudge, the coach view's Enter.
                 self.state.view = crate::ui::state::View::Coach;
                 self.state.coach_ui = Default::default();
                 if !self.coach_key(key) {
@@ -528,7 +543,15 @@ impl App {
                 };
                 self.state.set_toast(msg);
             }
-            KeyCode::Char('a') => {
+            KeyCode::Char('a') if self.state.open.is_none() => {
+                // Console: the advisor body.
+                self.state.console_body = Some(crate::dashboard::ADVISOR_BODY);
+            }
+            KeyCode::Char('0') | KeyCode::Esc if self.state.open.is_none() => {
+                // Console: home — the events body.
+                self.state.console_body = None;
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
                 // The open panel, else the nudge.
                 let panel = self.state.open.unwrap_or(9);
                 match crate::ask::compose(&self.state, panel) {
@@ -571,7 +594,13 @@ impl App {
                 self.state
                     .set_toast(format!("refresh {} ms", self.refresh_ms));
             }
-            KeyCode::Char(c @ '1'..='9') => {
+            KeyCode::Char(c @ '1'..='6') if self.state.open.is_none() => {
+                // Console: the cell's body swaps in; the header never moves.
+                self.state.console_body = Some((c as u8 - b'1') as usize);
+            }
+            KeyCode::Char(c @ '1'..='9') if self.state.open.is_some() => {
+                // Inside a panel the digits still switch panels, so every
+                // one of the nine stays reachable.
                 let id = c as u8 - b'0';
                 if self.panels.iter().any(|p| p.id() == id) {
                     self.state.open = Some(id);
@@ -674,6 +703,11 @@ impl App {
     }
 
     /// Draw one frame.
+    /// The dashboard object as this frame would draw it.
+    pub fn dashboard(&self) -> crate::dashboard::Dashboard {
+        crate::dashboard::snapshot(&self.state, &self.advisor)
+    }
+
     pub fn draw(&self, frame: &mut Frame) {
         let area = frame.area();
         if self.state.view == crate::ui::state::View::Coach {
@@ -722,7 +756,13 @@ impl App {
             }
             None => {
                 let d = crate::dashboard::snapshot(&self.state, &self.advisor);
-                crate::ui::dashboard::render(frame, body, &d, &self.state.theme);
+                crate::ui::dashboard::render(
+                    frame,
+                    body,
+                    &d,
+                    &self.state.theme,
+                    self.state.console_body(),
+                );
             }
         }
         // A view a panel opened (the Tokens digit's Enter opens the Context
@@ -1200,25 +1240,47 @@ mod tests {
     #[test]
     fn headless_render_shows_the_dashboard_and_footer() {
         let out = render_to_string(&app(), 60, 24);
-        assert!(out.contains("1 Context"), "{out}");
-        assert!(out.contains("9 Advisor"), "{out}");
-        assert!(out.contains("?help  1-9 open a panel"), "{out}");
+        assert!(out.contains("1: ctx"), "{out}");
+        assert!(out.contains("─── events "), "{out}");
+        assert!(out.contains("0: home"), "{out}");
+        assert!(out.contains("?help  1-6 a 0 body"), "{out}");
         assert_eq!(out.lines().count(), 24);
     }
 
+    /// Console: a digit swaps the body in place, Enter opens that body's
+    /// panel full-screen, and inside a panel the digits still switch
+    /// panels; `0` and Esc are the way home.
     #[test]
     fn digits_open_a_panel_full_screen_and_help_lists_bindings() {
         let mut a = app();
-        a.handle_key(key('2'));
+        a.handle_key(key('3'));
+        assert_eq!(a.state.open, None);
+        assert_eq!(a.state.console_body(), 2);
+        let out = render_to_string(&a, 60, 24);
+        assert!(out.contains("─── cache "), "{out}");
+        // The cache body's panel is 2 (Tokens & Cost).
+        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(a.state.open, Some(2));
         let out = render_to_string(&a, 40, 16);
         assert!(out.contains("Stub2") && out.contains("content 2"), "{out}");
         assert!(out.contains("0 lines"), "the summary in the frame: {out}");
         assert!(out.contains("Esc back"), "{out}");
-        // A digit without a panel behind it does nothing.
+        // The stub panel swallows every key but Esc (a real panel passes
+        // digits through, which switch panels).
         a.handle_key(key('5'));
         assert_eq!(a.state.open, Some(2));
         a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(a.state.open, None);
+        assert_eq!(a.state.console_body(), 2, "Esc from a panel keeps the body");
+        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(a.state.console_body(), crate::dashboard::EVENTS_BODY);
+        a.handle_key(key('a'));
+        assert_eq!(a.state.console_body(), crate::dashboard::ADVISOR_BODY);
+        a.handle_key(key('0'));
+        assert_eq!(a.state.console_body(), crate::dashboard::EVENTS_BODY);
+        // A body whose panel the app does not have: Enter does nothing.
+        a.handle_key(key('5'));
+        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(a.state.open, None);
         a.handle_key(key('?'));
         let out = render_to_string(&a, 60, 20);
@@ -1234,6 +1296,7 @@ mod tests {
     fn keys_route_to_the_open_panel() {
         let mut a = app();
         a.handle_key(key('1'));
+        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(a.state.open, Some(1));
         a.handle_key(key('j'));
         a.handle_key(key('j'));

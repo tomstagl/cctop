@@ -1,0 +1,28 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 85, 24)"
+---
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
+   builds and test suites longer than a …  LATER · turn 6
+─── context ───────────────────────────────────────────── 0: home  ·  Enter panel ───
+  142k of 1.00M est   autocompact 567k   425k left   +146k/turn
+
+  prefix    ≈49k  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇
+  harness  ≈7.8k  ▆▆▁▁▁▁▁▁▁▁▁▁▁▁
+  thinking  ≈355  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  inputs    ≈538  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  results   ≈180  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+
+  compactions 1   re-reads 0   stale 0   autocompact in ~3 turns
+
+  next 15c ≈$.50 · fresh ≈$.38
+  threshold 567k · 425k left · prefix 49k (35 %)
+
+
+
+
+
+ ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

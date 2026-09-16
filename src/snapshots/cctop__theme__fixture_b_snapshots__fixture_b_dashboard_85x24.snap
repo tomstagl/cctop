@@ -1,0 +1,28 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, w, h)"
+---
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
+ ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
+   builds and test suites longer than a …  LATER · turn 6
+─── events ────────────────────────────────────────────── 0: home  ·  Enter panel ───
+  23:29  api    cost-state $18.75 · api 22:14 · retries 0:00
+  23:29  note   /clear · continued in a new session
+  23:28  coach  LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the turn …
+  23:28  tool   Bash ✓ 49
+  23:28  tool   Bash git commit -m "$(cat lorem_i lorem lore lor lorem_i lorem_ip lo…
+  23:27  tool   Bash ✓ 16
+  23:27  tool   Bash git push lorem_ lore 2>&1 ▶
+  23:27  tool   Bash ✓ 32
+  23:27  cost   model opus-5 → sonnet-5
+  23:27  tool   Bash git commit -m "$(cat lorem_i lorem_ipsu lorem_i lore cctop lor …
+  23:25  tool   AskUserQuestion ✓ 83
+  14:49  tool   AskUserQuestion ▶
+  14:49  api    API error: invalid_request 400
+  14:49  compactcompacted auto 567k → 230k in 1:20
+  14:48  note   interrupted after 6 calls
+  14:47  api    API error: request failed
+  14:46  tool   TaskUpdate ✓ 5
+ ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

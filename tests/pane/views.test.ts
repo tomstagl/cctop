@@ -291,10 +291,11 @@ test('agents on fixture D: the team group under the subagents, its members in th
   fits(narrow, 50);
   has(narrow, /^○ diff-pa…\s+15:48\s+328k\s+0\.31\s+0\/1\s+ended$/);
   has(narrow, /^— diff-pa…\s+no transcript$/);
-  // Dashboard row 6 on D is the query's row, drawn verbatim on both sides.
-  const dash = fixture<{ rows: { digit: number; values: { text: string }[] }[] }>('dashboard-d');
-  const six = dash.rows.find((r) => r.digit === 6)!;
-  assert.equal(six.values.map((s) => s.text).join(''), 'team ≈$0.48 · 2 of 3 read');
+  // Console's tools body on D carries the team line, drawn verbatim on both sides.
+  const dash = fixture('dashboard-d') as { bodies: { id: string; rows: { text: string }[][] }[] };
+  const tools = dash.bodies.find((b) => b.id === 'tools')!;
+  const teamRow = tools.rows.map((r) => r.map((s) => s.text).join('')).find((r) => r.startsWith('  team'))!;
+  assert.equal(teamRow, '  team     ≈$0.48 · 2 of 3 read');
 });
 
 test('agents: MCP servers, restarts and background tasks', () => {
@@ -426,10 +427,15 @@ test('renderView dispatches on model.view and draws the Overview inline', () => 
   assert.match(first.get('overview')!, /^ cctop  /);
   assert.match(first.get('tools')!, /^TOOL/);
   assert.match(first.get('events')!, /^\d\d:\d\d:\d\d /);
+  // Inline, whatever the view: the strip — the status line, then the
+  // coach's line and the act line once the dashboard object is in.
+  const withDash = reduce(model, { type: 'query', verb: 'dashboard', data: fixture('dashboard') });
   for (const view of DETAIL) {
-    const inline = renderToText(renderView({ ...model, view }, el, 80, 'inline', NOW), 80);
+    const inline = renderToText(renderView({ ...withDash, view }, el, 80, 'inline', NOW), 80);
     assert.match(inline[0], /^● BUSY/, view);
-    assert.ok(inline.some((r) => r.includes('Limits')), view);
+    assert.ok(inline.some((r) => /^ [○◐●]/.test(r)), `${view}: ${JSON.stringify(inline)}`);
+    assert.ok(inline.some((r) => r.startsWith(' ▸ ')), `${view}: ${JSON.stringify(inline)}`);
+    assert.equal(renderToText(renderView({ ...model, view }, el, 80, 'inline', NOW), 80).length, 1, view);
   }
   // The functions the dispatcher calls are the ones the views export.
   assert.deepEqual(renderToText(renderTools(model, el, 80, NOW), 80), rawRows('tools', model, 80));

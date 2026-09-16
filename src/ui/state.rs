@@ -447,6 +447,9 @@ pub struct State {
     pub tokens_include_agents: bool,
     /// The panel open full-screen (its digit), closed with Esc.
     pub open: Option<PanelId>,
+    /// Console's open body, an index into `Dashboard::bodies` (`1`–`6`, `a`,
+    /// `0`); `None` is events, the way home (`console_body()`).
+    pub console_body: Option<usize>,
     /// A view the open panel owns on top of itself (`Enter`: a ledger, a
     /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,
@@ -1305,6 +1308,11 @@ impl State {
     /// Whether the prompt cache is warm right now, with the `≈` flag.
     pub fn cache_warm(&self) -> Option<(bool, bool)> {
         self.cache_clock().map(|c| (c.remaining_ms > 0, c.approx))
+    }
+
+    /// Console's open body: the index a key set, else events (home).
+    pub fn console_body(&self) -> usize {
+        self.console_body.unwrap_or(crate::dashboard::EVENTS_BODY)
     }
 
     /// "Now" for elapsed-time arithmetic: frozen at the end for dead sessions.

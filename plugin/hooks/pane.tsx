@@ -21,7 +21,7 @@ import {
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
-import { viewOfDigit, type OverviewActions } from './views/overview';
+import { badgesLine, header, type OverviewActions } from './views/overview';
 
 // Re-exported so the checked-in `$` contract's own version (US-009) has one
 // source (`model.ts`, already imported by both this file and the views) and
@@ -245,15 +245,11 @@ function coachChanged($: EngineInterface): void {
   }
 }
 
-// What the Overview's ledger Buttons do: a digit 5–9 opens that view, 1–4
-// unfolds the row's block beneath it (and folds it on the next press).
+// What Console's targets do: a cell, the act line or `0 home` opens its
+// body in place; the header never moves.
 function overviewActions($: EngineInterface): OverviewActions {
   return {
-    row: (digit) => {
-      const view = viewOfDigit(digit);
-      if (view !== null) selectView($, view);
-      else apply($, { type: 'overview.toggle', digit });
-    },
+    open: (id) => apply($, { type: 'overview.body', id }),
   };
 }
 
@@ -575,6 +571,20 @@ function viewBar(
     );
     used += gap + width;
     prevActive = active;
+  }
+  // The `bin · shim · hooks 2.1.273` badges after the tabs, when they fit:
+  // Console's header is the object's, identical on both surfaces.
+  const badges = badgesLine(header(model, 0).badges);
+  const badgesWidth = badges.reduce((n, b) => n + b.text.length, 0);
+  if (used + 2 + badgesWidth <= columns) {
+    lines[lines.length - 1].push(
+      <Text wrap="truncate">{'  '}</Text>,
+      ...badges.map((b) => (
+        <Text wrap="truncate" color={b.color} dimColor={b.dim}>
+          {b.text}
+        </Text>
+      )),
+    );
   }
   return (
     <Box flexDirection="column">

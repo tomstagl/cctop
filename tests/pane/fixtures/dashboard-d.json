@@ -1,4 +1,2683 @@
 {
+  "act": {
+    "acting": false,
+    "blocked": false,
+    "key": "a",
+    "line": [
+      {
+        "text": "▸ ",
+        "tone": "warn"
+      },
+      {
+        "text": "Edited 1 src file, no test/build run yet",
+        "tone": "bold"
+      },
+      {
+        "text": " — ",
+        "tone": "dim"
+      },
+      {
+        "text": "queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+        "tone": "fg"
+      }
+    ],
+    "nudge": "A32",
+    "opens": "advisor",
+    "short": [
+      {
+        "text": "▸ ",
+        "tone": "warn"
+      },
+      {
+        "text": "Edited 1 src file, no test/build run yet",
+        "tone": "bold"
+      }
+    ],
+    "tag": "NEXT · turn 8"
+  },
+  "bodies": [
+    {
+      "id": "context",
+      "key": "1",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  140k",
+            "tone": "bold"
+          },
+          {
+            "text": " of ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.00M est",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact ",
+            "tone": "dim"
+          },
+          {
+            "text": "967k",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "826k",
+            "tone": "fg"
+          },
+          {
+            "text": " left",
+            "tone": "dim"
+          },
+          {
+            "text": "   +33k/turn",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "prefix",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈56k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s0"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "harness",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈12k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▆▆▆",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈36k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "inputs",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈11k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▆▆▆",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "results",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈20k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  compactions ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   re-reads ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   stale ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact in ",
+            "tone": "dim"
+          },
+          {
+            "text": "~25 turns",
+            "tone": "fg"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  next 6c ≈$.36 · fresh ≈$.29",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  threshold 967k · 826k left · prefix 61k (44 %)",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "prefix",
+          "step": 0,
+          "tokens": 56698
+        },
+        {
+          "label": "harness",
+          "step": 0,
+          "tokens": 12704
+        },
+        {
+          "label": "thinking",
+          "step": 1,
+          "tokens": 36356
+        },
+        {
+          "label": "inputs",
+          "step": 2,
+          "tokens": 11462
+        },
+        {
+          "label": "results",
+          "step": 2,
+          "tokens": 20297
+        }
+      ],
+      "title": "context"
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  no status line — ",
+            "tone": "dim"
+          },
+          {
+            "text": "cctop install",
+            "tone": "fg"
+          },
+          {
+            "text": " adds the exact 5-hour and 7-day figures",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  weight   ",
+            "tone": "dim"
+          },
+          {
+            "text": "×10",
+            "tone": "warn"
+          },
+          {
+            "text": " fable — why the bar moves faster than the dollars",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  long ctx ",
+            "tone": "dim"
+          },
+          {
+            "text": "60 %",
+            "tone": "warn"
+          },
+          {
+            "text": " of usage was above 150k context",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  account-wide: other sessions draw from the same pool",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  60% of your usage was at >150k context",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  install the status line shim for the limits",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "limits"
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  warm ",
+            "tone": "ok"
+          },
+          {
+            "text": "59m",
+            "tone": "ok"
+          },
+          {
+            "text": " ≈ left of a ",
+            "tone": "dim"
+          },
+          {
+            "text": "1h",
+            "tone": "fg"
+          },
+          {
+            "text": " entry",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  misses      ",
+            "tone": "dim"
+          },
+          {
+            "text": "1",
+            "tone": "warn"
+          },
+          {
+            "text": "   last model_changed (111k)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  hit ratio   ",
+            "tone": "dim"
+          },
+          {
+            "text": "97 %",
+            "tone": "ok"
+          }
+        ],
+        [
+          {
+            "text": "  re-write    ",
+            "tone": "dim"
+          },
+          {
+            "text": "140k",
+            "tone": "warn"
+          },
+          {
+            "text": " if it goes cold before the next call",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  hit ratio 97 % · misses 1 (last model_changed)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  TTL 1h (observed)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  re-write if cold 140k ≈$1.8",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  reply before the countdown ends, or the next call pays the re-write",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "cache"
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ≈$10.6",
+            "tone": "bold"
+          },
+          {
+            "text": "   API-equivalent list price — a subscription is not billed per token",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache read",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s2"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "11.10M",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache write",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "320k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "output",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "85k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "└ thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "39k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "fresh input",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.1k",
+            "tone": "bold"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  cache hit ",
+            "tone": "dim"
+          },
+          {
+            "text": "97 %",
+            "tone": "ok"
+          },
+          {
+            "text": "   misses ",
+            "tone": "dim"
+          },
+          {
+            "text": "1",
+            "tone": "warn"
+          },
+          {
+            "text": "   burn ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$34.2/h",
+            "tone": "bold"
+          },
+          {
+            "text": "   $/call ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$.06",
+            "tone": "fg"
+          },
+          {
+            "text": "   next 30c ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$1.8",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "ledger ",
+            "tone": "dim"
+          },
+          {
+            "text": "$10.2",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "team ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$0.48 (5 %, 2 of 3 read)",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  spent by ",
+            "tone": "dim"
+          },
+          {
+            "text": "skill:ralph-skills:prd 10 %",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "skill:cctop:cctop 8 %",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "team 5 %",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "cache read",
+          "step": 2,
+          "tokens": 11097059
+        },
+        {
+          "label": "cache write",
+          "step": 1,
+          "tokens": 320258
+        },
+        {
+          "label": "output",
+          "step": 2,
+          "tokens": 85105
+        },
+        {
+          "label": "└ thinking",
+          "step": 1,
+          "tokens": 39541
+        },
+        {
+          "label": "fresh input",
+          "step": 0,
+          "tokens": 1141
+        }
+      ],
+      "title": "cost"
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ✓ ",
+            "tone": "ok"
+          },
+          {
+            "text": "cargo test --lib lorem_…",
+            "tone": "bold"
+          },
+          {
+            "text": "  passed 32m ago  ·  3 edits since",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  rework   ",
+            "tone": "dim"
+          },
+          {
+            "text": "3 unchecked",
+            "tone": "warn"
+          },
+          {
+            "text": "   edits 3 ✓ none 17m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "           fails: Other 3",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  files    ",
+            "tone": "dim"
+          },
+          {
+            "text": "8 touched",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  git      ",
+            "tone": "dim"
+          },
+          {
+            "text": "+0/−0",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  rewind   1 checkpoint this turn",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  turn     ",
+            "tone": "dim"
+          },
+          {
+            "text": "4 api calls · 3 tool calls",
+            "tone": "fg"
+          },
+          {
+            "text": "   api 1:38 / tools 0:04",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "work"
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "TOOL / CLASS",
+            "tone": "dim"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "CALLS",
+            "tone": "dim"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "ERR",
+            "tone": "dim"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "p50",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "→CTX",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "LAST",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash·explore",
+            "tone": "fg"
+          },
+          {
+            "text": "           ",
+            "tone": "dim"
+          },
+          {
+            "text": "42",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "1",
+            "tone": "warn"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈2.1s",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "9.9k",
+            "tone": "warn"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "6m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read",
+            "tone": "fg"
+          },
+          {
+            "text": "                   ",
+            "tone": "dim"
+          },
+          {
+            "text": "16",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈60ms",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "7.0k",
+            "tone": "fg"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "6m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Edit",
+            "tone": "fg"
+          },
+          {
+            "text": "                   ",
+            "tone": "dim"
+          },
+          {
+            "text": "11",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈79ms",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "387",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "3:04",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash·build-lint",
+            "tone": "fg"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "7",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "1",
+            "tone": "warn"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈7.7s",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "776",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "18m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "AskUserQuestion",
+            "tone": "fg"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "4",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈15.4s",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "327",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "10m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent",
+            "tone": "fg"
+          },
+          {
+            "text": "                   ",
+            "tone": "dim"
+          },
+          {
+            "text": "3",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈2.3s",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "216",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "0:02",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  97 calls",
+            "tone": "bold"
+          },
+          {
+            "text": "   3 errors ",
+            "tone": "dim"
+          },
+          {
+            "text": "Other 3",
+            "tone": "warn"
+          },
+          {
+            "text": "   0 denied",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  top ctx  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cctop install --yes",
+            "tone": "fg"
+          },
+          {
+            "text": "  500",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  team     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$0.48",
+            "tone": "bold"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "2 of 3 read",
+            "tone": "warn"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "tools"
+    },
+    {
+      "id": "advisor",
+      "key": "a",
+      "keys": "Enter coach",
+      "rows": [
+        [
+          {
+            "text": "  ▸ ",
+            "tone": "ok"
+          },
+          {
+            "text": "Edited 1 src file, no test/build run yet",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "    queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "    NEXT · since turn 8 · +2 queued (n)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "    saves avoids a hard stop",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  class    ",
+            "tone": "dim"
+          },
+          {
+            "text": "NEXT",
+            "tone": "warn"
+          },
+          {
+            "text": "   A32 · retires a test run or a read of an edited file",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  next     cache-miss → when the slot frees · cache m…",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  snoozed  —",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  also",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  LATER A01 cache miss: model → fable-5-1 · 111k re-written ≈$2.24",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  LATER A10 `lorem_ipsum_dolor_sit_amet_co…` blocked the turn for 1:38",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "advisor"
+    },
+    {
+      "id": "events",
+      "key": "0",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:04",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "coach",
+            "tone": "accent"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "NEXT A32 fired · Edited 1 src file, no test/build run yet",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:04",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost-state $10.16 · api 19:38 · retries 0:00",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:04",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent ✓ 72",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:04",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:03",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent ✓ 72",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:03",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:03",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "note",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "/model",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "hook",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Stop hooks 2 ran, 54ms",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Edit ✓ 37",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Edit /home/user/project/src/d93e76… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "hook",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Stop hooks 2 ran, 64ms",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Write ✓ 35",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15:01",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Write /home/user/project/src/d93e76… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash lorem_ipsum_dolor_sit_amet_consectetur_ for l in lorem_i lorem lorem_ lorem_i do echo lore query $l lorem_ipsu lore l lorem lorem_i lorem_ipsum_dolor_sit_ query $l --session $l 2>&1 | python3 -c l lo… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read /home/user/project/src/f58ab3… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read /home/user/project/src/40cde3… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna echo lore lorem.json l lorem_i lorem_ipsu lorem_ipsum_d -n -E lorem_ipsum_dolor_sit l… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✓ 450",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash lorem_ipsum_dolor_sit_ query --help 2>&1 | head -40; echo lore lorem_ query lorem lorem_i lorem_ipsum_dolor_sit_ query --session lorem_ipsum_dolor_sit_amet_consectet 2>/dev/null | python3 -c l lorem_… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✓ 329",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:58",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash echo lore lorem_ip ls lorem | head -30; lorem echo lore plugin lorem_ find plugin -type l | head -30; lorem echo lore lorem_ipsum_d cat lorem_ipsum_dolor_sit_amet_c.json 2>/dev/null || cat lorem_ipsu… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:57",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "AskUserQuestion ✓ 119",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:54",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "AskUserQuestion ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:53",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Skill ✓ 8",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:53",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Skill ralph-skills:prd ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:53",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebFetch ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:53",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebFetch ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebFetch lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebFetch lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✓ 38",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebSearch ✓ 500",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_a lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incidi… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "WebSearch lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "ToolSearch ✓ 0",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:52",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash ✗ error",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "14:51",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "ToolSearch lorem ipsum dolor sit ame ▶",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "events"
+    }
+  ],
+  "cells": [
+    {
+      "id": "context",
+      "key": "1",
+      "label": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "14%",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "826k left",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "14%",
+          "tone": "fg"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "826k left",
+          "tone": "fg"
+        }
+      ],
+      "opens": "context",
+      "short": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "14%",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "label": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "mid": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "opens": "limits",
+      "short": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "label": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "59m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "59m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cache",
+      "short": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "59m≈",
+          "tone": "ok"
+        }
+      ]
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "label": [
+        {
+          "text": "spend ≈$10.6",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "≈$34.2/h",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "spend ≈$10.6",
+          "tone": "fg"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "≈$34.2/h",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cost",
+      "short": [
+        {
+          "text": "spend ≈$10.6",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "label": [
+        {
+          "text": "✓ cargo tes… 32m",
+          "tone": "ok"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "3 unchecked",
+          "tone": "warn"
+        }
+      ],
+      "mid": [
+        {
+          "text": "✓ cargo tes… 32m",
+          "tone": "ok"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "3 unchecked",
+          "tone": "warn"
+        }
+      ],
+      "opens": "work",
+      "short": [
+        {
+          "text": "✓ cargo tes… 32m",
+          "tone": "ok"
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "label": [
+        {
+          "text": "97 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "3 err",
+          "tone": "warn"
+        }
+      ],
+      "mid": [
+        {
+          "text": "97 calls",
+          "tone": "fg"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "3 err",
+          "tone": "warn"
+        }
+      ],
+      "opens": "tools",
+      "short": [
+        {
+          "text": "97c ",
+          "tone": "fg"
+        },
+        {
+          "text": "3 err",
+          "tone": "warn"
+        }
+      ]
+    }
+  ],
   "cost_combined": {
     "approx": true,
     "metric_id": "cost_combined",
@@ -13,6 +2692,7 @@
     "line": "cctop  claude-fable-5-1 · turn 8 · 47:31 · ENDED 15:04 · /home/user/project · v2.1.269",
     "model": "claude-fable-5-1",
     "phase": {
+      "elapsed": "3:15",
       "glyph": "●",
       "tokens": [
         "2 calls",
@@ -32,544 +2712,6 @@
     "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },
-  "nudge": {
-    "acting": false,
-    "class": "NEXT",
-    "id": "A32",
-    "line": "Edited 1 src file, no test/build run yet — queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
-    "tag": "NEXT · turn 8"
-  },
-  "rows": [
-    {
-      "detail": [
-        {
-          "text": "+33k/turn",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "autocompact 967k",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "826k left",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "compactions 0",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "re-reads 0",
-          "tone": "dim"
-        }
-      ],
-      "digit": 1,
-      "name": "Context",
-      "values": [
-        {
-          "text": "▇▇▇▇▇▇",
-          "tone": "accent"
-        },
-        {
-          "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
-          "tone": "dim"
-        },
-        {
-          "text": " prefix 56k · inputs ≈11k · results ≈20k · thinking 36k · harness ≈12k",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "≈$10.6 API-equivalent",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$34.2/h",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$/call ≈$.06",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "$/turn ≈$.36",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "next 30c ≈$1.8",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "team ≈$0.48 (5 %, 2 of 3 read)",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "ski…",
-          "tone": "dim"
-        }
-      ],
-      "digit": 2,
-      "name": "Tokens",
-      "values": [
-        {
-          "text": "cache read 11.10M",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "write 320k",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "output 85k",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "warm 59m ≈",
-          "tone": "ok"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "misses 1 (model_changed 111k)",
-          "tone": "warn"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "60% of your usage was at >150k context",
-          "tone": "dim"
-        }
-      ],
-      "digit": 3,
-      "name": "Limits",
-      "values": [
-        {
-          "text": "no status line",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "weight ×10 (fable)",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "long_context 60 %",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "turn elapsed 3:15 · 4 api calls · 3 tool calls",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "hooks 2 (54ms)",
-          "tone": "dim"
-        }
-      ],
-      "digit": 4,
-      "name": "Turn",
-      "values": [
-        {
-          "text": "DELEGATING · 2 calls · silent 3:00 · ▸ steer window…",
-          "tone": "accent"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "api ≈1:38 · tools 0:04",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "Other 3",
-          "tone": "dim"
-        }
-      ],
-      "digit": 5,
-      "name": "Tools",
-      "values": [
-        {
-          "text": "97 calls",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "3 err",
-          "tone": "warn"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "explore 42 (1 ✗)",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "buildlint 7 (1 ✗)",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "test 3",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "Read 16",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "Edit 11",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "AskUserQuestion 4",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "top ctx Ba…",
-          "tone": "dim"
-        }
-      ]
-    },
-    {
-      "detail": [],
-      "digit": 6,
-      "name": "Agents",
-      "values": [
-        {
-          "text": "team ≈$0.48",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "2 of 3 read",
-          "tone": "warn"
-        }
-      ]
-    },
-    {
-      "detail": [],
-      "digit": 7,
-      "name": "Files",
-      "values": [
-        {
-          "text": "8 touched",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "d93e76.md E×1 W×1",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "f58ab3.md R×1",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "15:03 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "Agent ✓ 72",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "15:03 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "Agent lorem ipsum dolor sit amet co… ▶",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "15:03 ",
-          "tone": "dim"
-        },
-        {
-          "text": "note ",
-          "tone": "dim"
-        },
-        {
-          "text": "/model",
-          "tone": "fg"
-        }
-      ],
-      "digit": 8,
-      "name": "Events",
-      "values": [
-        {
-          "text": "15:04 ",
-          "tone": "dim"
-        },
-        {
-          "text": "api ",
-          "tone": "crit"
-        },
-        {
-          "text": "cost-state $10.16 · api 19:38 · retries…",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "15:04 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "Agent ✓ 72",
-          "tone": "fg"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "15:04 ",
-          "tone": "dim"
-        },
-        {
-          "text": "tool ",
-          "tone": "dim"
-        },
-        {
-          "text": "Agent lorem ipsum dolor sit a…",
-          "tone": "fg"
-        }
-      ]
-    },
-    {
-      "detail": [
-        {
-          "text": "LATER A01 cache miss: model → fable-5-1 · 111k re…",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "LATER A10 `lorem_ipsum_dolor_sit_amet_co…` blocke…",
-          "tone": "dim"
-        }
-      ],
-      "digit": 9,
-      "name": "Advisor",
-      "values": [
-        {
-          "text": "NEXT A32",
-          "tone": "warn"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "next cache-miss → when the slot frees · cache m…",
-          "tone": "dim"
-        },
-        {
-          "text": " · ",
-          "tone": "dim"
-        },
-        {
-          "text": "snoozed —",
-          "tone": "dim"
-        }
-      ]
-    }
-  ],
-  "schema": 1,
-  "session_mode": "interactive",
-  "start_line": null,
-  "tiles": [
-    {
-      "approx": true,
-      "figure": "14",
-      "glyph": "○",
-      "id": "context",
-      "level": "quiet",
-      "name": "context",
-      "source": "transcript",
-      "sub1": "140k of 1.00M",
-      "sub2": "≈$.06/call",
-      "unit": "%"
-    },
-    {
-      "approx": true,
-      "figure": "59",
-      "glyph": "○",
-      "id": "cache",
-      "level": "quiet",
-      "name": "cache",
-      "source": "transcript",
-      "sub1": "warm · 59m (1h) TTL",
-      "sub2": "misses 1 (last model_changed)",
-      "unit": "m"
-    },
-    {
-      "approx": false,
-      "figure": "—",
-      "glyph": "○",
-      "id": "limits",
-      "level": "quiet",
-      "name": "limits",
-      "source": "status line",
-      "sub1": "no status line",
-      "sub2": "",
-      "unit": "%"
-    },
-    {
-      "approx": false,
-      "figure": "3",
-      "glyph": "◐",
-      "id": "rework",
-      "level": "watch",
-      "name": "rework",
-      "source": "transcript",
-      "sub1": "edits 3 ✓ none 17m",
-      "sub2": "",
-      "unit": "unchecked"
-    }
-  ]
+  "schema": 2,
+  "session_mode": "interactive"
 }

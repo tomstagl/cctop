@@ -1,56 +1,41 @@
-// The Overview view: plan B's dashboard drawn from `cctop query dashboard`
-// (src/dashboard.rs), the way the TUI draws it (src/ui/dashboard.rs): the
-// header line with the phase cell, four tiles of block digits (the coach's
-// lights; two per row, the coach's L1 line below 50 body columns, L2 below
-// 40), the nudge on two rows, then the nine ledger rows as plain Buttons —
-// rows 5–9 switch to that view, rows 1–4 unfold the framed block the panel
-// drew before (contextBlock and friends) beneath the row and fold on the next
-// press. Before the binary answers, the tiles read the engine's own figures
-// (`model.usage` for the context tile) and the rest says so.
+// The Overview view: Console (PRD dashboard-v2 §4) drawn from `cctop query
+// dashboard` (src/dashboard.rs, schema 2) the way the TUI draws it
+// (src/ui/dashboard.rs): the header line with the phase cell right-aligned,
+// six cells — each a keyed Box of plain Buttons sharing one scope and one
+// press, the digit the engine's own chrome — the act line as a target of its
+// own with `a: advisor` at the right, the rule line naming the open body with
+// `0: home`, then the open body's rows. The pane has four colours and no hex
+// (views/frame.tsx), so a slice's series step is carried by weight and by the
+// alternating fill glyph alone.
 //
-// Inline placement (the classic renderer's few rows above the prompt) keeps
-// the flat form: the header line, the coach's L1 line, the Context and Limits
-// rows. Colours are the TUI's roles as Claude Code theme keys (views/frame.tsx).
+// Before the binary answers, the engine's own header and a waiting line; on a
+// binary whose object is not schema 2, one line naming the cctop this pane
+// needs (FR-16). Inline placement (the classic renderer's few rows above the
+// prompt) is the strip: the status line, the coach's L1 line, the act line.
 import type { ElementTable, RenderElement } from 'claude-code';
-import { formatCountdown, formatTokens, TESTED_WITH, type Model, type Placement, type TurnState, type View } from '../model';
-import { DASH, at, formatDuration, formatUsd, isMissing, mark, measured, stringAt, tokensOf } from './format';
-import { ACCENT, THEME, bigDigits, clip, dim, fit, frame, gauge, innerWidth, join, pad, seg, sparkline, textRow, width, type Line, type Seg } from './frame';
+import { TESTED_WITH, usageRows, type Model, type Placement, type TurnState } from '../model';
+import { DASH, at, formatDuration, isMissing, stringAt } from './format';
+import { ACCENT, THEME, clip, dim, fit, join, seg, textRow, width, lineWidth, type Line, type Seg } from './frame';
 
 /** The elements a view draws with, as `$.ui.resolve(e)` answers them. */
 export type ViewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text'>;
 
 export const NEEDS_BINARY = 'needs the cctop binary';
-/** Two-column rows from this many body columns; a single column below. */
-export const TWO_COLUMN_MIN = 60;
-/** The narrowest label a value column leaves room for. */
-const MIN_LABEL = 8;
 
-// The TUI's four colour roles: `cyan` stands for its accent (running, hooks,
-// agents); frame.tsx maps each to a Claude Code theme key.
+/** The dashboard object's schema this pane draws; an older binary sends 1. */
+export const SCHEMA = 2;
+
+/** Three cells per row from this many body columns; two below (the prototype's ladder). */
+export const THREE_CELLS = 80;
+/** A cell's middle form from this many cells wide; the short one below. */
+export const MID_CELL = 28;
+/** The act line's right-aligned `a: advisor` from this width. */
+export const ACT_TAIL = 66;
+/** The act line's full copy from this width; the short one below. */
+export const ACT_FULL = 72;
+
+/** The four palette colours a view may name. */
 export type Color = 'green' | 'yellow' | 'red' | 'cyan';
-
-export type Row = {
-  /** The metric id as docs/metrics.md names it. */
-  key: string;
-  label: string;
-  value: string;
-  color?: Color;
-  /** One line of text (`needs the cctop binary`) rather than a label/value pair. */
-  line?: boolean;
-  /** A 0–1 fill drawn as a gauge between the label and the value, in the row's colour (or the accent). */
-  gauge?: number;
-  /** The value alone, left-aligned, as the TUI's Context panel writes `396k / 1.00M est`; the gauge above it. */
-  bare?: boolean;
-  /** A sparkline drawn in the accent before the value, as the TUI's Context panel trends the size. */
-  spark?: readonly number[];
-};
-
-/**
- * A framed block. `hotkey` is the TUI's id for the panel (1 Context … 4
- * Turn), drawn in the frame as the TUI numbers it; `summaryShort` replaces
- * `summary` in the title when the full one would not fit the frame's top.
- */
-export type Block = { hotkey?: string; title: string; rows: Row[]; summary?: string; summaryShort?: string };
 
 export type Badge = { label: 'bin' | 'shim' | 'hooks'; on: boolean; text?: string };
 
@@ -59,39 +44,19 @@ export type Header = {
   turn: number;
   elapsed: string;
   model: string;
-  /** The permission mode (`auto`, `plan`) as `cctop query summary` reports it; null without the binary. */
   mode: string | null;
   effort: string;
   badges: Badge[];
 };
 
 const STATUS_MARK: Record<TurnState, string> = { busy: '●', idle: '○', waiting: '◆' };
-const STATUS_COLOR: Record<TurnState, Color | undefined> = { busy: 'green', idle: undefined, waiting: 'yellow' };
-const TOKEN_CLASSES: [string, string][] = [
-  ['cache_read', 'cache read'],
-  ['cache_write', 'cache write'],
-  ['fresh_input', 'fresh input'],
-  ['output', 'output'],
-  ['thinking', '└ thinking'],
-];
-// `cache_ttl` is the Rust enum's Debug name.
-const TTL_NAMES: Record<string, string> = { FiveMinutes: '5m', OneHour: '1h' };
+const STATUS_PILL: Record<TurnState, string> = { busy: 'BUSY', idle: 'IDLE', waiting: 'WAITING' };
 
-function line(key: string, text: string): Row {
-  return { key, label: text, value: '', line: true };
-}
-
-// The colour bands the TUI's gauges use (band_style): green below `warn`,
-// yellow from it, red from `crit`.
-function band(ratio: number, warn: number, crit: number): Color {
-  return ratio >= crit ? 'red' : ratio >= warn ? 'yellow' : 'green';
-}
-
-/** Elapsed of the running turn, else the last turn's duration; null before any. */
 function turnElapsedMs(model: Model, now: number): number | null {
-  return model.turn.startedAt !== null ? now - model.turn.startedAt : model.turn.lastDurationMs;
+  return model.turn.startedAt === null ? null : Math.max(0, now - model.turn.startedAt);
 }
 
+/** The engine's own header: what the pane knows before the binary answers. */
 export function header(model: Model, now: number): Header {
   const summary = model.query.summary;
   const elapsed = turnElapsedMs(model, now);
@@ -114,288 +79,6 @@ export function header(model: Model, now: number): Header {
   };
 }
 
-export function contextBlock(model: Model): Block {
-  const summary = model.query.summary;
-  const rows: Row[] = [];
-  let summaryText: string | undefined;
-  const usage = model.usage;
-  if (usage !== null) {
-    const { tokens, window } = usage.context;
-    const percent =
-      usage.context.percent ?? (tokens !== undefined && window > 0 ? Math.round((tokens / window) * 100) : undefined);
-    const size = tokens === undefined ? '?' : formatTokens(tokens);
-    const pct = percent === undefined ? '?' : String(percent);
-    rows.push({
-      key: 'context_size',
-      label: 'context',
-      value: `${size} / ${formatTokens(window)} (${pct} %)`,
-      color: percent === undefined ? undefined : band(percent / 100, 0.6, 0.8),
-      gauge: percent === undefined ? undefined : percent / 100,
-      bare: true,
-    });
-    summaryText = percent === undefined ? undefined : `${percent} %`;
-  } else {
-    const size = measured(summary, 'context', 'size');
-    const window = measured(summary, 'context', 'window');
-    if (size !== null && window !== null && window.value > 0) {
-      const ratio = measured(summary, 'context', 'ratio')?.value ?? size.value / window.value;
-      const pct = Math.round(ratio * 100);
-      rows.push({
-        key: 'context_size',
-        label: 'context',
-        value: mark(`${formatTokens(size.value)} / ${formatTokens(window.value)} (${pct} %)`, size.approx || window.approx),
-        color: band(ratio, 0.6, 0.8),
-        gauge: ratio,
-        bare: true,
-      });
-      summaryText = `${pct} %${size.approx || window.approx ? ' est' : ''}`;
-    } else {
-      rows.push({ key: 'context_size', label: 'context', value: DASH, bare: true });
-    }
-  }
-  if (model.binary === 'missing') {
-    rows.push(line('context_velocity', NEEDS_BINARY));
-  } else {
-    const velocity = measured(summary, 'context', 'velocity');
-    const perTurn = velocity === null ? null : Math.round(velocity.value);
-    rows.push({
-      key: 'context_velocity',
-      label: 'velocity',
-      value: velocity === null || perTurn === null ? DASH : mark(`${perTurn > 0 ? '+' : ''}${formatTokens(perTurn)}/turn`, velocity.approx),
-      spark: model.contextHistory,
-    });
-    const until = measured(summary, 'context', 'turns_until_compaction');
-    rows.push({
-      key: 'turns_until_compaction',
-      label: 'autocompact in',
-      value: until === null ? DASH : mark(`${Math.ceil(until.value)} turns`, until.approx),
-      color: until === null ? undefined : band(1 - Math.min(1, until.value / 10), 0.6, 0.8),
-    });
-  }
-  // The larger of the two counts: the transcript's includes compactions from
-  // before the module loaded, the event's those the poller has not read yet.
-  const counted = measured(summary, 'context', 'compactions');
-  rows.push({ key: 'compactions', label: 'compactions', value: String(Math.max(model.compactions, counted?.value ?? 0)) });
-  return { hotkey: '1', title: 'Context', rows, summary: summaryText };
-}
-
-export function tokensBlock(model: Model): Block {
-  const summary = model.query.summary;
-  const rows: Row[] = [];
-  let summaryText: string | undefined;
-  if (model.binary === 'missing') {
-    rows.push(line('cache_read', NEEDS_BINARY));
-  } else {
-    // Bars relative to the largest class, as the TUI's tokens panel draws them.
-    const classes = TOKEN_CLASSES.map(([key, label]) => ({ key, label, m: measured(summary, 'tokens', key) }));
-    const largest = Math.max(0, ...classes.map((c) => c.m?.value ?? 0));
-    let total = 0;
-    for (const { key, label, m } of classes) {
-      if (m !== null && key !== 'thinking') total += m.value;
-      rows.push({ key, label, value: tokensOf(m), gauge: m === null || largest <= 0 ? undefined : m.value / largest, color: 'cyan' });
-    }
-    if (total > 0) summaryText = formatTokens(Math.round(total));
-    const hit = measured(summary, 'tokens', 'cache_hit_ratio');
-    rows.push({
-      key: 'cache_hit_ratio',
-      label: 'cache hit',
-      value: hit === null ? DASH : mark(`${Math.round(hit.value * 100)} %`, hit.approx),
-      color: hit === null ? undefined : hit.value >= 0.8 ? 'green' : hit.value >= 0.5 ? 'yellow' : 'red',
-    });
-    const ttl = stringAt(summary, 'tokens', 'cache_ttl');
-    rows.push({ key: 'cache_ttl', label: 'cache TTL', value: ttl === null ? DASH : (TTL_NAMES[ttl] ?? ttl) });
-  }
-  const live = model.usage?.cost;
-  const cost = measured(summary, 'cost');
-  rows.push({
-    key: 'cost',
-    label: 'cost',
-    value: live !== undefined ? formatUsd(live.usd) : cost === null ? DASH : mark(formatUsd(cost.value), cost.approx),
-  });
-  if (model.binary !== 'missing') {
-    const burn = measured(summary, 'burn_rate');
-    rows.push({ key: 'burn_rate', label: 'burn rate', value: burn === null ? DASH : mark(`${formatUsd(burn.value)}/h`, burn.approx) });
-  }
-  return { hotkey: '2', title: 'Tokens & Cost', rows, summary: summaryText };
-}
-
-const LIMIT_WINDOWS: { kind: string; key: string; label: string }[] = [
-  { kind: 'five_hour', key: 'limit_5h', label: '5 h' },
-  { kind: 'seven_day', key: 'limit_7d', label: '7 d' },
-];
-
-export function limitsBlock(model: Model, now: number): Block {
-  const limits = at(model.query.summary, 'limits');
-  const rows: Row[] = [];
-  const summaryParts: string[] = [];
-  let resets: number | null = null;
-  for (const { kind, key, label } of LIMIT_WINDOWS) {
-    const live = model.usage?.rateLimits.find((l) => l.kind === kind);
-    const polled = live === undefined ? measured(limits, kind) : null;
-    const pct = live?.percentUsed ?? polled?.value;
-    let value = DASH;
-    if (live !== undefined) {
-      value = `${Math.round(live.percentUsed)} %`;
-      if (kind === 'five_hour' && live.resetsAt !== undefined) {
-        const t = Date.parse(live.resetsAt);
-        if (!Number.isNaN(t)) resets = t;
-      }
-    } else if (polled !== null) {
-      value = mark(`${Math.round(polled.value)} %`, polled.approx);
-    }
-    rows.push({
-      key,
-      label,
-      value,
-      color: pct === undefined ? undefined : band(pct / 100, 0.6, 0.85),
-      gauge: pct === undefined ? undefined : pct / 100,
-    });
-    if (pct !== undefined) summaryParts.push(`${label.replace(' ', '')} ${Math.round(pct)} %`);
-  }
-  if (resets === null) {
-    const polled = at(limits, 'five_hour_resets_at_ms');
-    if (typeof polled === 'number') resets = polled;
-  }
-  rows.push({ key: 'limit_reset', label: 'resets in', value: resets === null ? DASH : formatCountdown(resets - now) });
-  const exhaustion = measured(limits, 'exhaustion_ms');
-  rows.push({
-    key: 'limit_exhaustion',
-    label: 'exhausted in',
-    value: exhaustion === null ? DASH : mark(formatCountdown(exhaustion.value - now), exhaustion.approx),
-  });
-  return {
-    hotkey: '3',
-    title: 'Limits',
-    rows,
-    summary: summaryParts.length === 0 ? undefined : summaryParts.join(' · '),
-    summaryShort: summaryParts[0],
-  };
-}
-
-export function turnBlock(model: Model, now: number): Block {
-  const summary = model.query.summary;
-  const turn = model.turn;
-  const elapsed = turnElapsedMs(model, now);
-  const running = turn.runningTool;
-  const toolMs = turn.toolMs + (running === null ? 0 : Math.max(0, now - running.startedAt));
-  const rows: Row[] = [
-    { key: 'session_status', label: 'state', value: turn.state, color: STATUS_COLOR[turn.state] },
-    { key: 'turn_elapsed', label: 'elapsed', value: elapsed === null ? DASH : formatDuration(elapsed) },
-    // API time is what the turn spent outside its tool calls: an estimate.
-    {
-      key: 'api_time',
-      label: 'api / tools',
-      value: elapsed === null ? DASH : mark(`${formatDuration(Math.max(0, elapsed - toolMs))} / ${formatDuration(toolMs)}`, true),
-    },
-    {
-      key: 'tool_last_call',
-      label: 'waiting on',
-      value:
-        turn.state === 'waiting' ? 'permission' : running === null ? DASH : `${running.name} ${formatDuration(now - running.startedAt)}`,
-      color: turn.state === 'waiting' ? 'yellow' : running === null ? undefined : 'cyan',
-    },
-  ];
-  const waits = at(summary, 'permission_waits');
-  const count = at(waits, 'count');
-  const total = measured(waits, 'total');
-  rows.push({
-    key: 'permission_wait',
-    label: 'permission waits',
-    value: typeof count !== 'number' ? DASH : `${count} · ${total === null ? DASH : mark(formatDuration(total.value), total.approx)}`,
-  });
-  const queued = measured(summary, 'queued_prompts');
-  rows.push({
-    key: 'queued_prompts',
-    label: 'queued',
-    value: queued === null ? DASH : mark(String(queued.value), queued.approx),
-    color: queued !== null && queued.value > 0 ? 'yellow' : undefined,
-  });
-  return { hotkey: '4', title: 'Turn', rows, summary: elapsed === null ? undefined : formatDuration(elapsed) };
-}
-
-/** The coach's slot occupant (`▸ NOW A47 headline`, red for NOW, yellow for NEXT); the binary line while it is missing; else null. */
-export function advisorLine(model: Model): Row | null {
-  if (model.binary === 'missing') return line('advice_saving', NEEDS_BINARY);
-  const primary = at(model.query.advice, 'primary');
-  if (primary === null || typeof primary !== 'object') return null;
-  const headline = stringAt(primary, 'headline');
-  const cls = stringAt(primary, 'class') ?? '';
-  if (headline === null) return null;
-  const color: Color | undefined = cls === 'NOW' ? 'red' : cls === 'NEXT' ? 'yellow' : undefined;
-  return { ...line('advice_saving', `▸ ${cls} ${stringAt(primary, 'rule') ?? ''} ${headline}`), color };
-}
-
-const STATUS_PILL: Record<TurnState, string> = { busy: 'BUSY', idle: 'IDLE', waiting: 'WAITING' };
-
-/** The row's colour as a theme key; undefined leaves the default text colour. */
-function themed(color: Color | undefined): string | undefined {
-  return color === undefined ? undefined : THEME[color];
-}
-
-// A metric row inside a frame: `label`, a gauge when the row carries one,
-// the value right-aligned at the edge. Labels share the block's label column
-// and values its value column so the numbers line up. A gauge that has no
-// room beside the label goes on a row of its own above, as the TUI's Context
-// panel draws it; a `bare` row is the value alone, left-aligned.
-function metricLines(row: Row, inner: number, labelWidth: number, valueWidth: number): Line[] {
-  if (row.line) return [[dim(row.label)]];
-  const color = themed(row.color);
-  const fullGauge = (): Line[] => (row.gauge === undefined ? [] : [gauge(row.gauge, inner, color ?? ACCENT)]);
-  if (row.bare) return [...fullGauge(), [seg(row.value, { color, key: row.key })]];
-  const value = seg(pad(row.value, valueWidth, true), { color, key: row.key });
-  if (row.spark !== undefined && row.spark.length >= 2) {
-    // label, the sparkline in the accent, the value: `velocity ▂▃▅█  +50k/turn`.
-    const cells = Math.min(12, inner - labelWidth - 2 - valueWidth);
-    const spark = sparkline(row.spark, cells);
-    if (cells >= 4 && spark !== '') {
-      const rest = inner - labelWidth - 1 - width(spark) - valueWidth;
-      return [[seg(pad(row.label, labelWidth)), seg(' '), seg(spark, { color: ACCENT }), seg(' '.repeat(Math.max(1, rest))), value]];
-    }
-  }
-  if (row.gauge === undefined) return [[seg(pad(row.label, inner - 1 - valueWidth)), seg(' '), value]];
-  const cells = inner - labelWidth - 2 - valueWidth;
-  if (cells < 4) return [...fullGauge(), [seg(pad(row.label, inner - 1 - valueWidth)), seg(' '), value]];
-  return [[seg(pad(row.label, labelWidth)), seg(' '), ...gauge(row.gauge, cells, color ?? ACCENT), seg(' '), value]];
-}
-
-/** A block's rows as frame rows: the label column is the widest label (at most 16), the value column the widest value. */
-function blockRows(block: Block, inner: number): { line: Line; key?: string }[] {
-  const metric = block.rows.filter((r) => !r.line && !r.bare);
-  const widestValue = Math.max(0, ...metric.map((r) => width(r.value)));
-  const valueWidth = Math.max(1, Math.min(widestValue, inner - 1 - MIN_LABEL));
-  const widestLabel = Math.max(0, ...metric.map((r) => width(r.label)));
-  const labelWidth = Math.max(MIN_LABEL, Math.min(16, widestLabel, inner - 1 - valueWidth));
-  const out: { line: Line; key?: string }[] = [];
-  for (const row of block.rows) {
-    const lines = metricLines(row, inner, labelWidth, valueWidth);
-    // The metric id keys the row that shows the value (the last one).
-    lines.forEach((line, i) => out.push(i === lines.length - 1 ? { key: row.key, line } : { line }));
-  }
-  return out;
-}
-
-// A framed block; `height` pads it with empty rows so two frames side by
-// side close on the same line, as the TUI's columns do.
-function blockFrame(block: Block, frameWidth: number, el: ViewElements, height?: number): RenderElement {
-  const rows = blockRows(block, innerWidth(frameWidth));
-  while (height !== undefined && rows.length < height) rows.push({ line: [] });
-  return frame({ hotkey: block.hotkey, title: block.title, summary: blockSummary(block, frameWidth), width: frameWidth, rows }, el);
-}
-
-/** The block's summary, or its short form when the title row cannot hold the full one. */
-function blockSummary(block: Block, frameWidth: number): string | undefined {
-  if (block.summary === undefined) return undefined;
-  // `╭`, the digit and its space, the title, ` ─ `, the summary, a space, `╮`.
-  const head = 1 + (block.hotkey === undefined ? 0 : block.hotkey.length + 1) + width(block.title) + 3 + width(block.summary) + 2;
-  return head <= frameWidth || block.summaryShort === undefined ? block.summary : block.summaryShort;
-}
-
-/** Rows a block's frame holds, for pairing frames at one height. */
-function blockHeight(block: Block, frameWidth: number): number {
-  return blockRows(block, innerWidth(frameWidth)).length;
-}
-
-/** The status pill as the TUI's header draws it: `● BUSY`, `○ IDLE`, `◆ WAITING`. */
 function statusPill(status: TurnState): Line {
   const text = `${STATUS_MARK[status]} ${STATUS_PILL[status]}`;
   if (status === 'busy') return [seg(text, { color: THEME.green, bold: true })];
@@ -403,71 +86,38 @@ function statusPill(status: TurnState): Line {
   return [dim(text)];
 }
 
-function badgesLine(badges: Badge[]): Line {
+/** The `bin · shim · hooks 2.1.273` badges, the on ones green. */
+export function badgesLine(badges: Badge[]): Line {
   return join(
     badges.map((b) => [b.on ? seg(b.text ?? b.label, { color: THEME.green }) : dim(b.text ?? b.label)]),
     seg(' '),
   );
 }
 
-// The header frame: `╭cctop ─ model ─╮`, the status pill with the turn and
-// its elapsed time, then the effort, cost and badges, as the TUI's header.
-function headerFrame(head: Header, cost: string | null, frameWidth: number, el: ViewElements): RenderElement {
-  const inner = innerWidth(frameWidth);
-  const line1: Line = [...statusPill(head.status), seg(`  turn ${head.turn}  ${head.elapsed}`)];
-  const badges = badgesLine(head.badges);
-  const parts: Line[] = [];
-  if (head.mode !== null) parts.push([seg(head.mode)]);
-  parts.push([seg(head.effort)], [seg(cost ?? DASH)]);
-  const left: Line = join(parts, dim(' · '));
-  const room = inner - width(badges.map((s) => s.text).join('')) - 2;
-  const line2: Line = room >= 8 ? [...fit(left, room), seg('  '), ...badges] : left;
-  return frame(
-    {
-      title: 'cctop',
-      summary: head.model,
-      width: frameWidth,
-      rows: [
-        { key: 'session_status', line: line1 },
-        { line: line2 },
-      ],
-    },
-    el,
-  );
-}
+// ---------------------------------------------------------------- the object
 
-/** What a press on the Overview may do; built in pane.tsx over `$`. */
-export type OverviewActions = {
-  /** A ledger row's digit: rows 5–9 open that view, 1–4 unfold their block. */
-  row(digit: number): void;
-};
-
-/** The elements the Overview draws with: the views' Box and Text, plus Button for the ledger rows. */
-export type OverviewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
-
-/** Two tiles per row from this many body columns; the coach's L1 line below; L2 below `L2_MAX`. */
-export const TILES_MIN = 50;
-export const L2_MAX = 40;
-
-export type Tile = { id: string; level: string; glyph: string; figure: string; unit: string; sub1: string; sub2: string };
-export type LedgerRow = { digit: number; name: string; values: Seg[]; detail: Seg[] };
+export type Cell = { key: string; id: string; opens: string; label: Seg[]; mid: Seg[]; short: Seg[] };
+export type Act = { key: string; opens: string; line: Seg[]; short: Seg[]; tag: string; nudge: string | null; blocked: boolean; acting: boolean };
+export type Slice = { label: string; tokens: number; step: number };
+export type Body = { key: string; id: string; title: string; keys: string; rows: Seg[][]; slices: Slice[] };
 export type Dashboard = {
+  schema: number;
   headerLine: string;
-  phase: { glyph: string; word: string; tokens: string[] };
-  tiles: Tile[];
-  nudge: { line: string; tag: string; cls: string } | null;
-  /** The first turn's dim line (the project's /insights medians), drawn where the nudge goes while there is none. */
-  startLine: string | null;
+  phase: { glyph: string; word: string; elapsed: string; tokens: string[] };
+  cells: Cell[];
+  act: Act;
+  bodies: Body[];
   /** Nudges are shown this session; false on the control arm of the coach's own measurement (`cctop run --coach off|auto`). */
   exposed: boolean;
-  rows: LedgerRow[];
   lines: { l1: string; l2: string };
 };
 
-/** A tone as the binary tags it, to the pane's segment style. */
+/** A tone as the binary tags it, to the pane's segment style: the series
+ * steps by weight (the pane has no ramp — dim, plain, bold). */
 function toned(text: string, tone: unknown): Seg {
   switch (tone) {
     case 'dim':
+    case 's0':
       return dim(text);
     case 'accent':
       return seg(text, { color: ACCENT });
@@ -478,6 +128,7 @@ function toned(text: string, tone: unknown): Seg {
     case 'crit':
       return seg(text, { color: THEME.red });
     case 'bold':
+    case 's2':
       return seg(text, { bold: true });
     default:
       return seg(text);
@@ -489,167 +140,261 @@ function segsOf(v: unknown): Seg[] {
   return v.map((s) => toned(stringAt(s, 'text') ?? '', at(s, 'tone'))).filter((s) => s.text !== '');
 }
 
-function tileOf(v: unknown): Tile | null {
-  const id = stringAt(v, 'id');
-  if (id === null) return null;
-  return {
-    id,
-    level: stringAt(v, 'level') ?? 'quiet',
-    glyph: stringAt(v, 'glyph') ?? '○',
-    figure: stringAt(v, 'figure') ?? DASH,
-    unit: stringAt(v, 'unit') ?? '',
-    sub1: stringAt(v, 'sub1') ?? '',
-    sub2: stringAt(v, 'sub2') ?? '',
-  };
+function strings(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [];
 }
 
-/** The dashboard object as the pane reads it, or null before the binary answered. */
-export function dashboardOf(query: unknown): Dashboard | null {
+/** The `schema` of a dashboard object, or null when there is none yet. */
+export function schemaOf(query: unknown): number | null {
   if (query === null || typeof query !== 'object') return null;
-  const tiles = at(query, 'tiles');
-  const rows = at(query, 'rows');
-  if (!Array.isArray(tiles) || !Array.isArray(rows)) return null;
+  const s = at(query, 'schema');
+  return typeof s === 'number' ? s : null;
+}
+
+/** The dashboard object as the pane reads it, or null before the binary answered or on another schema. */
+export function dashboardOf(query: unknown): Dashboard | null {
+  if (schemaOf(query) !== SCHEMA) return null;
+  const cells = at(query, 'cells');
+  const bodies = at(query, 'bodies');
+  const act = at(query, 'act');
+  if (!Array.isArray(cells) || !Array.isArray(bodies) || act === null || typeof act !== 'object') return null;
   const phase = at(query, 'header', 'phase');
-  const tokens = at(phase, 'tokens');
-  const nudge = at(query, 'nudge');
   return {
+    schema: SCHEMA,
     headerLine: stringAt(query, 'header', 'line') ?? '',
     phase: {
       glyph: stringAt(phase, 'glyph') ?? '○',
       word: stringAt(phase, 'word') ?? '',
-      tokens: Array.isArray(tokens) ? tokens.filter((t): t is string => typeof t === 'string') : [],
+      elapsed: stringAt(phase, 'elapsed') ?? DASH,
+      tokens: strings(at(phase, 'tokens')),
     },
-    tiles: tiles.map(tileOf).filter((t): t is Tile => t !== null),
-    nudge:
-      nudge === null || typeof nudge !== 'object'
-        ? null
-        : { line: stringAt(nudge, 'line') ?? '', tag: stringAt(nudge, 'tag') ?? '', cls: stringAt(nudge, 'class') ?? '' },
-    startLine: stringAt(query, 'start_line'),
-    exposed: at(query, 'exposed') !== false,
-    rows: rows.map((r) => ({
-      digit: typeof at(r, 'digit') === 'number' ? (at(r, 'digit') as number) : 0,
-      name: stringAt(r, 'name') ?? '',
-      values: segsOf(at(r, 'values')),
-      detail: segsOf(at(r, 'detail')),
+    cells: cells.map((c) => ({
+      key: stringAt(c, 'key') ?? '',
+      id: stringAt(c, 'id') ?? '',
+      opens: stringAt(c, 'opens') ?? '',
+      label: segsOf(at(c, 'label')),
+      mid: segsOf(at(c, 'mid')),
+      short: segsOf(at(c, 'short')),
     })),
+    act: {
+      key: stringAt(act, 'key') ?? 'a',
+      opens: stringAt(act, 'opens') ?? 'advisor',
+      line: segsOf(at(act, 'line')),
+      short: segsOf(at(act, 'short')),
+      tag: stringAt(act, 'tag') ?? '',
+      nudge: stringAt(act, 'nudge'),
+      blocked: at(act, 'blocked') === true,
+      acting: at(act, 'acting') === true,
+    },
+    bodies: bodies.map((b) => ({
+      key: stringAt(b, 'key') ?? '',
+      id: stringAt(b, 'id') ?? '',
+      title: stringAt(b, 'title') ?? '',
+      keys: stringAt(b, 'keys') ?? '',
+      rows: Array.isArray(at(b, 'rows')) ? (at(b, 'rows') as unknown[]).map(segsOf) : [],
+      slices: Array.isArray(at(b, 'slices'))
+        ? (at(b, 'slices') as unknown[]).map((s) => ({
+            label: stringAt(s, 'label') ?? '',
+            tokens: typeof at(s, 'tokens') === 'number' ? (at(s, 'tokens') as number) : 0,
+            step: typeof at(s, 'step') === 'number' ? (at(s, 'step') as number) : 0,
+          }))
+        : [],
+    })),
+    exposed: at(query, 'exposed') !== false,
     lines: { l1: stringAt(query, 'lines', 'l1') ?? '', l2: stringAt(query, 'lines', 'l2') ?? '' },
   };
 }
 
-/** The tiles before the binary answers: the context tile from the engine's own usage read, the rest `—`. */
-export function engineTiles(model: Model): Tile[] {
-  const usage = model.usage;
-  let context: Tile = { id: 'context', level: 'quiet', glyph: '○', figure: DASH, unit: '%', sub1: 'waiting for a usage read', sub2: '' };
-  if (usage !== null) {
-    const { tokens, window } = usage.context;
-    const percent = usage.context.percent ?? (tokens !== undefined && window > 0 ? Math.round((tokens / window) * 100) : undefined);
-    context = {
-      id: 'context',
-      level: percent === undefined ? 'quiet' : percent >= 80 ? 'act' : percent >= 15 ? 'watch' : 'quiet',
-      glyph: percent === undefined ? '○' : percent >= 80 ? '●' : percent >= 15 ? '◐' : '○',
-      figure: percent === undefined ? DASH : String(percent),
-      unit: '%',
-      sub1: `${tokens === undefined ? '?' : formatTokens(tokens)} of ${formatTokens(window)}`,
-      sub2: 'engine read',
-    };
-  }
-  const blank = (id: string, unit: string): Tile => ({ id, level: 'quiet', glyph: '○', figure: DASH, unit, sub1: model.binary === 'missing' ? NEEDS_BINARY : 'waiting for cctop', sub2: '' });
-  return [context, blank('cache', 'm'), blank('limits', '%'), blank('rework', '')];
+/** The line the pane draws on a binary whose object is another schema (FR-16). */
+export function schemaMismatch(schema: number): string {
+  return `cctop ${schema < SCHEMA ? '0.6.0 or newer' : 'newer than this pane'} needed: the binary sends dashboard schema ${schema}, this pane draws ${SCHEMA} — brew upgrade cctop && claude plugin update cctop@cctop`;
 }
 
-function levelColor(level: string): string | undefined {
-  return level === 'act' ? THEME.red : level === 'watch' ? THEME.yellow : undefined;
-}
+// -------------------------------------------------------------- the surface
 
-// One tile's three rows at `cells` wide: the digits in the level colour,
-// the unit dim on the baseline, the glyph + name bold beside them, then the
-// two sub-lines.
-function tileLines(t: Tile, cells: number): [Line, Line, Line] {
-  const color = levelColor(t.level);
-  const digits = bigDigits(t.figure, color);
-  const dw = Math.max(...digits.map((l) => width(l.map((s) => s.text).join(''))));
-  const unitWidth = Math.max(1, width(t.unit));
-  const textWidth = Math.max(1, cells - (dw + 2 + unitWidth + 2));
-  const row = (i: number, text: string, style: Omit<Seg, 'text'>): Line => [
-    seg(' '),
-    ...fit(digits[i], dw),
-    dim(` ${pad(i === 2 ? t.unit : '', unitWidth)} `),
-    { text: pad(clip(text, textWidth), textWidth), ...style },
-  ];
-  const nameStyle: Omit<Seg, 'text'> = color === undefined ? { bold: true } : { bold: true, color };
-  return [row(0, `${t.glyph} ${t.id}`, nameStyle), row(1, t.sub1, {}), row(2, t.sub2, {})];
-}
+export type OverviewActions = {
+  /** A cell's, the act line's or `0 home`'s press: open that body in place. */
+  open(id: string): void;
+};
 
-/** The tiles two per row, each half the width. */
-function tileRows(tiles: Tile[], columns: number, el: ViewElements): RenderElement[] {
-  const half = Math.floor(columns / 2);
-  const out: RenderElement[] = [];
-  for (let i = 0; i < tiles.length; i += 2) {
-    const pair = tiles.slice(i, i + 2).map((t) => tileLines(t, half));
-    for (let r = 0; r < 3; r++) {
-      const line: Line = [];
-      for (const p of pair) line.push(...fit(p[r], half));
-      out.push(textRow(line, el, r === 0 ? `coach_${tiles[i].id}` : undefined));
-    }
-    if (i + 2 < tiles.length) out.push(textRow([seg('')], el));
-  }
-  return out;
-}
+/** The elements the Overview draws with: the views' Box and Text, plus Button for the targets. */
+export type OverviewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
 
-/** The header line: `cctop` bold, the session facts, the phase cell right-aligned. */
+/** Row 1: ` cctop`, the session facts dim, the phase cell right-aligned in its colour. */
 function headerLine(d: Dashboard, columns: number): Line {
   const facts = d.headerLine.replace(/^cctop\s+/, '');
-  let phase = `${d.phase.glyph} ${d.phase.word}`;
-  if (d.phase.tokens.length > 0) phase += ` · ${d.phase.tokens.join(' · ')}`;
-  const phaseText = clip(phase, Math.min(48, Math.max(0, columns - 10)));
+  const phaseText = clip(`${d.phase.glyph} ${d.phase.word} ${d.phase.elapsed}`, Math.min(40, Math.max(0, columns - 10)));
   const factsText = clip(facts, Math.max(0, columns - 8 - width(phaseText) - 2));
-  const padCells = Math.max(1, columns - 8 - width(factsText) - width(phaseText));
+  const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText));
   const phaseStyle: Omit<Seg, 'text'> =
-    d.phase.glyph === '◆' ? { color: THEME.yellow } : d.phase.glyph === '○' ? { dim: true } : { color: ACCENT };
-  return [seg(' cctop  ', { bold: true }), seg(factsText), seg(' '.repeat(padCells)), seg(phaseText, phaseStyle)];
+    d.phase.glyph === '◆' ? { color: THEME.yellow, bold: true } : d.phase.glyph === '○' ? { dim: true, bold: true } : { color: THEME.green, bold: true };
+  return [seg(' cctop  ', { color: ACCENT, bold: true }), dim(factsText), seg(' '.repeat(padCells)), seg(phaseText, phaseStyle)];
 }
 
-/** The ledger's left column: the digit and the name. */
-const GUTTER = 13;
+/** The cell text form for the width: wide at ≥ 80 columns, mid at cells ≥ 28, short below. */
+export function cellForm(columns: number, cellWidth: number): (c: Cell) => Seg[] {
+  if (columns >= THREE_CELLS) return (c) => c.label;
+  if (cellWidth >= MID_CELL) return (c) => c.mid;
+  return (c) => c.short;
+}
 
-// A ledger row: a plain Button `1: Context` … whose press opens the view or
-// unfolds the block, then the values on the same line, the detail dim on
-// the next (from 50 columns).
-function ledgerRows(d: Dashboard, model: Model, columns: number, now: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement[] {
+// A cell: a keyed Box of plain Buttons sharing one scope and one press —
+// the first carries the hotkey (the engine draws `1: ctx 35%`), the rest of
+// the label and the padding are Buttons too, so the whole area presses and
+// lights (FR-13). The open body's cell is Text in `ok`, bold: the one state
+// that is not a target. Without Buttons (a test's bare elements, the inline
+// strip) every part is Text and the digit is drawn as the engine would.
+function cellBox(c: Cell, text: Seg[], cw: number, active: boolean, el: OverviewElements, actions: OverviewActions | undefined): RenderElement {
   const { Box, Button } = el;
+  // `1: ` is the engine's; the text has the rest of the cell, cut a cell
+  // short so the gap to the next cell survives (the TUI's `cw - 4`), the
+  // gap a Button of one space so the whole area presses.
+  const body = [...fit(text, Math.max(1, cw - 4)), seg(' ')];
+  const first = body[0] ?? seg('');
+  const rest = body.slice(1);
+  if (actions === undefined || active) {
+    const style: Omit<Seg, 'text'> = active ? { color: THEME.green, bold: true } : { color: ACCENT, bold: true };
+    const line: Line = [seg(`${c.key}: `, style), ...(active ? body.map((s) => ({ text: s.text, color: THEME.green, bold: true })) : body)];
+    return textRow(line, el, `cell_${c.id}`);
+  }
+  const scope = `cctop-cell-${c.id}`;
+  const press = () => actions.open(c.opens);
+  return (
+    <Box key={`cell_${c.id}`} flexDirection="row" hover={{ scope }}>
+      <Button key={`cell-${c.id}`} label={first.text} hotkey={c.key} plain dimColor={first.dim === true} onPress={press} />
+      {rest.map((s, i) => (
+        <Button key={`cell-${c.id}-${i}`} label={s.text} plain dimColor={s.dim === true} onPress={press} />
+      ))}
+    </Box>
+  );
+}
+
+/** Rows 2–4: the cells, three per row at ≥ 80 columns, two below. */
+function cellRows(d: Dashboard, open: string, columns: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement[] {
+  const { Box } = el;
+  const perRow = columns >= THREE_CELLS ? 3 : 2;
+  const cw = Math.floor(Math.max(0, columns - 2) / perRow);
+  const form = cellForm(columns, cw);
   const out: RenderElement[] = [];
-  for (const r of d.rows) {
-    const values = fit(r.values, Math.max(1, columns - GUTTER));
-    const label = `${r.digit} ${r.name}`;
-    const gutter = pad(label, GUTTER - 1);
-    const rowLine: RenderElement =
-      actions === undefined ? (
-        textRow([seg(gutter, { color: ACCENT, bold: true }), seg(' '), ...values], el, `ledger_${r.digit}`)
-      ) : (
-        <Box key={`ledger_${r.digit}`} flexDirection="row">
-          <Button key={`ledger-${r.digit}`} label={pad(r.name, GUTTER - 4)} hotkey={String(r.digit)} plain onPress={() => actions.row(r.digit)} />
-          {textRow([seg(' '), ...values], el)}
-        </Box>
-      );
-    out.push(rowLine);
-    if (columns >= TILES_MIN && r.detail.length > 0) {
-      out.push(textRow([seg(' '.repeat(GUTTER)), ...fit(r.detail.map((s) => (s.color === undefined && !s.bold ? dim(s.text) : s)), Math.max(1, columns - GUTTER))], el));
-    }
-    if (r.digit >= 1 && r.digit <= 4 && model.unfolded.includes(r.digit)) {
-      const block = [contextBlock, tokensBlock, (m: Model) => limitsBlock(m, now), (m: Model) => turnBlock(m, now)][r.digit - 1](model);
-      out.push(blockFrame(block, columns, el));
-    }
+  for (let i = 0; i < d.cells.length; i += perRow) {
+    const cells = d.cells.slice(i, i + perRow).map((c) => (
+      <Box width={cw} flexShrink={0}>
+        {cellBox(c, form(c), cw, c.opens === open, el, actions)}
+      </Box>
+    ));
+    out.push(
+      <Box key={`cells_${i}`} flexDirection="row">
+        {textRow([seg(' ')], el)}
+        {cells}
+      </Box>,
+    );
   }
   return out;
 }
 
-// The inline form (the classic renderer's few rows above the prompt): no
-// frames, the header on one line, the coach's L1 line, then the Context and
-// Limits rows.
+/** Word-wrap segments into rows of at most `columns` cells, breaking at spaces (FR-7). */
+export function wrap(segs: Seg[], columns: number, indent: number): Line[] {
+  const rows: Line[] = [[]];
+  let used = 0;
+  for (const s of segs) {
+    let pending = '';
+    const flush = (): void => {
+      if (pending !== '') rows[rows.length - 1].push({ ...s, text: pending });
+      pending = '';
+    };
+    for (const word of s.text.split(/(?<= )/)) {
+      const w = width(word);
+      if (used + w > columns && used > indent) {
+        flush();
+        rows.push([seg(' '.repeat(indent))]);
+        used = indent;
+        const trimmed = word.replace(/^ +/, '');
+        pending += trimmed;
+        used += width(trimmed);
+      } else {
+        pending += word;
+        used += w;
+      }
+    }
+    flush();
+  }
+  return rows;
+}
+
+// Row 5: the act line, the whole of it a target (a keyed Box of plain
+// Buttons in the advisor's scope) with `a: advisor` right-aligned at
+// ACT_TAIL columns; wrapped onto a second row rather than cut.
+function actRows(d: Dashboard, open: string, columns: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement[] {
+  const { Box, Button } = el;
+  const text = columns >= ACT_FULL ? d.act.line : d.act.short;
+  const segs: Seg[] = [dim(' '), ...text];
+  if (d.act.tag !== '' && columns >= ACT_FULL) segs.push(dim(`  ${d.act.tag}`));
+  if (d.act.acting) segs.push(dim(' · acting…'));
+  const tailWidth = columns >= ACT_TAIL ? 'a: advisor '.length : 0;
+  const rows = wrap(segs, Math.max(1, columns - tailWidth - 1), 3).slice(0, 2);
+  const active = open === d.act.opens;
+  const out: RenderElement[] = [];
+  rows.forEach((row, i) => {
+    const line = fit(row, Math.max(1, columns - (i === 0 ? tailWidth : 0)));
+    if (actions === undefined || active) {
+      const tail: Line = i === 0 && tailWidth > 0 ? [seg('a: ', { color: active ? THEME.green : ACCENT, bold: true }), dim('advisor ')] : [];
+      out.push(textRow([...line, ...tail], el, i === 0 ? 'advice_saving' : undefined));
+      return;
+    }
+    const scope = 'cctop-cell-advisor';
+    const press = () => actions.open(d.act.opens);
+    out.push(
+      <Box key={i === 0 ? 'advice_saving' : `act_${i}`} flexDirection="row" hover={{ scope }}>
+        {line.map((s, j) => (
+          <Button key={`act-${i}-${j}`} label={s.text} plain dimColor={s.dim === true} onPress={press} />
+        ))}
+        {i === 0 && tailWidth > 0 ? <Button key="act-advisor" label="advisor " hotkey="a" plain dimColor onPress={press} /> : null}
+      </Box>,
+    );
+  });
+  return out;
+}
+
+/** Row 6: `─── title ─────── 0: home  ·  keys ───`, the home a plain Button with hotkey 0. */
+function ruleRow(body: Body, columns: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement {
+  const { Box, Button } = el;
+  const home = body.id === 'events';
+  const head: Line = [dim('─── '), seg(body.title, { bold: true }), dim(' ')];
+  const homeText = '0: home';
+  let keys = body.keys !== '' && lineWidth(head) + 12 + width(body.keys) + 8 <= columns ? body.keys : '';
+  let tailWidth = 1 + width(homeText) + (keys === '' ? 0 : 5 + width(keys)) + 4;
+  if (lineWidth(head) + tailWidth > columns) {
+    keys = '';
+    tailWidth = 1 + 1 + 4;
+  }
+  const rule = dim('─'.repeat(Math.max(0, columns - lineWidth(head) - tailWidth)));
+  const keysLine: Line = keys === '' ? [] : [dim('  ·  '), dim(keys)];
+  if (actions === undefined || home || lineWidth(head) + tailWidth > columns) {
+    const homeLine: Line = tailWidth === 6 ? [seg('0', { color: home ? THEME.green : ACCENT, bold: true })] : [seg('0: ', { color: home ? THEME.green : ACCENT, bold: true }), dim('home'), ...keysLine];
+    return textRow([...head, rule, dim(' '), ...homeLine, dim(' ───')], el, `rule_${body.id}`);
+  }
+  return (
+    <Box key={`rule_${body.id}`} flexDirection="row">
+      {textRow([...head, rule, dim(' ')], el)}
+      <Button key="cell-home" label="home" hotkey="0" plain dimColor onPress={() => actions.open('events')} />
+      {textRow([...keysLine, dim(' ───')], el)}
+    </Box>
+  );
+}
+
+/** The engine's own reading (`$.session.usage`): the context and the rate
+ * limits on one line — the pane's figures with no binary behind them. */
+export function engineUsageLine(model: Model, now: number): Line | null {
+  if (model.usage === null) return null;
+  const rows = usageRows(model.usage, now).filter((r) => r.key !== 'cost');
+  if (rows.length === 0) return null;
+  return [seg(' '), ...join(rows.map((r) => [dim(`${r.label.toLowerCase()} `), seg(r.value)]), dim(' · '))];
+}
+
+/** The inline form (the classic renderer's few rows above the prompt): the status line, the engine's usage line, the strip, the act line. */
 function renderInline(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
   const { Box } = el;
   const head = header(model, now);
-  const blocks = [contextBlock(model), limitsBlock(model, now)];
   const rows: RenderElement[] = [
     textRow(
       [...statusPill(head.status), seg(` · turn ${head.turn} · ${head.elapsed} · ${head.model} · ${head.effort}  `), ...badgesLine(head.badges)],
@@ -657,19 +402,19 @@ function renderInline(model: Model, el: ViewElements, columns: number, now: numb
       'session_status',
     ),
   ];
+  const usage = engineUsageLine(model, now);
+  if (usage !== null) rows.push(textRow(fit(usage, columns), el, 'context_size'));
   const d = dashboardOf(model.query.dashboard);
-  if (d !== null && d.lines.l1 !== '') rows.push(textRow([seg(d.lines.l1)], el, 'coach_context'));
-  for (const block of blocks) {
-    rows.push(textRow([seg(block.title, { bold: true })], el));
-    for (const r of blockRows(block, columns)) rows.push(textRow(r.line, el, r.key));
+  if (d !== null) {
+    if (d.lines.l1 !== '') rows.push(textRow([seg(` ${d.lines.l1}`)], el, 'coach_context'));
+    rows.push(textRow(fit([dim(' '), ...d.act.short], columns), el, 'advice_saving'));
   }
   return <Box flexDirection="column">{rows}</Box>;
 }
 
 /**
- * The Overview: the header line, the tiles (two per row; the L1 line below
- * TILES_MIN columns, L2 below L2_MAX), the nudge on two rows, the nine ledger
- * rows. Inline placement draws the flat short form (renderInline).
+ * Console: the header line, the six cells, the act line, the rule line and
+ * the open body's rows. Inline placement draws the strip (renderInline).
  */
 export function renderOverview(
   model: Model,
@@ -684,7 +429,8 @@ export function renderOverview(
   const d = dashboardOf(model.query.dashboard);
   const body: RenderElement[] = [];
   if (d === null) {
-    // Before the binary answers: the engine's own header and tiles.
+    // Before the binary answers, or on another schema: the engine's own
+    // header and one line saying what is missing.
     const head = header(model, now);
     body.push(
       textRow(
@@ -693,27 +439,23 @@ export function renderOverview(
         'session_status',
       ),
     );
-    if (columns >= TILES_MIN) body.push(...tileRows(engineTiles(model), columns, el));
-    body.push(textRow([dim(model.binary === 'missing' ? NEEDS_BINARY : 'waiting for cctop query dashboard…')], el, 'advice_saving'));
+    const usage = engineUsageLine(model, now);
+    if (usage !== null) body.push(textRow(fit(usage, columns), el, 'context_size'));
+    const schema = schemaOf(model.query.dashboard);
+    const text = schema !== null && schema !== SCHEMA ? schemaMismatch(schema) : model.binary === 'missing' ? NEEDS_BINARY : 'waiting for cctop query dashboard…';
+    body.push(textRow([dim(` ${text}`)], el, 'advice_saving'));
     return <Box flexDirection="column">{body}</Box>;
   }
+  const bel: OverviewElements = buttons?.el ?? { ...el, Button: el.Box as OverviewElements['Button'] };
+  const actions = buttons?.actions;
+  const open = model.body;
   body.push(textRow(headerLine(d, columns), el, 'session_status'));
-  if (columns >= TILES_MIN) body.push(...tileRows(d.tiles, columns, el));
-  else body.push(textRow([seg(` ${columns >= L2_MAX ? d.lines.l1 : d.lines.l2}`)], el, 'coach_context'));
-  if (d.nudge !== null) {
-    const [headline, action] = d.nudge.line.split(' — ');
-    const tagStyle: Omit<Seg, 'text'> = { dim: true };
-    body.push(textRow([seg(' ▸ ', { color: THEME.yellow }), seg(headline ?? d.nudge.line, { bold: true }), seg('  '), seg(d.nudge.tag, tagStyle)], el, 'advice_saving'));
-    if (action !== undefined) body.push(textRow([seg('   '), seg(action, { color: ACCENT })], el));
-  } else {
-    const quiet = d.exposed ? (d.startLine ?? 'quiet · nothing to act on') : 'coach off (control arm) · fires recorded, nothing shown';
-    body.push(textRow([dim(` ${quiet}`)], el, 'advice_saving'));
+  body.push(...cellRows(d, open, columns, bel, actions));
+  body.push(...actRows(d, open, columns, bel, actions));
+  const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];
+  if (shown !== undefined) {
+    body.push(ruleRow(shown, columns, bel, actions));
+    shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
   }
-  body.push(...ledgerRows(d, model, columns, now, buttons?.el ?? { ...el, Button: el.Box as OverviewElements['Button'] }, buttons?.actions));
   return <Box flexDirection="column">{body}</Box>;
-}
-
-/** The view a ledger digit opens (5–9); rows 1–4 unfold instead. */
-export function viewOfDigit(digit: number): View | null {
-  return ({ 5: 'tools', 6: 'agents', 7: 'files', 8: 'events', 9: 'advisor' } as Record<number, View>)[digit] ?? null;
 }
