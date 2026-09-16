@@ -7,7 +7,7 @@ expression: "render_to_string(&app, 85, 24)"
  4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
  ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
    builds and test suites longer than a …  LATER · turn 6
-─── cost ──────────────────────────────────────────────── 0: home  ·  Enter panel ───
+─── cost ───────────────────────────────────────────────────── 0: home  ·  ? keys ───
   $18.7   API-equivalent list price — a subscription is not billed per token
 
   cache read    ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇  28.46M
@@ -18,11 +18,3 @@ expression: "render_to_string(&app, 85, 24)"
 
   cache hit 99 %   misses 0   burn ≈$1.01/h   $/call ≈$.03   next 30c ≈$1.0
   ledger $18.7
-
-
-
-
-
-
-
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q

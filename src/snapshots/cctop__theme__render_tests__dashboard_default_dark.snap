@@ -7,7 +7,7 @@ expression: text
  3: cache 50m≈ 1h TTL         4: spend $9.90 ≈$16.3/h
  5: ✓ none rework 1 open      6: 257 calls 5 err
  ▸ Edited 1 src file, no test/build run yet
-─── events ───────────────────── 0: home  ·  Enter panel ───
+─── events ────────────────────────── 0: home  ·  ? keys ───
   10:17  coach  NEXT A32 fired · Edited 1 src file, no test…
   10:17  api    cost-state $9.90 · api 18:45 · retries 0:02
   10:17  note   interrupted after 125 calls
@@ -45,4 +45,4 @@ expression: text
   10:06  tool   mcp:claude-in-chrome ✓ 119
   10:06  tool   mcp:claude-in-chrome computer lorem ipsu ▶
   10:06  tool   mcp:claude-in-chrome computer lorem ipsu ▶
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask
+  10:06  tool   mcp:claude-in-chrome ✓ 69

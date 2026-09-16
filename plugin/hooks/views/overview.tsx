@@ -215,7 +215,12 @@ export function schemaMismatch(schema: number): string {
 export type OverviewActions = {
   /** A cell's, the act line's or `0 home`'s press: open that body in place. */
   open(id: string): void;
+  /** `? keys` pressed: expand the rule line into the key map, or collapse it. */
+  keys(keys: boolean): void;
 };
+
+/** What the pane's keys are, when the rule line is expanded: the hotkeys, and the pointer. */
+export const PANE_KEYS = '1-6 a 0 body  ·  click a cell, the act line or home  ·  the view bar for the other views';
 
 /** The elements the Overview draws with: the views' Box and Text, plus Button for the targets. */
 export type OverviewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
@@ -355,29 +360,42 @@ function actRows(d: Dashboard, open: string, columns: number, el: OverviewElemen
   return out;
 }
 
-/** Row 6: `─── title ─────── 0: home  ·  keys ───`, the home a plain Button with hotkey 0. */
-function ruleRow(body: Body, columns: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement {
+// Row 6: `─── title ─────── 0: home  ·  ? keys ───`, the home a plain
+// Button with hotkey 0 and `? keys` a plain Button that expands the tail
+// into the pane's key map (the TUI's `?`); short widths lose `? keys`,
+// then the word `home`, as the TUI does.
+function ruleRow(body: Body, expanded: boolean, columns: number, el: OverviewElements, actions: OverviewActions | undefined): RenderElement {
   const { Box, Button } = el;
   const home = body.id === 'events';
   const head: Line = [dim('─── '), seg(body.title, { bold: true }), dim(' ')];
   const homeText = '0: home';
-  let keys = body.keys !== '' && lineWidth(head) + 12 + width(body.keys) + 8 <= columns ? body.keys : '';
-  let tailWidth = 1 + width(homeText) + (keys === '' ? 0 : 5 + width(keys)) + 4;
+  const keysText = expanded ? clip(PANE_KEYS, Math.max(1, columns - lineWidth(head) - 1 - width(homeText) - 5 - 4)) : '? keys';
+  let withKeys = expanded || lineWidth(head) + 1 + width(homeText) + 5 + width(keysText) + 4 <= columns;
+  let tailWidth = 1 + width(homeText) + (withKeys ? 5 + width(keysText) : 0) + 4;
+  let bare = false;
   if (lineWidth(head) + tailWidth > columns) {
-    keys = '';
+    withKeys = false;
+    bare = true;
     tailWidth = 1 + 1 + 4;
   }
   const rule = dim('─'.repeat(Math.max(0, columns - lineWidth(head) - tailWidth)));
-  const keysLine: Line = keys === '' ? [] : [dim('  ·  '), dim(keys)];
-  if (actions === undefined || home || lineWidth(head) + tailWidth > columns) {
-    const homeLine: Line = tailWidth === 6 ? [seg('0', { color: home ? THEME.green : ACCENT, bold: true })] : [seg('0: ', { color: home ? THEME.green : ACCENT, bold: true }), dim('home'), ...keysLine];
-    return textRow([...head, rule, dim(' '), ...homeLine, dim(' ───')], el, `rule_${body.id}`);
+  const keyStyle: Omit<Seg, 'text'> = { color: home ? THEME.green : ACCENT, bold: true };
+  if (actions === undefined || bare) {
+    const tail: Line = bare
+      ? [seg('0', keyStyle)]
+      : [seg('0: ', keyStyle), dim('home'), ...(withKeys ? (expanded ? [dim('  ·  '), dim(keysText)] : [dim('  ·  '), seg('?', { color: ACCENT, bold: true }), dim(' keys')]) : [])];
+    return textRow([...head, rule, dim(' '), ...tail, dim(' ───')], el, `rule_${body.id}`);
   }
+  const homePart: RenderElement = home ? textRow([seg('0: ', keyStyle), dim('home')], el) : <Button key="cell-home" label="home" hotkey="0" plain dimColor onPress={() => actions.open('events')} />;
+  const keysPart: RenderElement[] = withKeys
+    ? [textRow([dim('  ·  ')], el), <Button key="rule-keys" label={keysText} plain dimColor onPress={() => actions.keys(!expanded)} />]
+    : [];
   return (
     <Box key={`rule_${body.id}`} flexDirection="row">
       {textRow([...head, rule, dim(' ')], el)}
-      <Button key="cell-home" label="home" hotkey="0" plain dimColor onPress={() => actions.open('events')} />
-      {textRow([...keysLine, dim(' ───')], el)}
+      {homePart}
+      {keysPart}
+      {textRow([dim(' ───')], el)}
     </Box>
   );
 }
@@ -454,7 +472,7 @@ export function renderOverview(
   body.push(...actRows(d, open, columns, bel, actions));
   const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];
   if (shown !== undefined) {
-    body.push(ruleRow(shown, columns, bel, actions));
+    body.push(ruleRow(shown, model.keys, columns, bel, actions));
     shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
   }
   return <Box flexDirection="column">{body}</Box>;

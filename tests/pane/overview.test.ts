@@ -177,7 +177,8 @@ test('the width ladder: three cells per row at 80, two below; wide, mid and shor
 
 test('cells are keyed Boxes of plain Buttons sharing one scope and one press; the open cell is Text; a press opens the body', () => {
   const opened: string[] = [];
-  const actions: OverviewActions = { open: (id) => opened.push(id) };
+  const keys: boolean[] = [];
+  const actions: OverviewActions = { open: (id) => opened.push(id), keys: (k) => keys.push(k) };
   // With tools open: five cell Buttons (the open cell is Text), `a` and `0`.
   const tree = renderOverview(build({ body: 'tools' }), el, 85, 'dock', NOW, { el, actions });
   const bs = buttons(tree);
@@ -217,6 +218,14 @@ test('cells are keyed Boxes of plain Buttons sharing one scope and one press; th
   presses.get(String(scoped.get('cctop-cell-advisor')![0].props!.key))!();
   presses.get('cell-home')!();
   assert.deepEqual(opened, ['cost', 'advisor', 'events']);
+  // `? keys` is a plain Button (no hotkey — `?` is none the engine takes)
+  // that expands the rule line into the pane's key map, and back.
+  presses.get('rule-keys')!();
+  assert.deepEqual(keys, [true]);
+  const expanded = renderOverview({ ...build({ body: 'tools' }), keys: true }, el, 85, 'dock', NOW, { el, actions });
+  const rule = renderToText(expanded, 85).find((l) => l.startsWith('─── tools '))!;
+  assert.ok(rule.includes('0: home  ·  1-6 a 0 body  ·  click a cell'), rule);
+  assert.ok(!rule.includes('? keys'), rule);
   // The open cell is Text in green, bold — not a target — and the rule names its body.
   assert.ok(keyed(tree).get('cell_tools')?.startsWith('6: '), keyed(tree).get('cell_tools'));
   has(renderToText(tree, 85), /^─── tools /);
@@ -307,7 +316,7 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
       .map((l) => l.replace(/\s+$/, ''));
     while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
     tui.pop(); // the footer
-    const pane = raw(model, columns, 'dock', { open: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
     assert.ok(tui.length >= 10, `${columns}: ${tui.length} TUI rows`);
     for (let i = 0; i < tui.length; i++) {
       assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}\n  tui:  ${JSON.stringify(tui[i])}\n  pane: ${JSON.stringify(pane[i])}`);

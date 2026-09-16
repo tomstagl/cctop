@@ -7,7 +7,7 @@ expression: "render_to_string(&app, 80, 30)"
  4: spend $18.7 · ≈$1.01/h 5: ✓ python3 -… 9h01 · r… 6: 140 calls · 6 err
  ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run  a: advisor
    builds and test suites longer than a …  LATER · turn 6
-─── events ───────────────────────────────────────── 0: home  ·  Enter panel ───
+─── events ────────────────────────────────────────────── 0: home  ·  ? keys ───
   23:29  api    cost-state $18.75 · api 22:14 · retries 0:00
   23:29  note   /clear · continued in a new session
   23:28  coach  LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the …
@@ -31,4 +31,4 @@ expression: "render_to_string(&app, 80, 30)"
   14:45  tool   Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem…
   14:45  perm   Bash ✗ automode-unavailable
   14:36  tool   Bash cd lorem_ipsum_dolor_sit_amet_consect git lorem lorem_ -q …
- ?help  1-6 a 0 body  Enter panel  Esc home  c coach  A ask  t theme  q
+  14:35  perm   Bash ✗ permission-rule
