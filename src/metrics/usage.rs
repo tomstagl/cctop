@@ -76,6 +76,16 @@ impl Usage {
         self.output += o.output;
         self.thinking += o.thinking;
     }
+
+    /// Takes back what `add` counted (saturating).
+    pub fn sub(&mut self, o: &Usage) {
+        self.input = self.input.saturating_sub(o.input);
+        self.cache_write_5m = self.cache_write_5m.saturating_sub(o.cache_write_5m);
+        self.cache_write_1h = self.cache_write_1h.saturating_sub(o.cache_write_1h);
+        self.cache_read = self.cache_read.saturating_sub(o.cache_read);
+        self.output = self.output.saturating_sub(o.output);
+        self.thinking = self.thinking.saturating_sub(o.thinking);
+    }
 }
 
 /// One prompt and everything the model did in response.

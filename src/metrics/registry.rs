@@ -128,7 +128,7 @@ pub const METRICS: &[Metric] = &[
     metric!(tool_search_loads, "Tools", "ToolSearch loads", "count", "Deferred tools loaded through `ToolSearch` per MCP server (`matches` of its result); each load rewrites the cached prefix", ["D2"], "", ""),
     // -- Agents & MCP
     metric!(agent_state, "Agents & MCP", "Agent state", "enum", "running while tool_uses are pending; done when the last response ends with text and no pending tool_use; failed when the last result is an error and nothing followed for 60 s", ["D2a", "D4"], "", ""),
-    metric!(agent_tokens, "Agents & MCP", "Agent tokens", "tokens", "Deduplicated usage of the agent's own transcript", ["D2a"], "", ""),
+    metric!(agent_tokens, "Agents & MCP", "Agent tokens", "tokens", "Deduplicated usage of the agent's own transcript: the last line of each `message.id` (subagent transcripts stream `output_tokens`), without a fork's replayed first message (the parent's launching response, billed in the parent)", ["D2a"], "", ""),
     metric!(mcp_rss, "Agents & MCP", "MCP memory", "bytes", "RSS of the MCP server process", ["D5"], "", ""),
     metric!(mcp_calls, "Agents & MCP", "MCP calls", "count", "Calls of tools named `mcp__<server>__*`", ["D2"], "", ""),
     metric!(agent_workflows, "Agents & MCP", "Workflow runs", "count", "`subagents/workflows/<run>/journal.jsonl`: agents launched, finished (`result`) and `failed` per run; the run's agents are scanned like the top-level ones", ["D2a"], "", ""),

@@ -24,7 +24,7 @@ expression: text
              elapsed 19:54 · 52 api calls · 125 tool calls
  5 Tools     257 calls · 5 err · test 15 (3 ✗) · mcp:claude…
              Other 4 · Denied 1
- 6 Agents    0 run · 2 % · fork 0:42 548k · $0.15
+ 6 Agents    0 run · 1 % · fork 0:42 485k · $0.13
 
  7 Files     4 touched · ad450c.rs W×1 · fc57f7.rs R×1
 

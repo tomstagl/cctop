@@ -17,7 +17,7 @@
         "approx": false,
         "metric_id": "agent_tokens",
         "unit": "tokens",
-        "value": 548887
+        "value": 485084
       },
       "type": "fork",
       "workflow": null

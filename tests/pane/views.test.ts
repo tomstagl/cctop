@@ -127,7 +127,7 @@ for (const columns of [50, 80]) {
   test(`agents at ${columns} columns: the fixture agent and the missing MCP hint`, () => {
     const lines = rows('agents', build(), columns);
     fits(lines, columns);
-    has(lines, /^✓ fork\s+Check whether a set.*\s0:42\s+549k$/);
+    has(lines, /^✓ fork\s+Check whether a set.*\s0:42\s+485k$/);
     has(lines, 'mcp: no live process (fixture)');
     assert.equal(lines.filter((r) => r !== '').length, 2, JSON.stringify(lines));
     assert.deepEqual(frameTitles(rawRows('agents', build(), columns)), ['6 Agents & MCP ─ 0/1 agents']);
