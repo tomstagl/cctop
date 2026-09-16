@@ -10,7 +10,7 @@
 // into functions declared in pane.tsx, so it receives `PollerEngine`, the
 // slice of `$` it uses, built there by a top-level function.
 import type { EngineInterface, Timer } from 'claude-code';
-import { IDLE_ONLY_VERBS, QUERY_VERBS, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
+import { IDLE_ONLY_VERBS, QUERY_VERBS, TESTED_WITH, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
 
 export type PollerEngine = {
   /** `now` resolves a Promise: a host round trip since Claude Code 2.1.271 (issue #3). */
@@ -81,6 +81,11 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
   const now = await $.clock.now();
   const marker = {
     version: model.version,
+    // The contract the module was built against and what its session.start
+    // self-check found, so `cctop pane status` pairs the running module with
+    // `claude --version` and relays a cause when a surface moved (issue #4).
+    testedWith: TESTED_WITH,
+    selfCheck: model.selfCheck,
     sessionId: model.sessionId,
     loaded: true,
     loadedAt: model.loadedAt === null ? null : new Date(model.loadedAt).toISOString(),

@@ -41,6 +41,7 @@ Grep it:
 ```
 grep -c 'hooks module cctop loaded' ~/.claude/debug/latest     # expect 1
 grep -c '/cctop-pane listed' ~/.claude/debug/latest            # expect 1
+grep 'cctop: plugin ' ~/.claude/debug/latest                    # expect one line ending "self-check ok"
 grep -i 'refused' ~/.claude/debug/latest                        # expect no output
 grep 'hook failed' ~/.claude/debug/latest                       # expect no output
 ```
@@ -50,7 +51,24 @@ Expected:
 - `claude -p` prints `ok` (or similar) and exits 0.
 - The log holds one line `hooks module cctop loaded (... ); events: session.start,command.run,ui.render`.
 - The log holds `$.command.register (cctop): /cctop-pane listed`.
+- The log holds one `$.ui.log` line `cctop: plugin <version> (hooks contract
+  <TESTED_WITH>) loaded; self-check ok` (plugin 0.8.0+): session.start's
+  check of the clock, `HOME` and the session id. A `self-check failed: …`
+  line names the surface that moved and is the one line to read when a
+  Claude Code release breaks the contract (issue #4).
 - No line contains `refused` or `hook failed`.
+- `~/.cctop/pane/<session>.json` holds `loaded: true`, `open: false`, the
+  plugin's `version` (read before the marker since 0.8.0; earlier modules
+  wrote `null` here in a `-p` run), `testedWith` and `selfCheck: "ok"`.
+
+The same check without a model call, and so without credentials — what CI
+runs (`.github/workflows/ci.yml`, the `contract` job): the prompt is the
+native `/plugin-types` command, which fires `session.start` like any run and
+writes the contract beside it.
+
+```
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin '/plugin-types /tmp/types'
+```
 
 Known benign line: `[WARN] plugin cctop: options requested but its manifest
 declares no userConfig; every option reads as absent`. The plugin declares no

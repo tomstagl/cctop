@@ -112,6 +112,24 @@ a `vscode` render surface and changed nothing the pane calls). Update with
 `claude plugin marketplace update cctop && claude plugin update
 cctop@cctop`, then restart Claude Code.
 
+### When the contract moves
+
+Function hooks are early access and change between Claude Code releases
+(issue #4). At `session.start` the module checks the surfaces it cannot do
+without — the clock resolves a number, `HOME` is set, the session has an id
+— and writes one line to the debug log (`claude --debug`,
+`~/.claude/debug/latest`) before anything else:
+
+```
+cctop: plugin 0.8.0 (hooks contract 2.1.273) loaded; self-check ok
+```
+
+When a surface moved, the line reads `self-check failed: <what>` with the
+update command, the marker carries the same text under `selfCheck`, and
+`cctop pane status` relays it on the hooks-module line. Every clock reading
+falls back to the environment's own `Date.now()`, so the pane keeps its
+books on a changed clock instead of failing every hook as 0.4.0 did.
+
 ### The `/diff` panel and the pane share one dock
 
 Claude Code's built-in `/diff` panel and a plugin pane occupy the same

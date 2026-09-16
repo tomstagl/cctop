@@ -8,7 +8,8 @@ import { fakeEngine, fakeElements, fakeOn, paneRender, type FakeEngine, type Pro
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { QUERY_FIXTURES, fixture } from './fixture';
-import { register } from '../../plugin/hooks/pane';
+import { register, selfCheckLine } from '../../plugin/hooks/pane';
+import { TESTED_WITH } from '../../plugin/hooks/model';
 
 // US-008 through the headless harness with the manual clock: the redraw
 // throttle, the timers' life with the pane, the store round-trip at
@@ -217,6 +218,8 @@ test('store round-trip: no reopen for a closed pane, a -p run or an empty store'
 function expectedMarker(rest: Record<string, unknown>): Record<string, unknown> {
   return {
     version: PLUGIN_VERSION,
+    testedWith: TESTED_WITH,
+    selfCheck: 'ok',
     sessionId: SESSION,
     loaded: true,
     loadedAt: new Date(T0).toISOString(),
@@ -329,4 +332,70 @@ test('a throwing view renders the error line above the previous tree, and the ho
 
   const reg = registrations.find((r) => r.event === 'ui.render');
   assert.ok(reg?.catchHandler !== undefined, 'ui.render has a .catch');
+});
+
+// Issue #4, item 3: session.start checks the `$` surfaces the module cannot
+// do without and says once what it found, before the marker; a surface that
+// moved is one line naming the module and its contract, not a failure per
+// hook, and the marker still says `loaded: true` with the cause.
+test('self-check: one line at session.start names the plugin, the contract and ok; the marker carries both', async () => {
+  const { $, start, marker } = boot();
+  await start();
+  await settle();
+  const lines = $.ui.logs.filter((l) => l.startsWith('cctop: plugin '));
+  assert.deepEqual(lines, [`cctop: plugin ${PLUGIN_VERSION} (hooks contract ${TESTED_WITH}) loaded; self-check ok`]);
+  assert.equal(marker()?.version, PLUGIN_VERSION, 'the manifest is read before the marker: never version: null');
+  assert.equal(marker()?.testedWith, TESTED_WITH);
+  assert.equal(marker()?.selfCheck, 'ok');
+  assert.ok(!$.ui.logs.some((l) => l.includes('failed')), JSON.stringify($.ui.logs));
+});
+
+test('self-check: a clock that no longer resolves a number is one line and a marker, and the hooks keep their books', async () => {
+  const { $, start, command, turnStart, turnComplete, render, marker } = boot();
+  // The next contract change, in the shape of issue #3: the host answers
+  // something that is not a number.
+  $.clock.now = (() => Promise.resolve({ ms: T0 })) as unknown as FakeEngine['clock']['now'];
+  const before = Date.now();
+  await start();
+  await settle();
+  const lines = $.ui.logs.filter((l) => l.startsWith('cctop: plugin '));
+  assert.equal(lines.length, 1, JSON.stringify($.ui.logs));
+  assert.equal(
+    lines[0],
+    selfCheckLine(PLUGIN_VERSION, { now: 0, problems: ['$.clock.now() resolved object, not a number'] }),
+  );
+  assert.match(lines[0], /self-check failed: \$\.clock\.now\(\) resolved object, not a number — /);
+  assert.match(lines[0], /claude plugin update cctop@cctop/);
+  const m = marker();
+  assert.equal(m?.loaded, true, 'the marker is written with the cause');
+  assert.equal(m?.selfCheck, '$.clock.now() resolved object, not a number');
+  assert.equal(m?.version, PLUGIN_VERSION);
+  const loadedAt = Date.parse(String(m?.loadedAt));
+  assert.ok(loadedAt >= before && loadedAt <= Date.now(), `loadedAt falls back to Date.now(): ${String(m?.loadedAt)}`);
+
+  // Every other hook reads the clock through the fallback: no failure line
+  // beside the self-check's own.
+  await command();
+  await settle();
+  await turnStart();
+  await render(80);
+  await turnComplete();
+  await settle();
+  const failures = $.ui.logs.filter((l) => l.includes('failed') && !l.startsWith('cctop: plugin '));
+  assert.deepEqual(failures, [], JSON.stringify($.ui.logs));
+  assert.equal(marker()?.open, true);
+});
+
+test('self-check: HOME unset and a session without an id are named together', async () => {
+  const $ = fakeEngine({ now: T0, process: binaryScripts(), files: { [MANIFEST]: manifest } });
+  $.session.id = () => Promise.reject(new Error('no session'));
+  const { on, dispatch } = fakeOn($, { surface: SURFACE });
+  register(on, {});
+  await dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({
+    cwd: '/home/user/project',
+  }));
+  await settle();
+  const line = $.ui.logs.find((l) => l.startsWith('cctop: plugin '));
+  assert.ok(line !== undefined, JSON.stringify($.ui.logs));
+  assert.match(line, /self-check failed: \$\.env\.get\("HOME"\) is unset: no marker can be written; \$\.session\.id\(\) failed: no session — /);
 });

@@ -93,6 +93,9 @@ export type Model = {
   lastTree: RenderElement | null;
   /** When session.start ran (the marker's `loadedAt`); null before it. */
   loadedAt: number | null;
+  /** What session.start's self-check of the `$` surfaces found: `ok`, or the
+   * problems in one line (the marker's `selfCheck`); null before it ran. */
+  selfCheck: string | null;
   visibility: Visibility;
   /** When the engine last asked for the pane's tree; null before the first render. */
   renderedAt: number | null;
@@ -120,7 +123,7 @@ export type Model = {
 export const HISTORY_TURNS = 24;
 
 export type Action =
-  | { type: 'session.start'; at: number }
+  | { type: 'session.start'; at: number; selfCheck?: string }
   | { type: 'turn.start'; at: number }
   | { type: 'turn.complete'; at: number; durationMs: number; reason: string }
   | { type: 'tool.start'; name: string; at: number }
@@ -176,6 +179,7 @@ export function initialModel(): Model {
     version: null,
     lastTree: null,
     loadedAt: null,
+    selfCheck: null,
     visibility: 'unknown',
     renderedAt: null,
     bodyColumns: null,
@@ -199,6 +203,7 @@ export function reduce(model: Model, action: Action): Model {
       return {
         ...model,
         loadedAt: action.at,
+        selfCheck: action.selfCheck ?? null,
         turn: { ...model.turn, state: 'idle', startedAt: null, runningTool: null },
       };
     case 'turn.start':

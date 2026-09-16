@@ -301,15 +301,29 @@ pub fn report(inputs: &Inputs) -> Report {
         ));
     }
 
-    // 3. The hooks module.
+    // 3. The hooks module. Its session.start self-check (the marker's
+    // `selfCheck`, plugin 0.8.0+) names a `$` surface that moved; the
+    // module then runs on its fallbacks and says so here.
     if loaded {
         let version = marker_str(inputs, "version").unwrap_or("?");
-        checks.push(check(
-            "hooks-module",
-            Verdict::Ok,
-            format!("hooks module loaded in this session (cctop plugin {version})"),
-            None,
-        ));
+        match marker_str(inputs, "selfCheck") {
+            Some(problems) if problems != "ok" => checks.push(check(
+                "hooks-module",
+                Verdict::Warn,
+                format!(
+                    "hooks module loaded in this session (cctop plugin {version}), but its self-check failed: {problems}"
+                ),
+                Some(format!(
+                    "{UPDATE_PLUGIN}, then restart Claude Code; if the newest plugin fails too, report it with `claude --version`"
+                )),
+            )),
+            _ => checks.push(check(
+                "hooks-module",
+                Verdict::Ok,
+                format!("hooks module loaded in this session (cctop plugin {version})"),
+                None,
+            )),
+        }
     } else {
         match &inputs.installed {
             None => checks.push(check(
@@ -962,6 +976,47 @@ mod tests {
             text.ends_with("→ run /cctop-pane to open the dashboard beside the transcript\n"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn a_failed_self_check_in_the_marker_is_relayed_on_the_module_line() {
+        let mut inputs = ready_inputs();
+        let mut m = marker(false, "unknown", 0);
+        m["selfCheck"] =
+            serde_json::Value::String("$.clock.now() resolved object, not a number".into());
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        assert!(report.ready, "the module runs, on its fallbacks");
+        let module = report
+            .checks
+            .iter()
+            .find(|c| c.id == "hooks-module")
+            .unwrap();
+        assert_eq!(module.verdict, Verdict::Warn);
+        assert_eq!(
+            module.text,
+            "hooks module loaded in this session (cctop plugin 0.2.0), but its self-check failed: $.clock.now() resolved object, not a number"
+        );
+        assert!(
+            module
+                .action
+                .as_deref()
+                .unwrap()
+                .starts_with("`claude plugin marketplace update cctop"),
+            "{:?}",
+            module.action
+        );
+        // `ok`, or a marker from before the self-check, is the plain line.
+        let mut m = marker(false, "unknown", 0);
+        m["selfCheck"] = serde_json::Value::String("ok".into());
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        let module = report
+            .checks
+            .iter()
+            .find(|c| c.id == "hooks-module")
+            .unwrap();
+        assert_eq!(module.verdict, Verdict::Ok);
     }
 
     #[test]
