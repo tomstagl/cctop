@@ -3,8 +3,14 @@ on:
   push:
     branches: [main, "ralph/**"]
   pull_request:
+  # Daily: a Claude Code release that moves a `$` surface the pane uses shows
+  # up in the `contract` job within a day, naming the surface (issue #4).
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
 jobs:
   check:
+    if: github.event_name != 'schedule'
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
@@ -19,6 +25,7 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
   pane:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +36,23 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: claude plugin validate
+  contract:
+    # Everything that needs the `claude` CLI, against the latest release:
+    # the headless load check of docs/verification/pane.md §A (no model
+    # call: `/plugin-types` is the prompt), the contract surface diffed
+    # against the checked-in d.ts, `claude plugin validate --strict`, and
+    # the version pins (scripts/check-contract.sh). The step summary
+    # carries the result line §A records.
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: install the latest Claude Code
         run: |
-          if command -v claude >/dev/null 2>&1; then
-            CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin
-          else
-            echo "claude not on the runner; plugin validate skipped"
-          fi
+          npm install -g @anthropic-ai/claude-code@latest
+          claude --version
+      - run: ./scripts/check-contract.sh

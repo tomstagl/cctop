@@ -1,4 +1,4 @@
-.PHONY: build demo site check check-types
+.PHONY: build demo site check check-types check-contract
 build:
 	cargo build --release
 site:
@@ -16,3 +16,5 @@ check-types:
 	else \
 		echo "check-types: claude not on PATH, skipping"; \
 	fi
+check-contract:
+	./scripts/check-contract.sh
