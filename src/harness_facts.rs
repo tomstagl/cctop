@@ -60,6 +60,44 @@ pub mod first_seen {
     pub const CONTINUED_IN: Version = Version(2, 1, 270);
 }
 
+/// What Claude Code's `cost-state` line holds (read on the 2.1.247 – 2.1.272
+/// transcripts of one machine: 79 sessions with a cost-state, 8 with subagent
+/// usage; `scripts/ledger-vs-agents.py` prints the table).
+pub mod cost_state {
+    /// `modelUsage` was ≥ main + subagents on every session and matched
+    /// main + agents where the agents dominate (a 336-agent run: cache
+    /// reads 0.2 % apart, cache writes 0.7 %). Adding priced agents on top
+    /// of the ledger double counts; only calls after its moment are added.
+    pub const INCLUDES_SUBAGENTS: bool = true;
+    /// The ledger also holds calls no transcript shows (haiku side calls:
+    /// 1.5 M input tokens on one session; `inputTokens` is 20–100× the
+    /// transcript's), so `ledger − priced(main)` is not the agents' share
+    /// and neither part is ever derived by subtraction.
+    pub const INCLUDES_UNTRANSCRIBED_CALLS: bool = true;
+    /// 115 cost-states in 79 sessions: 68 the file's last line (after
+    /// `last-prompt`), 26 after `bridge-session`, 1–5 per session, none
+    /// with a timestamp. The nearest timestamped line is a `system` line
+    /// 1–5 lines above; a live session has no ledger until it ends.
+    pub const WRITTEN_AT: &str = "session end (after last-prompt) or bridge-session; no timestamp";
+}
+
+/// The `<task-notification>` a finished agent (or background task) sends
+/// back as a `user` line with `origin.kind = "task-notification"` (387 on
+/// the same corpus, Claude Code 2.1.231 – 2.1.272).
+pub mod task_notification {
+    /// `<status>` values seen: 294 / 25 / 9.
+    pub const STATUSES: [&str; 3] = ["completed", "failed", "killed"];
+    /// `<usage>` (`subagent_tokens`, `tool_uses`, `duration_ms`) is optional
+    /// on agent notifications of every version seen (2.1.231 – 2.1.270; 18
+    /// with, 31 without, both in 2.1.269). Nothing may depend on it.
+    pub const USAGE_OPTIONAL: bool = true;
+    /// A background shell task's notification has a `<task-id>` and no
+    /// `<tool-use-id>`; a workflow run's carries `<agent_count>`,
+    /// `<agents_done>`, `<agents_error>`, `<agents_skipped>`,
+    /// `<agents_empty_result>` and `<failures>` instead of a result.
+    pub const SHELL_TASKS_HAVE_NO_TOOL_USE_ID: bool = true;
+}
+
 /// Autocompact arithmetic (recovered from the 2.1.269 binary and the debug
 /// log's `autocompact: tokens=… effectiveWindow=…` line).
 pub mod autocompact {
@@ -173,5 +211,11 @@ mod tests {
         assert_eq!(effort_cost_index("claude-fable-5-1", "max"), Some(1.74));
         assert_eq!(effort_cost_index("claude-sonnet-5", "low"), Some(0.47));
         assert_eq!(effort_cost_index("claude-opus-5", "high"), None);
+    }
+
+    #[test]
+    fn ledger_and_notification_facts() {
+        assert!(cost_state::WRITTEN_AT.contains("no timestamp"));
+        assert!(task_notification::STATUSES.contains(&"killed"));
     }
 }

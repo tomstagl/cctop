@@ -6,6 +6,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::agents::Agent;
 use crate::transcript::{CacheTtl, CostState, Line};
 
 use super::usage::{Aggregate, Usage};
@@ -98,6 +99,36 @@ impl Pricing {
     }
 }
 
+/// Where a dollar figure comes from. The mark of a sum is the worst of its
+/// parts: `Ledger` prints bare, `Priced` and `Mixed` print `≈`, `Unpriced`
+/// prints `—` and the token count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    /// Claude Code's own `cost-state` (main, subagents and the calls no
+    /// transcript shows, up to the moment it was written).
+    Ledger,
+    /// cctop's estimate: usage × `pricing.toml`.
+    Priced,
+    /// A ledger plus priced calls after it.
+    Mixed,
+    /// Usage on a model the price table does not know: no dollars.
+    Unpriced,
+}
+
+impl Source {
+    /// The source of a sum of two figures.
+    pub fn plus(self, other: Source) -> Source {
+        use Source::*;
+        match (self, other) {
+            (Unpriced, _) | (_, Unpriced) => Unpriced,
+            (Ledger, Ledger) => Ledger,
+            (Priced, Priced) => Priced,
+            _ => Mixed,
+        }
+    }
+}
+
 /// Cost figure with provenance.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cost {
@@ -105,6 +136,34 @@ pub struct Cost {
     /// True when any part of the figure is cctop's own estimate rather than
     /// Claude Code's `cost-state`.
     pub approx: bool,
+    pub source: Source,
+}
+
+impl Cost {
+    pub fn ledger(usd: f64) -> Cost {
+        Cost {
+            usd,
+            approx: false,
+            source: Source::Ledger,
+        }
+    }
+
+    pub fn priced(usd: f64) -> Cost {
+        Cost {
+            usd,
+            approx: true,
+            source: Source::Priced,
+        }
+    }
+
+    /// `self + other`, the source the worst of the two.
+    pub fn plus(self, other: Cost) -> Cost {
+        Cost {
+            usd: self.usd + other.usd,
+            approx: self.approx || other.approx,
+            source: self.source.plus(other.source),
+        }
+    }
 }
 
 /// Running cost over a transcript: authoritative up to the last `cost-state`,
@@ -114,6 +173,12 @@ pub struct CostTracker {
     pricing: Pricing,
     /// Latest `cost-state` seen.
     pub authoritative: Option<CostState>,
+    /// The ledger's moment: the last line timestamp seen before the latest
+    /// `cost-state` (the line itself carries none; it is written at session
+    /// end or on a bridge, 1–5 lines after the last timestamped one).
+    pub authoritative_at_ms: Option<i64>,
+    /// Timestamp of the last timestamped line pushed.
+    last_line_at_ms: Option<i64>,
     /// Usage (per model) of responses seen *after* the latest cost-state.
     since: BTreeMap<String, Usage>,
     /// Ids already attributed since the last cost-state (dedupe).
@@ -135,9 +200,20 @@ impl CostTracker {
     }
 
     pub fn push(&mut self, line: &Line) {
+        let at = match line {
+            Line::User(u) => u.timestamp.as_deref(),
+            Line::Assistant(a) => a.timestamp.as_deref(),
+            Line::System(s) => s.timestamp.as_deref(),
+            _ => None,
+        }
+        .and_then(parse_ts_ms);
+        if let Some(at) = at {
+            self.last_line_at_ms = Some(self.last_line_at_ms.map_or(at, |m| m.max(at)));
+        }
         match line {
             Line::CostState(c) => {
                 self.authoritative = Some(c.clone());
+                self.authoritative_at_ms = self.last_line_at_ms;
                 self.since.clear();
                 self.seen.clear();
                 self.unknown_model = false;
@@ -167,25 +243,50 @@ impl CostTracker {
             .sum()
     }
 
-    /// Best current figure. `None` when there is no cost-state and no
-    /// priceable model at all.
+    /// Best current figure for the main transcript: the ledger plus what
+    /// came after it. `None` when there is no cost-state and no priceable
+    /// model at all.
     pub fn current(&self) -> Option<Cost> {
         let since = self.since_usd();
         let any_since = self.since.values().any(|u| u.total() > 0);
         match &self.authoritative {
-            Some(c) => Some(Cost {
-                usd: c.total_cost_usd + since,
-                approx: any_since,
-            }),
-            None if any_since && !self.unknown_model => Some(Cost {
-                usd: since,
-                approx: true,
-            }),
-            None if any_since => Some(Cost {
-                usd: since,
-                approx: true,
-            })
-            .filter(|c| c.usd > 0.0),
+            Some(c) if any_since => Some(Cost::ledger(c.total_cost_usd).plus(Cost::priced(since))),
+            Some(c) => Some(Cost::ledger(c.total_cost_usd)),
+            None if any_since && !self.unknown_model => Some(Cost::priced(since)),
+            None if any_since => Some(Cost::priced(since)).filter(|c| c.usd > 0.0),
+            None => None,
+        }
+    }
+
+    /// The session's whole spend: `current()` plus the priced calls of its
+    /// subagents after the ledger's moment. The ledger already holds the
+    /// agents' calls up to that moment (`harness_facts::cost_state`), so a
+    /// call counts only when its own line timestamp is later; with no
+    /// ledger every agent call counts. With no agents this is `current()`
+    /// exactly. A call on a model the table does not know adds nothing.
+    pub fn combined<'a>(&self, agents: impl IntoIterator<Item = &'a Agent>) -> Option<Cost> {
+        let mut agents_usd = 0.0;
+        let mut any_agent = false;
+        for a in agents {
+            for c in &a.calls {
+                let after = match (self.authoritative_at_ms, c.at_ms) {
+                    (None, _) => true,
+                    (Some(moment), Some(at)) => at > moment,
+                    (Some(_), None) => false,
+                };
+                if !after {
+                    continue;
+                }
+                if let Some(usd) = self.pricing.estimate(&c.usage, &c.model) {
+                    agents_usd += usd;
+                    any_agent = true;
+                }
+            }
+        }
+        match self.current() {
+            Some(c) if any_agent => Some(c.plus(Cost::priced(agents_usd))),
+            Some(c) => Some(c),
+            None if any_agent => Some(Cost::priced(agents_usd)),
             None => None,
         }
     }
@@ -610,6 +711,140 @@ mod tests {
         }
         let c = fresh.current().unwrap();
         assert!(c.approx && c.usd > 1.0);
+        assert_eq!(c.source, Source::Priced);
+
+        // Fixture A's fork was taken from another session and the anonymiser
+        // shifts each file on its own: its 7 own calls post-date the ledger's
+        // moment, so the combined figure prices all of them on top of the
+        // ledger and is `≈` (correct for what the files say).
+        let agents =
+            crate::agents::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a"));
+        let fork = &agents["a9a92645226d3a561"];
+        let moment = t.authoritative_at_ms.unwrap();
+        assert!(fork.calls.iter().all(|c| c.at_ms.unwrap() > moment));
+        let all = t.combined(agents.values()).unwrap();
+        let fork_usd = Pricing::bundled()
+            .estimate(&fork.usage, &fork.model)
+            .unwrap();
+        assert!((all.usd - (end.usd + fork_usd)).abs() < 1e-9);
+        assert_eq!(all.source, Source::Mixed);
+        assert!(all.approx);
+    }
+
+    /// An agent with one priced call per `(timestamp, output tokens)`.
+    fn agent(model: &str, calls: &[(&str, u64)]) -> Agent {
+        let mut a = Agent::new("x", crate::agents::Meta::default());
+        for (i, (ts, out)) in calls.iter().enumerate() {
+            let l = Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","message":{{"id":"m{i}","model":"{model}","content":[{{"type":"text","text":"x"}}],"usage":{{"output_tokens":{out}}}}}}}"#
+            ))
+            .unwrap();
+            a.push(&l);
+        }
+        a
+    }
+
+    fn output_price(model: &str) -> f64 {
+        Pricing::bundled().price(model).unwrap().output / 1e6
+    }
+
+    #[test]
+    fn combined_adds_agent_calls_after_the_ledgers_moment() {
+        let ledger =
+            Line::parse(r#"{"type":"cost-state","totalCostUSD":10.0,"modelUsage":{}}"#).unwrap();
+        let main_line = |ts: &str, id: &str| -> Line {
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"output_tokens":1000}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let out = output_price("claude-opus-5");
+        let eps = 1e-9;
+
+        // No ledger: every part is priced, main and agents alike.
+        let mut t = CostTracker::new(Pricing::bundled());
+        t.push(&main_line("2026-01-01T00:00:00Z", "a"));
+        let agents = [agent("claude-opus-5", &[("2026-01-01T00:00:05Z", 1000)])];
+        let c = t.combined(&agents).unwrap();
+        assert_eq!(c.source, Source::Priced);
+        assert!(c.approx);
+        assert!((c.usd - 2000.0 * out).abs() < eps);
+        assert_eq!(t.authoritative_at_ms, None);
+
+        // A ledger: its moment is the last timestamped line before it.
+        t.push(&main_line("2026-01-01T00:01:00Z", "b"));
+        t.push(&ledger);
+        assert_eq!(
+            t.authoritative_at_ms,
+            parse_ts_ms("2026-01-01T00:01:00Z"),
+            "the cost-state line has no timestamp of its own"
+        );
+        assert_eq!(t.current().unwrap(), Cost::ledger(10.0));
+        // Agent calls before the moment are inside the ledger; after it they
+        // are added; a call straddling it (same second) counts as before.
+        let agents = [
+            agent("claude-opus-5", &[("2026-01-01T00:00:30Z", 1000)]),
+            agent(
+                "claude-opus-5",
+                &[
+                    ("2026-01-01T00:01:00Z", 1000),
+                    ("2026-01-01T00:02:00Z", 1000),
+                ],
+            ),
+        ];
+        let c = t.combined(&agents).unwrap();
+        assert_eq!(c.source, Source::Mixed);
+        assert!(c.approx);
+        assert!((c.usd - (10.0 + 1000.0 * out)).abs() < eps, "{}", c.usd);
+        // Only calls before it: the ledger stands alone, exact.
+        let c = t.combined(&agents[..1]).unwrap();
+        assert_eq!(c, Cost::ledger(10.0));
+        // Main calls after the ledger are priced too (`current()`).
+        t.push(&main_line("2026-01-01T00:03:00Z", "c"));
+        let c = t.combined(&agents).unwrap();
+        assert!((c.usd - (10.0 + 2000.0 * out)).abs() < eps);
+        assert_eq!(c.source, Source::Mixed);
+
+        // An agent on a model the table does not know adds nothing and
+        // does not change the mark.
+        let unknown = [agent("claude-unknown-9", &[("2026-01-01T00:04:00Z", 1000)])];
+        let with = t.combined(&unknown).unwrap();
+        assert_eq!(with, t.current().unwrap());
+        let mut fresh = CostTracker::new(Pricing::bundled());
+        assert_eq!(fresh.combined(&unknown), None, "nothing priceable at all");
+        fresh.push(&main_line("2026-01-01T00:00:00Z", "a"));
+        assert_eq!(fresh.combined(&unknown), fresh.current());
+
+        // No agents: `current()` exactly (FR-6).
+        assert_eq!(t.combined(&[]), t.current());
+        let mut none = CostTracker::new(Pricing::bundled());
+        assert_eq!(none.combined(&[]), None);
+        none.push(&ledger);
+        assert_eq!(none.combined(&[]), Some(Cost::ledger(10.0)));
+        assert_eq!(
+            none.authoritative_at_ms, None,
+            "a ledger with no timestamped line before it has no moment"
+        );
+    }
+
+    #[test]
+    fn source_of_a_sum_is_the_worst_part() {
+        use Source::*;
+        assert_eq!(Ledger.plus(Ledger), Ledger);
+        assert_eq!(Ledger.plus(Priced), Mixed);
+        assert_eq!(Priced.plus(Priced), Priced);
+        assert_eq!(Mixed.plus(Priced), Mixed);
+        assert_eq!(Mixed.plus(Ledger), Mixed);
+        assert_eq!(Ledger.plus(Unpriced), Unpriced);
+        let c = Cost::ledger(1.0).plus(Cost::priced(0.5));
+        assert_eq!(
+            c,
+            Cost {
+                usd: 1.5,
+                approx: true,
+                source: Mixed
+            }
+        );
     }
 
     #[test]

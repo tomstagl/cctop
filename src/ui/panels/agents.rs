@@ -118,9 +118,9 @@ impl Panel for Agents {
             // A fork's inherited context: the cache read of its first own
             // call (`fork-context-ref.contextLength` is not tokens).
             let inherited = a
-                .first_own_call
+                .first_own_call()
                 .filter(|_| a.is_fork)
-                .map(|u| format!(" ↰{}", fmt::tokens(u.cache_read)))
+                .map(|c| format!(" ↰{}", fmt::tokens(c.usage.cache_read)))
                 .unwrap_or_default();
             lines.push(Line::from(vec![
                 Span::styled(format!(" {glyph} "), style),
