@@ -5,6 +5,7 @@ pub mod state;
 
 pub use panel::{Handled, Panel, PanelId};
 pub use state::State;
+pub mod agents_view;
 pub mod coach_view;
 pub mod dashboard;
 pub mod fmt;

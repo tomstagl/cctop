@@ -1,5 +1,6 @@
 //! Agents & MCP: subagents, MCP server processes, background tasks.
 
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -8,7 +9,7 @@ use ratatui::Frame;
 
 use crate::agents::{State as AgentState, IDLE_MS};
 use crate::ui::fmt;
-use crate::ui::panel::{Panel, PanelId};
+use crate::ui::panel::{Handled, Panel, PanelId};
 use crate::ui::state::State;
 
 pub struct Agents;
@@ -51,6 +52,27 @@ impl Panel for Agents {
         } else {
             parts.join(" · ")
         })
+    }
+
+    fn handle_key(&mut self, key: KeyEvent, state: &mut State) -> Handled {
+        if state.overlay == Some(self.id()) {
+            return crate::ui::agents_view::handle_key(key, state);
+        }
+        match key.code {
+            KeyCode::Enter => {
+                crate::ui::agents_view::open(state);
+                Handled::Yes
+            }
+            _ => Handled::No,
+        }
+    }
+
+    fn has_overlay(&self) -> bool {
+        true
+    }
+
+    fn render_overlay(&self, frame: &mut Frame, area: Rect, state: &State) {
+        crate::ui::agents_view::render(frame, area, state)
     }
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {

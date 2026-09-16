@@ -47,7 +47,7 @@ pub const BINDINGS: &[Binding] = &[
     },
     Binding {
         keys: "Enter",
-        action: "act on the nudge",
+        action: "act on nudge · ledger 1/2 · agents 6",
     },
     Binding {
         keys: "p",

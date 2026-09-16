@@ -122,6 +122,87 @@ impl Sort {
     }
 }
 
+/// A workflow run folded into one row: the journal's counts, the
+/// notification's empty results when one arrived, and the subtotal of its
+/// agents' rows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkflowGroup {
+    pub run: String,
+    pub launched: usize,
+    pub done: usize,
+    pub failed: usize,
+    /// `<agents_empty_result>` of the run's task notification.
+    pub empty_result: Option<usize>,
+    /// Agents of the run with a transcript.
+    pub agents: usize,
+    pub running: usize,
+    pub cost: Cost,
+    pub waste_usd: f64,
+}
+
+/// One group per workflow run seen in `rows` or in the journals, in run
+/// order.
+pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
+    let mut runs: Vec<String> = state
+        .workflow_journals
+        .iter()
+        .map(|j| j.run.clone())
+        .collect();
+    for r in rows {
+        if let Some(run) = &r.workflow {
+            if !runs.contains(run) {
+                runs.push(run.clone());
+            }
+        }
+    }
+    runs.sort();
+    runs.into_iter()
+        .map(|run| {
+            let journal = state.workflow_journals.iter().find(|j| j.run == run);
+            let members: Vec<&AgentRow> = rows
+                .iter()
+                .filter(|r| r.workflow.as_deref() == Some(&run))
+                .collect();
+            let mut cost_usd = 0.0;
+            let mut any_priced = false;
+            let mut waste_usd = 0.0;
+            for r in &members {
+                if r.cost.source != Source::Unpriced {
+                    cost_usd += r.cost.usd;
+                    any_priced = true;
+                }
+                waste_usd += r.waste.map_or(0.0, |w| w.usd);
+            }
+            WorkflowGroup {
+                empty_result: state
+                    .workflow_notifications
+                    .get(&run)
+                    .and_then(|n| n.workflow)
+                    .map(|w| w.empty_result),
+                launched: journal.map_or(members.len(), |j| j.launched),
+                done: journal.map_or(0, |j| j.results),
+                failed: journal.map_or(0, |j| j.failed),
+                agents: members.len(),
+                running: members
+                    .iter()
+                    .filter(|r| r.state == AgentState::Running)
+                    .count(),
+                cost: if any_priced {
+                    Cost::priced(cost_usd)
+                } else {
+                    Cost {
+                        usd: 0.0,
+                        approx: true,
+                        source: Source::Unpriced,
+                    }
+                },
+                waste_usd,
+                run,
+            }
+        })
+        .collect()
+}
+
 /// The footer's figures over every row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Totals {
