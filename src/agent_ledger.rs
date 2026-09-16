@@ -156,7 +156,7 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
     let journal_failed = state
         .workflow_journals
         .iter()
-        .any(|j| j.failed_ids.iter().any(|id| *id == a.id));
+        .any(|j| j.failed_ids.contains(&a.id));
     let heuristic = a.state(now);
     let agent_state = match &status {
         Some(TaskStatus::Completed) => AgentState::Done,
