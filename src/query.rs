@@ -314,25 +314,60 @@ pub fn files(state: &State) -> Value {
 }
 
 pub fn agents(state: &State) -> Value {
-    let now = state.clock_ms();
-    let agents: Vec<Value> = state
-        .agents
-        .values()
-        .map(|a| {
+    use crate::agent_ledger::{self, Sort};
+    let rows = agent_ledger::rows(state, Sort::Spend, false);
+    let totals = agent_ledger::totals(&rows);
+    let agents: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let a = &state.agents[&r.id];
             json!({
-                "id": a.id,
-                "type": a.agent_type,
-                "description": a.description,
-                "model": a.model,
-                "state": format!("{:?}", a.state(now)).to_lowercase(),
-                "elapsed": a.elapsed_ms(now).map(|e| m(e, "ms", "agent_state", false)),
-                "tokens": m(a.usage.total(), "tokens", "agent_tokens", false),
-                "workflow": a.workflow,
-                "inherited_context": a.inherited_context_len,
+                "id": r.id,
+                "type": r.agent_type,
+                "description": r.description,
+                "model": r.model,
+                "state": format!("{:?}", r.state).to_lowercase(),
+                "status": r.status.as_ref().map(|s| json!({"value": s.as_str(), "unit": "enum", "metric_id": "agent_status", "approx": false})),
+                "elapsed": r.elapsed_ms.map(|e| m(e, "ms", "agent_state", false)),
+                "tokens": m(r.tokens, "tokens", "agent_tokens", false),
+                "cost": CostValue::new(r.cost, "agent_cost"),
+                "returned_tokens": r.returned_tokens.map(|t| m(t, "tokens", "agent_returned", true)),
+                "waste": r.waste.map(|w| json!({
+                    "usd": CostValue::new(crate::metrics::cost::Cost { usd: w.usd, ..r.cost }, "agent_waste"),
+                    "reason": w.reason,
+                    "idle_ms": w.idle_ms,
+                })),
+                "cold_start": r.cold_start,
+                "launched_turn": r.launched_turn,
+                "workflow": r.workflow,
+                // A fork's inherited context in tokens (its first own call's
+                // cache read); `fork_context_messages` is what
+                // `fork-context-ref.contextLength` says, which is not tokens.
+                "inherited_context": r.inherited_context,
+                "fork_context_messages": a.inherited_context_len,
                 "depth": a.spawn_depth,
             })
         })
         .collect();
+    let waste_by_reason: serde_json::Map<String, Value> = crate::agent_ledger::WasteReason::ALL
+        .iter()
+        .zip(totals.waste_by_reason.iter())
+        .map(|(r, usd)| {
+            (
+                r.label().replace(' ', "_"),
+                m(*usd, "USD", "agents_waste", true),
+            )
+        })
+        .collect();
+    let totals_v = json!({
+        "cost": CostValue::new(totals.cost, "agents_cost"),
+        "waste": m(totals.waste_usd, "USD", "agents_waste", true),
+        "waste_by_reason": waste_by_reason,
+        "classified": totals.classified,
+        "cold_starts": m(totals.cold_starts, "count", "agents_cold_starts", false),
+        "cold_start_usd": m(totals.cold_start_usd, "USD", "agents_cold_starts", true),
+        "returned_ratio": totals.returned_ratio.map(|r| m(r, "ratio", "agents_return_ratio", true)),
+    });
     let mcp: Vec<Value> = state
         .procs
         .mcp
@@ -347,10 +382,20 @@ pub fn agents(state: &State) -> Value {
         .iter()
         .map(|t| json!({"id": t.id, "kind": t.kind, "description": t.description, "started_at_ms": t.started_at_ms, "status": t.status}))
         .collect();
-    let workflows: Vec<Value> = state
-        .workflow_journals
+    let workflows: Vec<Value> = agent_ledger::workflow_groups(state, &rows)
         .iter()
-        .map(|j| json!({"run": j.run, "launched": j.launched, "done": j.results, "failed": j.failed}))
+        .map(|g| {
+            json!({
+                "run": g.run,
+                "launched": g.launched,
+                "done": g.done,
+                "failed": g.failed,
+                "empty_result": g.empty_result,
+                "agents": g.agents,
+                "cost": CostValue::new(g.cost, "agents_cost"),
+                "waste": m(g.waste_usd, "USD", "agents_waste", true),
+            })
+        })
         .collect();
     let teammates: Vec<Value> = state
         .teammates
@@ -359,6 +404,7 @@ pub fn agents(state: &State) -> Value {
         .collect();
     json!({
         "agents": agents,
+        "totals": totals_v,
         "depth": state.agent_depth(),
         "workflows": workflows,
         "teammates": teammates,

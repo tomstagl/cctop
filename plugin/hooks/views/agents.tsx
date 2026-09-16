@@ -1,13 +1,14 @@
-// The Agents & MCP view: subagents (state glyph, type, description, elapsed,
-// tokens), MCP servers (name, RSS, calls, restarts) and background tasks, one
-// row each as the TUI's panel draws them, from `cctop query agents`.
+// The Agents & MCP view: subagents as the TUI's agents view lists them
+// (state glyph, type, model family, elapsed, tokens, priced cost, what came
+// back, waste with its reason), MCP servers (name, RSS, calls, restarts) and
+// background tasks, one row each, from `cctop query agents`.
 import type { RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { DASH, at, formatBytes, formatDuration, isMissing, measured, stringAt, tokensOf } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
 import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
-const W = { glyph: 10, prefix: 3, kind: 6, elapsed: 6, tokens: 6, rss: 7, calls: 9, restarts: 4, status: 16 };
+const W = { glyph: 10, model: 6, prefix: 3, kind: 6, elapsed: 6, tokens: 6, cost: 5, ret: 5, rss: 7, calls: 9, restarts: 4, status: 16 };
 
 const STATE_GLYPH: Record<string, [string, Color]> = {
   running: ['◐', 'cyan'],
@@ -15,16 +16,59 @@ const STATE_GLYPH: Record<string, [string, Color]> = {
   failed: ['✗', 'red'],
 };
 
-function agentCells(a: unknown): Cell[] {
+/** `claude-opus-5` → `opus`: the family, as the TUI's agents view. */
+function family(model: string | null): string {
+  return (model ?? '').replace(/^claude-/, '').split('-')[0] ?? '';
+}
+
+/** Dollars without the sign in five cells, as the TUI's agents view (`0.19`, `12.4`, `118`). */
+function cents(usd: number): string {
+  if (usd >= 100) return usd.toFixed(0);
+  if (usd >= 10) return usd.toFixed(1);
+  return usd.toFixed(2);
+}
+
+/** `idle 55m` / `idle 2h10` from the waste's age, else the reason word. */
+function wasteText(a: unknown): string {
+  const waste = at(a, 'waste');
+  if (waste === null || waste === undefined) return '0.00';
+  const usd = measured(waste, 'usd');
+  const reason = stringAt(waste, 'reason') ?? '';
+  const idle = at(waste, 'idle_ms');
+  const label = reason === 'no_return' ? 'no ret' : reason === 'idle' && typeof idle === 'number' ? `idle ${shortDuration(idle)}` : reason;
+  const amount = usd === null || stringAt(waste, 'usd', 'source') === 'unpriced' ? DASH : cents(usd.value);
+  return `${amount} ${label}`;
+}
+
+/** Minutes-first, as the TUI's coach::short_duration: `41m`, `2h10`, `4:12` under five minutes. */
+function shortDuration(ms: number): string {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  if (s < 300) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+}
+
+/** Below this many body columns the model and `ret` columns make way for the waste. */
+const NARROW = 58;
+
+function agentCells(a: unknown, inner: number): Cell[] {
   const state = stringAt(a, 'state') ?? '';
   const [glyph, color] = STATE_GLYPH[state] ?? ['·', undefined];
   const elapsed = measured(a, 'elapsed');
-  return [
-    { text: `${glyph} ${stringAt(a, 'type') ?? DASH}`, width: W.glyph, color, key: 'agent_state' },
-    { text: stringAt(a, 'description') ?? '', dim: true },
+  const cost = measured(a, 'cost');
+  const unpriced = stringAt(a, 'cost', 'source') === 'unpriced';
+  const ret = measured(a, 'returned_tokens');
+  const wide = inner >= NARROW;
+  const cells: Cell[] = [{ text: `${glyph} ${stringAt(a, 'type') ?? DASH}`, width: W.glyph, color, key: 'agent_state' }];
+  if (wide) cells.push({ text: family(stringAt(a, 'model')), width: W.model, dim: true });
+  cells.push(
     { text: elapsed === null ? DASH : formatDuration(elapsed.value), width: W.elapsed, right: true },
     { text: tokensOf(measured(a, 'tokens')), width: W.tokens, right: true, key: 'agent_tokens' },
-  ];
+    { text: cost === null || unpriced ? DASH : cents(cost.value), width: W.cost, right: true, key: 'agent_cost' },
+  );
+  if (wide) cells.push({ text: ret === null ? (state === 'running' ? '...' : DASH) : tokensOf(ret).replace(/^≈/, ''), width: W.ret, right: true, key: 'agent_returned' });
+  cells.push({ text: wasteText(a), key: 'agent_waste', color: at(a, 'waste') ? 'yellow' : undefined });
+  return cells;
 }
 
 function mcpCells(m: unknown): Cell[] {
@@ -70,7 +114,7 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = [];
-  for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a), inner, 'agent_state'));
+  for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
   if (isMissing(data, 'mcp')) rows.push(line(`mcp: ${stringAt(data, 'mcp', 'hint') ?? DASH}`, { key: 'mcp_rss' }));
   for (const m of listAt(data, 'mcp')) rows.push(row(mcpCells(m), inner, 'mcp_rss'));
   for (const t of listAt(data, 'tasks')) rows.push(row(taskCells(t, now), inner));

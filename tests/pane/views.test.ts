@@ -127,7 +127,10 @@ for (const columns of [50, 80]) {
   test(`agents at ${columns} columns: the fixture agent and the missing MCP hint`, () => {
     const lines = rows('agents', build(), columns);
     fits(lines, columns);
-    has(lines, /^✓ fork\s+Check whether a set.*\s0:42\s+485k$/);
+    // The TUI's agents view columns: type, model, time, tokens, ≈$, ret,
+    // waste; below 58 body columns the model and ret make way.
+    if (columns >= 60) has(lines, /^✓ fork\s+sonnet\s+0:42\s+485k\s+0\.13\s+—\s+0\.00$/);
+    else has(lines, /^✓ fork\s+0:42\s+485k\s+0\.13\s+0\.00$/);
     has(lines, 'mcp: no live process (fixture)');
     assert.equal(lines.filter((r) => r !== '').length, 2, JSON.stringify(lines));
     assert.deepEqual(frameTitles(rawRows('agents', build(), columns)), ['6 Agents & MCP ─ 0/1 agents']);
@@ -232,6 +235,30 @@ test('tools: ≈ marks exactly the approx values of the fixture', () => {
   }
 });
 
+test('agents on fixture C: the columns of the TUI agents view, waste with its reason', () => {
+  // `cctop query agents` on fixture C (tests/pane/fixtures/agents-c.json):
+  // a killed Explore agent with a partial result and the fork that
+  // returned 2 069 characters; the shell task's notification made no row.
+  const data = fixture<Record<string, unknown>>('agents-c');
+  const model = build({ query: { agents: data } });
+  const lines = rows('agents', model, 80);
+  fits(lines, 80);
+  // (354 828 tokens: the pane's formatTokens rounds to 355k where the
+  // TUI's fmt::tokens truncates to 354k — a pre-existing difference.)
+  has(lines, /^✗ Explore\s+sonnet\s+2:32\s+355k\s+0\.18\s+41\s+0\.18 killed$/);
+  has(lines, /^✓ fork\s+sonnet\s+0:42\s+485k\s+0\.13\s+517\s+0\.00$/);
+  assert.equal(lines.filter((r) => /^[✗✓◐] /.test(r)).length, 2);
+  assert.deepEqual(frameTitles(rawRows('agents', model, 80)), ['6 Agents & MCP ─ 0/2 agents']);
+  // The rows are sorted by spend, as the query returns them; the totals
+  // carry the same figures the TUI's footer prints.
+  const totals = data.totals as Record<string, { value: number }>;
+  assert.equal(totals.classified as unknown as number, 1);
+  assert.ok(Math.abs(totals.waste.value - 0.18) < 0.005);
+  const narrow = rows('agents', model, 50);
+  fits(narrow, 50);
+  has(narrow, /^✗ Explore\s+2:32\s+355k\s+0\.18\s+0\.18 killed$/);
+});
+
 test('agents: MCP servers, restarts and background tasks', () => {
   const agents = fixture<Record<string, unknown>>('agents');
   const data = {
@@ -251,8 +278,13 @@ test('agents: MCP servers, restarts and background tasks', () => {
   for (const columns of [50, 80]) {
     const lines = rows('agents', model, columns);
     fits(lines, columns);
-    has(lines, /^◐ general\s+Find the callers\s+0:09\s+1k$/);
-    has(lines, /^✗ Explore\s+Broken\s+—\s+0$/);
+    if (columns >= 60) {
+      has(lines, /^◐ general\s+opus\s+0:09\s+1k\s+—\s+\.\.\.\s+0\.00$/);
+      has(lines, /^✗ Explore\s+sonnet\s+—\s+0\s+—\s+—\s+0\.00$/);
+    } else {
+      has(lines, /^◐ general\s+0:09\s+1k\s+—\s+0\.00$/);
+      has(lines, /^✗ Explore\s+—\s+0\s+—\s+0\.00$/);
+    }
     has(lines, /^mcp playwright\s+188 MB\s+7 calls\s+↻2$/);
     has(lines, /^mcp github\s+512 kB\s+0 calls$/);
     has(lines, /^bg\s+bash\s+cargo bui.*\s1:58\s+b7f3a9c0 running$/);

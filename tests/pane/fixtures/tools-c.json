@@ -1,0 +1,323 @@
+{
+  "bash_by_class": [
+    {
+      "calls": 16,
+      "class": "gitread",
+      "errors": 0
+    },
+    {
+      "calls": 6,
+      "class": "explore",
+      "errors": 0
+    },
+    {
+      "calls": 4,
+      "class": "commit",
+      "errors": 2
+    },
+    {
+      "calls": 3,
+      "class": "implement",
+      "errors": 0
+    }
+  ],
+  "errors_by_class": [
+    {
+      "class": "Other",
+      "count": 2
+    }
+  ],
+  "input_to_ctx": [
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 914
+      },
+      "tool": "Agent"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 1435
+      },
+      "tool": "Bash"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 16
+      },
+      "tool": "Read"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 4
+      },
+      "tool": "TaskStop"
+    }
+  ],
+  "tool_search_loads": {},
+  "tools": [
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 29
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 2
+      },
+      "last_call_at_ms": 1788376499951,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 3267
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 14494
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 5612
+      },
+      "tool": "Bash"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 2
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1788376372201,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 1511
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 3063
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 532
+      },
+      "tool": "Agent"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 2
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1788375610381,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 51
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 86
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 725
+      },
+      "tool": "Read"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1788376454878,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 13
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 13
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 49
+      },
+      "tool": "TaskStop"
+    }
+  ],
+  "top_ctx": [
+    {
+      "input": "/home/user/project/src/26a31b…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 37,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.00925
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Read",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "git diff lore lorem_ipsum --stat echo lorem_ip lorem_ipsum_dol git diff lore lorem_ipsum lorem_ipsum_d",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 24,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.006
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Bash",
+      "truncated": false,
+      "turn": 5
+    },
+    {
+      "input": "git checkout lore && git pull lorem_ lore --ff-only",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 19,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.00475
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Bash",
+      "truncated": false,
+      "turn": 6
+    },
+    {
+      "input": "for l in lorem_ipsum_dolor_sit_amet_co lorem_ipsum_dolor_sit_amet_consectetur_adipiscing lorem_ipsum_dolor_sit_a lorem_ipsum_dolor_sit_amet_co do echo lore $l lorem git -C lore lorem --prune lorem do…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 12,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.003
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Bash",
+      "truncated": false,
+      "turn": 7
+    },
+    {
+      "input": "cd lorem_ipsum_dolor_sit_amet_co && git checkout lore && git pull --ff-only lorem_ lore",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 8,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.002
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 500
+      },
+      "tool": "Bash",
+      "truncated": false,
+      "turn": 7
+    }
+  ]
+}

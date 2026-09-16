@@ -708,36 +708,37 @@ fn row_tools(state: &State) -> Row {
 }
 
 fn row_agents(state: &State) -> Row {
-    let now = state.clock_ms();
     let mut parts: Vec<Line> = Vec::new();
-    let running = state
-        .agents
-        .values()
-        .filter(|a| a.state(now) == crate::agents::State::Running)
-        .count();
-    if !state.agents.is_empty() {
-        parts.push(vec![fg(format!("{running} run"))]);
+    // The agents ledger's rows, by waste then spend: what the agents view
+    // opens on (agent PRD §4.5).
+    let rows = crate::agent_ledger::rows(state, crate::agent_ledger::Sort::Waste, false);
+    let totals = crate::agent_ledger::totals(&rows);
+    if !rows.is_empty() {
+        parts.push(vec![fg(format!("{} run", totals.running))]);
         if let Some((usd, share)) = state.agents_cost() {
             parts.push(vec![fg(format!("{:.0} %", share * 100.0))]);
-            let mut agents: Vec<_> = state.agents.values().collect();
-            agents.sort_by_key(|a| std::cmp::Reverse(a.usage.total()));
-            for a in agents.iter().take(3) {
+            for r in rows.iter().take(3) {
                 parts.push(vec![fg(format!(
                     "{} {} {}",
-                    fmt::clip(&a.agent_type, 8),
-                    a.elapsed_ms(now).map(fmt::duration_ms).unwrap_or_default(),
-                    fmt::tokens(a.usage.total())
+                    fmt::clip(&r.agent_type, 8),
+                    r.elapsed_ms.map(fmt::duration_ms).unwrap_or_default(),
+                    fmt::tokens(r.tokens)
                 ))]);
             }
             parts.push(vec![fg(fmt::usd(usd))]);
         }
-        let failed = state
-            .agents
-            .values()
-            .filter(|a| a.state(now) == crate::agents::State::Failed)
+        let failed = rows
+            .iter()
+            .filter(|r| r.state == crate::agents::State::Failed)
             .count();
         if failed > 0 {
             parts.push(vec![seg(format!("{failed} failed"), Tone::Crit)]);
+        }
+        if totals.waste_usd > 0.0 {
+            parts.push(vec![seg(
+                format!("wasted ≈{}", fmt::usd(totals.waste_usd)),
+                Tone::Warn,
+            )]);
         }
     }
     if !state.mcp_needs_auth.is_empty() {

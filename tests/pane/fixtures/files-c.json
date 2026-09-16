@@ -1,0 +1,44 @@
+[
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/9bba5c.md",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/26a31b.md",
+    "reads": 1,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 0
+  }
+]

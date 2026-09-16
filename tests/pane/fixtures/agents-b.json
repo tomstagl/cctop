@@ -10,5 +10,60 @@
   "tasks": [],
   "teammates": [],
   "tool_search_loads": {},
+  "totals": {
+    "classified": 0,
+    "cold_start_usd": {
+      "approx": true,
+      "metric_id": "agents_cold_starts",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "cold_starts": {
+      "approx": false,
+      "metric_id": "agents_cold_starts",
+      "unit": "count",
+      "value": 0
+    },
+    "cost": {
+      "approx": true,
+      "metric_id": "agents_cost",
+      "source": "unpriced",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "returned_ratio": null,
+    "waste": {
+      "approx": true,
+      "metric_id": "agents_waste",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "waste_by_reason": {
+      "failed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "idle": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "killed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "no_ret": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      }
+    }
+  },
   "workflows": []
 }

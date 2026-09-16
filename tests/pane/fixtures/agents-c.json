@@ -1,6 +1,61 @@
 {
   "agents": [
     {
+      "cold_start": true,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 0.178014
+      },
+      "depth": 1,
+      "description": "lorem ipsum dolor sit amet consect",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 152377
+      },
+      "fork_context_messages": null,
+      "id": "a2de915228d5f40fe",
+      "inherited_context": null,
+      "launched_turn": 7,
+      "model": "claude-sonnet-5",
+      "returned_tokens": {
+        "approx": true,
+        "metric_id": "agent_returned",
+        "unit": "tokens",
+        "value": 41
+      },
+      "state": "failed",
+      "status": {
+        "approx": false,
+        "metric_id": "agent_status",
+        "unit": "enum",
+        "value": "killed"
+      },
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 354828
+      },
+      "type": "Explore",
+      "waste": {
+        "idle_ms": null,
+        "reason": "killed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "priced",
+          "unit": "USD",
+          "value": 0.178014
+        }
+      },
+      "workflow": null
+    },
+    {
       "cold_start": false,
       "cost": {
         "approx": true,
@@ -10,7 +65,7 @@
         "value": 0.1270531
       },
       "depth": 1,
-      "description": "Check whether a setup step needs the user personally",
+      "description": "lorem ipsum dolor sit amet consectetur adipiscing elit s",
       "elapsed": {
         "approx": false,
         "metric_id": "agent_state",
@@ -20,11 +75,21 @@
       "fork_context_messages": 32,
       "id": "a9a92645226d3a561",
       "inherited_context": 62690,
-      "launched_turn": null,
+      "launched_turn": 2,
       "model": "claude-sonnet-5",
-      "returned_tokens": null,
+      "returned_tokens": {
+        "approx": true,
+        "metric_id": "agent_returned",
+        "unit": "tokens",
+        "value": 517
+      },
       "state": "done",
-      "status": null,
+      "status": {
+        "approx": false,
+        "metric_id": "agent_status",
+        "unit": "enum",
+        "value": "completed"
+      },
       "tokens": {
         "approx": false,
         "metric_id": "agent_tokens",
@@ -45,41 +110,39 @@
   "mcp_needs_auth": [],
   "tasks": [],
   "teammates": [],
-  "tool_search_loads": {
-    "builtin": 25
-  },
+  "tool_search_loads": {},
   "totals": {
-    "classified": 0,
+    "classified": 1,
     "cold_start_usd": {
       "approx": true,
       "metric_id": "agents_cold_starts",
       "unit": "USD",
-      "value": 0.0
+      "value": 0.051485
     },
     "cold_starts": {
       "approx": false,
       "metric_id": "agents_cold_starts",
       "unit": "count",
-      "value": 0
+      "value": 1
     },
     "cost": {
       "approx": true,
       "metric_id": "agents_cost",
       "source": "priced",
       "unit": "USD",
-      "value": 0.1270531
+      "value": 0.30506710000000004
     },
     "returned_ratio": {
       "approx": true,
       "metric_id": "agents_return_ratio",
       "unit": "ratio",
-      "value": 0.0
+      "value": 0.6262626262626263
     },
     "waste": {
       "approx": true,
       "metric_id": "agents_waste",
       "unit": "USD",
-      "value": 0.0
+      "value": 0.178014
     },
     "waste_by_reason": {
       "failed": {
@@ -98,7 +161,7 @@
         "approx": true,
         "metric_id": "agents_waste",
         "unit": "USD",
-        "value": 0.0
+        "value": 0.178014
       },
       "no_ret": {
         "approx": true,

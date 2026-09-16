@@ -9,6 +9,7 @@ counterpart prints, so `docs/query.md` describes the shapes.
 | `cctop_summary` | `cctop query summary` |
 | `cctop_ledger` (`last`) | `cctop query ledger --last N` |
 | `cctop_tools` | `cctop query tools` |
+| `cctop_agents` | `cctop query agents` |
 | `cctop_advice` | `cctop query advice` |
 | `cctop_coach` | `cctop query coach` |
 | `cctop_prefix` | `cctop query prefix` |
@@ -21,8 +22,8 @@ spawned it (its parent pid), falling back to the same discovery the TUI uses.
 
 ## Cost of registering it
 
-Measured on 0.1.0: the seven tool schemas serialise to **2 349 bytes ≈ 587
-tokens** (`cctop mcp` → `tools/list`; a unit test keeps it under 600). That rides on every request of any
+Measured after `cctop_agents` was added (0.3.1+): the nine tool schemas serialise to **3 138 bytes ≈ 784
+tokens** (`cctop mcp` → `tools/list`; a unit test keeps it under 800). That rides on every request of any
 session that has the server registered — which is exactly what Advisor rule
 A07 warns about. So:
 
