@@ -27,6 +27,21 @@ Page *Colour & k9s*:
   validator output, and the replacement ramp per theme (PRD §5).
 - `K9s.dc.html` — what k9s settled, including the two it got wrong in public.
 
+Page *Directions* (added after the dogfood):
+
+- `Directions.dc.html` — the decision sheet: what the dogfood settled, what k9s
+  actually comes down to once the keybindings are stripped away, why the colour
+  work does not wait for this decision, and the three axes.
+- `Instrument.dc.html` — direction 1, *restraint*. No bars, no block digits;
+  numbers right-aligned in one column with a rule between groups.
+- `Ledger.dc.html` — direction 2, *uniformity*. One row type per reading,
+  sortable and filterable, with the count in the title.
+- `Console.dc.html` — direction 3, *focus*. Three fixed header rows plus one
+  body that fills the rest; a digit swaps the body.
+
+All three carry the same session and the same readings — the dogfood validated
+the data, so only the rendering varies between them.
+
 ## Scripts
 
 - `node series-ramp.mjs` — derives the sequential series ramp from each bundled

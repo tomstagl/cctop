@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 28px 30px 34px; display: flex; flex-direction: column; gap: 20px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span class="m" style="font-size: 13px; font-weight: 600; color: {{tone}}">{{num}}</span>
+      <span style="font-size: 22px; font-weight: 600; color: #D6DEE8">{{name}}</span>
+      <span class="m" style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: {{tone}}">{{axis}}</span>
+    </div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 900px; text-wrap: pretty">{{lede}}</div>
+  </div>
+
+  <sc-for list="{{screens}}" as="s" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 8px"><div class="m" style="font-size: 11px; color: #6E7F93">{{s.cap}}</div><div style="border-radius: 7px; border: 1px solid #1A222B; padding: 13px 15px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 18px; width: max-content"><sc-for list="{{s.rows}}" as="row" hint-placeholder-count="20"><div class="r"><sc-for list="{{row}}" as="g" hint-placeholder-count="12"><span style="color: {{g.c}}; font-weight: {{g.w}}">{{g.t}}</span></sc-for></div></sc-for></div></div></sc-for>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 6px">
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 6px; background: #121820; border-left: 3px solid #5FC77E"><div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5FC77E">what it fixes</div><div style="font-size: 13.5px; line-height: 1.5; color: #A6B4C4; text-wrap: pretty">{{fixes}}</div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 6px; background: #121820; border-left: 3px solid #E5605E"><div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #E5605E">what it costs</div><div style="font-size: 13.5px; line-height: 1.5; color: #A6B4C4; text-wrap: pretty">{{costs}}</div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 6px; background: #121820; border-left: 3px solid #4CC2C2"><div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #4CC2C2">pick this if</div><div style="font-size: 13.5px; line-height: 1.5; color: #A6B4C4; text-wrap: pretty">{{pick}}</div></div>
+  </div>
+
+  <div style="display: flex; gap: 14px; padding: 13px 16px; border-radius: 6px; background: #0E141B; align-items: baseline"><span class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7F93; white-space: nowrap">from k9s</span><span style="font-size: 13.5px; line-height: 1.5; color: #8FA0B4; text-wrap: pretty">{{k9s}}</span></div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1160,"height":1240}}'>
+var P = { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644',
+          s0:'#516A69', s1:'#69AAAA', s2:'#7EF0F0' };
+function sg(t, r, b) { return { t: String(t), r: r || 'fg', b: !!b }; }
+function lw(l) { var n = 0; for (var i = 0; i < l.length; i++) n += Array.from(l[i].t).length; return n; }
+function at(l, c, r) { var n = c - lw(l); if (n > 0) l.push(sg(' '.repeat(n), r || 'dim')); return l; }
+function rt(l, c, txt, role, b) { at(l, c - Array.from(String(txt)).length); l.push(sg(txt, role, b)); return l; }
+function sp(l, right, cols) { var n = cols - lw(l) - lw(right); l.push(sg(' '.repeat(n > 0 ? n : 1), 'dim')); for (var i = 0; i < right.length; i++) l.push(right[i]); return l; }
+function fit(l, cols) { var o = [], u = 0; for (var i = 0; i < l.length; i++) { if (u >= cols) break; var a = Array.from(l[i].t);
+  if (u + a.length <= cols) { o.push(l[i]); u += a.length; } else { o.push({ t: a.slice(0, Math.max(0, cols - u - 1)).join('') + '…', r: l[i].r, b: l[i].b }); u = cols; } } return o; }
+function rule(cols, role) { return [sg('─'.repeat(cols), role || 'border')]; }
+function bar(pct, w, role) { var f = Math.max(0, Math.min(w, Math.round(pct / 100 * w))); if (f === 0 && pct > 0) f = 1; if (f === w && pct < 100) f = w - 1;
+  return [sg('▇'.repeat(f), role || 'ok'), sg('▁'.repeat(w - f), 'border')]; }
+// the context bar, stacked by agency: fixed / transient / yours, alternating glyphs
+function ctx(w) { var filled = Math.round(0.35 * w), a = Math.round(filled * 65 / 238), b = Math.round(filled * 42 / 238), c = filled - a - b;
+  return [sg('▇'.repeat(a), 's0'), sg('▆'.repeat(b), 's1'), sg('▇'.repeat(c), 's2'), sg('▁'.repeat(w - filled), 'border')]; }
+function paint(rows, cols) { return rows.map(function (l) { l = fit(l, cols);
+  if (!l.length) return [{ t: ' '.repeat(cols), c: P.dim, w: '400' }];
+  var out = l.map(function (s) { return { t: s.t, c: P[s.r] || P.fg, w: s.b ? '600' : '400' }; });
+  var n = cols - l.reduce(function (x, s) { return x + Array.from(s.t).length; }, 0);
+  if (n > 0) out.push({ t: ' '.repeat(n), c: P.dim, w: '400' });
+  return out; }); }
+
+// ---------------- 1 · INSTRUMENT — restraint, no decorative bars ----------------
+function instrument(cols) {
+  var wide = cols >= 100, out = [];
+  var C = wide ? { lbl: 1, v: 30, b: 47, c: 64, n: 70 } : { lbl: 1, v: 22, b: 35, c: 48, n: 52 };
+  var row = function (label, v, vr, b, br, c, cr, note, nr) {
+    var l = [];
+    at(l, C.lbl); l.push(sg(label, 'dim'));
+    rt(l, C.v, v, vr || 'fg', true);
+    if (b) rt(l, C.b, b, br || 'fg');
+    if (c) rt(l, C.c, c, cr || 'fg');
+    if (note && wide) { at(l, C.n); l.push(sg(note, nr || 'dim')); }
+    return l;
+  };
+  out.push(sp([sg(' cctop', 'accent', true)], [sg('opus-5 · turn 1 · 52:11 · ~/code/cctop ', 'dim')], cols));
+  out.push(rule(cols));
+  var s = [];
+  at(s, 1); s.push(sg('WORKING', 'ok', true));
+  rt(s, C.v, '52:11', 'fg', true); rt(s, C.b, '159 calls', 'fg'); rt(s, C.c, '1 err', 'warn');
+  if (wide) { at(s, C.n); s.push(sg('▸ ', 'ok')); s.push(sg('steer window', 'fg')); s.push(sg('  ·  1:56 silent', 'dim')); }
+  out.push(s);
+  out.push(rule(cols));
+  out.push(row('context', '350k', 'fg', 'of 1.00M', 'dim', '35 %', 'fg', '616k to autocompact'));
+  out.push(row('5h limit', '4 %', 'fg', 'of 100 %', 'dim', '↻ 4h06', 'dim', '7d 22 %  ·  long ctx 78 %', 'warn'));
+  out.push(row('cache', '59m', 'fg', 'of 1h', 'dim', 'warm', 'ok', '0 misses  ·  re-writes 350k cold'));
+  out.push(row('spend', '≈$22.50', 'fg', '≈$90/h', 'warn', '≈$29/turn', 'warn', 'API-equivalent, not a bill'));
+  out.push(rule(cols));
+  out.push(row('running', 'Bash', 'accent', '0:03', 'fg', '', null, 'cargo fmt --all && make check'));
+  out.push(row('tools', '159', 'fg', '1 err', 'warn', '', null, 'explore 69 · test 39 · implement 30'));
+  out.push(row('files', '27', 'fg', '8 stale', 'warn', '', null, 'agents.rs ×3 re-read · 2 IDE edits'));
+  out.push(row('checks', '✓', 'ok', 'rework 0', 'ok', '', null, 'cargo test 10s  ·  git +0/−0'));
+  out.push(rule(cols));
+  var e = []; at(e, 1); e.push(sg('05:53', 'dim')); at(e, 9); e.push(sg('Bash', 'fg')); at(e, 16); e.push(sg('cargo fmt --all && make check > /tmp/check.log', 'dim'));
+  out.push(e);
+  var e2 = []; at(e2, 1); e2.push(sg('05:52', 'dim')); at(e2, 9); e2.push(sg('hook', 'fg')); at(e2, 16); e2.push(sg('PostToolBatch', 'dim'));
+  out.push(e2);
+  out.push([]);
+  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' panels   ', 'dim'), sg('w', 'accent', true), sg(' wide   ', 'dim'), sg('q', 'accent', true), sg(' quit', 'dim')]);
+  return out;
+}
+
+// ---------------- 2 · LEDGER — one row type, sortable, filterable ----------------
+function ledger(cols) {
+  var wide = cols >= 100, out = [];
+  var C = wide ? { r: 1, v: 26, l: 40, b: 44, bw: 20, p: 69, n: 73 } : { r: 1, v: 22, l: 33, b: 36, bw: 12, p: 52, n: 56 };
+  var line = function (name, v, lim, pct, barSegs, note, nr) {
+    var l = [];
+    at(l, C.r); l.push(sg(name, 'fg'));
+    rt(l, C.v, v, 'fg', true);
+    rt(l, C.l, lim, 'dim');
+    at(l, C.b); if (barSegs) { for (var i = 0; i < barSegs.length; i++) l.push(barSegs[i]); } else l.push(sg('·'.repeat(C.bw), 'border'));
+    rt(l, C.p, pct, pct === '—' ? 'dim' : 'fg', pct !== '—');
+    at(l, C.n); l.push(sg(note, nr || 'dim'));
+    return l;
+  };
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · turn 1 · 52:11 · ~/code/cctop', 'dim')],
+              [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 · 159c · ', 'dim'), sg('1 err', 'warn')], cols));
+  out.push(sp([sg(' Readings', 'fg', true), sg('(session)', 'dim'), sg('[14]', 'accent', true)],
+              [sg('▸ ', 'ok'), sg('steer window — 4 calls, 1:56 silent', 'fg')], cols));
+  out.push([]);
+  var h = []; at(h, C.r); h.push(sg('READING', 'dim')); rt(h, C.v, 'VALUE', 'dim'); rt(h, C.l, 'OF', 'dim');
+  at(h, C.b); h.push(sg('FILL', 'dim')); rt(h, C.p, '%', 'dim'); at(h, C.n); h.push(sg('NOTE', 'dim'));
+  out.push(h);
+  out.push(line('context', '350k', '1.00M', '35', ctx(C.bw), '616k to autocompact'));
+  out.push(line('5h limit', '4 %', '100 %', '4', bar(4, C.bw, 'ok'), 'resets 4h06'));
+  out.push(line('7d limit', '22 %', '100 %', '22', bar(22, C.bw, 'ok'), 'resets 76h06 · long ctx 78 %', 'warn'));
+  out.push(line('cache', '59m', '1h', '98', bar(98, C.bw, 'ok'), '0 misses · re-writes 350k cold'));
+  out.push(line('spend', '≈$22.50', '—', '—', null, '≈$90/h · ≈$29/turn · API-equivalent'));
+  out.push(line('rework', '0', '—', '—', null, '✓ cargo test 10s · git +0/−0', 'ok'));
+  out.push(line('tools', '159', '—', '—', null, '1 err · explore 69 · test 39 · impl 30'));
+  out.push(line('files', '27', '—', '—', null, '8 stale · agents.rs ×3 re-read', 'warn'));
+  out.push(line('running', 'Bash', '0:03', '—', null, 'cargo fmt --all && make check'));
+  out.push([]);
+  out.push([sg(' s', 'accent', true), sg(' sort   ', 'dim'), sg('/', 'accent', true), sg(' filter   ', 'dim'), sg('1-9', 'accent', true), sg(' panels   ', 'dim'), sg('?', 'accent', true), sg('help', 'dim')]);
+  return out;
+}
+
+// ---------------- 3 · CONSOLE — fixed header, one body ----------------
+function console_(cols, body) {
+  var wide = cols >= 100, out = [];
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11 · ~/code/cctop', 'dim')],
+              [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 ', 'dim')], cols));
+  var b = [sg(' ', 'dim')];
+  var cell = function (k, v, vr, extra, er) { b.push(sg(k + ' ', 'dim')); b.push(sg(v, vr || 'fg', true)); if (extra) b.push(sg(' ' + extra, er || 'dim')); b.push(sg('  │  ', 'border')); };
+  cell('ctx', '35%', 'fg', '616k left'); cell('5h', '4%', 'fg', '↻4h06'); cell('cache', '59m', 'fg', '1h');
+  cell('spend', '≈$22.50', 'fg', '≈$90/h', 'warn');
+  b.push(sg('✓ ', 'ok')); b.push(sg('test 10s', 'ok')); b.push(sg('  │  ', 'border'));
+  b.push(sg('159c ', 'fg')); b.push(sg('1 err', 'warn'));
+  out.push(b);
+  out.push(sp([sg(' ▸ ', 'ok', true), sg('steer window', 'fg', true), sg(' — 4 calls and 1:56 since Claude last spoke', 'dim')],
+              [sg('9 advisor', 'accent')], cols));
+  var t = [sg('─── ', 'border'), sg(body.title, 'fg', true), sg(' ', 'border')];
+  var keys = [sg(' ', 'border'), sg(body.keys, 'dim'), sg(' ───', 'border')];
+  var n = cols - lw(t) - lw(keys); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+  out.push(t.concat(keys));
+  for (var i = 0; i < body.rows.length; i++) out.push(body.rows[i]);
+  out.push([]);
+  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' change the body   ', 'dim'), sg('-', 'accent', true), sg(' back   ', 'dim'), sg('/', 'accent', true), sg(' filter   ', 'dim'), sg('q', 'accent', true)]);
+  return out;
+}
+function bodyEvents(cols) {
+  var ev = [['05:53', 'tool', 'Bash', 'cargo fmt --all && make check > /tmp/check.log', 'fg'],
+            ['05:52', 'hook', '', 'PostToolBatch', 'dim'],
+            ['05:52', 'tool', 'Bash', '✓ 94 tokens to context', 'fg'],
+            ['05:52', 'tool', 'Bash', 'cargo test harness_facts 2>&1 | grep -c ok', 'fg'],
+            ['05:52', 'hook', '', 'PostToolBatch', 'dim'],
+            ['05:51', 'api', '', 'cost-state  ≈$22.50 · 159 calls · retries 0:00', 'warn'],
+            ['05:44', 'note', '', '/clear · continued in a new session', 'accent']];
+  return { title: 'events', keys: '1 context  2 cost  5 tools  7 files  8 events', rows: ev.map(function (e) {
+    var l = []; at(l, 1); l.push(sg(e[0], 'dim')); at(l, 8); l.push(sg(e[1], 'accent')); at(l, 14); if (e[2]) l.push(sg(e[2], 'fg'));
+    at(l, 20); l.push(sg(e[3], e[4])); return l; }) };
+}
+function bodyContext(cols) {
+  var sl = [['prefix', '44k', 's0', 'system prompt · CLAUDE.md · tool schemas — fixed this session'],
+            ['harness', '≈21k', 's0', 'reminders and injected files Claude Code adds per turn'],
+            ['thinking', '42k', 's1', 'retained reasoning — dropped at the next boundary'],
+            ['inputs', '≈49k', 's2', 'what Claude wrote to call tools — Bash text dominates'],
+            ['results', '≈82k', 's2', 'what tools returned — the lever you actually control']];
+  var rows = [[sg('  350k', 'fg', true), sg(' of ', 'dim'), sg('1.00M', 'fg'), sg('   autocompact ', 'dim'), sg('967k', 'fg'), sg('   ', 'dim'), sg('616k', 'ok', true), sg(' left', 'dim')], []];
+  for (var i = 0; i < sl.length; i++) {
+    var l = []; at(l, 2); l.push(sg(sl[i][0], 'fg')); rt(l, 16, sl[i][1], 'fg', true);
+    at(l, 18); var f = Math.round(parseInt(sl[i][1].replace(/\D/g, ''), 10) / 82 * 24);
+    l.push(sg((i % 2 === 0 ? '▇' : '▆').repeat(f), sl[i][2])); l.push(sg('▁'.repeat(24 - f), 'border'));
+    if (cols >= 100) { at(l, 46); l.push(sg(sl[i][3], 'dim')); }
+    rows.push(l);
+  }
+  return { title: 'context', keys: 'Enter turn ledger  ·  - back', rows: rows };
+}
+
+class Component extends DCLogic {
+  renderVals() {
+    return { num: "DIRECTION 3", name: "Console", axis: "focus", tone: "#4CC2C2", lede: "Three header rows that never move, and one body that is whatever you are looking at. The header carries the glance \u2014 context, limit, cache, spend, checks, calls \u2014 on one dense line. The body gets every remaining row and shows one thing properly. A digit swaps it.", fixes: "The pane specifically. It stops trying to summarise nine things in a space that fits one, and gives the body enough height to be worth reading. The header is learned once and never moves, which is what makes a three-second glance possible at all.", costs: "The biggest behavioural change, and you can no longer see tools and files at the same time \u2014 you choose. The header line is dense enough to need learning, and at narrow widths it has to wrap or drop cells, which is where this direction is weakest.", pick: "The complaint is really about the pane being cramped, and you mostly look at one thing at a time anyway. Also the only direction that makes room for a genuinely good events or tools view.", k9s: "The structure k9s actually has: a header you can hide, one body that fills the screen, a breadcrumb, and the count carried in the title so the body never has to summarise itself.", screens: [{ cap: "the pane, 122 columns \u2014 default body", rows: paint(console_(122, bodyEvents(122)), 122) },{ cap: "the same screen after pressing 1", rows: paint(console_(122, bodyContext(122)), 122) },{ cap: "narrow, 78 columns", rows: paint(console_(78, bodyEvents(78)), 78) }] };
+  }
+}
+</script>
+</body>
+</html>
