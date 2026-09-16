@@ -28,8 +28,18 @@ Shapes the parsers classify are preserved without their content:
 - Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
   17-hex strings Claude Code made up, so they stay as they are: the
   transcript file name, the launch result and the notification must agree.
+- Team keys: `agentName` (a member's role) and `agentType` stay; the team
+  name `session-<lead id8>` is rewritten to `session-<hid(lead)[:8]>` so it
+  still equals the anonymised lead's id, wherever it appears (`teamName`,
+  `team_name`, a team config's `name`, the `@<team>` suffix of `agentId` /
+  `agent_id` / `teammate_id` / `leadAgentId`); `isActive`, `backendType`,
+  `joinedAt` stay; `cwd` is rewritten like every path. Pass the lead's
+  session id with `--team` when anonymising a teammate transcript or a
+  team config (the file's own `sessionId` is the teammate's).
 
-usage: anonymise-transcript.py <in.jsonl> <out.jsonl> [--max-str N]
+usage: anonymise-transcript.py <in.jsonl> <out.jsonl> [--max-str N] [--team LEAD_ID]
+       anonymise-transcript.py <in.jsonl> <out-dir>/ …    # named <hid(sessionId)>.jsonl
+       anonymise-transcript.py <config.json> <out.json> … # one JSON document
 """
 import hashlib
 import json
@@ -67,13 +77,16 @@ KEEP_KEYS = {"type", "subtype", "role", "model", "id", "name", "tool_use_id", "r
              "lowPriorityMaxWaitSeconds", "resetsAt", "warm", "ttl", "iterations", "tokens",
              # subagent ids and metas: the file name, the launch and the notification agree
              "agentId", "agent_id", "taskId", "taskType", "agentType", "toolUseId", "isFork",
-             "spawnDepth", "runId", "workflowName", "canReadOutputFile"}
+             "spawnDepth", "runId", "workflowName", "canReadOutputFile",
+             # team keys: roles and the team name (rewritten with the lead's id, see TEAM)
+             "agentName", "teamName", "team_name", "teammate_id", "leadAgentId", "backendType",
+             "isActive", "joinedAt"}
 ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid", "promptId",
            "leafUuid", "messageId", "snapshotMessageId", "sourceToolAssistantUUID", "toolUseID",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
            "ownerOrganizationUuid", "parentSessionId", "parentLastUuid",
            "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid",
-           "prompt_id"}
+           "prompt_id", "leadSessionId"}
 PATH_KEYS = {"file_path", "filePath", "path", "notebook_path", "file", "filename", "trackingPath",
              "changedFiles", "displayPath", "planFilePath", "realParentDir", "outputFile",
              "persistedOutputPath", "transcriptDir", "scriptPath", "agent_transcript_path"}
@@ -118,6 +131,26 @@ TAGS = ("<task-notification>", "<teammate-message", "<bash-input>", "<bash-stdou
         "<ide_opened_file>", "<system-reminder>", "<local-command-caveat>", "<command-message>",
         "<command-args>", "<ide_selection>")
 MAX_STR = 4000
+# `(old team name, new team name)` when --team names the lead: the team is
+# `session-<lead id8>` and must follow the lead's hashed id.
+TEAM = None
+
+
+def team_name(session_id):
+    return "session-" + session_id[:8]
+
+
+def anon_team(v):
+    """A string equal to the team name, or ending in `@<team>`, follows the
+    lead's anonymised id; anything else is returned unchanged."""
+    if TEAM is None:
+        return v
+    old, new = TEAM
+    if v == old:
+        return new
+    if v.endswith("@" + old):
+        return v[: -len(old)] + new
+    return v
 
 
 def fill(n):
@@ -252,7 +285,7 @@ def anon(v, key=None, parent=None):
             # error is free text.
             return v if len(v) <= 40 and " " not in v else fill(min(len(v), MAX_STR))
         if key in KEEP_KEYS:
-            return v
+            return anon_team(v)
         if key in ID_KEYS:
             return hid(v)
         if key == "cwd":
@@ -279,19 +312,49 @@ def anon(v, key=None, parent=None):
 
 
 def main():
-    global MAX_STR
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if "--max-str" in sys.argv:
-        MAX_STR = int(sys.argv[sys.argv.index("--max-str") + 1])
-        args = [a for a in args if a != str(MAX_STR)]
+    global MAX_STR, TEAM
+    argv = sys.argv[1:]
+    args = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--max-str":
+            MAX_STR = int(argv[i + 1])
+            i += 2
+        elif argv[i] == "--team":
+            lead = argv[i + 1]
+            TEAM = (team_name(lead), team_name(hid(lead)))
+            i += 2
+        else:
+            args.append(argv[i])
+            i += 1
     src, dst = args[0], args[1]
-    with open(src) as f, open(dst, "w") as out:
+    if src.endswith(".json"):
+        # One JSON document (a team's `config.json`), pretty-printed.
+        with open(src) as f:
+            doc = json.load(f)
+        with open(dst, "w") as out:
+            json.dump(anon(doc), out, indent=2, ensure_ascii=False)
+            out.write("\n")
+        return
+    rows = []
+    with open(src) as f:
         for line in f:
             try:
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            out.write(json.dumps(anon(o), ensure_ascii=False, separators=(",", ":")) + "\n")
+            rows.append(anon(o))
+    if dst.endswith("/") or os.path.isdir(dst):
+        # A teammate transcript is `<sessionId>.jsonl`: name the copy by
+        # the anonymised id so the collector still finds it by its lines.
+        sid = next((o["sessionId"] for o in rows if o.get("sessionId")), None)
+        if not sid:
+            sys.exit(f"anonymise-transcript: no sessionId in {src}")
+        os.makedirs(dst, exist_ok=True)
+        dst = os.path.join(dst, sid + ".jsonl")
+    with open(dst, "w") as out:
+        for o in rows:
+            out.write(json.dumps(o, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
 if __name__ == "__main__":

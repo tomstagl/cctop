@@ -81,6 +81,10 @@ pub struct AgentSpawn {
     pub agent_type: Option<String>,
     /// The model Claude Code resolved for it (`resolvedModel`).
     pub resolved_model: Option<String>,
+    /// A `teammate_spawned` result's member name and team: the lead-side
+    /// record of a teammate (`agent_id` is `<name>@<team>`).
+    pub name: Option<String>,
+    pub team_name: Option<String>,
     pub tool_uses: Option<u64>,
     pub is_async: bool,
     /// `usage.total()` on synchronous completions.
@@ -393,6 +397,8 @@ impl Stats {
                                 agent_id: ag.agent_id.clone(),
                                 agent_type: ag.agent_type.clone().or(c.agent_type.clone()),
                                 resolved_model: ag.resolved_model.clone(),
+                                name: ag.name.clone(),
+                                team_name: ag.team_name.clone(),
                                 tool_uses: ag.total_tool_use_count,
                                 is_async: ag.is_async,
                                 tokens: ag.usage.as_ref().map(|u| u.total()).unwrap_or(0),
@@ -647,6 +653,43 @@ mod tests {
 
     fn fixture() -> Vec<Line> {
         parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl")).unwrap()
+    }
+
+    #[test]
+    fn teammate_spawns_carry_the_name_and_team() {
+        let lines =
+            parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl"))
+                .unwrap();
+        let s = Stats::from_lines(&lines);
+        let spawns: Vec<&AgentSpawn> = s
+            .agent_spawns
+            .iter()
+            .filter(|a| a.agent_id.as_deref().is_some_and(|id| id.contains('@')))
+            .collect();
+        let names: Vec<&str> = spawns.iter().filter_map(|a| a.name.as_deref()).collect();
+        assert_eq!(
+            names,
+            [
+                "diff-pane-research",
+                "diff-pane-research-2",
+                "diff-pane-research-3"
+            ]
+        );
+        for a in &spawns {
+            assert_eq!(a.team_name.as_deref(), Some("session-afd065d3"));
+            assert_eq!(a.agent_type.as_deref(), Some("claude-code-guide"));
+            assert_eq!(a.resolved_model.as_deref(), Some("haiku"));
+            assert_eq!(
+                a.agent_id.as_deref(),
+                Some(format!("{}@session-afd065d3", a.name.as_deref().unwrap()).as_str())
+            );
+        }
+        // Subagent spawns carry neither.
+        let a = Stats::from_lines(&fixture());
+        assert!(a
+            .agent_spawns
+            .iter()
+            .all(|s| s.name.is_none() && s.team_name.is_none()));
     }
 
     #[test]

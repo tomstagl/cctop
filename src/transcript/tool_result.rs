@@ -179,6 +179,8 @@ impl ToolUseDetail {
                 agent_id: s("agentId").or_else(|| s("agent_id")),
                 agent_type: s("agent_type"),
                 resolved_model: s("resolvedModel").or_else(|| s("model")),
+                name: s("name"),
+                team_name: s("team_name"),
                 is_async: b("isAsync"),
                 total_tool_use_count: n("totalToolUseCount"),
                 usage: usage.map(|u| crate::metrics::Usage::from_api(&u)),
@@ -399,6 +401,10 @@ pub struct AgentResult {
     pub agent_id: Option<String>,
     pub agent_type: Option<String>,
     pub resolved_model: Option<String>,
+    /// `teammate_spawned` only: the member's name (a role) and its team
+    /// (`session-<lead id8>`), the keys its own transcript carries.
+    pub name: Option<String>,
+    pub team_name: Option<String>,
     pub is_async: bool,
     pub total_tool_use_count: Option<u64>,
     /// Present on synchronous completions.
@@ -561,11 +567,14 @@ mod tests {
         );
         assert!(a.is_async && a.usage.is_none());
         let t = parse(
-            r#"{"status":"teammate_spawned","prompt":"p","teammate_id":"x","agent_id":"x","agent_type":"claude-code-guide","model":"haiku","name":"n"}"#,
+            r#"{"status":"teammate_spawned","prompt":"p","teammate_id":"n@session-83f0e9b9","agent_id":"n@session-83f0e9b9","agent_type":"claude-code-guide","model":"haiku","name":"n","team_name":"session-83f0e9b9"}"#,
         );
         let ToolUseDetail::Agent(t) = t else { panic!() };
         assert_eq!(t.agent_type.as_deref(), Some("claude-code-guide"));
         assert_eq!(t.resolved_model.as_deref(), Some("haiku"));
+        assert_eq!(t.name.as_deref(), Some("n"));
+        assert_eq!(t.team_name.as_deref(), Some("session-83f0e9b9"));
+        assert!(a.name.is_none() && a.team_name.is_none());
         let done = parse(
             r#"{"status":"completed","agentId":"a","totalToolUseCount":12,"usage":{"input_tokens":5,"cache_read_input_tokens":1000,"output_tokens":71,"output_tokens_details":{"thinking_tokens":10}},"content":"summary"}"#,
         );

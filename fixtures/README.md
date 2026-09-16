@@ -53,6 +53,30 @@ Layout mirrors `~/.claude`:
   text; agent ids stay as written so the file name, the launch result and
   the notification agree.
 
+- `session-d.jsonl` + `session-d/teammates/` + `session-d.team.json` — the
+  team fixture (722 lines, 2.1.269): a lead that spawned a teammate through
+  the `Agent` tool (`toolUseResult.status: teammate_spawned`, line 430) and
+  the teammate's own 101-line transcript, which ended with a `cost-state`
+  (Claude Code's exact figure for it) — the whole team, both files real and
+  unshifted. The lead's team directory was gone when the fixture was made,
+  which is the point: the collector finds the teammates from the
+  transcripts alone (`teamName == session-<lead id8>` on every one of their
+  `user` / `assistant` / `system` / `attachment` lines, from line 4). The
+  composer (`--teammate`) adds two members from the lead's own spawn segment
+  copied with fresh ids: `-2`, whose transcript is a copy of the real one
+  under its name and session id, cut before its `cost-state` and shifted by
+  its segment's delta (a teammate still running: priced, `≈`); and `-3`,
+  which has a spawn result and no transcript (`missing`, `no transcript`).
+  `session-d.team.json` (`--team-config`) is a live team's `config.json`
+  used as the shape — member keys, `backendType`, `isActive`, `tmuxPaneId`
+  — naming this team: the lead, the real teammate (`isActive: false`), `-2`
+  and `-3` (`isActive: true`); the config-path tests read it, the
+  transcript-path tests run without it. The anonymiser keeps `agentName`
+  (a role) and `agentType`, rewrites the team name with the lead's hashed
+  id everywhere it appears (`--team`) so the lead, the teammates and the
+  team file still agree, names each teammate file by its hashed session id,
+  and rewrites `cwd` like every path.
+
 To rebuild `session-b.jsonl` from the same sources:
 
 ```
@@ -72,4 +96,19 @@ scripts/anonymise-transcript.py raw/c.jsonl fixtures/session-c.jsonl --max-str 2
 for f in raw/c/subagents/*; do
   scripts/anonymise-transcript.py "$f" fixtures/session-c/subagents/$(basename "$f") --max-str 2000
 done
+```
+
+To rebuild `session-d.jsonl` (the spine is the lead with a
+`teammate_spawned` result in its project directory; `--teammate` scans that
+directory for the transcripts of its team; the live team is any
+`~/.claude/teams/*/config.json` with a `tmux` member):
+
+```
+python3 scripts/compose-fixture.py <lead> --teammate <lead's project dir> \
+  --team-config ~/.claude/teams/<live team>/config.json raw/d.jsonl
+python3 scripts/anonymise-transcript.py raw/d.jsonl fixtures/session-d.jsonl --max-str 2000 --team <lead id>
+for f in raw/d/teammates/*.jsonl; do
+  python3 scripts/anonymise-transcript.py "$f" fixtures/session-d/teammates/ --max-str 2000 --team <lead id>
+done
+python3 scripts/anonymise-transcript.py raw/d.team.json fixtures/session-d.team.json --team <lead id>
 ```

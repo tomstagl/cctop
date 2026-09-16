@@ -14,6 +14,9 @@ pub struct Attachment {
     pub parent_uuid: Option<String>,
     pub timestamp: Option<String>,
     pub version: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub team_name: Option<String>,
     #[serde(default)]
     pub attachment: Value,
     /// The text as sent, one entry per rendered block; only lengths are kept.

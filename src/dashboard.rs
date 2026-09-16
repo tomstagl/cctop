@@ -105,6 +105,10 @@ pub struct Header {
     pub elapsed: String,
     pub cwd: String,
     pub pr: Option<u64>,
+    /// `<member>@<team>` when the attached session is itself a teammate
+    /// (its lines carry `agentName` / `teamName`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<String>,
     pub phase: PhaseCell,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
     pub line: String,
@@ -254,6 +258,14 @@ fn header(state: &State, c: &Coach) -> Header {
         );
     }
     parts.push(cwd.clone());
+    let team = state
+        .agg
+        .team
+        .as_ref()
+        .map(|(team, member)| format!("{member}@{team}"));
+    if let Some(t) = &team {
+        parts.push(t.clone());
+    }
     if let Some(n) = pr {
         parts.push(format!("PR #{n}"));
     }
@@ -268,6 +280,7 @@ fn header(state: &State, c: &Coach) -> Header {
         elapsed,
         cwd,
         pr,
+        team,
         phase: PhaseCell {
             glyph,
             word,
@@ -923,6 +936,43 @@ mod tests {
         s.session.ended_at_ms = s.last_line_at_ms;
         let e = Engine::for_state(&s);
         (s, e)
+    }
+
+    #[test]
+    fn a_teammate_attached_as_the_main_session_names_its_team() {
+        // Fixture D's real teammate, read as the attached session: a normal
+        // session whose header carries `<member>@<team>`; the lead's (and
+        // A's, B's, C's) header has no `team` at all.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("fixtures/session-d/teammates/85424f6c-500e-5993-641b-0a66d897a888.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        s.session.ended_at_ms = s.last_line_at_ms;
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        assert_eq!(
+            d.header.team.as_deref(),
+            Some("diff-pane-research@session-afd065d3")
+        );
+        assert!(
+            d.header
+                .line
+                .contains(" · diff-pane-research@session-afd065d3 · "),
+            "{}",
+            d.header.line
+        );
+        let (b, e) = fixture_b();
+        let d = snapshot(&b, &e);
+        assert_eq!(d.header.team, None);
+        assert!(
+            !serde_json::to_string(&d.header)
+                .unwrap()
+                .contains("\"team\""),
+            "no key without a team: the query output of A, B and C is unchanged"
+        );
     }
 
     #[test]
