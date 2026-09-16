@@ -12,11 +12,14 @@ use serde::Deserialize;
 use crate::metrics::cost::parse_ts_ms;
 use crate::metrics::Usage;
 use crate::tail::{parse_file, Tailer};
-use crate::transcript::{AssistantBlock, Line};
+use crate::transcript::{AssistantBlock, Line, TaskNotification};
 
 /// After this long with no new lines, an agent whose last event was a
 /// failed tool result is reported as failed.
 pub const FAILED_AFTER_MS: i64 = 60_000;
+
+/// A running agent (or an MCP server) with no line for this long is idle.
+pub const IDLE_MS: i64 = 5 * 60 * 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -73,6 +76,18 @@ pub struct Agent {
     pub calls: Vec<AgentCall>,
     /// The workflow run this agent belongs to (`subagents/workflows/<run>/`).
     pub workflow: Option<String>,
+    /// The `Agent` call that launched it: the meta's `toolUseId`, or the
+    /// spawn result's `tool_use_id` from the main transcript.
+    pub tool_use_id: Option<String>,
+    /// The main-transcript turn that launched it (`agent_spawns[].turn`).
+    pub launched_turn: Option<usize>,
+    /// The `<task-notification>` that reported it finished — Claude Code's
+    /// word on the status and what came back; `None` until it lands (or
+    /// when the transcript was cut before it).
+    pub notified: Option<TaskNotification>,
+    /// Length of a synchronous `Agent` result's content, when the launch
+    /// was not `async_launched`.
+    pub sync_result_chars: Option<usize>,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub last_line_at: Option<i64>,
@@ -84,6 +99,10 @@ pub struct Agent {
     pub hook_tool_calls: usize,
     pub hook_tool_ms: u64,
     pub hook_tool_errors: usize,
+    /// `PreToolUse` events the spool attributed to this agent; more of them
+    /// than post events means a tool is still running (a 10-minute build
+    /// is not an idle agent).
+    pub hook_pre_calls: usize,
     /// Tool calls by display name, from the agent's own transcript.
     pub tools_by_name: std::collections::BTreeMap<String, usize>,
     // -- derived-state inputs
@@ -118,6 +137,10 @@ impl Agent {
             inherited_context_len: None,
             calls: Vec::new(),
             workflow: None,
+            tool_use_id: meta.tool_use_id,
+            launched_turn: None,
+            notified: None,
+            sync_result_chars: None,
             started_at: None,
             finished_at: None,
             last_line_at: None,
@@ -127,6 +150,7 @@ impl Agent {
             hook_tool_calls: 0,
             hook_tool_ms: 0,
             hook_tool_errors: 0,
+            hook_pre_calls: 0,
             tools_by_name: Default::default(),
             pending_tool_uses: 0,
             last_was_error_result: false,
@@ -145,6 +169,7 @@ impl Agent {
         self.started_at = self.started_at.or(Some(at_ms));
         self.last_line_at = Some(self.last_line_at.unwrap_or(at_ms).max(at_ms));
         match event {
+            "PreToolUse" => self.hook_pre_calls += 1,
             "PostToolUse" => {
                 self.hook_tool_calls += 1;
                 self.hook_tool_ms += duration_ms.unwrap_or(0);
@@ -269,6 +294,11 @@ impl Agent {
         self.parent_message_id.as_deref() == Some(id)
     }
 
+    /// Tool calls the hook spool saw start and not finish.
+    pub fn hook_pending(&self) -> usize {
+        self.hook_pre_calls.saturating_sub(self.hook_tool_calls)
+    }
+
     /// The agent's first own API call (a fork's first after the parent's
     /// replayed message): its cache read is the context a fork inherited;
     /// `cache_write > cache_read` is a cold start.
@@ -352,6 +382,8 @@ pub struct WorkflowJournal {
     pub started: usize,
     pub results: usize,
     pub failed: usize,
+    /// The `agentId` of each `failed` entry.
+    pub failed_ids: Vec<String>,
 }
 
 /// Read every `workflows/<run>/journal.jsonl` under `subagents`.
@@ -379,7 +411,12 @@ pub fn workflow_journals(subagents: &Path) -> Vec<WorkflowJournal> {
                 Some("launched") => j.launched += 1,
                 Some("started") => j.started += 1,
                 Some("result") => j.results += 1,
-                Some("failed") => j.failed += 1,
+                Some("failed") => {
+                    j.failed += 1;
+                    if let Some(id) = v.get("agentId").and_then(|a| a.as_str()) {
+                        j.failed_ids.push(id.to_string());
+                    }
+                }
                 _ => {}
             }
         }
@@ -566,6 +603,7 @@ impl AgentWatcher {
                     a.description = m.description;
                     a.is_fork |= m.is_fork;
                     a.spawn_depth = m.spawn_depth;
+                    a.tool_use_id = m.tool_use_id.or(a.tool_use_id.take());
                     if a.model.is_empty() {
                         a.model = m.model;
                     }
@@ -621,7 +659,8 @@ mod workflow_tests {
                 launched: 1,
                 started: 1,
                 results: 1,
-                failed: 1
+                failed: 1,
+                failed_ids: vec!["deep1".into()],
             }]
         );
         let teams = dir.join("teams");
@@ -824,6 +863,45 @@ mod tests {
         );
         assert_eq!(id_from_path(Path::new("/x/agent-abc.meta.json")), None);
         assert_eq!(id_from_path(Path::new("/x/other.jsonl")), None);
+    }
+
+    #[tokio::test]
+    async fn watcher_and_load_agree_on_fixture_a() {
+        // The watcher tails the same files `load` reads once; every field
+        // an agent carries must come out the same either way.
+        let loaded = load(&session_dir());
+        let mut w = AgentWatcher::watch(&session_dir());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while std::time::Instant::now() < deadline {
+            w.poll();
+            if w.agents
+                .get("a9a92645226d3a561")
+                .is_some_and(|a| a.api_calls == 7)
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        let (l, p) = (&loaded["a9a92645226d3a561"], &w.agents["a9a92645226d3a561"]);
+        assert_eq!(l.agent_type, p.agent_type);
+        assert_eq!(l.is_fork, p.is_fork);
+        assert_eq!(l.model, p.model);
+        assert_eq!(l.tool_use_id, p.tool_use_id);
+        assert_eq!(
+            l.tool_use_id.as_deref(),
+            Some("toolu_01M8zBKzHtARBxXKRUsLB7sf"),
+            "from the meta"
+        );
+        assert_eq!(l.calls, p.calls);
+        assert_eq!(l.usage, p.usage);
+        assert_eq!(l.api_calls, p.api_calls);
+        assert_eq!(l.tool_calls, p.tool_calls);
+        assert_eq!(l.inherited_context_len, p.inherited_context_len);
+        assert_eq!(l.started_at, p.started_at);
+        assert_eq!(l.finished_at, p.finished_at);
+        assert_eq!(l.state(i64::MAX), p.state(i64::MAX));
+        assert_eq!(l.notified, p.notified);
+        assert_eq!(l.launched_turn, p.launched_turn);
     }
 
     #[tokio::test]

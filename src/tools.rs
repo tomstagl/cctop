@@ -27,6 +27,8 @@ pub struct Call {
     pub class: ToolClass,
     /// The Bash class, for Bash calls.
     pub bash_class: Option<BashClass>,
+    /// `subagent_type` of an `Agent` call (the launch result names none).
+    pub agent_type: Option<String>,
     /// A Bash command on the read-only allowlist (exploration runs).
     pub read_only: bool,
     /// File basenames the call touches.
@@ -72,6 +74,9 @@ pub struct Call {
 pub struct AgentSpawn {
     pub at: Option<i64>,
     pub turn: usize,
+    /// The `Agent` call's own id: the second key a task notification
+    /// carries (`<tool-use-id>`).
+    pub tool_use_id: String,
     pub agent_id: Option<String>,
     pub agent_type: Option<String>,
     /// The model Claude Code resolved for it (`resolvedModel`).
@@ -291,6 +296,8 @@ pub struct Stats {
     pub git_events: Vec<(i64, String)>,
     /// Every `Agent` result, in order.
     pub agent_spawns: Vec<AgentSpawn>,
+    /// Every `Workflow` launch: `(tool_use_id, task id, run id)`.
+    pub workflow_launches: Vec<(String, Option<String>, Option<String>)>,
     /// `TaskUpdate` results that completed a task: `(epoch ms, turn)`.
     pub task_completions: Vec<(i64, usize)>,
 }
@@ -371,12 +378,20 @@ impl Stats {
                         Some(ToolUseDetail::TaskUpdate(tu)) if tu.completed() => {
                             self.task_completions.push((at.unwrap_or(0), c.turn));
                         }
+                        Some(ToolUseDetail::Workflow { task_id, run_id }) => {
+                            self.workflow_launches.push((
+                                r.tool_use_id.clone(),
+                                task_id.clone(),
+                                run_id.clone(),
+                            ));
+                        }
                         Some(ToolUseDetail::Agent(ag)) => {
                             self.agent_spawns.push(AgentSpawn {
                                 at,
                                 turn: c.turn,
+                                tool_use_id: r.tool_use_id.clone(),
                                 agent_id: ag.agent_id.clone(),
-                                agent_type: ag.agent_type.clone(),
+                                agent_type: ag.agent_type.clone().or(c.agent_type.clone()),
                                 resolved_model: ag.resolved_model.clone(),
                                 tool_uses: ag.total_tool_use_count,
                                 is_async: ag.is_async,
@@ -430,6 +445,10 @@ impl Stats {
                             class,
                             bash_class: (name == "Bash")
                                 .then(|| phase::classify_bash(command.unwrap_or(""))),
+                            agent_type: (name == "Agent")
+                                .then(|| input.get("subagent_type").and_then(Value::as_str))
+                                .flatten()
+                                .map(str::to_string),
                             read_only: match name.as_str() {
                                 "Bash" => phase::read_only_bash(command.unwrap_or("")),
                                 "Read" | "Grep" | "Glob" | "WebFetch" | "LS" => true,

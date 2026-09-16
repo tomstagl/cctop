@@ -289,6 +289,23 @@ pub struct CacheClock {
     pub approx: bool,
 }
 
+/// What the main transcript says about one subagent: its launch and its
+/// task notification. Keyed by the agent id, which is also the
+/// notification's `<task-id>`.
+#[derive(Debug, Clone, Default)]
+pub struct AgentLink {
+    pub tool_use_id: Option<String>,
+    pub launched_turn: Option<usize>,
+    pub agent_type: Option<String>,
+    pub resolved_model: Option<String>,
+    /// An `Agent` result with this id was seen, so a placeholder row is
+    /// justified while (or if ever) the transcript is missing.
+    pub spawned: bool,
+    pub notified: Option<crate::transcript::TaskNotification>,
+    /// Length of a synchronous result's content.
+    pub sync_result_chars: Option<usize>,
+}
+
 #[derive(Debug, Default)]
 pub struct State {
     // -- collectors
@@ -308,6 +325,15 @@ pub struct State {
     pub tools: tools::Stats,
     /// Subagents of this session, by id.
     pub agents: std::collections::BTreeMap<String, crate::agents::Agent>,
+    /// The main transcript's side of each agent, by agent id: the launch
+    /// (`Agent` result) and the task notification that ended it. Applied
+    /// to `agents` whenever they are (re)loaded, so a placeholder or a
+    /// notification is never lost to the watcher's next poll.
+    pub agent_links: std::collections::BTreeMap<String, AgentLink>,
+    /// A `Workflow` run's task notification, by run id (`wf_…`) when the
+    /// launch was seen, else by its task id.
+    pub workflow_notifications:
+        std::collections::BTreeMap<String, crate::transcript::TaskNotification>,
     /// Workflow runs under `subagents/workflows/`, with their failures.
     pub workflow_journals: Vec<crate::agents::WorkflowJournal>,
     /// Members of this session's team, when it leads one.
@@ -636,6 +662,7 @@ impl State {
                     )
                 });
                 agent.note_hook(&ev.event, p.get("duration_ms").and_then(|v| v.as_u64()), at);
+                self.link_agent(&agent_id);
                 return;
             }
         }
@@ -1301,7 +1328,29 @@ impl State {
             }
         }
         self.cost.push(line);
+        let spawns_before = self.tools.agent_spawns.len();
         self.tools.push(line);
+        if self.tools.agent_spawns.len() > spawns_before {
+            let sync_chars = match line {
+                Line::User(u) => match u.tool_use_detail() {
+                    Some(crate::transcript::ToolUseDetail::Agent(ag)) if ag.usage.is_some() => {
+                        Some(ag.result_chars)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
+            let spawn = self
+                .tools
+                .agent_spawns
+                .last()
+                .cloned()
+                .expect("just pushed");
+            self.note_agent_spawn(&spawn, sync_chars);
+        }
+        if let Some(n) = line.task_notification() {
+            self.note_task_notification(n);
+        }
         self.events.apply(line);
         self.files.push(line);
         self.prefix.push(line);
@@ -1390,7 +1439,8 @@ impl State {
     }
 
     /// Take the watcher's agents, keeping what the hook spool attributed to
-    /// agents whose transcript is not on disk (yet).
+    /// agents whose transcript is not on disk (yet), and re-applying what
+    /// the main transcript knows about each (`agent_links`).
     pub fn merge_agents(
         &mut self,
         fresh: &std::collections::BTreeMap<String, crate::agents::Agent>,
@@ -1401,8 +1451,116 @@ impl State {
                 a.hook_tool_calls = h.hook_tool_calls;
                 a.hook_tool_ms = h.hook_tool_ms;
                 a.hook_tool_errors = h.hook_tool_errors;
+                a.hook_pre_calls = h.hook_pre_calls;
             }
             self.agents.insert(id.clone(), a);
+        }
+        let ids: Vec<String> = self.agent_links.keys().cloned().collect();
+        for id in &ids {
+            self.link_agent(id);
+        }
+    }
+
+    /// An `Agent` result landed: remember the launch by agent id.
+    fn note_agent_spawn(&mut self, spawn: &tools::AgentSpawn, sync_result_chars: Option<usize>) {
+        let Some(id) = spawn.agent_id.clone() else {
+            return;
+        };
+        // A teammate's `agent_id` is `<name>@<team>`; the team PRD reads it.
+        if id.contains('@') {
+            return;
+        }
+        let link = self.agent_links.entry(id.clone()).or_default();
+        link.tool_use_id = Some(spawn.tool_use_id.clone());
+        link.launched_turn = Some(spawn.turn);
+        link.agent_type = spawn.agent_type.clone().or(link.agent_type.take());
+        link.resolved_model = spawn.resolved_model.clone().or(link.resolved_model.take());
+        link.spawned = true;
+        if sync_result_chars.is_some() {
+            link.sync_result_chars = sync_result_chars;
+        }
+        self.link_agent(&id);
+    }
+
+    /// A `<task-notification>` landed, by whichever of Claude Code's three
+    /// deliveries: an agent's goes to its link (and its `Agent`), a
+    /// workflow run's to `workflow_notifications`, a background shell
+    /// command's is dropped — it never creates an agent.
+    fn note_task_notification(&mut self, n: crate::transcript::TaskNotification) {
+        if n.workflow.is_some() {
+            let run = self
+                .tools
+                .workflow_launches
+                .iter()
+                .find(|(tu, task, _)| {
+                    n.tool_use_id.as_deref() == Some(tu.as_str())
+                        || task.as_deref() == Some(n.task_id.as_str())
+                })
+                .and_then(|(_, _, run)| run.clone())
+                .unwrap_or_else(|| n.task_id.clone());
+            self.workflow_notifications.insert(run, n);
+            return;
+        }
+        let known =
+            self.agent_links.contains_key(&n.task_id) || self.agents.contains_key(&n.task_id);
+        let launcher = n
+            .tool_use_id
+            .as_deref()
+            .and_then(|id| self.tools.get(id))
+            .map(|c| c.name.clone());
+        let is_agent =
+            known || launcher.as_deref() == Some("Agent") || (launcher.is_none() && n.is_agent());
+        if !is_agent {
+            return;
+        }
+        let id = n.task_id.clone();
+        let link = self.agent_links.entry(id.clone()).or_default();
+        if link.tool_use_id.is_none() {
+            link.tool_use_id = n.tool_use_id.clone();
+        }
+        if launcher.as_deref() == Some("Agent") {
+            link.spawned = true;
+        }
+        link.notified = Some(n);
+        self.link_agent(&id);
+    }
+
+    /// Apply one link to its agent, creating a placeholder for a launched
+    /// agent whose transcript is not there (yet).
+    fn link_agent(&mut self, id: &str) {
+        let Some(link) = self.agent_links.get(id).cloned() else {
+            return;
+        };
+        let agent = match self.agents.get_mut(id) {
+            Some(a) => a,
+            None if link.spawned => self.agents.entry(id.to_string()).or_insert_with(|| {
+                crate::agents::Agent::new(
+                    id,
+                    crate::agents::Meta {
+                        agent_type: link.agent_type.clone().unwrap_or_default(),
+                        model: link.resolved_model.clone().unwrap_or_default(),
+                        tool_use_id: link.tool_use_id.clone(),
+                        ..Default::default()
+                    },
+                )
+            }),
+            None => return,
+        };
+        if agent.tool_use_id.is_none() {
+            agent.tool_use_id = link.tool_use_id.clone();
+        }
+        agent.launched_turn = link.launched_turn.or(agent.launched_turn);
+        if link.notified.is_some() {
+            agent.notified = link.notified.clone();
+        }
+        if link.sync_result_chars.is_some() {
+            agent.sync_result_chars = link.sync_result_chars;
+        }
+        if agent.agent_type.is_empty() {
+            agent.agent_type = link.agent_type.clone().unwrap_or_default();
+        }
+        if agent.model.is_empty() {
+            agent.model = link.resolved_model.clone().unwrap_or_default();
         }
     }
 
@@ -1803,5 +1961,187 @@ mod tests {
         );
         assert_eq!(s.cache_warm(), Some((false, false)));
         assert_eq!(s.cache.recache_tokens_if_cold, 300_000);
+    }
+
+    /// The main-transcript side of an agent: its `Agent` launch (the call
+    /// and the `async_launched` result) and the notification that ends it.
+    fn launch(agent_id: &str, tool_use_id: &str, at: &str) -> [Line; 2] {
+        [
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"{at}","message":{{"id":"m-{tool_use_id}","model":"claude-opus-5","content":[{{"type":"tool_use","id":"{tool_use_id}","name":"Agent","input":{{"subagent_type":"Explore","description":"d","prompt":"p"}}}}],"usage":{{"output_tokens":10}}}}}}"#
+            ))
+            .unwrap(),
+            Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"{at}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{tool_use_id}","content":"launched"}}]}},"toolUseResult":{{"status":"async_launched","isAsync":true,"agentId":"{agent_id}","resolvedModel":"claude-haiku-4-5-20251001","outputFile":"/tmp/o","description":"d","prompt":"p"}}}}"#
+            ))
+            .unwrap(),
+        ]
+    }
+
+    fn notification_text(task_id: &str, tool_use_id: Option<&str>, status: &str) -> String {
+        let tu = tool_use_id
+            .map(|t| format!("<tool-use-id>{t}</tool-use-id>"))
+            .unwrap_or_default();
+        format!(
+            "<task-notification><task-id>{task_id}</task-id>{tu}<output-file>/tmp/o</output-file><status>{status}</status><summary>s</summary><result>four</result></task-notification>"
+        )
+    }
+
+    #[test]
+    fn task_notifications_reach_agents_by_every_delivery_and_shell_tasks_never_do() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","promptSource":"typed","origin":{"kind":"human"},"message":{"role":"user","content":"go"}}"#).unwrap());
+        for l in launch("0000000000000000a", "toolu_a", "2026-01-01T00:00:01Z") {
+            s.apply(&l);
+        }
+        // The launch alone makes a placeholder with the call's type, the
+        // resolved model, the tool_use id and the launching turn.
+        let a = &s.agents["0000000000000000a"];
+        assert_eq!(a.agent_type, "Explore");
+        assert_eq!(a.model, "claude-haiku-4-5-20251001");
+        assert_eq!(a.tool_use_id.as_deref(), Some("toolu_a"));
+        assert_eq!(a.launched_turn, Some(1));
+        assert_eq!(a.notified, None);
+        assert!(s.agent_links["0000000000000000a"].spawned);
+
+        // 1. As a user line.
+        let text = notification_text("0000000000000000a", Some("toolu_a"), "completed");
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:01:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        let n = s.agents["0000000000000000a"].notified.clone().unwrap();
+        assert_eq!(n.status, crate::transcript::TaskStatus::Completed);
+        assert_eq!(n.result_chars, Some(4));
+
+        // 2. As a queue operation (the model was busy) and 3. the queued
+        // command it becomes — the same notification, keyed by task id.
+        for l in launch("0000000000000000b", "toolu_b", "2026-01-01T00:02:00Z") {
+            s.apply(&l);
+        }
+        let text = notification_text("0000000000000000b", Some("toolu_b"), "killed");
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"2026-01-01T00:03:00Z","content":{}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        assert_eq!(
+            s.agents["0000000000000000b"]
+                .notified
+                .as_ref()
+                .unwrap()
+                .status,
+            crate::transcript::TaskStatus::Killed
+        );
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"attachment","timestamp":"2026-01-01T00:03:01Z","attachment":{{"type":"queued_command","prompt":{},"commandMode":"prompt","origin":{{"kind":"task-notification"}}}}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        assert_eq!(
+            s.agent_links.len(),
+            2,
+            "a repeat overwrites, never duplicates"
+        );
+
+        // A background shell command's notification: the launching call was
+        // a Bash, so no agent, no link.
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:04:00Z","message":{"id":"m-sh","model":"claude-opus-5","content":[{"type":"tool_use","id":"toolu_sh","name":"Bash","input":{"command":"make check","run_in_background":true}}],"usage":{"output_tokens":10}}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:04:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_sh","content":"bg"}]}}"#).unwrap());
+        let text = notification_text("baqaldmpb", Some("toolu_sh"), "failed");
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:05:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        assert_eq!(s.agents.len(), 2);
+        assert!(!s.agent_links.contains_key("baqaldmpb"));
+        // One with no tool_use id and no launch in the transcript: not an
+        // agent by its id shape either.
+        let text = notification_text("xyz123abc", None, "completed");
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:06:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        assert_eq!(s.agent_links.len(), 2);
+        // An agent-shaped id with no launch seen (a cut transcript): the
+        // link waits, no placeholder.
+        let text = notification_text("0000000000000000c", None, "completed");
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:07:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(&text).unwrap()
+        )).unwrap());
+        assert!(s.agent_links.contains_key("0000000000000000c"));
+        assert!(!s.agents.contains_key("0000000000000000c"));
+
+        // The watcher's agents replace the placeholders; the links follow.
+        let mut fresh = std::collections::BTreeMap::new();
+        for id in [
+            "0000000000000000a",
+            "0000000000000000b",
+            "0000000000000000c",
+        ] {
+            fresh.insert(
+                id.to_string(),
+                crate::agents::Agent::new(
+                    id,
+                    crate::agents::Meta {
+                        agent_type: "Explore".into(),
+                        ..Default::default()
+                    },
+                ),
+            );
+        }
+        s.merge_agents(&fresh);
+        assert_eq!(
+            s.agents["0000000000000000a"]
+                .notified
+                .as_ref()
+                .unwrap()
+                .status,
+            crate::transcript::TaskStatus::Completed
+        );
+        assert_eq!(
+            s.agents["0000000000000000b"]
+                .notified
+                .as_ref()
+                .unwrap()
+                .status,
+            crate::transcript::TaskStatus::Killed
+        );
+        assert_eq!(
+            s.agents["0000000000000000b"].launched_turn,
+            Some(2),
+            "launched after the first notification's machine turn"
+        );
+        assert_eq!(
+            s.agents["0000000000000000c"]
+                .notified
+                .as_ref()
+                .unwrap()
+                .status,
+            crate::transcript::TaskStatus::Completed,
+            "the waiting link attaches when the agent appears"
+        );
+    }
+
+    #[test]
+    fn workflow_notifications_are_keyed_by_run() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"m-wf","model":"claude-opus-5","content":[{"type":"tool_use","id":"toolu_wf","name":"Workflow","input":{"script":"x"}}],"usage":{"output_tokens":10}}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_wf","content":"launched"}]},"toolUseResult":{"status":"async_launched","taskId":"wquxwsh3","taskType":"workflow","workflowName":"review","runId":"wf_89cf8717-8a9","summary":"s","transcriptDir":"/d","scriptPath":"/s"}}"#).unwrap());
+        assert_eq!(
+            s.tools.workflow_launches,
+            vec![(
+                "toolu_wf".to_string(),
+                Some("wquxwsh3".to_string()),
+                Some("wf_89cf8717-8a9".to_string())
+            )]
+        );
+        let text = "<task-notification><task-id>wquxwsh3</task-id><tool-use-id>toolu_wf</tool-use-id><status>completed</status><summary>s</summary><result>r</result><usage><agent_count>9</agent_count><agents_done>7</agents_done><agents_error>2</agents_error><agents_skipped>0</agents_skipped><agents_empty_result>1</agents_empty_result><subagent_tokens>5</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9</duration_ms></usage></task-notification>";
+        s.apply(&Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:09:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(text).unwrap()
+        )).unwrap());
+        let n = &s.workflow_notifications["wf_89cf8717-8a9"];
+        assert_eq!(n.workflow.unwrap().empty_result, 1);
+        assert!(s.agents.is_empty(), "a workflow run is not an agent");
     }
 }

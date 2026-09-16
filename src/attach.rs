@@ -258,7 +258,8 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
     {
         app.feed(line);
     }
-    app.state.agents = crate::agents::load(&transcript.with_extension(""));
+    app.state
+        .merge_agents(&crate::agents::load(&transcript.with_extension("")));
     if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }

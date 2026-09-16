@@ -79,6 +79,18 @@ const FALLBACK_RATIO: &[(&str, f64)] = &[
 ];
 
 impl Attachment {
+    /// A task notification delivered as a `queued_command` (the model was
+    /// busy when the task ended); the queued prompt's text is not kept.
+    pub fn task_notification(&self) -> Option<super::TaskNotification> {
+        if self.subtype() != "queued_command" {
+            return None;
+        }
+        self.attachment
+            .get("prompt")
+            .and_then(Value::as_str)
+            .and_then(super::TaskNotification::parse)
+    }
+
     /// The `attachment.type` string.
     pub fn subtype(&self) -> &str {
         self.attachment

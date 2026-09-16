@@ -81,21 +81,32 @@ pub mod cost_state {
     pub const WRITTEN_AT: &str = "session end (after last-prompt) or bridge-session; no timestamp";
 }
 
-/// The `<task-notification>` a finished agent (or background task) sends
-/// back as a `user` line with `origin.kind = "task-notification"` (387 on
-/// the same corpus, Claude Code 2.1.231 – 2.1.272).
+/// The `<task-notification>` a finished agent, background shell command or
+/// workflow run sends back (the same corpus, Claude Code 2.1.231 – 2.1.272,
+/// re-read on 2026-09-16 over 505 transcripts).
 pub mod task_notification {
-    /// `<status>` values seen: 294 / 25 / 9.
+    /// `<status>` values seen.
     pub const STATUSES: [&str; 3] = ["completed", "failed", "killed"];
     /// `<usage>` (`subagent_tokens`, `tool_uses`, `duration_ms`) is optional
     /// on agent notifications of every version seen (2.1.231 – 2.1.270; 18
     /// with, 31 without, both in 2.1.269). Nothing may depend on it.
     pub const USAGE_OPTIONAL: bool = true;
-    /// A background shell task's notification has a `<task-id>` and no
-    /// `<tool-use-id>`; a workflow run's carries `<agent_count>`,
-    /// `<agents_done>`, `<agents_error>`, `<agents_skipped>`,
-    /// `<agents_empty_result>` and `<failures>` instead of a result.
-    pub const SHELL_TASKS_HAVE_NO_TOOL_USE_ID: bool = true;
+    /// Claude Code delivers one notification three ways, all with the same
+    /// text: a `user` line (`promptSource: system`, `origin.kind:
+    /// task-notification`) when the model is idle; when it is busy, a
+    /// `queue-operation` `enqueue` line whose `content` is the text, then
+    /// either a `queued_command` attachment (`prompt`) or, after a
+    /// `dequeue`, the user line. On this machine every `killed` agent
+    /// notification came as an attachment and none as a user line, so a
+    /// reader must take all three and key by `<task-id>`.
+    pub const DELIVERIES: [&str; 3] = ["user", "queue-operation", "attachment"];
+    /// The `<task-id>` is the agent id (17 hex characters, the transcript
+    /// file's name) for an `Agent`; a background shell command's is 9
+    /// base-36 characters and its `<tool-use-id>` names a `Bash` call (it
+    /// is present, contrary to v1.1's reading); a workflow run's carries
+    /// `<agent_count>`, `<agents_done>`, `<agents_error>`,
+    /// `<agents_skipped>`, `<agents_empty_result>` and `<failures>`.
+    pub const AGENT_ID_HEX_LEN: usize = 17;
 }
 
 /// Autocompact arithmetic (recovered from the 2.1.269 binary and the debug
@@ -217,5 +228,10 @@ mod tests {
     fn ledger_and_notification_facts() {
         assert!(cost_state::WRITTEN_AT.contains("no timestamp"));
         assert!(task_notification::STATUSES.contains(&"killed"));
+        assert_eq!(task_notification::DELIVERIES.len(), 3);
+        assert_eq!(
+            task_notification::AGENT_ID_HEX_LEN,
+            "a9a92645226d3a561".len()
+        );
     }
 }

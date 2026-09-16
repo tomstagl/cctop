@@ -20,6 +20,14 @@ Shapes the parsers classify are preserved without their content:
 - User text keeps the markers that identify a line's kind
   (`[Request interrupted by user]`, `<command-name>/clear</command-name>`,
   `<task-notification>`, …) and the verbatim `/context` table.
+- A `<task-notification>` (as a user line, a `queued_command` attachment or
+  a `queue-operation`'s content) keeps its element names, `<task-id>`,
+  `<tool-use-id>`, `<status>` and the numbers under `<usage>`; the text of
+  `<summary>`, `<note>`, `<result>`, `<diagnostics>` and `<failures>`
+  becomes filler of the same length and `<output-file>` an anonymous path.
+- Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
+  17-hex strings Claude Code made up, so they stay as they are: the
+  transcript file name, the launch result and the notification must agree.
 
 usage: anonymise-transcript.py <in.jsonl> <out.jsonl> [--max-str N]
 """
@@ -56,12 +64,15 @@ KEEP_KEYS = {"type", "subtype", "role", "model", "id", "name", "tool_use_id", "r
              "isSnapshotUpdate", "prNumber", "messageCount", "pendingBackgroundAgentCount",
              "pendingWorkflowCount", "preTokens", "postTokens", "cumulativeDroppedTokens",
              "isUsingOverage", "unifiedRateLimitFallbackAvailable", "lowPriorityRetryAfterSeconds",
-             "lowPriorityMaxWaitSeconds", "resetsAt", "warm", "ttl", "iterations", "tokens"}
+             "lowPriorityMaxWaitSeconds", "resetsAt", "warm", "ttl", "iterations", "tokens",
+             # subagent ids and metas: the file name, the launch and the notification agree
+             "agentId", "agent_id", "taskId", "taskType", "agentType", "toolUseId", "isFork",
+             "spawnDepth", "runId", "workflowName", "canReadOutputFile"}
 ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid", "promptId",
            "leafUuid", "messageId", "snapshotMessageId", "sourceToolAssistantUUID", "toolUseID",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
-           "ownerOrganizationUuid", "agentId", "agent_id", "parentSessionId", "parentLastUuid",
-           "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid", "taskId",
+           "ownerOrganizationUuid", "parentSessionId", "parentLastUuid",
+           "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid",
            "prompt_id"}
 PATH_KEYS = {"file_path", "filePath", "path", "notebook_path", "file", "filename", "trackingPath",
              "changedFiles", "displayPath", "planFilePath", "realParentDir", "outputFile",
@@ -180,8 +191,33 @@ def anon_stdout(s):
     return "\n".join(k for k, _ in out)
 
 
+NOTIFICATION_KEEP = {"task-id", "tool-use-id", "status", "event", "task-type", "subagent_tokens",
+                     "tool_uses", "duration_ms", "agent_count", "agents_done", "agents_error",
+                     "agents_skipped", "agents_empty_result"}
+
+
+def anon_notification(s):
+    """`<task-notification>`: element names and the enum / numeric / id
+    elements stay; text elements become same-length filler; the output
+    file becomes an anonymous path."""
+    def repl(m):
+        name, body = m.group(1), m.group(2)
+        if name in NOTIFICATION_KEEP:
+            return m.group(0)
+        if name == "output-file":
+            return f"<{name}>{anon_path(body.strip())}</{name}>"
+        return f"<{name}>{fill(len(body))}</{name}>"
+    # Leaf elements only (no `<` inside), innermost first; `<result>` may
+    # hold markup of its own, so it is handled on the raw text last.
+    out = re.sub(r"<([a-z_-]+)>([^<]*)</\1>", repl, s)
+    return re.sub(r"<result>(.*?)</result>(?=\s*(?:<[a-z_-]+>|</task-notification>))",
+                  lambda m: "<result>" + fill(len(m.group(1))) + "</result>", out, flags=re.S)
+
+
 def anon_text(s):
     """Human/harness text: keep line-kind markers, fill the rest."""
+    if s.lstrip().startswith("<task-notification>"):
+        return anon_notification(s)
     for m in MARKERS:
         if s.startswith(m):
             return m + fill(len(s) - len(m))
