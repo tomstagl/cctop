@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+    .r { white-space: pre; font-variant-ligatures: none; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 32px 38px; display: flex; flex-direction: column; gap: 22px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 23px; font-weight: 600; color: #D6DEE8">Console — every clickable area</div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 920px; text-wrap: pretty">The target is the <strong style="color: #C3CDDA">cell</strong>, not the number in it — padding included. Eight of them, and the digits are contiguous and one-to-one with the cells, which the old 1 / 2 / 5 / 7 / 8 map was not: it was inherited from the nine panels and had four gaps.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 9px; padding: 17px 19px; border-radius: 7px; background: #121820">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #4CC2C2">the mechanism, from claude-code.d.ts</div>
+    <div style="font-size: 14px; line-height: 1.6; color: #A6B4C4; text-wrap: pretty"><span class="m" style="color: #D6DEE8">Button</span> is the only pressable leaf, and its <span class="m" style="color: #D6DEE8">hover</span> prop applies label styles “while the nearest enclosing keyed <span class="m">Box</span>, or given a <span class="m">scope</span> its group, is hovered”. So a cell is <strong style="color: #C3CDDA">a keyed Box holding two or three Buttons that share one scope and one <span class="m">onPress</span></strong>: the whole area lights together, any part of it clicks, and each part keeps its own colour — which one Button with one label could not do.</div>
+    <div style="font-size: 14px; line-height: 1.6; color: #A6B4C4; text-wrap: pretty">The digit is not drawn by cctop. <span class="m" style="color: #D6DEE8">plain</span> means “the hotkey in the accent color, a colon, the label (<span class="m">1: Yes</span>)”, so <span class="m" style="color: #C3CDDA">1:ctx 35% 616k left</span> is the engine's own rendering of a hotkey — native affordance, no invention, and it follows the person's theme.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7F93">the eight targets · 67 columns</div>
+    <div style="border-radius: 7px; border: 1px solid #1A222B; padding: 13px 15px; background: #0E1318; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 18px; width: max-content"><sc-for list="{{shot}}" as="row" hint-placeholder-count="8"><div class="r"><sc-for list="{{row}}" as="g" hint-placeholder-count="10"><span style="color: {{g.c}}; font-weight: {{g.w}}; background: {{g.bg}}">{{g.t}}</span></sc-for></div></sc-for></div>
+    <div class="m" style="font-size: 11px; color: #5D6B7D">the shaded blocks are the hit areas — every cell of them, padding and all</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <div style="display: grid; grid-template-columns: 34px 168px 92px minmax(0, 1fr); gap: 14px; padding: 8px 12px"><sc-for list="{{head}}" as="h" hint-placeholder-count="4"><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">{{h}}</span></sc-for></div>
+    <sc-for list="{{targets}}" as="t" hint-placeholder-count="8"><div style="display: grid; grid-template-columns: 34px 168px 92px minmax(0, 1fr); gap: 14px; padding: 11px 12px; border-radius: 4px; background: {{t.bg}}; align-items: baseline"><span class="m" style="font-size: 13px; font-weight: 600; color: #4CC2C2">{{t.k}}</span><span class="m" style="font-size: 12px; color: #D6DEE8; overflow-wrap: anywhere">{{t.cell}}</span><span class="m" style="font-size: 12px; color: #5FC77E">{{t.opens}}</span><div style="display: flex; flex-direction: column; gap: 4px; min-width: 0"><span style="font-size: 13.5px; line-height: 1.45; color: #A6B4C4; text-wrap: pretty">{{t.shows}}</span><span class="m" style="font-size: 11px; line-height: 1.5; color: #5D6B7D; overflow-wrap: anywhere">{{t.ids}}</span></div></div></sc-for>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7F93">how a target renders, in each of its five states</div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <div style="display: grid; grid-template-columns: 96px 300px minmax(0, 1fr); gap: 16px; padding: 8px 12px"><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">state</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">docked pane</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">standalone terminal</span></div>
+      <sc-for list="{{states}}" as="s" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 96px 300px minmax(0, 1fr); gap: 16px; padding: 11px 12px; border-radius: 4px; background: {{s.bg}}; align-items: baseline"><span class="m" style="font-size: 12px; color: {{s.tone}}">{{s.name}}</span><span style="font-size: 13.5px; line-height: 1.45; color: #A6B4C4; text-wrap: pretty">{{s.pane}}</span><span style="font-size: 13.5px; line-height: 1.45; color: #8FA0B4; text-wrap: pretty">{{s.tui}}</span></div></sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 6px; padding: 17px 19px; border-radius: 7px; background: #141109; border: 1px solid #33290F">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #E2B04A">to verify at a real terminal before this is built</div>
+    <div style="display: flex; flex-direction: column; gap: 7px"><sc-for list="{{verify}}" as="v" hint-placeholder-count="4"><div style="display: grid; grid-template-columns: 15px minmax(0, 1fr); gap: 11px"><span class="m" style="font-size: 13px; color: #E2B04A">·</span><span style="font-size: 13.5px; line-height: 1.5; color: #B9C4D1; text-wrap: pretty">{{v}}</span></div></sc-for></div>
+    <div style="font-size: 13px; line-height: 1.5; color: #8FA0B4; margin-top: 3px">CLAUDE.md: live-terminal checks are never marked passed by automation. All four go into <span class="m" style="color: #C3CDDA">docs/verification/pane.md</span> as <span class="m">Result: pending</span>.</div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1780}}'>
+var P = { fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644' };
+function s(t, c, b, hit) { return { t: t, c: P[c] || P.fg, w: b ? '600' : '400', bg: hit ? '#1B2833' : 'transparent' }; }
+
+class Component extends DCLogic {
+  renderVals() {
+    var pad = function (n, hit) { return s(' '.repeat(n), 'dim', false, hit); };
+    var cell = function (k, txt, w) {
+      var out = [s(k + ':', 'accent', true, true), s(txt, 'fg', false, true)];
+      var n = w - 2 - Array.from(txt).length;
+      if (n > 0) out.push(pad(n, true));
+      return out;
+    };
+    var row = function (a, b) { return [s(' ', 'dim')].concat(a, b); };
+    var W = 67, fill = function (rows) { return rows.map(function (r) {
+      var n = W - r.reduce(function (a, g) { return a + Array.from(g.t).length; }, 0);
+      return n > 0 ? r.concat([s(' '.repeat(n), 'dim')]) : r; }); };
+    return {
+      shot: fill([
+        [s(' cctop', 'accent', true), s('  opus-5 · t1 · 52:11                        ● ', 'dim'), s('WORKING', 'ok', true), s(' 52:11', 'dim')],
+        row(cell('1', 'ctx 35% 616k left', 32), cell('2', '5h 4% ↻4h06', 32)),
+        row(cell('3', 'cache 59m 1h TTL', 32), cell('4', 'spend ≈$22.50 ≈$90/h', 32)),
+        row(cell('5', '✓ test 10s · rework 0', 32), cell('6', '159 calls · 1 err', 32)),
+        [s(' ▸ ', 'ok', true, true), s('steer window · 4c 1:56', 'fg', true, true), pad(24, true), s('a:', 'accent', true, true), s('advisor', 'dim', false, true)],
+        [s('─── ', 'border'), s('events', 'fg', true), s(' ────────────────────────────────── ', 'border'), s('0', 'accent', true, true), s(' home', 'dim', false, true), s('  ·  ? keys ───', 'border')],
+        [s('  05:53  tool  Bash  cargo fmt --all && make check > /tmp/che…', 'dim')],
+        [s('  05:52  hook        PostToolBatch', 'dim')]
+      ]),
+      head: ['key', 'the cell', 'opens', 'what the body shows, and what it reads'],
+      targets: [
+        { k: '1', cell: 'ctx 35% · 616k left', opens: 'context', bg: '#101820',
+          shows: 'The window: size against the window, headroom to autocompact, and the anatomy bar split three ways by how much you can do about each slice — five ways with labels once the body has room.',
+          ids: 'context_size · context_window · turns_until_compaction · context_anatomy · context_velocity · compactions · file_rereads' },
+        { k: '2', cell: '5h 4% · ↻ 4h06', opens: 'limits', bg: '#0E141B',
+          shows: 'Both rolling windows with their reset clocks, the per-call weight that explains why the bar moves faster than the dollars, and the behaviour flags at or above 10 %.',
+          ids: 'limit_5h · limit_7d · limit_reset · limit_weight · behaviour_flags · limit_exhaustion · other_sessions' },
+        { k: '3', cell: 'cache 59m · 1h TTL', opens: 'cache', bg: '#101820',
+          shows: 'The countdown with a decision attached: what the next call re-writes if the entry expires first, the misses and their named causes, the hit ratio.',
+          ids: 'cache_warm · cache_expires_in · cache_ttl · cache_misses · cache_recache_if_cold · cache_hit_ratio' },
+        { k: '4', cell: 'spend ≈$22.50 · ≈$90/h', opens: 'cost', bg: '#0E141B',
+          shows: 'Every token by price class, the burn rate, cost per call and per turn — and the API-equivalent caveat spelled out rather than carried by the ≈ alone.',
+          ids: 'cost · burn_rate · cost_per_call · cost_per_turn · cache_read · cache_write · output · thinking · agents_cost' },
+        { k: '5', cell: '✓ test 10s · rework 0', opens: 'work', bg: '#101820',
+          shows: 'Whether the work is converging: the last confirmed check and the edits since it, open rework, the files touched, re-read or left stale, and what is uncommitted.',
+          ids: 'last_check · coach_rework · file_touches · file_rereads · uncommitted · rewind_points' },
+        { k: '6', cell: '159 calls · 1 err', opens: 'tools', bg: '#0E141B',
+          shows: 'Where the context is going: calls, errors and p50 per tool, tokens each pushed into the window, and the single largest results by name.',
+          ids: 'tool_calls · tool_errors · tool_p50 · tokens_to_ctx · top_ctx · bash_class · error_class' },
+        { k: 'a', cell: '▸ the act line, whole', opens: 'advisor', bg: '#101820',
+          shows: 'The coach’s slot: the nudge in full without truncation, its class and evidence, what is queued behind it and what is snoozed. x snoozes, e explains.',
+          ids: 'the coach object (coach::snapshot) · advice_saving' },
+        { k: '0', cell: '0 home, in the rule line', opens: 'events', bg: '#0E141B',
+          shows: 'The default body and the way back from anywhere: the timeline every other body is built from, as a TIME · KIND · WHAT grid.',
+          ids: 'D2 transcript · D4 hook spool' }
+      ],
+      states: [
+        { name: 'rest', tone: '#8FA0B4', bg: '#101820',
+          pane: 'A plain Button: the digit in the theme’s accent, a colon, the label. Secondary parts carry dimColor, which the engine already brightens under the pointer.',
+          tui: 'The same characters. The digit is the accent role, the label foreground, the trailing detail dim.' },
+        { name: 'hover', tone: '#4CC2C2', bg: '#0E141B',
+          pane: 'The whole keyed Box lights through the shared scope — padding included — and the Button directly under the pointer inverts, which the surface does itself.',
+          tui: 'Nothing. There is no pointer, and this is the one state the two surfaces cannot share.' },
+        { name: 'focus', tone: '#4CC2C2', bg: '#101820',
+          pane: 'The engine’s focus ring, reached with the focus chord or a click; Enter presses. dimColor parts render at full strength while focused.',
+          tui: 'No ring: the key is printed in the cell, so there is nothing to move focus between.' },
+        { name: 'pressed', tone: '#5FC77E', bg: '#0E141B',
+          pane: 'The body swaps in place; the header does not move. ui.press fires with the cell’s key as e.element.',
+          tui: 'Identical — the digit is handled in app.rs and swaps the body.' },
+        { name: 'current', tone: '#5FC77E', bg: '#101820',
+          pane: 'The cell that matches the open body draws its digit and label in the ok role and bold, so the header says where you are without a second indicator.',
+          tui: 'Identical.' }
+      ],
+      verify: [
+        'Does a plain Button with no hotkey draw just its label? The cells need two or three Buttons sharing one press, and only the first should carry the digit. The d.ts documents plain with a hotkey and is silent on plain without one.',
+        'Does the shared hover scope cover a Button whose label is only spaces? The padding is what makes the area large, and it is drawn as a Button so that clicking it counts.',
+        'Do bare digits still press from an empty composer when six Buttons in one pane claim 1 to 6? The d.ts says the later of two on one hotkey wins; it does not say what six in one band do.',
+        'How wide is the real body at the dock widths the arithmetic predicts — 35, 54, 67, 85 — once BORDER_COLUMNS and the drag grip are taken out? Everything above is laid out against those four numbers.'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
