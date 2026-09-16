@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans Condensed", system-ui, sans-serif; background: #0A0E12; }
+    a { color: #4CC2C2; } a:hover { color: #7ADCDC; }
+    .m { font-family: "IBM Plex Mono", monospace; }
+  </style>
+</helmet>
+<div style="box-sizing: border-box; padding: 30px 32px 38px; display: flex; flex-direction: column; gap: 22px; background: #0A0E12">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 23px; font-weight: 600; color: #D6DEE8">What the pane actually is</div>
+    <div style="font-size: 15px; line-height: 1.5; color: #8FA0B4; max-width: 920px; text-wrap: pretty">Three constraints, traced from <span class="m" style="color: #C3CDDA">docs/claude-code-panels.md</span> and <span class="m" style="color: #C3CDDA">claude-code.d.ts</span> rather than assumed. Each one invalidates something in the earlier rounds.</div>
+  </div>
+
+  <sc-for list="{{facts}}" as="f" hint-placeholder-count="3"><div style="display: flex; flex-direction: column; gap: 11px; padding: 18px 20px; border-radius: 7px; background: #121820; border-left: 3px solid {{f.tone}}">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap"><span class="m" style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: {{f.tone}}">{{f.kicker}}</span><span style="font-size: 17px; font-weight: 600; color: #D6DEE8">{{f.head}}</span></div>
+    <div style="font-size: 14px; line-height: 1.55; color: #A6B4C4; text-wrap: pretty">{{f.body}}</div>
+    <div class="m" style="font-size: 12px; line-height: 1.7; color: #8FA0B4; white-space: pre-wrap; padding: 11px 13px; border-radius: 5px; background: #0A0E12">{{f.detail}}</div>
+    <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding-top: 9px; border-top: 1px solid #1E2731"><span class="m" style="font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: #E5605E">invalidates</span><span style="font-size: 13.5px; line-height: 1.5; color: #B9C4D1; text-wrap: pretty">{{f.breaks}}</span></div>
+  </div></sc-for>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7F93">glyphs — the font is the person's terminal font, and the pane cannot detect it</div>
+    <div style="font-size: 14px; line-height: 1.5; color: #8FA0B4; max-width: 920px; text-wrap: pretty">The TUI has <span class="m" style="color: #C3CDDA">Caps::detect</span> and an ASCII fallback for a non-UTF-8 locale. The pane has neither: it draws into Claude Code, which draws into a terminal whose font cctop never sees. So glyph choice is a one-way bet, and the safe bet is what the engine itself already draws.</div>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 4px">
+      <div style="display: grid; grid-template-columns: 112px 96px minmax(0, 1fr); gap: 16px; padding: 8px 12px"><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">glyph</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">verdict</span><span class="m" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6B7D">why</span></div>
+      <sc-for list="{{glyphs}}" as="g" hint-placeholder-count="6"><div style="display: grid; grid-template-columns: 112px 96px minmax(0, 1fr); gap: 16px; padding: 10px 12px; border-radius: 4px; background: {{g.bg}}; align-items: baseline"><span class="m" style="font-size: 15px; color: #D6DEE8">{{g.ch}}</span><span class="m" style="font-size: 11.5px; color: {{g.tone}}">{{g.verdict}}</span><span style="font-size: 13.5px; line-height: 1.45; color: #96A5B7; text-wrap: pretty">{{g.why}}</span></div></sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding: 18px 20px; border-radius: 7px; background: #0E1A1C; border: 1px solid #1B3338">
+    <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #4CC2C2">what this means for the build</div>
+    <div style="display: flex; flex-direction: column; gap: 8px"><sc-for list="{{means}}" as="m" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 15px minmax(0, 1fr); gap: 11px"><span class="m" style="font-size: 13px; color: #4CC2C2">·</span><span style="font-size: 14px; line-height: 1.5; color: #B9C4D1; text-wrap: pretty">{{m}}</span></div></sc-for></div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      facts: [
+        { kicker: 'width', tone: '#E5605E', head: 'The dock is 35 to 85 columns, never 122',
+          body: "The dock width is computed, not chosen: p3(columns) = min(floor(columns × 0.45), 90, columns − 70), then BORDER_COLUMNS = 4 and the one-column drag grip come out of it. Ninety is a hard cap, so no terminal however wide gives the pane more than about 85 usable columns. Below 110 there is no dock at all and the pane becomes a band above the prompt.",
+          detail: "terminal 110  ->  dock 40  ->  body ~35\\nterminal 132  ->  dock 59  ->  body ~54\\nterminal 162  ->  dock 72  ->  body ~67      the common case\\nterminal 200  ->  dock 90  ->  body ~85      the cap\\nterminal 240  ->  dock 90  ->  body ~85      still the cap\\nbelow    110  ->  no dock: inline band above the prompt",
+          breaks: "Every screen drawn at 122 columns and captioned “the pane”, in all three directions. 122 is the standalone terminal split. The Console prototype is now laid out at 85 / 67 / 54, and six header cells need two rows at 85 and three at 54." },
+        { kicker: 'colour', tone: '#E5605E', head: 'The pane has four colours, and they are the person’s, not ours',
+          body: "frame.tsx spells it out: colours are Claude Code theme keys, not palette names. suggestion is the accent the engine colours a Button’s hotkey with, success / warning / error are the three bands, borders are dimmed default text. The Color type is the whole vocabulary — there is no hex, no ramp, and no way to ask for one.",
+          detail: "export type Color = 'green' | 'yellow' | 'red' | 'cyan'\\n  cyan   -> suggestion   the accent, and a hotkey\\n  green  -> success\\n  yellow -> warning\\n  red    -> error\\nplus dimColor, bold, inverse — and nothing else",
+          breaks: "Theme::series(n), the three-step agency ramp for the context bar. It is expressible in the TUI, which has truecolor, and not in the pane. The pane has to carry the same meaning with dimColor and the alternating ▇ / ▆ fill alone — which makes fixing stacked_bar’s glyph alternation a correctness fix for the pane, not a nicety." },
+        { kicker: 'affordance', tone: '#5FC77E', head: 'The engine draws the clickable chrome itself',
+          body: "Button is the only pressable leaf and it renders natively: [ label ] with chrome, or plain as the hotkey in the accent colour, a colon, the label. Under the pointer it inverts on its own. dimColor parts come back to full strength under the pointer or the focus. None of that is cctop’s to draw, and none of it can be restyled.",
+          detail: "<Button plain hotkey=\"1\" onPress={...}>ctx 35% 616k left</Button>\\n        drawn by the engine as:  1: ctx 35% 616k left\\n                                 ^  accent, the person’s theme\\nhover  -> label styles, while the enclosing keyed Box is hovered\\npointer-> the Button inverts, no hook runs, nothing crosses",
+          breaks: "The hand-drawn digit map in the rule line. It was cctop painting an affordance the engine already paints better, in the wrong place, with a numbering inherited from nine panels that only had five bodies to point at." }
+      ],
+      glyphs: [
+        { ch: '─ │ ╭ ╰', verdict: 'safe', tone: '#5FC77E', bg: '#101820', why: "The engine draws its own frames with these, so any terminal running Claude Code already renders them." },
+        { ch: '○ ◐ ●', verdict: 'safe', tone: '#5FC77E', bg: '#0E141B', why: "Geometric shapes, in every terminal font worth the name, and already shipping in the pane’s Coach view." },
+        { ch: '▸ ✓ ✗ ↻', verdict: 'safe', tone: '#5FC77E', bg: '#101820', why: "Already shipping on both surfaces. ↻ is the only one worth a second look on a minimal font." },
+        { ch: '▇ ▆ ▁', verdict: 'the risk', tone: '#E2B04A', bg: '#141109', why: "Block elements are where fonts disagree: some render them a fraction narrow, so a bar drifts out of the column it was measured into. This is the one glyph class the pane cannot fall back from, because it cannot detect the font." },
+        { ch: '█ ▀', verdict: 'gone', tone: '#5D6B7D', bg: '#0E141B', why: "The block-digit font. Nothing in Console uses it, which removes the widest glyph bet the current design makes." },
+        { ch: '· ≈ ×', verdict: 'safe', tone: '#5FC77E', bg: '#101820', why: "Latin-1 and General Punctuation; safe anywhere the rest of the UI already is." }
+      ],
+      means: [
+        "Console is laid out against 85 / 67 / 54 and an inline form, with 67 as the design centre. A screen that only works at 122 has not been designed for the pane.",
+        "The context bar’s three-way split survives in the pane through glyph alternation and dimColor, not colour. That makes the stacked_bar fix — alternate on emitted segments, not on the input index — a pane correctness bug, and it moves up the plan.",
+        "No cctop-drawn hotkey chrome. Cells are plain Buttons and the engine paints the digit; the rule line keeps only 0 home and ? keys, which are navigation rather than readings.",
+        "Bars stay measurable but never load-bearing: every bar has its number beside it, so a font that renders ▇ a fraction narrow costs alignment and not meaning.",
+        "The four pane colours and the four TUI theme roles are the same four. That is the argument for keeping ok / warn / crit strictly for thresholds — it is the only vocabulary both surfaces share."
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

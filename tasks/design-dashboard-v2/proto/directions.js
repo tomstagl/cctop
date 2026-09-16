@@ -100,41 +100,87 @@ function ledgerScreen(self, cols) {
 }
 
 // ============ 3 · CONSOLE ============
+// Header cells are whole-area targets. Each renders as Claude Code draws a
+// `plain` Button with a hotkey — the digit in the accent colour, a colon, the
+// label (claude-code.d.ts, ButtonProps.plain) — so the affordance is native and
+// the digits are contiguous and 1:1 with the cells.
+var CELLS = [
+  { k: '1', id: 'context', short: 'ctx 35% 616k left',      mid: 'ctx 35% 616k left',       wide: 'ctx 35% · 616k left' },
+  { k: '2', id: 'limits',  short: '5h 4%',                   mid: '5h 4% ↻4h06',             wide: '5h 4% · ↻ 4h06' },
+  { k: '3', id: 'cache',   short: 'cache 59m',               mid: 'cache 59m 1h TTL',        wide: 'cache 59m · 1h TTL' },
+  { k: '4', id: 'cost',    short: 'spend ≈$22.50',           mid: 'spend ≈$22.50 ≈$90/h',    wide: 'spend ≈$22.50 · ≈$90/h' },
+  { k: '5', id: 'work',    short: '✓ test 10s',              mid: '✓ test 10s · rework 0',   wide: '✓ test 10s · rework 0', tone: 'ok' },
+  { k: '6', id: 'tools',   short: '159c 1 err',              mid: '159 calls · 1 err',       wide: '159 calls · 1 err' }
+];
 function consoleScreen(self, cols) {
-  var st = self.state, out = [], b = BODIES[st.body](cols);
+  var st = self.state, out = [];
   var go = function (v) { return function () { self.setState({ body: v }); }; };
-  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11 · ~/code/cctop', 'dim')],
+  var perRow = cols >= 80 ? 3 : 2, cw = Math.floor((cols - 2) / perRow);
+  var field = cols >= 80 ? 'wide' : (cw >= 28 ? 'mid' : 'short');
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11', 'dim')],
               [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 ', 'dim')], cols));
-  var hb = [sg(' ', 'dim')];
-  var cell = function (k, v, vr, extra, er, view) {
-    hb.push(sg(k + ' ', 'dim', false, view ? go(view) : undefined));
-    hb.push(sg(v, vr || 'fg', true, view ? go(view) : undefined));
-    if (extra) hb.push(sg(' ' + extra, er || 'dim'));
-    hb.push(sg('  │  ', 'border'));
-  };
-  cell('ctx', '35%', 'fg', '616k left', 'dim', 'context');
-  cell('5h', '4%', 'fg', '↻4h06');
-  cell('cache', '59m', 'fg', '1h', 'dim', 'cost');
-  cell('spend', '≈$22.50', 'fg', '≈$90/h', 'warn', 'cost');
-  hb.push(sg('✓ ', 'ok')); hb.push(sg('test 10s', 'ok', false, go('files'))); hb.push(sg('  │  ', 'border'));
-  hb.push(sg('159c ', 'fg', false, go('tools'))); hb.push(sg('1 err', 'warn', false, go('tools')));
-  out.push(hb);
-  out.push(sp([sg(' ▸ ', 'ok', true), sg('steer window', 'fg', true), sg(' — 4 calls and 1:56 since Claude last spoke', 'dim')],
-              [sg('9 advisor', 'accent')], cols));
+  for (var i = 0; i < CELLS.length; i += perRow) {
+    var l = [sg(' ', 'dim')];
+    for (var j = 0; j < perRow && i + j < CELLS.length; j++) {
+      var c = CELLS[i + j], on = go(c.id), grp = 'cell-' + c.id, active = st.body === c.id;
+      var text = c[field], pad = cw - 2 - Array.from(text).length;
+      l.push(sg(c.k + ':', active ? 'ok' : 'accent', true, on, grp));
+      l.push(sg(text, active ? 'ok' : (c.tone || 'fg'), active, on, grp));
+      if (pad > 0) l.push(sg(' '.repeat(pad), 'dim', false, on, grp));
+    }
+    out.push(at(l, cols));
+  }
+  var act = [sg(' ▸ ', 'ok', true, go('advisor'), 'cell-advisor'),
+             sg('steer window', 'fg', true, go('advisor'), 'cell-advisor'),
+             sg(cols >= 72 ? ' — 4 calls, 1:56 silent' : ' · 4c 1:56', 'dim', false, go('advisor'), 'cell-advisor')];
+  out.push(cols >= 66 ? sp(act, [sg('a:', 'accent', true, go('advisor'), 'cell-advisor'), sg('advisor', 'dim', false, go('advisor'), 'cell-advisor')], cols)
+                      : at(act, cols));
+  var b = BODIES[st.body] ? BODIES[st.body](cols) : bEvents(cols);
   var t = [sg('─── ', 'border'), sg(b.title, 'fg', true), sg(' ', 'border')];
-  var map = [sg(' ', 'border')];
-  [['1', 'context'], ['2', 'cost'], ['5', 'tools'], ['7', 'files'], ['8', 'events']].forEach(function (d, i) {
-    if (i) map.push(sg('  ', 'border'));
-    map.push(sg(d[0], st.body === d[1] ? 'ok' : 'accent', st.body === d[1], go(d[1])));
-    map.push(sg(' ' + d[1], st.body === d[1] ? 'ok' : 'dim', st.body === d[1], go(d[1])));
-  });
-  map.push(sg(' ───', 'border'));
-  var n = cols - lw(t) - lw(map); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
-  out.push(t.concat(map));
-  for (var i = 0; i < b.rows.length; i++) out.push(b.rows[i]);
-  var pad = 9 - b.rows.length; for (var z = 0; z < pad; z++) out.push([]);
-  out.push([]);
-  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' change the body   ', 'dim'),
-            sg('-', 'accent', true, go('events')), sg(' back   ', 'dim'), sg('/', 'accent', true), sg(' filter   ', 'dim'), sg('q', 'accent', true)]);
+  var tail = [sg(' ', 'border'), sg('0', 'accent', true, go('events'), 'cell-home'), sg(' home', 'dim', false, go('events'), 'cell-home'),
+              sg('  ·  ', 'border'), sg('?', 'accent', true), sg(' keys', 'dim'), sg(' ───', 'border')];
+  var n = cols - lw(t) - lw(tail); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+  out.push(t.concat(tail));
+  for (var z = 0; z < b.rows.length; z++) out.push(b.rows[z]);
   return out;
 }
+function bWork(cols) {
+  var rows = [[sg('  ✓ ', 'ok'), sg('cargo test', 'fg', true), sg('  passed 10s ago  ·  0 edits since', 'dim')], [],
+              [sg('  rework   ', 'dim'), sg('0 open', 'ok', true), sg('   no failing streak, no correction, nothing blocked', 'dim')],
+              [sg('  files    ', 'dim'), sg('27 touched', 'fg', true), sg('   2 IDE edits  ·  ', 'dim'), sg('8 stale reads', 'warn')],
+              [sg('  re-reads ', 'dim'), sg('agents.rs ×3', 'warn'), sg('  ·  ', 'border'), sg('tools.rs ×3', 'warn')],
+              [sg('  git      ', 'dim'), sg('+0/−0', 'fg'), sg('   nothing uncommitted', 'dim')]];
+  return { title: 'work', keys: 's sort', rows: rows };
+}
+function bLimits(cols) {
+  var rows = [], m = function (label, v, pct, note) {
+    var l = []; at(l, 2); l.push(sg(label, 'fg')); rt(l, 18, v, 'fg', true);
+    at(l, 20); var bw = Math.min(20, cols - 46); var bb = bar(pct, bw, 'ok');
+    for (var i = 0; i < bb.length; i++) l.push(bb[i]);
+    at(l, 22 + bw); l.push(sg(note, 'dim')); return l; };
+  rows.push(m('5 hours', '4 %', 4, 'resets 4h06'));
+  rows.push(m('7 days', '22 %', 22, 'resets 76h06'));
+  rows.push([]);
+  rows.push([sg('  weight   ', 'dim'), sg('×5', 'warn', true), sg(' opus — why the bar moves faster than the dollars', 'dim')]);
+  rows.push([sg('  long ctx ', 'dim'), sg('78 %', 'warn', true), sg(' of usage was above 150k context', 'dim')]);
+  rows.push([sg('  account-wide: other sessions draw from the same pool', 'dim')]);
+  return { title: 'limits', keys: '', rows: rows };
+}
+function bCache(cols) {
+  var rows = [[sg('  warm ', 'ok'), sg('59m', 'ok', true), sg(' left of a ', 'dim'), sg('1h', 'fg'), sg(' entry', 'dim')], [],
+              [sg('  misses      ', 'dim'), sg('0', 'ok', true)],
+              [sg('  hit ratio   ', 'dim'), sg('99 %', 'ok', true)],
+              [sg('  re-write    ', 'dim'), sg('350k', 'warn', true), sg(' if it goes cold before the next call', 'dim')], [],
+              [sg('  reply before the countdown ends, or the next call pays the re-write', 'dim')]];
+  return { title: 'cache', keys: '', rows: rows };
+}
+function bAdvisor(cols) {
+  var rows = [[sg('  ▸ ', 'ok', true), sg('steer window is open', 'fg', true)],
+              [sg('    4 tool calls and 1:56 since Claude last wrote to you.', 'dim')],
+              [sg('    Type now to redirect, or let it run.', 'dim')], [],
+              [sg('  class    ', 'dim'), sg('OPEN', 'ok', true), sg('   retires at the turn\'s end', 'dim')],
+              [sg('  next     ', 'dim'), sg('—', 'dim')],
+              [sg('  snoozed  ', 'dim'), sg('—', 'dim')]];
+  return { title: 'advisor', keys: 'x snooze · e why', rows: rows };
+}
+BODIES.work = bWork; BODIES.limits = bLimits; BODIES.cache = bCache; BODIES.advisor = bAdvisor;

@@ -33,6 +33,8 @@
   #term .r{white-space:pre;font-variant-ligatures:none}
   #term .hit{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   #term .hit:hover{background:#1B2833}
+  #term .area{text-decoration:none}
+  #term .area:focus-visible{outline:1px solid #4CC2C2;outline-offset:-1px}
   .hint{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#5D6B7D;line-height:1.6}
   .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   @media(max-width:820px){.cards{grid-template-columns:minmax(0,1fr)}}
@@ -79,7 +81,7 @@
 <script>
 var P = { bg:'#0E1318', fg:'#D6DEE8', dim:'#5D6B7D', accent:'#4CC2C2', ok:'#5FC77E', warn:'#E2B04A', crit:'#E5605E', border:'#2A3644',
           s0:'#516A69', s1:'#69AAAA', s2:'#7EF0F0' };
-function sg(t, r, b, on) { return { t: String(t), r: r || 'fg', b: !!b, on: on }; }
+function sg(t, r, b, on, g) { return { t: String(t), r: r || 'fg', b: !!b, on: on, g: g }; }
 function lw(l) { var n = 0; for (var i = 0; i < l.length; i++) n += Array.from(l[i].t).length; return n; }
 function at(l, c, r) { var n = c - lw(l); if (n > 0) l.push(sg(' '.repeat(n), r || 'dim')); return l; }
 function rt(l, c, txt, role, b) { at(l, c - Array.from(String(txt)).length); l.push(sg(txt, role, b)); return l; }
@@ -94,7 +96,7 @@ function ctx(w) { var filled = Math.round(0.35 * w), a = Math.round(filled * 65 
   return [sg('▇'.repeat(a), 's0'), sg('▆'.repeat(b), 's1'), sg('▇'.repeat(c), 's2'), sg('▁'.repeat(w - filled), 'border')]; }
 function paint(rows, cols) { return rows.map(function (l) { l = fit(l, cols);
   if (!l.length) return [{ t: ' '.repeat(cols), c: P.dim, w: '400', cur: 'default', ul: 'none' }];
-  var out = l.map(function (s) { return { t: s.t, c: P[s.r] || P.fg, w: s.b ? '600' : '400', on: s.on, cur: s.on ? 'pointer' : 'default', ul: s.on ? 'underline dotted' : 'none' }; });
+  var out = l.map(function (s) { return { t: s.t, c: P[s.r] || P.fg, w: s.b ? '600' : '400', on: s.on, g: s.g, cur: s.on ? 'pointer' : 'default', ul: s.on && !s.g ? 'underline dotted' : 'none' }; });
   var n = cols - l.reduce(function (x, s) { return x + Array.from(s.t).length; }, 0);
   if (n > 0) out.push({ t: ' '.repeat(n), c: P.dim, w: '400', cur: 'default', ul: 'none' });
   return out; }); }
@@ -301,48 +303,94 @@ function ledgerScreen(self, cols) {
 }
 
 // ============ 3 · CONSOLE ============
+// Header cells are whole-area targets. Each renders as Claude Code draws a
+// `plain` Button with a hotkey — the digit in the accent colour, a colon, the
+// label (claude-code.d.ts, ButtonProps.plain) — so the affordance is native and
+// the digits are contiguous and 1:1 with the cells.
+var CELLS = [
+  { k: '1', id: 'context', short: 'ctx 35% 616k left',      mid: 'ctx 35% 616k left',       wide: 'ctx 35% · 616k left' },
+  { k: '2', id: 'limits',  short: '5h 4%',                   mid: '5h 4% ↻4h06',             wide: '5h 4% · ↻ 4h06' },
+  { k: '3', id: 'cache',   short: 'cache 59m',               mid: 'cache 59m 1h TTL',        wide: 'cache 59m · 1h TTL' },
+  { k: '4', id: 'cost',    short: 'spend ≈$22.50',           mid: 'spend ≈$22.50 ≈$90/h',    wide: 'spend ≈$22.50 · ≈$90/h' },
+  { k: '5', id: 'work',    short: '✓ test 10s',              mid: '✓ test 10s · rework 0',   wide: '✓ test 10s · rework 0', tone: 'ok' },
+  { k: '6', id: 'tools',   short: '159c 1 err',              mid: '159 calls · 1 err',       wide: '159 calls · 1 err' }
+];
 function consoleScreen(self, cols) {
-  var st = self.state, out = [], b = BODIES[st.body](cols);
+  var st = self.state, out = [];
   var go = function (v) { return function () { self.setState({ body: v }); }; };
-  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11 · ~/code/cctop', 'dim')],
+  var perRow = cols >= 80 ? 3 : 2, cw = Math.floor((cols - 2) / perRow);
+  var field = cols >= 80 ? 'wide' : (cw >= 28 ? 'mid' : 'short');
+  out.push(sp([sg(' cctop', 'accent', true), sg('  opus-5 · t1 · 52:11', 'dim')],
               [sg('● ', 'ok'), sg('WORKING', 'ok', true), sg(' 52:11 ', 'dim')], cols));
-  var hb = [sg(' ', 'dim')];
-  var cell = function (k, v, vr, extra, er, view) {
-    hb.push(sg(k + ' ', 'dim', false, view ? go(view) : undefined));
-    hb.push(sg(v, vr || 'fg', true, view ? go(view) : undefined));
-    if (extra) hb.push(sg(' ' + extra, er || 'dim'));
-    hb.push(sg('  │  ', 'border'));
-  };
-  cell('ctx', '35%', 'fg', '616k left', 'dim', 'context');
-  cell('5h', '4%', 'fg', '↻4h06');
-  cell('cache', '59m', 'fg', '1h', 'dim', 'cost');
-  cell('spend', '≈$22.50', 'fg', '≈$90/h', 'warn', 'cost');
-  hb.push(sg('✓ ', 'ok')); hb.push(sg('test 10s', 'ok', false, go('files'))); hb.push(sg('  │  ', 'border'));
-  hb.push(sg('159c ', 'fg', false, go('tools'))); hb.push(sg('1 err', 'warn', false, go('tools')));
-  out.push(hb);
-  out.push(sp([sg(' ▸ ', 'ok', true), sg('steer window', 'fg', true), sg(' — 4 calls and 1:56 since Claude last spoke', 'dim')],
-              [sg('9 advisor', 'accent')], cols));
+  for (var i = 0; i < CELLS.length; i += perRow) {
+    var l = [sg(' ', 'dim')];
+    for (var j = 0; j < perRow && i + j < CELLS.length; j++) {
+      var c = CELLS[i + j], on = go(c.id), grp = 'cell-' + c.id, active = st.body === c.id;
+      var text = c[field], pad = cw - 2 - Array.from(text).length;
+      l.push(sg(c.k + ':', active ? 'ok' : 'accent', true, on, grp));
+      l.push(sg(text, active ? 'ok' : (c.tone || 'fg'), active, on, grp));
+      if (pad > 0) l.push(sg(' '.repeat(pad), 'dim', false, on, grp));
+    }
+    out.push(at(l, cols));
+  }
+  var act = [sg(' ▸ ', 'ok', true, go('advisor'), 'cell-advisor'),
+             sg('steer window', 'fg', true, go('advisor'), 'cell-advisor'),
+             sg(cols >= 72 ? ' — 4 calls, 1:56 silent' : ' · 4c 1:56', 'dim', false, go('advisor'), 'cell-advisor')];
+  out.push(cols >= 66 ? sp(act, [sg('a:', 'accent', true, go('advisor'), 'cell-advisor'), sg('advisor', 'dim', false, go('advisor'), 'cell-advisor')], cols)
+                      : at(act, cols));
+  var b = BODIES[st.body] ? BODIES[st.body](cols) : bEvents(cols);
   var t = [sg('─── ', 'border'), sg(b.title, 'fg', true), sg(' ', 'border')];
-  var map = [sg(' ', 'border')];
-  [['1', 'context'], ['2', 'cost'], ['5', 'tools'], ['7', 'files'], ['8', 'events']].forEach(function (d, i) {
-    if (i) map.push(sg('  ', 'border'));
-    map.push(sg(d[0], st.body === d[1] ? 'ok' : 'accent', st.body === d[1], go(d[1])));
-    map.push(sg(' ' + d[1], st.body === d[1] ? 'ok' : 'dim', st.body === d[1], go(d[1])));
-  });
-  map.push(sg(' ───', 'border'));
-  var n = cols - lw(t) - lw(map); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
-  out.push(t.concat(map));
-  for (var i = 0; i < b.rows.length; i++) out.push(b.rows[i]);
-  var pad = 9 - b.rows.length; for (var z = 0; z < pad; z++) out.push([]);
-  out.push([]);
-  out.push([sg(' ?', 'accent', true), sg('help   ', 'dim'), sg('1-9', 'accent', true), sg(' change the body   ', 'dim'),
-            sg('-', 'accent', true, go('events')), sg(' back   ', 'dim'), sg('/', 'accent', true), sg(' filter   ', 'dim'), sg('q', 'accent', true)]);
+  var tail = [sg(' ', 'border'), sg('0', 'accent', true, go('events'), 'cell-home'), sg(' home', 'dim', false, go('events'), 'cell-home'),
+              sg('  ·  ', 'border'), sg('?', 'accent', true), sg(' keys', 'dim'), sg(' ───', 'border')];
+  var n = cols - lw(t) - lw(tail); t.push(sg('─'.repeat(n > 0 ? n : 0), 'border'));
+  out.push(t.concat(tail));
+  for (var z = 0; z < b.rows.length; z++) out.push(b.rows[z]);
   return out;
 }
+function bWork(cols) {
+  var rows = [[sg('  ✓ ', 'ok'), sg('cargo test', 'fg', true), sg('  passed 10s ago  ·  0 edits since', 'dim')], [],
+              [sg('  rework   ', 'dim'), sg('0 open', 'ok', true), sg('   no failing streak, no correction, nothing blocked', 'dim')],
+              [sg('  files    ', 'dim'), sg('27 touched', 'fg', true), sg('   2 IDE edits  ·  ', 'dim'), sg('8 stale reads', 'warn')],
+              [sg('  re-reads ', 'dim'), sg('agents.rs ×3', 'warn'), sg('  ·  ', 'border'), sg('tools.rs ×3', 'warn')],
+              [sg('  git      ', 'dim'), sg('+0/−0', 'fg'), sg('   nothing uncommitted', 'dim')]];
+  return { title: 'work', keys: 's sort', rows: rows };
+}
+function bLimits(cols) {
+  var rows = [], m = function (label, v, pct, note) {
+    var l = []; at(l, 2); l.push(sg(label, 'fg')); rt(l, 18, v, 'fg', true);
+    at(l, 20); var bw = Math.min(20, cols - 46); var bb = bar(pct, bw, 'ok');
+    for (var i = 0; i < bb.length; i++) l.push(bb[i]);
+    at(l, 22 + bw); l.push(sg(note, 'dim')); return l; };
+  rows.push(m('5 hours', '4 %', 4, 'resets 4h06'));
+  rows.push(m('7 days', '22 %', 22, 'resets 76h06'));
+  rows.push([]);
+  rows.push([sg('  weight   ', 'dim'), sg('×5', 'warn', true), sg(' opus — why the bar moves faster than the dollars', 'dim')]);
+  rows.push([sg('  long ctx ', 'dim'), sg('78 %', 'warn', true), sg(' of usage was above 150k context', 'dim')]);
+  rows.push([sg('  account-wide: other sessions draw from the same pool', 'dim')]);
+  return { title: 'limits', keys: '', rows: rows };
+}
+function bCache(cols) {
+  var rows = [[sg('  warm ', 'ok'), sg('59m', 'ok', true), sg(' left of a ', 'dim'), sg('1h', 'fg'), sg(' entry', 'dim')], [],
+              [sg('  misses      ', 'dim'), sg('0', 'ok', true)],
+              [sg('  hit ratio   ', 'dim'), sg('99 %', 'ok', true)],
+              [sg('  re-write    ', 'dim'), sg('350k', 'warn', true), sg(' if it goes cold before the next call', 'dim')], [],
+              [sg('  reply before the countdown ends, or the next call pays the re-write', 'dim')]];
+  return { title: 'cache', keys: '', rows: rows };
+}
+function bAdvisor(cols) {
+  var rows = [[sg('  ▸ ', 'ok', true), sg('steer window is open', 'fg', true)],
+              [sg('    4 tool calls and 1:56 since Claude last wrote to you.', 'dim')],
+              [sg('    Type now to redirect, or let it run.', 'dim')], [],
+              [sg('  class    ', 'dim'), sg('OPEN', 'ok', true), sg('   retires at the turn\'s end', 'dim')],
+              [sg('  next     ', 'dim'), sg('—', 'dim')],
+              [sg('  snoozed  ', 'dim'), sg('—', 'dim')]];
+  return { title: 'advisor', keys: 'x snooze · e why', rows: rows };
+}
+BODIES.work = bWork; BODIES.limits = bLimits; BODIES.cache = bCache; BODIES.advisor = bAdvisor;
 
 
 var DIRS = {
-  instrument: { label: '1 · Instrument', screen: instrumentScreen,
+  instrument: { label: '1 · Instrument', screen: instrumentScreen, widths: [122, 78],
     init: { cols: 122, view: 'overview', w: false },
     state: function (s) { return s.view === 'overview' ? ('overview' + (s.w ? ' · wide' : '')) : ('panel: ' + s.view); },
     hint: function (s) { return s.view === 'overview'
@@ -351,7 +399,7 @@ var DIRS = {
     fixes: 'The ugliness directly — nothing is decorative, so nothing clashes. Alignment does the work the tiles attempted with size, in four rows instead of seven. Cheapest to build: no new widget.',
     costs: 'You lose proportion at a glance. 35 % as a number is not a third of a bar filled, and the context breakdown leaves the overview entirely. If seeing the bar fill is what changed your behaviour, this takes it away.',
     pick: 'The complaint is visual noise rather than missing information, and you would rather read than scan. Safest if you want something better next week.' },
-  ledger: { label: '2 · Ledger', screen: ledgerScreen,
+  ledger: { label: '2 · Ledger', screen: ledgerScreen, widths: [122, 78],
     init: { cols: 122, view: 'overview', sort: 'fill', asc: false, filter: 'all' },
     state: function (s) { return s.view === 'overview' ? ('sort ' + s.sort + (s.asc ? ' up' : ' down') + ' · ' + s.filter) : ('panel: ' + s.view); },
     hint: function (s) { return s.view === 'overview'
@@ -360,12 +408,12 @@ var DIRS = {
     fixes: 'The thing that makes the current screen hard to scan — nine rows of nine shapes. Here the eye runs down one column. The only direction that offers a severity view without breaking position.',
     costs: 'Nothing stands out, including the call to action, which fights the table from a header line. Readings with no denominator carry visibly empty columns. Most work: a real table widget across every reading.',
     pick: 'The complaint is that nothing lines up and you want one interaction everywhere. Most k9s-shaped, and the one that scales if the reading count keeps growing.' },
-  console: { label: '3 · Console', screen: consoleScreen,
-    init: { cols: 122, body: 'events' },
+  console: { label: '3 · Console', screen: consoleScreen, widths: [85, 67, 54],
+    init: { cols: 67, body: 'events' },
     state: function (s) { return 'body: ' + s.body; },
-    hint: function () { return 'Click a digit in the rule line to swap the body — or click a reading in the header strip, which jumps to the body that explains it · 1 2 5 7 8 work as keys'; },
+    hint: function (s) { return 'Click anywhere in a header cell — the whole area is the target, padding included. 1-6 and a are the hotkeys Claude Code draws itself (plain Button: the digit in the accent colour, a colon, the label). 0 returns to events. Widths are the real dock: a 200-column terminal gives 85, a 162-column one 67.'; },
     fixes: 'The pane specifically. It stops summarising nine things in a space that fits one and gives the body enough height to be worth reading. The header is learned once and never moves.',
-    costs: 'Biggest behavioural change, and you can no longer see two panels at once. The header line is dense enough to need learning, and at 78 columns it truncates — switch the width to see where that hurts.',
+    costs: 'Biggest behavioural change, and you can no longer see two panels at once. Six cells need two or three header rows at dock widths, so the body starts four rows down — at 54 columns that is a third of a short pane spent on chrome.',
     pick: 'The complaint is really the pane being cramped and you mostly look at one thing at a time. The only direction that makes room for a genuinely good events or tools view.' }
 };
 
@@ -380,16 +428,22 @@ Object.keys(DIRS).forEach(function (k) {
   b.onclick = function () { cur = k; render(); };
   b.dataset.k = k; $('tabs').appendChild(b);
 });
-[122, 78].forEach(function (w) {
-  var b = document.createElement('button');
-  b.className = 'chip'; b.type = 'button'; b.textContent = w + ' cols';
-  b.onclick = function () { S[cur].cols = w; render(); };
-  b.dataset.w = w; $('widths').appendChild(b);
-});
+function buildWidths() {
+  var host = $('widths'); host.textContent = '';
+  DIRS[cur].widths.forEach(function (w) {
+    var b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button'; b.textContent = w + ' cols';
+    b.onclick = function () { S[cur].cols = w; render(); };
+    b.dataset.w = w; host.appendChild(b);
+  });
+}
 $('reset').onclick = function () { S[cur] = Object.assign({}, DIRS[cur].init); render(); };
 
 document.addEventListener('keydown', function (e) {
-  var s = S[cur], d = cur, map = { '1': 'context', '2': 'cost', '5': 'tools', '7': 'files', '8': 'events' };
+  var s = S[cur], d = cur;
+  var map = d === 'console'
+    ? { '1': 'context', '2': 'limits', '3': 'cache', '4': 'cost', '5': 'work', '6': 'tools', '0': 'events', 'a': 'advisor' }
+    : { '1': 'context', '2': 'cost', '5': 'tools', '7': 'files', '8': 'events' };
   if (map[e.key]) { if (d === 'console') s.body = map[e.key]; else s.view = map[e.key]; render(); e.preventDefault(); return; }
   if (e.key === 'Escape' && d !== 'console') { s.view = 'overview'; render(); return; }
   if (e.key === 'w' && d === 'instrument') { s.w = !s.w; render(); return; }
@@ -400,9 +454,14 @@ document.addEventListener('keydown', function (e) {
   if (e.key === '-' && d === 'console') { s.body = 'events'; render(); }
 });
 
+function paintGroup(g, on) {
+  document.querySelectorAll('#term [data-g="' + g + '"]').forEach(function (e) {
+    e.style.background = on ? '#1B2833' : ''; });
+}
 function render() {
   var d = DIRS[cur], s = S[cur];
   Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-selected', b.dataset.k === cur); });
+  buildWidths();
   Array.prototype.forEach.call($('widths').children, function (b) { b.setAttribute('aria-pressed', +b.dataset.w === s.cols); });
   var rows = paint(d.screen(ctxObj(), s.cols), s.cols);
   var t = $('term'); t.textContent = '';
@@ -411,8 +470,15 @@ function render() {
     r.forEach(function (g) {
       var el = document.createElement('span');
       el.textContent = g.t; el.style.color = g.c; el.style.fontWeight = g.w;
-      if (g.on) { el.className = 'hit'; el.onclick = g.on; el.tabIndex = 0;
-        el.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.on(); } }; }
+      if (g.on) {
+        el.className = g.g ? 'hit area' : 'hit'; el.onclick = g.on; el.tabIndex = 0;
+        el.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.on(); } };
+        if (g.g) {                       // the keyed-Box hover scope, in the browser
+          el.dataset.g = g.g;
+          el.onmouseenter = el.onfocus = function () { paintGroup(g.g, true); };
+          el.onmouseleave = el.onblur = function () { paintGroup(g.g, false); };
+        }
+      }
       line.appendChild(el);
     });
     t.appendChild(line);
