@@ -19,6 +19,11 @@
 > - Fixture A cannot exercise the return path: its fork was taken from a different, later session than its main transcript. US-001's "the fork returns 310 tokens" was invented.
 > - Mechanics corrected: overlays are `state.overlay = Some(panel id)` + `Panel::render_overlay`, not `ContextView`; there is no header cost tile (cost lives in dashboard row 2's detail); `IDLE_MS` is Panel 6's *MCP* idle constant; `state.tools.agent_spawns` already links an agent id to the launching turn and nobody reads it; the journal parser drops the `agentId` of `failed` entries.
 
+> Found while implementing US-003 (2026-09-16, 505 transcripts on the same machine; `harness_facts::task_notification`):
+> - **A notification is delivered three ways**, all with the same text: as a `user` line when the model is idle, and when it is busy as a `queue-operation` `enqueue` (its `content`) followed by a `queued_command` attachment (its `prompt`) or, after a `dequeue`, the user line. Every `killed` agent notification on this machine came as an attachment, none as a user line — a parser that reads user lines alone never sees one. `Line::task_notification()` reads all three; `State` keys by `<task-id>` so a repeat overwrites.
+> - **Background shell commands' notifications do carry `<tool-use-id>`** (it names the `Bash` call); what tells them from an agent's is the id: an agent's `<task-id>` is its 17-hex agent id, a shell task's 9 base-36 characters. `State` takes a notification as an agent's when the id is a known agent's, the tool_use was an `Agent` call, or (no launch seen) the id has the agent shape.
+> - **No `failed` agent notification exists on this machine** (the 25 of v1.1 were shell tasks and tool-result text); fixture C carries `completed` and `killed` agents and a shell `failed`; the `failed` reason is pinned on synthetic lines. `<result>` is present on a `killed` notification too (the partial result, 165 chars on the fixture).
+
 ---
 
 ## 1. Introduction

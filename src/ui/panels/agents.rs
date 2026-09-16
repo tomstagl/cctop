@@ -6,15 +6,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use crate::agents::State as AgentState;
+use crate::agents::{State as AgentState, IDLE_MS};
 use crate::ui::fmt;
 use crate::ui::panel::{Panel, PanelId};
 use crate::ui::state::State;
 
 pub struct Agents;
-
-/// No calls for longer than this counts as idle.
-const IDLE_MS: i64 = 5 * 60 * 1000;
 
 impl Panel for Agents {
     fn id(&self) -> PanelId {

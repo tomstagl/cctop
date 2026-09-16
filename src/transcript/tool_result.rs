@@ -18,6 +18,12 @@ pub enum ToolUseDetail {
         task_id: Option<String>,
     },
     TaskUpdate(TaskUpdateResult),
+    /// A `Workflow` run launched (`runId` names `subagents/workflows/<run>/`;
+    /// `taskId` is what its task notification will carry).
+    Workflow {
+        task_id: Option<String>,
+        run_id: Option<String>,
+    },
     /// A denial or a plain error: Claude Code wrote the message as a string.
     Text {
         chars: usize,
@@ -157,6 +163,12 @@ impl ToolUseDetail {
                 status_change: change,
                 success: b("success"),
             });
+        }
+        if has("status") && has("runId") {
+            return ToolUseDetail::Workflow {
+                task_id: s("taskId"),
+                run_id: s("runId"),
+            };
         }
         if has("status") && (has("agentId") || has("agent_id") || has("resolvedModel")) {
             let usage = o
@@ -633,6 +645,7 @@ mod tests {
                         ToolUseDetail::AskUserQuestion(_) => "ask",
                         ToolUseDetail::TaskCreate { .. } => "task_create",
                         ToolUseDetail::TaskUpdate(_) => "task_update",
+                        ToolUseDetail::Workflow { .. } => "workflow",
                         ToolUseDetail::Text { .. } => "text",
                         ToolUseDetail::Other => "other",
                     };

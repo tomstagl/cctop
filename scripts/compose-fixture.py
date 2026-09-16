@@ -26,13 +26,31 @@ identifiers:
   --gitop      a Bash commit whose result carries `gitOperation.commit`
                (and a push / PR when the same session has them)
   --continued  a `continued-in` line (what `/clear` leaves behind)
+  --agent-killed  an `Agent` launch (the call and its `async_launched`
+               result) and the `killed` task notification that ended it,
+               by whichever delivery Claude Code used (a user line, or the
+               `queue-operation` enqueue through the `queued_command`
+               attachment); the agent's own transcript and meta under the
+               source's `subagents/` are copied beside the output, shifted
+               by the same delta as the segment (one time shift across the
+               lead and its subagent)
+  --shell-failed  a background Bash launch and the `failed` notification
+               of that shell task (which must never create an agent)
+
+The spine's own `subagents/` directory is copied verbatim beside the
+output (`<out>/subagents/`, `<out>` being the output path without
+`.jsonl`): the spine keeps its timestamps, so its agents need no shift.
 
 usage: compose-fixture.py <spine.jsonl> --denials F --task F --synthetic F
                           --interrupt F --compaction F --ask F --context F
-                          --gitop F --continued F <out.jsonl>
+                          --gitop F --continued F --agent-killed F
+                          --shell-failed F <out.jsonl>
 """
 import datetime as dt
 import json
+import os
+import re
+import shutil
 import sys
 
 GAP_S = 45  # seconds between the spine's last line and the first splice
@@ -199,10 +217,89 @@ def seg_continued(lines):
     return [o for o in lines if o.get("type") == "continued-in"][:1]
 
 
-def splice(spine, segments, session_id, cwd):
+NOTIFICATION = re.compile(r"<task-notification>")
+
+
+def notification_text(o):
+    """The `<task-notification>` text a line carries, by any of the three
+    deliveries, else None."""
+    t = o.get("type")
+    if t == "user":
+        text = text_of(o)
+    elif t == "attachment":
+        text = (o.get("attachment") or {}).get("prompt")
+    elif t == "queue-operation" and o.get("operation") == "enqueue":
+        text = o.get("content")
+    else:
+        return None
+    if isinstance(text, str) and text.lstrip().startswith("<task-notification>"):
+        return text
+    return None
+
+
+def element(text, name):
+    m = re.search(rf"<{name}>(.*?)</{name}>", text, re.S)
+    return m.group(1).strip() if m else None
+
+
+def seg_notification(lines, status, launcher):
+    """The launch (an assistant line whose `launcher` tool_use the
+    notification names, and its result) plus the notification's delivery
+    block: a user line on its own, or the `queue-operation` enqueue through
+    the `queued_command` attachment that followed it. Returns
+    `(segment, task_id)`."""
+    tools = {}
+    for o in lines:
+        for b in tool_uses(o):
+            tools[b.get("id")] = b.get("name")
+    for i, o in enumerate(lines):
+        text = notification_text(o)
+        if not text or element(text, "status") != status:
+            continue
+        tu = element(text, "tool-use-id")
+        if tools.get(tu) != launcher:
+            continue
+        task_id = element(text, "task-id")
+        launch = []
+        for j, x in enumerate(lines):
+            if any(b.get("id") == tu for b in tool_uses(x)):
+                launch = [x]
+                for r in lines[j + 1 : j + 6]:
+                    if r.get("type") == "user" and has_tool_result(r):
+                        launch.append(r)
+                        break
+                break
+        if o.get("type") == "user":
+            block = [o]
+        else:
+            # From the enqueue to the line that delivered it (an attachment
+            # or a user line within a few lines); skip a match with neither.
+            start = i
+            while start > 0 and lines[start - 1].get("type") == "queue-operation":
+                start -= 1
+            end = next(
+                (
+                    k
+                    for k in range(i + 1, min(i + 12, len(lines)))
+                    if lines[k].get("type") in ("attachment", "user")
+                    and notification_text(lines[k])
+                    and element(notification_text(lines[k]), "task-id") == task_id
+                ),
+                None,
+            )
+            if end is None:
+                continue
+            block = lines[start : end + 1]
+        return launch + block, task_id
+    return [], None
+
+
+def splice(spine, segments, session_id, cwd, deltas=None):
     """Append segments after the spine's last timestamped line, before its
     `cost-state`, shifting each segment so it starts GAP_S after the line
-    before it and keeps its internal spacing."""
+    before it and keeps its internal spacing. `deltas` collects each
+    segment's shift, in order."""
+    deltas = deltas if deltas is not None else []
     tail = []
     while spine and spine[-1].get("type") == "cost-state":
         tail.insert(0, spine.pop())
@@ -218,6 +315,8 @@ def splice(spine, segments, session_id, cwd):
         seg = [json.loads(json.dumps(o)) for o in seg]  # deep copy
         first_ts = next((ts(o) for o in seg if ts(o)), None)
         base = last_ts + dt.timedelta(seconds=GAP_S)
+        if first_ts:
+            deltas.append(base - first_ts)
         starts_turn = any(o.get("type") == "user" and not has_tool_result(o) and not o.get("isMeta") for o in seg)
         for j, o in enumerate(seg):
             if ts(o) and first_ts:
@@ -242,6 +341,36 @@ def splice(spine, segments, session_id, cwd):
     return out + tail
 
 
+def shift_file(src, dst, delta):
+    """Copy a subagent transcript with every timestamp moved by `delta`."""
+    with open(src) as f, open(dst, "w") as out:
+        for line in f:
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ts(o):
+                o["timestamp"] = fmt(ts(o) + delta)
+            out.write(json.dumps(o, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def copy_agent(source_session, task_id, out_dir, delta):
+    """The agent's transcript and meta from `<source>/subagents/**`, shifted."""
+    src_dir = source_session[: -len(".jsonl")] if source_session.endswith(".jsonl") else source_session
+    for root, _dirs, files in os.walk(os.path.join(src_dir, "subagents")):
+        for name in files:
+            if name not in (f"agent-{task_id}.jsonl", f"agent-{task_id}.meta.json"):
+                continue
+            rel = os.path.relpath(root, src_dir)
+            os.makedirs(os.path.join(out_dir, rel), exist_ok=True)
+            dst = os.path.join(out_dir, rel, name)
+            if name.endswith(".jsonl"):
+                shift_file(os.path.join(root, name), dst, delta)
+            else:
+                shutil.copyfile(os.path.join(root, name), dst)
+            print(f"  {rel}/{name} (shifted {delta})", file=sys.stderr)
+
+
 def main():
     args = sys.argv[1:]
     opts = {}
@@ -258,7 +387,14 @@ def main():
     spine = load(spine_path)
     session_id = next(o["sessionId"] for o in spine if o.get("sessionId"))
     cwd = next(o["cwd"] for o in spine if o.get("cwd"))
+    out_dir = out_path[: -len(".jsonl")] if out_path.endswith(".jsonl") else out_path + ".d"
+    spine_agents = os.path.join(spine_path[: -len(".jsonl")], "subagents")
+    if os.path.isdir(spine_agents):
+        shutil.rmtree(os.path.join(out_dir, "subagents"), ignore_errors=True)
+        shutil.copytree(spine_agents, os.path.join(out_dir, "subagents"))
+        print(f"subagents: copied from the spine", file=sys.stderr)
     segments = []
+    agents = []  # (segment index, source session, task id)
     finders = [
         ("denials", lambda ls: seg_denials(ls)),
         ("task", lambda ls: [seg_task(ls)]),
@@ -278,7 +414,20 @@ def main():
             sys.exit(f"compose-fixture: no {name} segment in {opts[name]}")
         print(f"{name}: {sum(len(s) for s in found)} lines from {len(found)} segment(s)", file=sys.stderr)
         segments.extend(found)
-    out = splice(spine, segments, session_id, cwd)
+    for name, status, launcher in (("agent-killed", "killed", "Agent"), ("shell-failed", "failed", "Bash")):
+        if name not in opts:
+            continue
+        seg, task_id = seg_notification(load(opts[name]), status, launcher)
+        if not seg:
+            sys.exit(f"compose-fixture: no {name} segment in {opts[name]}")
+        print(f"{name}: {len(seg)} lines (task {task_id})", file=sys.stderr)
+        if launcher == "Agent":
+            agents.append((len(segments), opts[name], task_id))
+        segments.append(seg)
+    deltas = []
+    out = splice(spine, segments, session_id, cwd, deltas)
+    for idx, source, task_id in agents:
+        copy_agent(source, task_id, out_dir, deltas[idx])
     with open(out_path, "w") as f:
         for o in out:
             f.write(json.dumps(o, ensure_ascii=False, separators=(",", ":")) + "\n")

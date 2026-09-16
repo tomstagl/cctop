@@ -3,6 +3,7 @@
 //! `cctop query`.
 
 pub mod advisor;
+pub mod agent_ledger;
 pub mod agents;
 pub mod alerts;
 pub mod app;

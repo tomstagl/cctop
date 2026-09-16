@@ -35,10 +35,41 @@ Layout mirrors `~/.claude`:
   lines in stdout, the enum-valued keys the coach parsers read, and the
   markers that identify a user line's kind.
 
+- `session-c.jsonl` + `session-c/subagents/` — the agents fixture (236
+  lines, 2.1.258 with a 2.1.258 and a 2.1.263 segment): the session whose
+  fork fixture A ships, whole — the `Agent` launch (`async_launched`), the
+  fork's transcript and meta, and the `<task-notification>` that returned
+  its 2 069-char result (delivered twice, as Claude Code does when the
+  model is busy: a `queue-operation` enqueue, then a user line) — plus two
+  segments `scripts/compose-fixture.py` splices after the spine's last
+  turn: an Explore agent launched, stopped with `TaskStop` and reported
+  `killed` as a `queued_command` attachment, with its own transcript copied
+  under `subagents/` and shifted by the same delta (`--agent-killed`); and
+  a background Bash command's `failed` notification (`--shell-failed`),
+  which must never become an agent. No `failed` *agent* notification
+  existed on the machine it was composed on; that reason is covered by
+  synthetic lines in `src/agent_ledger.rs`. The anonymiser keeps the
+  notification's element names, ids, statuses and numbers and fills its
+  text; agent ids stay as written so the file name, the launch result and
+  the notification agree.
+
 To rebuild `session-b.jsonl` from the same sources:
 
 ```
 scripts/compose-fixture.py <spine> --denials <s1> --task <s2> --synthetic <s2> \
   --interrupt <s3> --compaction <s4> --ask <s5> --context <s6> --continued <s7> raw.jsonl
 scripts/anonymise-transcript.py raw.jsonl fixtures/session-b.jsonl --max-str 2000
+```
+
+To rebuild `session-c.jsonl` (the spine is the session whose `subagents/`
+holds `agent-a9a92645226d3a561.meta.json`; the composer copies its
+`subagents/` beside the output and the killed agent's files with the
+segment's shift):
+
+```
+scripts/compose-fixture.py <spine> --agent-killed <s8> --shell-failed <s9> raw/c.jsonl
+scripts/anonymise-transcript.py raw/c.jsonl fixtures/session-c.jsonl --max-str 2000
+for f in raw/c/subagents/*; do
+  scripts/anonymise-transcript.py "$f" fixtures/session-c/subagents/$(basename "$f") --max-str 2000
+done
 ```

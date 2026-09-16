@@ -13,6 +13,7 @@
 
 pub mod attachment;
 pub mod local_command;
+pub mod task_notification;
 pub mod tool_result;
 
 use std::collections::BTreeMap;
@@ -23,6 +24,7 @@ use serde_json::Value;
 pub use crate::tail::{parse_file, Tailer};
 pub use attachment::{Attachment, AttachmentKind};
 pub use local_command::{ContextCapture, LocalCommand};
+pub use task_notification::{TaskNotification, TaskStatus, WorkflowNotification};
 pub use tool_result::{
     AgentResult, AskResult, BashResult, EditResult, GitOperation, ReadKind, ReadResult,
     TaskUpdateResult, TestMarker, ToolUseDetail,
@@ -92,6 +94,19 @@ impl Line {
             _ => None,
         };
         parsed.unwrap_or(Line::Unknown(raw))
+    }
+
+    /// A task notification this line carries, by whichever of the three
+    /// deliveries (a `user` line, a `queued_command` attachment, or the
+    /// `enqueue` of a queue operation while the model was busy). The same
+    /// notification can appear more than once; key by `task_id`.
+    pub fn task_notification(&self) -> Option<TaskNotification> {
+        match self {
+            Line::User(u) => u.task_notification(),
+            Line::Attachment(a) => a.task_notification(),
+            Line::QueueOperation(q) if q.operation == "enqueue" => q.task_notification.clone(),
+            _ => None,
+        }
     }
 
     /// The `type` string of this line.
@@ -378,6 +393,15 @@ impl UserLine {
     }
 
     /// The slash command of a `<command-name>` line (`/clear`, `/model`…).
+    /// The finished task this line reports, when it is a task notification
+    /// delivered as a user line.
+    pub fn task_notification(&self) -> Option<TaskNotification> {
+        if self.prompt_kind() != PromptKind::TaskNotification {
+            return None;
+        }
+        TaskNotification::parse(&self.message.content.text())
+    }
+
     pub fn slash_command(&self) -> Option<String> {
         let text = self.message.content.text();
         let t = text.trim_start();
@@ -951,6 +975,24 @@ pub struct QueueOperation {
     /// `absorbed_mid_turn` when a queued steer was folded into the running
     /// turn.
     pub reason: Option<String>,
+    /// A task notification that arrived while the model was busy (the
+    /// line's `content`), parsed at read time; the text of a queued prompt
+    /// is never kept.
+    #[serde(
+        default,
+        rename = "content",
+        deserialize_with = "notification_from_text"
+    )]
+    pub task_notification: Option<TaskNotification>,
+}
+
+fn notification_from_text<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<TaskNotification>, D::Error> {
+    let v: Option<Value> = Option::deserialize(d)?;
+    Ok(v.as_ref()
+        .and_then(Value::as_str)
+        .and_then(TaskNotification::parse))
 }
 
 #[derive(Debug, Clone, Deserialize)]
