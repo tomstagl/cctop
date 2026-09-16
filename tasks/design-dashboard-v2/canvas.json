@@ -1,21 +1,152 @@
 {
   "pages": [
-    { "id": "page-1", "name": "Redesign" },
-    { "id": "page-2", "name": "Colour & k9s" }
+    {
+      "id": "page-1",
+      "name": "Redesign"
+    },
+    {
+      "id": "page-2",
+      "name": "Colour & k9s"
+    },
+    {
+      "id": "page-3",
+      "name": "Directions"
+    }
   ],
   "artboards": [
-    { "file": "Before.dc.html",     "x": 0,    "y": 0,    "w": 1120, "h": 1340, "page": "page-1" },
-    { "file": "Main.dc.html",       "x": 1220, "y": 0,    "w": 1120, "h": 900,  "page": "page-1", "is_interactive": true },
-    { "file": "Responsive.dc.html", "x": 2440, "y": 0,    "w": 1120, "h": 1560, "page": "page-1" },
-    { "file": "Anatomy.dc.html",    "x": 0,    "y": 1700, "w": 1120, "h": 1800, "page": "page-1" },
-    { "file": "Audit.dc.html",      "x": 1220, "y": 1700, "w": 1120, "h": 2520, "page": "page-1", "print": "flow" },
-    { "file": "Color.dc.html",      "x": 0,    "y": 0,    "w": 1120, "h": 1800, "page": "page-2", "print": "flow" },
-    { "file": "K9s.dc.html",        "x": 1220, "y": 0,    "w": 1120, "h": 1820, "page": "page-2", "print": "flow" }
+    {
+      "file": "Before.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 1340,
+      "page": "page-1"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 1220,
+      "y": 0,
+      "w": 1120,
+      "h": 900,
+      "page": "page-1",
+      "is_interactive": true
+    },
+    {
+      "file": "Responsive.dc.html",
+      "x": 2440,
+      "y": 0,
+      "w": 1120,
+      "h": 1560,
+      "page": "page-1"
+    },
+    {
+      "file": "Anatomy.dc.html",
+      "x": 0,
+      "y": 1700,
+      "w": 1120,
+      "h": 1800,
+      "page": "page-1"
+    },
+    {
+      "file": "Audit.dc.html",
+      "x": 1220,
+      "y": 1700,
+      "w": 1120,
+      "h": 2520,
+      "page": "page-1",
+      "print": "flow"
+    },
+    {
+      "file": "Color.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 1800,
+      "page": "page-2",
+      "print": "flow"
+    },
+    {
+      "file": "K9s.dc.html",
+      "x": 1220,
+      "y": 0,
+      "w": 1120,
+      "h": 1820,
+      "page": "page-2",
+      "print": "flow"
+    },
+    {
+      "file": "Directions.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1160,
+      "h": 1400,
+      "page": "page-3",
+      "print": "flow"
+    },
+    {
+      "file": "Instrument.dc.html",
+      "x": 1260,
+      "y": 0,
+      "w": 1160,
+      "h": 1120,
+      "page": "page-3",
+      "print": "flow"
+    },
+    {
+      "file": "Ledger.dc.html",
+      "x": 2520,
+      "y": 0,
+      "w": 1160,
+      "h": 1120,
+      "page": "page-3",
+      "print": "flow"
+    },
+    {
+      "file": "Console.dc.html",
+      "x": 3780,
+      "y": 0,
+      "w": 1160,
+      "h": 1300,
+      "page": "page-3",
+      "print": "flow"
+    }
   ],
   "annotations": [
-    { "id": "start-here", "x": 0, "y": -150, "w": 1120, "page": "page-1", "text": "Today's pane, redrawn from its own render path with the session in your screenshot — same numbers as the redesign beside it, so the comparison is like for like." },
-    { "id": "try-it", "x": 1220, "y": -150, "w": 1120, "page": "page-1", "text": "This one is live: the chips switch terminal width and open the drill-downs.\nThe tweaks above the artboard switch theme (all six bundled ones) and the alert state." },
-    { "id": "colour-answer", "x": 0, "y": -150, "w": 1120, "page": "page-2", "text": "The short answer to why thinking is red: it should not be. Every number on this page was computed with the palette validator, not judged by eye." }
+    {
+      "id": "start-here",
+      "x": 0,
+      "y": -150,
+      "w": 1120,
+      "page": "page-1",
+      "text": "Today's pane, redrawn from its own render path with the session in your screenshot \u2014 same numbers as the redesign beside it, so the comparison is like for like."
+    },
+    {
+      "id": "try-it",
+      "x": 1220,
+      "y": -150,
+      "w": 1120,
+      "page": "page-1",
+      "text": "This one is live: the chips switch terminal width and open the drill-downs.\nThe tweaks above the artboard switch theme (all six bundled ones) and the alert state."
+    },
+    {
+      "id": "colour-answer",
+      "x": 0,
+      "y": -150,
+      "w": 1120,
+      "page": "page-2",
+      "text": "The short answer to why thinking is red: it should not be. Every number on this page was computed with the palette validator, not judged by eye."
+    },
+    {
+      "id": "pick-one",
+      "x": 0,
+      "y": -160,
+      "w": 1160,
+      "page": "page-3",
+      "text": "Dogfood verdict: the data is validated, the rendering is not. All three carry the same readings \u2014 they differ only in how the screen is built. Start left, then compare the three at pane width."
+    }
   ],
-  "launch": { "view": "canvas", "page": "page-2" }
+  "launch": {
+    "view": "canvas",
+    "page": "page-3"
+  }
 }
