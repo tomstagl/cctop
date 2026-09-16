@@ -36,7 +36,7 @@ This document rebuilds the dashboard around three reading distances — a three-
 - **Never truncate what must be read.** The act band wraps rather than cutting; anything that can be silently clipped is by definition not first-glance material, and there is a key that un-truncates the rest.
 - **Reclaim rows.** The tile block's seven rows go; the rows go to content, and the chrome that remains can be collapsed by the person reading it.
 - **Keep every figure.** Nothing is dropped from the product, only moved down a reading distance, and the overview prints the digit that opens the full table.
-- **Keep the surfaces identical.** `dashboard::snapshot` stays the single object; the TUI, the pane, `cctop query dashboard` and the MCP tool draw it verbatim as they do today.
+- **Keep the surfaces identical.** `dashboard::snapshot` stays the single object; the TUI, the pane and `cctop query dashboard` draw it verbatim. (There is no dashboard MCP tool today and this work does not add one.)
 
 ### Non-goals
 
@@ -58,21 +58,26 @@ Measured from the committed fixture-B snapshots and the two renderers.
 | Unit placement | the unit is emitted on row index 2 only, `dw + 2` cells right of the digits | `tile_rows` / `tileLines` |
 | Ledger | 9 rows + 9 detail rows = **18 rows**, drawn whether or not the row has content (`6 Agents —` costs two) | `compose()` |
 | Row budget at 122 × 24 | header 1 + tiles 3 + nudge 1 + ledger 18 + footer 1 = 24, every blank separator already dropped | `fixture_b_dashboard_122x24.snap` |
-| Truncation | values cut at `ROW_WIDTH = 118` with `…`, then clipped again at the terminal edge with no marker | `dashboard::cut`, ratatui `Paragraph` without `wrap` |
+| Truncation | cut **twice at two different widths**: `ROW_WIDTH = 118` in the object, then `width − LEDGER_GUTTER` in the renderer. Both mark with `…`, so nothing is lost silently — but the object cuts to a width the terminal may not have, and the second cut always lands on the useful end of the line | `dashboard::cut` at `src/dashboard.rs:197`, `spans()` at `src/ui/dashboard.rs:53` |
 | Dead height | 80 × 40 renders 9 blank rows below the ledger while four rows above are ellipsed; 60 × 51 renders 21 | `fixture_b_dashboard_80x40.snap`, `…_60x51.snap` |
 | Duplication | 4 facts printed twice or more (phase cell ≡ row 4 values; `warm 59m`; `≈$/call`; context %) | `dashboard.rs::header` vs `row_turn`, `tile` vs `row_tokens` |
 | Footer | one static string in every view, including drill-downs that have their own keys (`s` sort, `Enter` calls, `a` agents) | `ui/dashboard.rs::FOOTER` |
 | 40-column form | tiles collapse to `○14% ○— ○59m ●1 ▸` — four lights with nothing naming which is which | `fixture_b_dashboard_40x24.snap` |
 
-### 3.2 Values that disagree — one real, one not
+### 3.2 Two readers of one session, disagreeing by 2250×
 
-The screenshot that opened this work shows an overview and two expanded panels carrying values that contradict each other. Checked against the code, they are two different situations and only one of them is a defect.
+The screenshot that opened this work shows an overview and two expanded panels carrying values that contradict each other. My first reading was that the cost pair could not be a code defect, because both sides call `state.cost.current()` and `fmt::usd` (`src/ui/fmt.rs:27`) emits three decimals only below `$0.01`, so one `State` cannot render both. **That inference runs backwards.** Both readings were on one screen. If one `State` cannot produce both, then the two surfaces were not reading one `State` — which is precisely the invariant CLAUDE.md states.
 
-**Cost — not a code defect.** Panel 2 shows `cost $0.000` beside row 2's `≈$22.5`. Both read the same accessor — `state.cost.current()` at `src/ui/panels/tokens.rs:94` and `src/dashboard.rs:450` — and `fmt::usd` emits three decimals only below `$0.01` (`src/ui/fmt.rs:27`). **One `State` cannot render both**, so the two boxes in that image were captured from different states: different moments, a different session, or a composite. There is nothing here to fix in the renderers. It is kept in this document because it is a good argument for FR-3: a screen that prints the same reading in two places invites exactly this confusion, in a bug report and in a user's head.
+`src/metrics/cost.rs:172–191` says how. `current()` has two branches:
 
-**Turn state — a real divergence, possibly by design.** Panel 4 shows `state idle`, `elapsed —` beside the header's `● WORKING · silent 1:56`. These genuinely read two sources: `src/ui/panels/turn.rs` reads `agg.current_turn()`, while `dashboard::header` takes the phase word from the classifier via `coach::snapshot`. A turn that has ended while tool activity continues will legitimately produce both answers — they are answers to different questions. The defect, if any, is that both are labelled as the session's state with no way to tell them apart.
+- **authoritative** — `Some(c) => { usd: c.total_cost_usd + since, approx: any_since }`
+- **estimate** — `None if any_since => { usd: since, approx: true }`
 
-CLAUDE.md's invariant is *"One state, many surfaces. Every number comes from the same pipeline, so the TUI, `cctop query`, the MCP tools and the pane never disagree."* The turn case does not break the pipeline rule; it breaks the naming. US-101 therefore verifies first and fixes only what reproduces.
+`$0.000` printed *without* `≈` is reachable only through the authoritative branch with a near-zero total and no un-consumed estimates. `≈$22.5` *with* `≈` needs `any_since`. And `src/metrics/cost.rs:138–142`: a `Line::CostState` sets `authoritative` **and clears `self.since`**. So the screenshot is one reader that had consumed a `cost-state` line reporting ≈ 0 and one that had not — two processes at different points in the same transcript, or two sessions.
+
+A 2250× disagreement between two live surfaces, located in `src/metrics/`. **This is the highest-value finding in this document, and it is not a layout problem at all.**
+
+**Turn state is a second, separate divergence.** `src/ui/panels/turn.rs:34` reads `state.agg.current_turn()`; `dashboard::header` and `row_turn` read `c.state` from `coach::state_line` (`src/coach.rs:1038`). A turn that has ended while tool activity continues legitimately produces both answers — they answer different questions under one label.
 
 ### 3.3 The colour finding, computed
 
@@ -114,8 +119,8 @@ k9s has had a decade and an impatient audience on the same questions. Two of its
 | Un-truncate | `Ctrl-W` wide columns | none — rows are cut twice, once silently |
 | Faults only | `Ctrl-Z` | none — quiet rows are drawn anyway |
 | Jump by name | `:` with aliases | digits 1–9 only, already fewer than the destinations |
-| Filter in place | `/` regex, `-l` labels, `-f` fuzzy | none on any table |
-| Sort by column | `Shift-O`, `Shift-N/A/P/S` | `s`/`S` on the turn ledger only |
+| Filter in place | `/` regex, `-l` labels, `-f` fuzzy | exists but is inconsistent: `f` with an inline field on tools (`tools.rs:118`), `/` with `n`/`N` jump on events (`events.rs:107`), nothing on files or the ledger |
+| Sort by column | `Shift-O`, `Shift-N/A/P/S` | exists but is undiscoverable: `s`/`S` on tools (`tools.rs:113`) and the ledger (`ledger_view.rs:39`), `s` on files (`files.rs:76`), nothing in any footer |
 | Navigation stack | breadcrumb, `[` `]`, `-` last view, `Esc` one level | `Esc` one level, no trail |
 | Count in the title | `Pods(default)[12]` | already done — panel titles carry a summary figure |
 | Inherit the terminal | skin `bg: default` | every theme paints its own background |
@@ -237,7 +242,7 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 
 ## 7. Functional requirements
 
-- **FR-1** `dashboard::snapshot` remains the only place a surface's contents are decided. The TUI, the pane, `cctop query dashboard` and `cctop_dashboard` draw it verbatim; a fixture-B test holds the two surfaces row-identical, as `tests/pane` does today.
+- **FR-1** `dashboard::snapshot` remains the only place a surface's contents are decided. The TUI, the pane and `cctop query dashboard` draw it verbatim. (There is **no** `cctop_dashboard` MCP tool — `src/mcp.rs` exposes eight and none of them is the dashboard. Adding one is out of scope.) A fixture-B test holds the two surfaces row-identical; **that harness does not exist yet** and US-103 builds it.
 - **FR-2** Every figure carries its unit in the same cell run, on the same line.
 - **FR-3** No fact is drawn twice on one screen.
 - **FR-4** Zone order is fixed and never reorders by urgency, value or recency.
@@ -252,22 +257,23 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 
 ## 8. User stories
 
-### US-101: Make turn state say which question it answers
-**Description:** As a user, I want to know whether "idle" means the turn ended or the session is quiet, so that two boxes showing different words do not read as a bug.
+### US-101: Two readers of one session must not disagree about cost
+**Description:** As a user, I want every surface reading one session to report one cost, so that a 2250× gap between two windows is impossible.
 
 **Acceptance Criteria:**
-- [ ] A test renders panel 2's cost line and the spend zone from one fixture `State` and asserts the same string — a regression guard for the FR-3 case in §3.2, not a fix
-- [ ] The turn-ended-while-tools-run case is captured as a fixture (`scripts/anonymise-transcript.py`, never hand-edited) and a test asserts what each surface says for it
-- [ ] Panel 4's field is labelled for what it reads (the turn's own state) and the header's for what it reads (the phase classifier's word), so the two can differ without reading as a contradiction
-- [ ] If the fixture shows a genuine divergence — the classifier reporting a phase with no tool activity and no open turn — that is a bug in `src/phase.rs` and is fixed there, with the registry row gaining the caveat
-- [ ] No renderer papers over a difference by hiding one of the two values
+- [ ] The §3.2 mechanism is reproduced in a test: one reader that has consumed a `cost-state` line and one that has not, over the same transcript, and the assertion is that they agree
+- [ ] `Cost::current()` no longer lets a cleared `since` and a near-zero `total_cost_usd` present as a confident `$0.000` — either the authoritative branch keeps the estimate it displaced, or a near-zero cost on a non-trivial session carries `≈` and a caveat
+- [ ] Fixed in `src/metrics/cost.rs`, **not** in a renderer, and not by hiding one of the two values
+- [ ] The registry row for `cost` gains the caveat if both readings are legitimate at different points
+- [ ] Turn state, separately: panel 4's field is labelled for what it reads (the turn) and the header's for the phase classifier, so the two can differ without reading as a contradiction. A turn-ended-while-tools-run fixture (`scripts/anonymise-transcript.py`, never hand-edited) pins what each says
+- [ ] Ships on the layout that exists today and changes no schema
 
 ### US-102: The zone layout, TUI
 **Description:** As a user, I want status, act, meters, second look and events in fixed positions, so that a glance always lands in the same place.
 
 **Acceptance Criteria:**
 - [ ] `src/ui/dashboard.rs` composes the §4.2 zones; `tile_block`, `tile_rows` and `big_digits` are deleted with their tests, and `FOUR_TILES` / `TWO_TILES` / `L1_TILES` / `TILE_WIDTH` go with them
-- [ ] Column stops per §4.2; a test asserts every emitted row is exactly `width` cells at 40 / 60 / 80 / 100 / 122
+- [ ] Column stops per §4.2; a test asserts every composed row is **≤ `width` cells measured before render** (a ratatui `TestBackend` buffer is `width` cells by construction, so measuring post-render is vacuous) at 40 / 60 / 80 / 100 / 122, on both surfaces
 - [ ] FR-5: a zone with no content emits no row; `6 Agents —` is gone and agents rides the files row
 - [ ] FR-3: the phase cell appears once; `warm`, `≈$/call` and the context percent appear once each
 - [ ] Insta snapshots regenerated at 40 × 24, 60 × 51, 80 × 40, 100 × 30, 122 × 24
@@ -276,8 +282,11 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 **Description:** As a user of the docked pane, I want the same screen the terminal draws.
 
 **Acceptance Criteria:**
-- [ ] `plugin/hooks/views/overview.tsx` draws the same zones; `tileRows` / `tileLines` / `engineTiles` are deleted
-- [ ] `tests/pane` holds the fixture-B moments row-identical between the Rust and TypeScript renderers, as today
+- [ ] `plugin/hooks/views/overview.tsx` draws the same zones; `tileRows`, `tileLines`, `engineTiles`, `TILES_MIN`, `L2_MAX`, `type Tile` and `tileOf` are deleted, and `dashboardOf`'s hard `tiles` requirement with them
+- [ ] `frame.tsx`'s `bigDigits` / `BIG_GLYPHS` is deleted **in the same commit** as `tileLines`, its only caller
+- [ ] **A fixture-B row-identity harness is built.** It does not exist today: `coach.test.ts` covers the Coach card, `overview.test.ts` uses fixture A and regexes rather than Rust-rendered rows, and the `-b` dashboard fixtures are generated but read by no test
+- [ ] The pane reads `schema` and renders one line naming the cctop it needs, instead of waiting forever on `dashboardOf → null`. There is no binary pin; the pane probes `cctop query --help`
+- [ ] The digit model is resolved with the schema, not after: `Model.unfolded`, `overview.toggle`, `viewOfDigit` and `pane.tsx:253–255` all hang off it
 - [ ] The narrow form (< `MIN_DOCK_COLUMNS`) is §4.3's, not a truncation of the wide one
 - [ ] `scripts/pane-fixtures.sh` regenerated for both fixtures
 
@@ -296,32 +305,32 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 **Description:** As a user, I want a colour to mean the same thing everywhere on the screen.
 
 **Acceptance Criteria:**
-- [ ] `Theme::series(n)` derives the §5.2 ramp from `accent`, solving the near endpoint against `bg` for ≥ 3.2 : 1; no new TOML key
-- [ ] A test asserts monotone lightness and the contrast floor for all six bundled themes and for a synthetic theme with an extreme accent
-- [ ] The overview's context bar carries three slices, panel 1 five; `stacked_bar`'s alternating `▇`/`▆` is kept as secondary encoding
-- [ ] `ok` / `warn` / `crit` appear in no composition bar; a grep test in CI would be over-fitting, so this is enforced by review and by the ASCII snapshot
+- [ ] `Theme::series(n)` derives the §5.2 ramp from `accent`, solving the near endpoint against `bg` for ≥ 3.2 : 1; no new TOML key. It is a **new module** — the repo has no colour crate in `Cargo.toml` and no OKLab code today
+- [ ] The ramp is computed from the **unreduced** accent. `Theme::for_caps` (`src/theme.rs:258–282`) consumes `self` and rewrites each fixed field, so a `series(n)` derived afterwards reads an already-reduced colour that may be `Color::Indexed` with no RGB to convert
+- [ ] A test asserts monotone lightness and the contrast floor for all six bundled themes and two synthetic extremes, **and pins the six bundled hexes** so the Rust ramp cannot drift from `series-ramp.mjs`, PRD §5.2 and the artboards
+- [ ] A test puts `series(3)` through `to_ansi16` for all six themes and asserts three distinct results — or the 16-colour path is declared glyph-only and the glyph fix below carries it alone
+- [ ] **`stacked_bar` is fixed, not reused as-is.** `src/ui/widgets.rs:31` picks the glyph from `i % 2` over `parts` and `continue`s a zero-cell slice, so a three-slice bar on a session with no extended thinking draws `fixed` and `yours` as adjacent runs of the *same* glyph. Alternate on **emitted** segments, not on the input index
+- [ ] A test drives the zero-middle-slice case under `Caps { mono: true }` and asserts the two remaining slices are distinguishable by glyph alone. This is the FR-8 test; `dashboard_ascii` carries no colour and cannot enforce it
+- [ ] A rendered-buffer assertion that the context bar's spans carry only colours from `Theme::series(n)` — five lines over the buffer, not a grep, and not "enforced by review"
 - [ ] `docs/metrics.md` gains the encoding note for `context_anatomy`; the panel guide gains §5.3's sentence in plain words
-- [ ] The ASCII / `NO_COLOR` snapshot still distinguishes all three slices
 
-### US-106: Reclaimable chrome and the un-truncate key
-**Description:** As a user on a short or narrow terminal, I want to trade chrome for content.
-
-**Acceptance Criteria:**
-- [ ] `Ctrl-E` collapses the meter block to the coach's one-line form and back; the act band is unaffected; state persisted in `~/.config/cctop/config.toml`
-- [ ] `w` toggles wide mode: rows wrap instead of cutting, in both surfaces
-- [ ] `z` hides every quiet zone
-- [ ] FR-11: the give-way order is a declared list; a test drives 24 heights at 122 columns and asserts no blank row below a truncated one
-- [ ] All three keys appear in the per-view footer and the help overlay
-
-### US-107: Per-view footer, filter, sort, breadcrumb
-**Description:** As a user, I want each view to tell me what I can do in it.
+### US-106: Per-view footer and the un-truncate key
+**Description:** As a user, I want each view to name its own keys, and a way to see what a row cut off.
 
 **Acceptance Criteria:**
-- [ ] `Panel::keys(&State) -> Vec<(key, label)>` feeds the footer; the overview lists its own, each panel its own
-- [ ] `/` filters the tools, files and events tables; `Esc` clears the filter before leaving the view
-- [ ] `s` sorts every table by the selected column, named in the footer
-- [ ] `-` returns to the previous view; the footer carries a breadcrumb; `Esc` is exactly one level up everywhere
-- [ ] `bg = "default"` in a theme inherits the terminal background
+- [ ] `Panel::keys(&State) -> Vec<(&str, &str)>` on the trait, default empty; the footer is generated from the active view. There are **three** footer sites: `src/ui/dashboard.rs::FOOTER`, `src/ui/coach_view.rs:26`, and a hard-coded string at `src/app.rs:815`
+- [ ] `w` toggles wide mode — rows wrap instead of cutting — on both surfaces, with a rule for a zone taller than the screen
+- [ ] Both appear in the footer and the help overlay
+- [ ] Live-terminal verification goes to `docs/verification/pane.md` as `Result: pending` (CLAUDE.md). That file already carries 28 pending items, which is itself the argument for keeping this story to two
+
+### US-107: Deferred — the rest of the chrome
+**Description:** `Ctrl-E` collapse, `z` faults-only, `/` filter, `s` sort, `-` previous view and `bg = "default"` are **not** in this PRD.
+
+**Why:**
+- `/`, `s` and `f` already exist and disagree with each other: `tools.rs:113,117,118`, `files.rs:76`, `events.rs:107,111–112`, `ledger_view.rs:39–44` (the sort itself is in `src/ledger.rs`). Consolidating them is a nine-panel navigation project with an `f`-vs-`/` decision and an `n`/`N` conflict with `advisor.rs:43–44`
+- `-` is already bound to the refresh interval (`src/app.rs:569`)
+- `bg = "default"` collides with US-105: the ramp solves its near endpoint against `bg`, so removing the background makes the contrast guarantee unenforceable for the users who opted in. It also breaks `build-site.sh:38`'s CSS injection, and `Theme::parse` discards a whole theme file when any colour fails to parse
+- Every item is live-terminal only, so all of it converts acceptance criteria into pending lines
 
 ### US-108: The downstream surface
 **Description:** As a reader of the site and the docs, I want them to describe the dashboard that ships.
@@ -331,12 +340,14 @@ The bar is not a chart of what happened; it is a list of levers, four of which a
 - [ ] `site/index.template.html` §2 prose ("Four lights, one nudge, nine rows", the tile paragraph, the Fig. 2 caption, the key list) rewritten for zones
 - [ ] `scripts/build-guide.py`'s `coach_*` entries and the sample lines regenerated; a guide page for the meters
 - [ ] `make demo` regenerates `two-pane.*`, the six `theme-*.png`, `demo.gif` / `.webm`; `site/demo.tape` updated for the new keys
-- [ ] `og-image.png` regenerated if it shows the dashboard
+- [ ] `make site` re-run — `site/index.html`, `site/metrics.html` and `site/guide/*.html` are committed build outputs, not inputs
+- [ ] The layout descriptions **outside** every marked block are updated by hand: `README.md:66`, `plugin/README.md:35,44` (marketplace text), `src/main.rs:114` clap help (mirrored in `tests/pane/poller.test.ts:26`), `src/query.rs:392` and the module docs
 - [ ] `docs/query.md` updated if the `dashboard` object's shape changes; `cctop metrics --md` and `--readme` re-run
 
 ## 9. What this does not answer
 
 - **`:` fuzzy jump** (§6) is deferred. cctop has roughly a dozen destinations, digits reach nine of them, and the evidence that the remaining three need a command grammar is weak. Revisit when the count passes fifteen.
-- **Whether the overview should keep a hero number at all.** This document says no — meters with a shared geometry beat one big figure, and four big figures in four units beat nothing. If dogfooding says a single spend or context figure is missed from across a room, it returns as *one* figure with its unit attached, not four.
+- **Whether zones actually read better than tiles.** This document asserts it and does not measure it. The predecessor's own plan committed to a dogfood week that never happened, so the design being replaced was never evaluated either. **The layout change ships behind `layout = tiles | zones` on the exposure machinery coach Phase 7 already built, and the tiles are deleted only when the arm says so** (plan §1.2). Everything measured in §3 justifies US-101, US-104 and US-105; none of it justifies deleting the tiles.
+- **Whether the overview should keep a hero number at all.** This document says no — meters with a shared geometry beat one big figure, and four big figures in four units beat nothing. If the dogfood says a single spend or context figure is missed from across a room, it returns as *one* figure with its unit attached.
 - **The ledger's `Panel::ledger` contract.** Zones no longer map one-to-one onto panels (`agents` rides `files`, `cache` and `spend` both carry digit `2`). Whether `Panel` keeps a ledger method or the zones become their own table is a plan-level decision (plan §2, Phase 1).
 - **Whether §3.2's turn divergence is a defect or two honest answers.** A code question, not a design one. US-101 settles it with a fixture; the redesign does not depend on the outcome.
