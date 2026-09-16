@@ -417,12 +417,20 @@ pub fn agents(state: &State) -> Value {
             })
         })
         .collect();
-    let teammates: Vec<Value> = state
-        .teammates
-        .iter()
-        .map(|t| json!({"name": t.name, "type": t.agent_type}))
-        .collect();
-    json!({
+    // The team's rows (team PRD §4.5) when the session leads one; else the
+    // config's member list as before (a solo session's directory names
+    // the lead alone).
+    let team_rows = agent_ledger::teammate_rows(state, Sort::Spend, false);
+    let team_totals = agent_ledger::team_totals(state, &team_rows);
+    let teammates: Vec<Value> = match &team_totals {
+        Some(_) => team_rows.iter().map(teammate_json).collect(),
+        None => state
+            .teammates
+            .iter()
+            .map(|t| json!({"name": t.name, "type": t.agent_type}))
+            .collect(),
+    };
+    let mut out = json!({
         "agents": agents,
         "totals": totals_v,
         "depth": state.agent_depth(),
@@ -433,6 +441,52 @@ pub fn agents(state: &State) -> Value {
         "mcp_failed": state.mcp_failed,
         "tool_search_loads": state.tools.tool_search_loads,
         "tasks": tasks,
+    });
+    if let Some(t) = team_totals {
+        let waste_by_reason: serde_json::Map<String, Value> = crate::team::WasteReason::ALL
+            .iter()
+            .zip(t.waste_by_reason.iter())
+            .map(|(r, usd)| (r.label().to_string(), m(*usd, "USD", "team_waste", true)))
+            .collect();
+        out["team"] = json!({
+            "name": t.name,
+            "source": t.source,
+            "members": t.members,
+            "read": t.read,
+            "active": t.active,
+            "missing": t.missing,
+            "looked_in": t.looked_in,
+            "cost": t.cost.map(|c| CostValue::new(c, "team_cost")),
+            "waste": m(t.waste_usd, "USD", "team_waste", true),
+            "waste_by_reason": waste_by_reason,
+        });
+    }
+    out
+}
+
+/// One teammate's row as JSON (team PRD §4.5).
+fn teammate_json(r: &crate::agent_ledger::TeammateRow) -> Value {
+    json!({
+        "name": r.name,
+        "type": r.agent_type,
+        "model": r.model,
+        "session_id": r.session_id,
+        "path": r.path,
+        "state": r.state,
+        "elapsed": r.elapsed_ms.map(|e| m(e, "ms", "teammate_state", false)),
+        "context": r.path.is_some().then(|| m(r.context, "tokens", "teammate_context", false)),
+        "tokens": r.path.is_some().then(|| m(r.tokens, "tokens", "teammate_tokens", false)),
+        "cost": r.cost.map(|c| CostValue::new(c, "teammate_cost")),
+        "turns": r.path.is_some().then(|| json!({
+            "human": m(r.turns.0, "count", "teammate_turns", false),
+            "machine": m(r.turns.1, "count", "teammate_turns", false),
+        })),
+        "waste": r.waste.map(|w| json!({
+            "usd": m(w.usd, "USD", "teammate_waste", true),
+            "reason": w.reason,
+            "idle_ms": w.idle_ms,
+        })),
+        "status": r.status_word(),
     })
 }
 
@@ -677,6 +731,52 @@ mod tests {
         for st in [state(), state_b()] {
             let s = summary(&st);
             assert!(s.get("team_cost").is_none(), "{}", s["team_cost"]);
+        }
+    }
+
+    #[test]
+    fn query_agents_exports_the_team_only_when_there_is_one() {
+        let d = state_d();
+        let a = agents(&d);
+        let team = &a["team"];
+        assert_eq!(team["name"], "session-afd065d3");
+        assert_eq!(team["source"], "config");
+        assert_eq!(team["members"], 3);
+        assert_eq!(team["read"], 2);
+        assert_eq!(team["active"], 1);
+        assert_eq!(team["missing"], json!(["diff-pane-research-3"]));
+        assert_eq!(team["looked_in"].as_array().unwrap().len(), 1);
+        assert_eq!(team["cost"]["metric_id"], "team_cost");
+        assert_eq!(team["cost"]["source"], "mixed");
+        assert_eq!(team["waste"]["metric_id"], "team_waste");
+        assert!(team["waste_by_reason"]["idle"].is_object());
+        assert!(team["waste_by_reason"]["errored"].is_object());
+        let rows = a["teammates"].as_array().unwrap();
+        assert_eq!(rows.len(), 3);
+        let real = &rows[0];
+        assert_eq!(real["name"], "diff-pane-research");
+        assert_eq!(real["state"], "ended");
+        assert_eq!(real["status"], "ended");
+        assert_eq!(real["cost"]["source"], "ledger");
+        assert_eq!(real["cost"]["approx"], false);
+        assert_eq!(real["context"]["metric_id"], "teammate_context");
+        assert_eq!(real["tokens"]["metric_id"], "teammate_tokens");
+        assert_eq!(real["turns"]["machine"]["value"], 1);
+        assert_eq!(real["turns"]["human"]["metric_id"], "teammate_turns");
+        assert!(real["path"].as_str().unwrap().ends_with(".jsonl"));
+        assert_eq!(rows[1]["state"], "active");
+        assert_eq!(rows[1]["cost"]["source"], "priced");
+        assert!(rows[1]["status"].is_null());
+        let missing = &rows[2];
+        assert_eq!(missing["state"], "missing");
+        assert_eq!(missing["status"], "no transcript");
+        assert!(missing["cost"].is_null() && missing["tokens"].is_null());
+        assert!(missing["path"].is_null());
+        // A, B and C: no `team` key, `teammates` the config's list as before.
+        for st in [state(), state_b()] {
+            let a = agents(&st);
+            assert!(a.get("team").is_none());
+            assert_eq!(a["teammates"], json!([]));
         }
     }
 

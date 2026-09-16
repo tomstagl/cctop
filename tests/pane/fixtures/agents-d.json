@@ -1,0 +1,225 @@
+{
+  "agents": [],
+  "depth": 0,
+  "mcp": {
+    "hint": "no live process (fixture)",
+    "source": "missing"
+  },
+  "mcp_failed": [],
+  "mcp_needs_auth": [],
+  "tasks": [],
+  "team": {
+    "active": 1,
+    "cost": {
+      "approx": true,
+      "metric_id": "team_cost",
+      "source": "mixed",
+      "unit": "USD",
+      "value": 0.48398220000000003
+    },
+    "looked_in": [
+      "fixtures/session-d/teammates"
+    ],
+    "members": 3,
+    "missing": [
+      "diff-pane-research-3"
+    ],
+    "name": "session-afd065d3",
+    "read": 2,
+    "source": "config",
+    "waste": {
+      "approx": true,
+      "metric_id": "team_waste",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "waste_by_reason": {
+      "errored": {
+        "approx": true,
+        "metric_id": "team_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "idle": {
+        "approx": true,
+        "metric_id": "team_waste",
+        "unit": "USD",
+        "value": 0.0
+      }
+    }
+  },
+  "teammates": [
+    {
+      "context": {
+        "approx": false,
+        "metric_id": "teammate_context",
+        "unit": "tokens",
+        "value": 62275
+      },
+      "cost": {
+        "approx": false,
+        "metric_id": "teammate_cost",
+        "source": "ledger",
+        "unit": "USD",
+        "value": 0.31492260000000005
+      },
+      "elapsed": {
+        "approx": false,
+        "metric_id": "teammate_state",
+        "unit": "ms",
+        "value": 948371
+      },
+      "model": "claude-haiku-4-5-20251001",
+      "name": "diff-pane-research",
+      "path": "fixtures/session-d/teammates/85424f6c-500e-5993-641b-0a66d897a888.jsonl",
+      "session_id": "85424f6c-500e-5993-641b-0a66d897a888",
+      "state": "ended",
+      "status": "ended",
+      "tokens": {
+        "approx": false,
+        "metric_id": "teammate_tokens",
+        "unit": "tokens",
+        "value": 327638
+      },
+      "turns": {
+        "human": {
+          "approx": false,
+          "metric_id": "teammate_turns",
+          "unit": "count",
+          "value": 0
+        },
+        "machine": {
+          "approx": false,
+          "metric_id": "teammate_turns",
+          "unit": "count",
+          "value": 1
+        }
+      },
+      "type": "claude-code-guide",
+      "waste": null
+    },
+    {
+      "context": {
+        "approx": false,
+        "metric_id": "teammate_context",
+        "unit": "tokens",
+        "value": 62275
+      },
+      "cost": {
+        "approx": true,
+        "metric_id": "teammate_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 0.1690596
+      },
+      "elapsed": {
+        "approx": false,
+        "metric_id": "teammate_state",
+        "unit": "ms",
+        "value": 45723
+      },
+      "model": "claude-haiku-4-5-20251001",
+      "name": "diff-pane-research-2",
+      "path": "fixtures/session-d/teammates/0e5bc00a-9c6a-de1c-b514-55f31642e084.jsonl",
+      "session_id": "0e5bc00a-9c6a-de1c-b514-55f31642e084",
+      "state": "active",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "teammate_tokens",
+        "unit": "tokens",
+        "value": 327638
+      },
+      "turns": {
+        "human": {
+          "approx": false,
+          "metric_id": "teammate_turns",
+          "unit": "count",
+          "value": 0
+        },
+        "machine": {
+          "approx": false,
+          "metric_id": "teammate_turns",
+          "unit": "count",
+          "value": 1
+        }
+      },
+      "type": "claude-code-guide",
+      "waste": null
+    },
+    {
+      "context": null,
+      "cost": null,
+      "elapsed": null,
+      "model": "haiku",
+      "name": "diff-pane-research-3",
+      "path": null,
+      "session_id": null,
+      "state": "missing",
+      "status": "no transcript",
+      "tokens": null,
+      "turns": null,
+      "type": "claude-code-guide",
+      "waste": null
+    }
+  ],
+  "tool_search_loads": {
+    "builtin": 3
+  },
+  "totals": {
+    "classified": 0,
+    "cold_start_usd": {
+      "approx": true,
+      "metric_id": "agents_cold_starts",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "cold_starts": {
+      "approx": false,
+      "metric_id": "agents_cold_starts",
+      "unit": "count",
+      "value": 0
+    },
+    "cost": {
+      "approx": true,
+      "metric_id": "agents_cost",
+      "source": "unpriced",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "returned_ratio": null,
+    "waste": {
+      "approx": true,
+      "metric_id": "agents_waste",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "waste_by_reason": {
+      "failed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "idle": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "killed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "no_ret": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      }
+    }
+  },
+  "workflows": []
+}

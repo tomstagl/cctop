@@ -259,6 +259,44 @@ test('agents on fixture C: the columns of the TUI agents view, waste with its re
   has(narrow, /^✗ Explore\s+1:21\s+355k\s+0\.18\s+0\.18 killed$/);
 });
 
+test('agents on fixture D: the team group under the subagents, its members in the TUI columns', () => {
+  // `cctop query agents` on fixture D (tests/pane/fixtures/agents-d.json):
+  // no subagents; a team of three — the real teammate (ended, Claude
+  // Code's own figure), a copy cut before its cost-state (active, priced)
+  // and a spawn with no transcript (missing) — team PRD §4.3.
+  const data = fixture<Record<string, unknown>>('agents-d');
+  const model = build({ query: { agents: data } });
+  const lines = rows('agents', model, 80);
+  fits(lines, 80);
+  has(lines, /^team 3 · 1 active · ≈\$0\.48 · 2 of 3 read$/);
+  has(lines, /^○ diff-pa…\s+haiku\s+15:48\s+62k\s+328k\s+0\.31\s+0\/1\s+ended$/);
+  has(lines, /^● diff-pa…\s+haiku\s+0:45\s+62k\s+328k\s+≈0\.17\s+0\/1$/);
+  has(lines, /^— diff-pa…\s+haiku\s+no transcript$/);
+  assert.equal(lines.filter((r) => /^[○●—] /.test(r)).length, 3);
+  assert.deepEqual(frameTitles(rawRows('agents', model, 80)), ['6 Agents & MCP ─ 1/3 team']);
+  // The rows are sorted by spend, as the query returns them; the group
+  // carries the same sum and the same read count Panel 2 prints.
+  const team = data.team as Record<string, unknown>;
+  assert.equal(team.read, 2);
+  assert.equal(team.members, 3);
+  assert.deepEqual(team.missing, ['diff-pane-research-3']);
+  assert.equal((team.cost as { source: string }).source, 'mixed');
+  const teammates = data.teammates as { name: string; state: string; cost: { approx: boolean } | null }[];
+  assert.deepEqual(teammates.map((t) => t.state), ['ended', 'active', 'missing']);
+  assert.equal(teammates[0].cost?.approx, false, 'its cost-state is exact');
+  assert.equal(teammates[1].cost?.approx, true, 'priced while it runs');
+  assert.equal(teammates[2].cost, null);
+  // Narrow: the model and context columns make way.
+  const narrow = rows('agents', model, 50);
+  fits(narrow, 50);
+  has(narrow, /^○ diff-pa…\s+15:48\s+328k\s+0\.31\s+0\/1\s+ended$/);
+  has(narrow, /^— diff-pa…\s+no transcript$/);
+  // Dashboard row 6 on D is the query's row, drawn verbatim on both sides.
+  const dash = fixture<{ rows: { digit: number; values: { text: string }[] }[] }>('dashboard-d');
+  const six = dash.rows.find((r) => r.digit === 6)!;
+  assert.equal(six.values.map((s) => s.text).join(''), 'team ≈$0.48 · 2 of 3 read');
+});
+
 test('agents: MCP servers, restarts and background tasks', () => {
   const agents = fixture<Record<string, unknown>>('agents');
   const data = {
