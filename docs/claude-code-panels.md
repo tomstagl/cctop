@@ -290,7 +290,11 @@ remedy the plugin and the skill now spell out (`cctop pane status`,
    `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of
    `~/.claude/settings.json`, then restart Claude Code.
 2. The installed cctop plugin ships the hooks module (≥ 0.2.0; `claude plugin
-   update cctop`, or `claude --plugin-dir <checkout>/plugin` while developing).
+   update cctop`, or `claude --plugin-dir <checkout>/plugin` while developing)
+   and works with this Claude Code: not a pair known to fail (plugin < 0.4.1
+   on ≥ 2.1.271, issue #3 — `KNOWN_INCOMPATIBLE` in `src/pane.rs`), and a
+   Claude Code no newer than the module's `TESTED_WITH` (else a warning: the
+   contract is early access and moves between releases).
 3. Fullscreen renderer (`/tui fullscreen`, persisted as `tui` in settings).
 4. Terminal ≥ 110 columns (below that the pane is drawn inline above the prompt).
 5. The diff panel closed (`/diff` toggles it; it takes the dock otherwise).

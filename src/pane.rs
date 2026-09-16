@@ -11,7 +11,10 @@
 //!    `env` block applies at the next start).
 //! 2. The installed cctop plugin ships the hooks module and it loaded in
 //!    this session (`~/.cctop/pane/<session>.json`, `loaded: true`, written
-//!    by the module at session start).
+//!    by the module at session start), and the pair works together: not a
+//!    known-broken pair ([`KNOWN_INCOMPATIBLE`]), and Claude Code no newer
+//!    than the module's `TESTED_WITH` (function hooks are early access and
+//!    move between releases; issue #4).
 //! 3. The fullscreen renderer (`tui` in settings).
 //! 4. A terminal of 110 columns or more.
 //! 5. The diff panel closed (`diffSidebarOpen` in `~/.claude.json` says
@@ -31,6 +34,27 @@ pub const MIN_CLAUDE_VERSION: (u64, u64, u64) = (2, 1, 269);
 pub const MIN_DOCK_COLUMNS: u16 = 110;
 /// The cctop plugin version that first ships the hooks module.
 pub const MIN_PLUGIN_VERSION: (u64, u64, u64) = (0, 2, 0);
+
+/// A plugin range and a Claude Code range known not to work together.
+#[derive(Debug, Clone, Copy)]
+pub struct Incompatibility {
+    /// Plugins older than this …
+    pub plugin_before: (u64, u64, u64),
+    /// … on Claude Code at least this.
+    pub claude_from: (u64, u64, u64),
+    /// What moved, in one clause.
+    pub why: &'static str,
+}
+
+/// The pairs that fail, from experience; checked before `TESTED_WITH`, so a
+/// listed pair is ✗ with the fix whatever the module says it was tested
+/// with. Every entry is a contract change that took a plugin release to
+/// follow; add one when the next lands.
+pub const KNOWN_INCOMPATIBLE: &[Incompatibility] = &[Incompatibility {
+    plugin_before: (0, 4, 1),
+    claude_from: (2, 1, 271),
+    why: "2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3)",
+}];
 /// How stale a marker's `heartbeatAt` may be for `open: true` to count
 /// (matches `split::pane_marker_open`).
 const MARKER_STALE_AFTER_MS: i64 = 30_000;
@@ -84,6 +108,10 @@ pub struct Installed {
     pub install_path: PathBuf,
     /// `<install_path>/hooks/hooks.json` names a hooks module.
     pub has_module: bool,
+    /// `TESTED_WITH` in `<install_path>/hooks/model.ts`: the Claude Code
+    /// version the module's contract was generated from (the header badge
+    /// shows it). None when the file or the constant is missing.
+    pub tested_with: Option<String>,
 }
 
 /// Everything the checks look at, read once.
@@ -332,6 +360,15 @@ pub fn report(inputs: &Inputs) -> Report {
         }
     }
 
+    // 3b. The pair: the plugin that runs (the marker's version, else the
+    // installed one) against this Claude Code. A known-broken pair is ✗
+    // with the fix; a Claude Code newer than what the module was tested
+    // with is a warning, since function hooks move between releases and
+    // the module cannot know what changed (issue #4).
+    if let Some(c) = compatibility(inputs, loaded) {
+        checks.push(c);
+    }
+
     // 4. Renderer.
     match &inputs.tui {
         Some((mode, source)) if mode == "fullscreen" => checks.push(check(
@@ -446,6 +483,108 @@ pub fn report(inputs: &Inputs) -> Report {
     }
 }
 
+const UPDATE_PLUGIN: &str =
+    "`claude plugin marketplace update cctop && claude plugin update cctop@cctop`";
+
+fn fmt_version(v: (u64, u64, u64)) -> String {
+    format!("{}.{}.{}", v.0, v.1, v.2)
+}
+
+/// The `compatibility` line, when there is a module to pair: the running
+/// module's version (the marker's when it loaded and says one, else the
+/// installed plugin's) and what it was tested with (the marker's
+/// `testedWith`, else the install's `hooks/model.ts`) against
+/// `claude --version`. None without a module or without a Claude Code
+/// version to compare with (those have their own lines).
+fn compatibility(inputs: &Inputs, loaded: bool) -> Option<Check> {
+    let installed = inputs.installed.as_ref();
+    let has_module = loaded || installed.is_some_and(|i| i.has_module);
+    if !has_module {
+        return None;
+    }
+    let claude = inputs.claude_version.as_deref().and_then(parse_version)?;
+    let marker_version = if loaded {
+        marker_str(inputs, "version")
+    } else {
+        None
+    };
+    let plugin_text = marker_version
+        .or(installed.map(|i| i.version.as_str()))
+        .unwrap_or("?");
+    let plugin = parse_version(plugin_text)?;
+    let tested_with = if loaded {
+        marker_str(inputs, "testedWith")
+    } else {
+        None
+    }
+    .or(installed.and_then(|i| i.tested_with.as_deref()));
+
+    if let Some(pair) = KNOWN_INCOMPATIBLE
+        .iter()
+        .find(|p| plugin < p.plugin_before && claude >= p.claude_from)
+    {
+        return Some(check(
+            "compatibility",
+            Verdict::Fail,
+            format!(
+                "cctop plugin {} does not work on Claude Code {}: {}",
+                fmt_version(plugin),
+                fmt_version(claude),
+                pair.why
+            ),
+            Some(format!(
+                "{UPDATE_PLUGIN} (plugin {} or newer), then restart Claude Code",
+                fmt_version(pair.plugin_before)
+            )),
+        ));
+    }
+    Some(match tested_with.and_then(parse_version) {
+        Some(t) if claude > t => check(
+            "compatibility",
+            Verdict::Warn,
+            format!(
+                "Claude Code {} is newer than cctop plugin {} was tested with ({}); function hooks are early access and change between releases",
+                fmt_version(claude),
+                fmt_version(plugin),
+                fmt_version(t)
+            ),
+            Some(format!(
+                "{UPDATE_PLUGIN} when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions"
+            )),
+        ),
+        Some(t) if claude == t => check(
+            "compatibility",
+            Verdict::Ok,
+            format!(
+                "cctop plugin {} tested with Claude Code {}",
+                fmt_version(plugin),
+                fmt_version(t)
+            ),
+            None,
+        ),
+        Some(t) => check(
+            "compatibility",
+            Verdict::Ok,
+            format!(
+                "cctop plugin {} tested with Claude Code {} (this is {}, older; the module awaits every host call, so it runs on both)",
+                fmt_version(plugin),
+                fmt_version(t),
+                fmt_version(claude)
+            ),
+            None,
+        ),
+        None => check(
+            "compatibility",
+            Verdict::Unknown,
+            format!(
+                "cctop plugin {}: the Claude Code version it was tested with is not readable (TESTED_WITH in hooks/model.ts)",
+                fmt_version(plugin)
+            ),
+            None,
+        ),
+    })
+}
+
 /// The lines a person reads (the skill relays them verbatim).
 pub fn render(report: &Report) -> String {
     let mut out = String::new();
@@ -546,6 +685,7 @@ pub fn read_installed(home: &Path) -> Option<Installed> {
         .to_string();
     Some(Installed {
         has_module: hooks_module_declared(&install_path),
+        tested_with: read_tested_with(&install_path),
         version,
         install_path,
     })
@@ -556,6 +696,15 @@ pub fn hooks_module_declared(plugin_root: &Path) -> bool {
     read_json(&plugin_root.join("hooks/hooks.json"))
         .and_then(|v| v.get("modules")?.as_array().map(|m| !m.is_empty()))
         .unwrap_or(false)
+}
+
+/// `TESTED_WITH = '2.1.273'` out of `<plugin>/hooks/model.ts` (the module
+/// ships as source; every plugin with the module has the line, since 0.2.0).
+pub fn read_tested_with(plugin_root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(plugin_root.join("hooks/model.ts")).ok()?;
+    let rest = text.split("TESTED_WITH").nth(1)?;
+    let quoted = rest.split(['\'', '"']).nth(1)?;
+    parse_version(quoted).map(fmt_version)
 }
 
 fn read_claude_version() -> Option<String> {
@@ -728,6 +877,7 @@ mod tests {
                 version: "0.2.0".into(),
                 install_path: "/plugins/cctop".into(),
                 has_module: true,
+                tested_with: Some("2.1.270".into()),
             }),
             marker: Some(marker(false, "unknown", 0)),
             session_started_at: Some(T0 - 5_000),
@@ -784,6 +934,7 @@ mod tests {
                 "claude",
                 "function-hooks",
                 "hooks-module",
+                "compatibility",
                 "renderer",
                 "terminal",
                 "diff-panel",
@@ -804,8 +955,169 @@ mod tests {
             "{text}"
         );
         assert!(
+            text.contains("✓ cctop plugin 0.2.0 tested with Claude Code 2.1.270\n"),
+            "{text}"
+        );
+        assert!(
             text.ends_with("→ run /cctop-pane to open the dashboard beside the transcript\n"),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn the_known_broken_pair_is_a_failure_with_the_update() {
+        // Issue #3 as this machine had it on 2026-09-15: plugin 0.4.0 on
+        // Claude Code 2.1.272, every hook failing, no marker.
+        let mut inputs = ready_inputs();
+        inputs.claude_version = Some("2.1.272".into());
+        inputs.installed = Some(Installed {
+            version: "0.4.0".into(),
+            install_path: "/plugins/cctop/0.4.0".into(),
+            has_module: true,
+            tested_with: Some("2.1.270".into()),
+        });
+        inputs.marker = None;
+        let report = super::report(&inputs);
+        assert!(!report.ready);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Fail);
+        assert_eq!(
+            pair.text,
+            "cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3)"
+        );
+        assert_eq!(
+            pair.action.as_deref(),
+            Some("`claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code")
+        );
+        // The same plugin on the Claude Code before the change is only
+        // unverified for newer releases, not broken.
+        inputs.claude_version = Some("2.1.270".into());
+        let report = super::report(&inputs);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Ok, "{}", pair.text);
+        // And 0.4.1 on 2.1.272 is past the pair: a warning about the drift.
+        inputs.claude_version = Some("2.1.272".into());
+        inputs.installed.as_mut().unwrap().version = "0.4.1".into();
+        let report = super::report(&inputs);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Warn, "{}", pair.text);
+    }
+
+    #[test]
+    fn a_newer_claude_code_than_tested_with_warns_and_names_both() {
+        let mut inputs = ready_inputs();
+        inputs.claude_version = Some("2.1.280".into());
+        inputs.installed = Some(Installed {
+            version: "0.7.0".into(),
+            install_path: "/plugins/cctop/0.7.0".into(),
+            has_module: true,
+            tested_with: Some("2.1.273".into()),
+        });
+        let mut m = marker(false, "unknown", 0);
+        m["version"] = serde_json::Value::String("0.7.0".into());
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        assert!(report.ready, "a warning does not unready the pane");
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Warn);
+        assert_eq!(
+            pair.text,
+            "Claude Code 2.1.280 is newer than cctop plugin 0.7.0 was tested with (2.1.273); function hooks are early access and change between releases"
+        );
+        assert!(
+            pair.action.as_deref().unwrap().starts_with(
+                "`claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out"
+            ),
+            "{:?}",
+            pair.action
+        );
+        // An older Claude Code than the module was tested with is fine and
+        // says so.
+        inputs.claude_version = Some("2.1.272".into());
+        let report = super::report(&inputs);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Ok);
+        assert!(
+            pair.text.contains("(this is 2.1.272, older;"),
+            "{}",
+            pair.text
+        );
+    }
+
+    #[test]
+    fn a_loaded_module_is_paired_by_what_its_marker_says() {
+        // The install moved to 0.7.0 (tested with 2.1.273) while this
+        // session still runs the 0.4.1 module it loaded at start: the
+        // marker's versions are the running pair, the install's are not.
+        let mut inputs = ready_inputs();
+        inputs.claude_version = Some("2.1.273".into());
+        inputs.installed = Some(Installed {
+            version: "0.7.0".into(),
+            install_path: "/plugins/cctop/0.7.0".into(),
+            has_module: true,
+            tested_with: Some("2.1.273".into()),
+        });
+        let mut m = marker(false, "unknown", 0);
+        m["version"] = serde_json::Value::String("0.4.1".into());
+        m["testedWith"] = serde_json::Value::String("2.1.272".into());
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Warn);
+        assert!(
+            pair.text.starts_with(
+                "Claude Code 2.1.273 is newer than cctop plugin 0.4.1 was tested with (2.1.272)"
+            ),
+            "{}",
+            pair.text
+        );
+        // A marker without `testedWith` (plugins before 0.8.0) falls back to
+        // the install's model.ts; a null `version` (a -p run) to the install's.
+        let mut m = marker(false, "unknown", 0);
+        m["version"] = serde_json::Value::Null;
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        let pair = report
+            .checks
+            .iter()
+            .find(|c| c.id == "compatibility")
+            .unwrap();
+        assert_eq!(pair.verdict, Verdict::Ok);
+        assert_eq!(
+            pair.text,
+            "cctop plugin 0.7.0 tested with Claude Code 2.1.273"
+        );
+        // No module at all (skills-only plugin, or none): nothing to pair.
+        inputs.marker = None;
+        inputs.installed = None;
+        let report = super::report(&inputs);
+        assert!(
+            report.checks.iter().all(|c| c.id != "compatibility"),
+            "{report:?}"
         );
     }
 
@@ -822,6 +1134,7 @@ mod tests {
                 version: "0.1.0".into(),
                 install_path: "/plugins/cctop/0.1.0".into(),
                 has_module: false,
+                tested_with: None,
             }),
             marker: None,
             session_started_at: Some(T0),
@@ -1057,6 +1370,11 @@ mod tests {
         )
         .unwrap();
         std::fs::write(
+            plugin.join("hooks/model.ts"),
+            "// the module\nexport const TESTED_WITH = '2.1.273';\nexport const X = 1;\n",
+        )
+        .unwrap();
+        std::fs::write(
             home.join(".claude/plugins/installed_plugins.json"),
             format!(
                 r#"{{"version":2,"plugins":{{"cctop@cctop":[{{"scope":"project","installPath":"/elsewhere","version":"0.1.0"}},{{"scope":"user","installPath":"{}","version":"0.2.0"}}]}}}}"#,
@@ -1069,7 +1387,8 @@ mod tests {
             Some(Installed {
                 version: "0.2.0".into(),
                 install_path: plugin.clone(),
-                has_module: true
+                has_module: true,
+                tested_with: Some("2.1.273".into()),
             })
         );
         std::fs::write(plugin.join("hooks/hooks.json"), r#"{ "hooks": {} }"#).unwrap();
@@ -1077,6 +1396,10 @@ mod tests {
             !hooks_module_declared(&plugin),
             "no modules key means skills-only"
         );
+        std::fs::write(plugin.join("hooks/model.ts"), "export const OTHER = 1;\n").unwrap();
+        assert_eq!(read_tested_with(&plugin), None, "no constant, no version");
+        std::fs::remove_file(plugin.join("hooks/model.ts")).unwrap();
+        assert_eq!(read_tested_with(&plugin), None, "no file, no version");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
