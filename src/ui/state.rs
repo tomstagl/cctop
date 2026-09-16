@@ -366,6 +366,10 @@ pub struct State {
     pub workflow_journals: Vec<crate::agents::WorkflowJournal>,
     /// Members of this session's team, when it leads one.
     pub teammates: Vec<crate::agents::Teammate>,
+    /// The team's own transcripts, read as sessions (team PRD): each
+    /// member's aggregate, ledger and liveness. `None` for a session that
+    /// leads no team.
+    pub team: Option<crate::team::Team>,
     /// MCP servers Claude Code reported as needing auth, pending or failed
     /// (`deferred_tools_delta`).
     pub mcp_needs_auth: Vec<String>,

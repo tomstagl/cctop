@@ -393,6 +393,55 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>Members of <code>~/.claude/teams/&lt;team&gt;/config.json</code> when this session leads the team</dd>
 <dt>Measured</dt><dd class="meta">list · from D12 · exact · <a href="../metrics.html#teammates">how</a></dd>
 </dl></article>
+<article class="entry" id="teammate_cost">
+<div class="mg">
+<h3>Teammate cost</h3>
+</div><dl>
+<dt>What it means</dt><dd>The teammate's own <code>cost-state.totalCostUSD</code> plus its priced calls after that line; all of them priced while it has none; <code>—</code> with <code>no transcript</code> when its file is not found</dd>
+<dt>Measured</dt><dd class="meta">USD · from D2c · Claude Code's own cost record · the price table · ≈ while it runs or after its ledger's moment · <a href="../metrics.html#teammate_cost">how</a></dd>
+</dl></article>
+<article class="entry" id="teammate_context">
+<div class="mg">
+<h3>Teammate context</h3>
+</div><dl>
+<dt>What it means</dt><dd>The teammate's current context: the input of its last API call, as Panel 1 computes the lead's</dd>
+<dt>Measured</dt><dd class="meta">tokens · from D2c · exact · <a href="../metrics.html#teammate_context">how</a></dd>
+</dl></article>
+<article class="entry" id="teammate_tokens">
+<div class="mg">
+<h3>Teammate tokens</h3>
+</div><dl>
+<dt>What it means</dt><dd>Deduplicated usage of the teammate's transcript (one figure per <code>message.id</code>), as the lead's Panel 2</dd>
+<dt>Measured</dt><dd class="meta">tokens · from D2c · exact · <a href="../metrics.html#teammate_tokens">how</a></dd>
+</dl></article>
+<article class="entry" id="teammate_turns">
+<div class="mg">
+<h3>Teammate turns</h3>
+</div><dl>
+<dt>What it means</dt><dd>Turns of the teammate's transcript, human / machine: a <code>&lt;teammate-message&gt;</code> starts a machine turn</dd>
+<dt>Measured</dt><dd class="meta">count · from D2c · exact · <a href="../metrics.html#teammate_turns">how</a></dd>
+</dl></article>
+<article class="entry" id="teammate_state">
+<div class="mg">
+<h3>Teammate state</h3>
+</div><dl>
+<dt>What it means</dt><dd>active (<code>isActive: true</code> in the team config) · recent (no config; a line in the last 5 min) · ended (its file ends with a <code>cost-state</code>, or <code>isActive: false</code>) · gone (no ledger, no config, no recent line) · missing (known from the config or a spawn, no transcript found)</dd>
+<dt>Measured</dt><dd class="meta">enum · from D12 · D2c · exact · <a href="../metrics.html#teammate_state">how</a></dd>
+</dl></article>
+<article class="entry" id="teammate_waste">
+<div class="mg">
+<h3>Teammate waste</h3>
+</div><dl>
+<dt>What it means</dt><dd>The cost of the teammate's current turn under one reason: <code>idle</code> (alive, no API call for 5 min, no tool call unanswered in its transcript) or <code>errored</code> (its last response was an API-error line and nothing followed for 60 s)</dd>
+<dt>Measured</dt><dd class="meta">USD · from D2c · the price table · always an estimate · <a href="../metrics.html#teammate_waste">how</a></dd>
+</dl></article>
+<article class="entry" id="team_waste">
+<div class="mg">
+<h3>Team waste</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ <code>teammate_waste</code> over the team</dd>
+<dt>Measured</dt><dd class="meta">USD · from D2c · the price table · always an estimate · <a href="../metrics.html#team_waste">how</a></dd>
+</dl></article>
 <article class="entry" id="mcp_auth">
 <div class="mg">
 <h3>MCP needs auth</h3>

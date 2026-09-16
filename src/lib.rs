@@ -42,6 +42,7 @@ pub mod split;
 pub mod status;
 pub mod tail;
 pub mod tasks;
+pub mod team;
 pub mod theme;
 pub mod tools;
 pub mod transcript;

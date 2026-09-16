@@ -133,6 +133,7 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
     if !state.session.alive {
         state.session.ended_at_ms = state.last_line_at_ms;
     }
+    state.team = load_team(transcript, &state);
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let cwd = state.session.cwd.clone();
     state.prefix.scan(&cwd, home.as_deref());
@@ -176,6 +177,48 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
         }
     }
     state
+}
+
+/// The lead as the team collector sees it: its id from the registry, or
+/// from its own lines for a fixture or an archived transcript.
+pub fn team_lead(transcript: &Path, state: &State) -> crate::team::Lead {
+    let session_id = if state.session.session_id.is_empty() {
+        state.agg.session_id.clone().unwrap_or_default()
+    } else {
+        state.session.session_id.clone()
+    };
+    crate::team::Lead {
+        session_id,
+        transcript: transcript.to_path_buf(),
+        started_at_ms: state.session.started_at_ms.or_else(|| {
+            state
+                .agg
+                .turns
+                .first()
+                .and_then(|t| t.started_at.as_deref())
+                .and_then(crate::metrics::cost::parse_ts_ms)
+        }),
+        alive: state.session.alive,
+    }
+}
+
+/// The team the transcript's session leads, read once: `<stem>/teammates/`
+/// and `<stem>.team.json` beside a fixture, the team directory and the
+/// project directories for a live or archived session.
+pub fn load_team(transcript: &Path, state: &State) -> Option<crate::team::Team> {
+    let lead = team_lead(transcript, state);
+    let name = crate::team::team_name(&lead.session_id)?;
+    let teams = crate::agents::teams_dir();
+    let layout = crate::team::Layout::for_transcript(transcript, Some(&name), teams.as_deref());
+    let projects = crate::baseline::default_projects_dir();
+    crate::team::load(
+        &lead,
+        &layout,
+        &state.tools.agent_spawns,
+        projects.as_deref(),
+        state.cost.pricing(),
+        state.clock_ms(),
+    )
 }
 
 #[cfg(test)]
@@ -248,6 +291,35 @@ mod tests {
         // A path is never a key.
         assert_eq!(archived_transcript(&root, "../-Users-me-code-one/x"), None);
         assert_eq!(archived_transcript(&root.join("missing"), A), None);
+    }
+
+    #[test]
+    fn a_fixture_finds_its_team_beside_the_file_and_the_others_none() {
+        // `--session fixtures/session-d.jsonl`: `session-d/teammates/` and
+        // `session-d.team.json` are found the way A's `subagents/` is.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+        let d = root.join("session-d.jsonl");
+        let state = state_from(&d, SessionInfo::from_fixture(&d));
+        let team = state.team.as_ref().expect("fixture D leads a team");
+        assert_eq!(team.name, "session-afd065d3");
+        assert_eq!(team.source, crate::team::Source::Config);
+        assert_eq!(team.members.len(), 3);
+        assert_eq!(team.read(), 2);
+        assert_eq!(team.looked_in.len(), 1);
+        assert!(team.looked_in[0].ends_with("session-d/teammates"));
+        assert!(
+            state.teammates.is_empty(),
+            "Panel 6's config list needs a registry id"
+        );
+        let lead = team_lead(&d, &state);
+        assert_eq!(lead.session_id, "afd065d3-054a-5984-b05e-c46a3fa0a9ca");
+        assert!(lead.started_at_ms.is_some());
+        assert!(!lead.alive);
+        for name in ["session-a", "session-b", "session-c"] {
+            let p = root.join(format!("{name}.jsonl"));
+            let s = state_from(&p, SessionInfo::from_fixture(&p));
+            assert!(s.team.is_none(), "{name} leads no team");
+        }
     }
 
     #[test]
