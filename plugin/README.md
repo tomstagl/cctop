@@ -15,7 +15,7 @@ Two skills, plus a docked pane on builds with function hooks:
 The binary first:
 
 ```
-brew install tomstagl/tap/cctop     # currently v0.6.0; or: cargo install cctop
+brew install tomstagl/tap/cctop     # currently v0.7.0; or: cargo install cctop
 ```
 
 Then the plugin, from a local checkout or the marketplace entry:
@@ -39,6 +39,7 @@ between the last contract change and the next one:
 |---|---|---|
 | 0.2.0 – 0.4.0 | 2.1.269 / 2.1.270 | 2.1.269 – 2.1.270 only (`$.clock.now()` became a Promise in 2.1.271, issue #3) |
 | 0.4.1 – 0.7.0 | 2.1.272 / 2.1.273 | 2.1.269 and later, as far as CI has seen (the module awaits every host call) |
+| 0.8.0 | 2.1.274 | 2.1.269 – 2.1.274 (2.1.274 added `$.agent.register`, `position: "absolute"` on `Box` and a `Markdown` element — nothing the pane calls moved); says so at session start (`cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
 
 Function hooks are early access and change between Claude Code releases.
 CI checks the contract against the latest release daily
@@ -126,9 +127,11 @@ and later every hook failed — `marker write failed: RangeError: Invalid
 Date` at the start of every session, every light on `waiting for cctop`
 once the pane was open, and `cctop pane status` reporting the hooks module
 as not loaded (issue #3). Plugin 0.4.1 awaits every reading and runs on
-2.1.270 and 2.1.272 alike; the header's `hooks 2.1.273` light names the
-Claude Code version the module's contract was generated from (2.1.273 added
-a `vscode` render surface and changed nothing the pane calls). Update with
+2.1.270 and 2.1.272 alike; the header's `hooks …` light names the Claude
+Code version the module's contract was generated from (`2.1.274` for plugin
+0.8.0; 2.1.273 added a `vscode` render surface, 2.1.274 `$.agent.register`
+and absolute `Box` placement — neither moved anything the pane calls).
+Update with
 `claude plugin marketplace update cctop && claude plugin update
 cctop@cctop`, then restart Claude Code.
 
@@ -141,7 +144,7 @@ without — the clock resolves a number, `HOME` is set, the session has an id
 `~/.claude/debug/latest`) before anything else:
 
 ```
-cctop: plugin 0.8.0 (hooks contract 2.1.273) loaded; self-check ok
+cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok
 ```
 
 When a surface moved, the line reads `self-check failed: <what>` with the
@@ -190,8 +193,8 @@ what it was tested with is the module's `TESTED_WITH` (the header's `hooks
 …` light), read from the marker or from the install's `hooks/model.ts`:
 
 ```
-  ✓ cctop plugin 0.7.0 tested with Claude Code 2.1.273
-  ! Claude Code 2.1.280 is newer than cctop plugin 0.7.0 was tested with (2.1.273); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
+  ✓ cctop plugin 0.8.0 tested with Claude Code 2.1.274
+  ! Claude Code 2.1.280 is newer than cctop plugin 0.8.0 was tested with (2.1.274); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
   ✗ cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3) → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code
 ```
 
