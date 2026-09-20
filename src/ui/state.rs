@@ -462,6 +462,11 @@ pub struct State {
     pub agents_ui: crate::ui::agents_view::AgentsUi,
     /// Times the agents view was opened this session (A48's `acted`).
     pub agents_view_opens: u64,
+    /// Times the prefix or the sources inspector was opened (`i`, `m`): what
+    /// A17 counts as acted on.
+    pub inspector_opens: u64,
+    /// The sources inspector shows its per-file list.
+    pub sources_files: bool,
     pub prefix: crate::prefix::Prefix,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
@@ -554,6 +559,8 @@ pub enum ContextView {
     #[default]
     Ledger,
     Prefix,
+    /// What is in the window and what put it there (`m`).
+    Sources,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -601,6 +608,8 @@ pub enum FileSort {
     Touches,
     Lines,
     Name,
+    /// What the file's reads occupy in the window now.
+    Tokens,
 }
 
 impl FileSort {
@@ -609,7 +618,8 @@ impl FileSort {
             FileSort::LastTouch => FileSort::Touches,
             FileSort::Touches => FileSort::Lines,
             FileSort::Lines => FileSort::Name,
-            FileSort::Name => FileSort::LastTouch,
+            FileSort::Name => FileSort::Tokens,
+            FileSort::Tokens => FileSort::LastTouch,
         }
     }
 }

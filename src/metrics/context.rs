@@ -768,7 +768,11 @@ pub fn residency(
     cwd: Option<&std::path::Path>,
     capture: Option<(&crate::transcript::ContextCapture, usize)>,
 ) -> Residency {
-    let calls = &agg.calls;
+    // API-error lines (`<synthetic>`, zero usage) are responses with no
+    // context; a drop to 0 is not a boundary. `Reference::Boundary.call`
+    // indexes this filtered list.
+    let calls: Vec<&super::usage::CallRecord> =
+        agg.calls.iter().filter(|c| c.context() > 0).collect();
     let mut r = Residency {
         size,
         prefix: prefix_first,
