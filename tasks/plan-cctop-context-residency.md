@@ -17,7 +17,7 @@ state exists ("one state, many surfaces").
 | 2 — Calibration | US-002 | `metrics/context.rs`, `ui/state.rs` | `1e4fd8c` |
 | 3 — The inspector | US-003 | `ui/sources_view.rs` (new), `ui/panels/context.rs`, `ui/panels/files.rs`, `ui/state.rs` | `db2c5f6` |
 | 4 — Query, MCP, registry | US-004 | `query.rs`, `mcp.rs`, `metrics/registry.rs`, `docs/metrics.md`, `README.md`, `docs/query.md`, `docs/mcp.md`, `site/` | `633ebbd` |
-| 5 — A17 retuned | US-005 | `advisor/rules/token.rs` (A17), `advisor/rules/mod.rs`, the coach/dashboard pane fixtures, `site/guide/advisor.html` | `3e1fe32` — **§10.6 open: A17 now fires on 4 of 4 fixtures** |
+| 5 — A17 retuned | US-005 | `advisor/rules/token.rs` (A17), `advisor/rules/mod.rs`, the coach/dashboard pane fixtures, `site/guide/advisor.html` | `3e1fe32`, then `730c1a3` — the token arm reads the 50 k only against a calibrated prefix; replay back to the baseline (PRD §10.6) |
 
 Nothing in `plugin/` is touched (PRD §7). Nothing is added to
 `State::apply` — `residency.rs` is derived on read, like `metrics/`.
@@ -195,6 +195,12 @@ rule's fire count may move. 37 rules; the registry, `docs/metrics.md` and
 the guide regenerate.
 
 Commit: `Coach: A17 fires at a 50 k prefix and retires when an inspector is opened`.
+
+Follow-up (`730c1a3`, PRD §10.6): at 50 k the token arm fired on 4 of 4
+fixtures and displaced A01 and A10, because the raw first-call prefix runs
+47–62 k and overstates by a third. The arm now reads `PREFIX_TOKENS` only
+against a `Mode::Calibrated` prefix (a `/context` ran); the $/turn arm is
+unchanged. `cctop coach-replay` on A–D is back to the pre-Phase-5 counts.
 
 ## 3. Risks and decisions taken early
 
