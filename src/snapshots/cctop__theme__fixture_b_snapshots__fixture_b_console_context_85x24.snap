@@ -11,10 +11,10 @@ expression: "render_to_string(&app, 85, 24)"
   142k of 1.00M est   autocompact 567k   425k left   +146k/turn
 
   prefix    ≈49k  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇
-  harness  ≈7.8k  ▆▆▁▁▁▁▁▁▁▁▁▁▁▁
-  thinking  ≈355  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  inputs    ≈538  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  results   ≈180  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  harness     ≈0  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  thinking    ≈0  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  inputs    ≈221  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  results   ≈131  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
   compactions 1   re-reads 0   stale 0   autocompact in ~3 turns
 

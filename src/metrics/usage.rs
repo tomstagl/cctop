@@ -295,6 +295,17 @@ pub struct Boundary {
     pub kind: BoundaryKind,
 }
 
+/// One injected attachment: reminders, listings, injected files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessEvent {
+    /// Epoch ms of the attachment line.
+    pub at_ms: Option<i64>,
+    pub turn: usize,
+    pub tokens: u64,
+    /// Estimated (a per-subtype ratio) rather than measured (`rendered`).
+    pub approx: bool,
+}
+
 /// One API response, for the per-request arithmetic (`/usage` weight,
 /// the behaviour flags, the cost gradient).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,6 +375,11 @@ pub struct Aggregate {
     /// The session's title (`custom-title` wins over `ai-title`).
     pub title: Option<String>,
     custom_title: bool,
+    /// Every attachment the harness injected, in order, with when it landed:
+    /// the residency model places each on the API call that first carried
+    /// it, the way it places a tool result (a turn-level sum cannot say which
+    /// side of a boundary an attachment fell on).
+    pub harness_events: Vec<HarnessEvent>,
     /// Open pull request number, from `pr-link`.
     pub pr_number: Option<u64>,
     /// `agent-setting` seen: the session runs a named agent persona (team).
@@ -578,6 +594,15 @@ impl Aggregate {
                     let (tokens, approx) = att.tokens_est();
                     t.harness_tokens += tokens;
                     t.harness_approx |= approx && tokens > 0;
+                    if tokens > 0 {
+                        let turn = t.number;
+                        self.harness_events.push(HarnessEvent {
+                            at_ms: att.timestamp.as_deref().and_then(super::cost::parse_ts_ms),
+                            turn,
+                            tokens,
+                            approx,
+                        });
+                    }
                 }
             }
             Line::System(s) => {

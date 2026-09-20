@@ -330,7 +330,7 @@ impl Files {
 
 /// Paths a read-only Bash command reads: the file arguments of `cat`,
 /// `sed -n`, `head`, `tail` segments.
-fn bash_read_paths(cmd: &str) -> Vec<String> {
+pub(crate) fn bash_read_paths(cmd: &str) -> Vec<String> {
     let mut out = Vec::new();
     for seg in cmd.split(['|', ';', '\n']) {
         let seg = seg.trim().trim_start_matches("&&").trim();

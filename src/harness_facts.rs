@@ -62,6 +62,11 @@ pub mod first_seen {
     pub const PER_TURN_EFFORT: Version = Version(2, 1, 269);
     /// `continued-in` (what `/clear` leaves in the old transcript), `sessionKind`.
     pub const CONTINUED_IN: Version = Version(2, 1, 270);
+    /// `usage.output_tokens_details.thinking_tokens` on every assistant
+    /// line. The oldest transcript on this machine that carries it is
+    /// 2.1.247 (fixture A, 30 922 thinking tokens over the session); the
+    /// version that introduced it is not known, so this is an upper bound.
+    pub const THINKING_TOKENS: Version = Version(2, 1, 247);
     /// `agentName` / `teamName` on every `user`, `assistant`, `system` and
     /// `attachment` line of a teammate's transcript. The oldest teammate
     /// transcript on this machine (2.1.232) has them from line 4; the

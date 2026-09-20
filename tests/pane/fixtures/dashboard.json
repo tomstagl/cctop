@@ -124,7 +124,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈9.1k",
+            "text": "≈3.0k",
             "tone": "bold"
           },
           {
@@ -132,11 +132,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆",
+            "text": "",
             "tone": "s0"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -214,7 +214,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈168k",
+            "text": "≈166k",
             "tone": "bold"
           },
           {
@@ -288,7 +288,7 @@
         {
           "label": "harness",
           "step": 0,
-          "tokens": 9068
+          "tokens": 2954
         },
         {
           "label": "thinking",
@@ -298,12 +298,12 @@
         {
           "label": "inputs",
           "step": 2,
-          "tokens": 1378
+          "tokens": 1374
         },
         {
           "label": "results",
           "step": 2,
-          "tokens": 168039
+          "tokens": 166353
         }
       ],
       "title": "context"
