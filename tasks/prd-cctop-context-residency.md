@@ -124,6 +124,90 @@ absorb them and blame them on conversation.
 **FR-10 follows from this** (§6). The reconciliation identity still holds — the
 rows always sum to `size` — but a row would be lying about *what* it holds.
 
+### 3.2 F — The `LatePrefix` threshold, swept (2026-09-20)
+
+Per-call unexplained residual, `Δcontext − (previous output + tool results
+between the two calls)`, over 5 fixtures + 1 live transcript (197 calls).
+
+**Fixture residuals are biased high**: tool results are capped (§3.2 C), so the
+subtracted term is understated and the residual absorbs the missing mass
+(`session-a` p50 1,917 against the live transcript's 183). The threshold is
+therefore taken from the live, uncapped transcript; fixtures only show how
+badly the detector misfires on capped data.
+
+Live transcript, sorted tail: `… 3,461 · 3,680 · **7,780** · **19,366**`.
+The two known injections sit alone above a ×2.1 gap.
+
+| Threshold | Fires on live | Verdict |
+|---|---|---|
+| 2,000 | 7 | 5 false |
+| 3,000 | 4 | 2 false |
+| **4,000 – 7,500** | **2** | **exact — the plateau** |
+| 10,000 | 1 | misses the skills re-injection |
+
+**`LATE_PREFIX_MIN = 5_000`**, centred in the plateau with 3,680 below and
+7,780 above. On capped fixtures it fires on ~2 % of calls, all artefacts —
+so a fixture test may assert that a *known* injection is caught, never that
+an ordinary call is not.
+
+### 3.2 G — Full-session simulation, validated against ground truth
+
+A Python port of §4 was run over the whole corpus. `session-d` holds the only
+native `/context` capture, so it is the only ground truth available:
+
+| At the turn `/context` ran | Claude Code | The model | Error |
+|---|---|---|---|
+| **Total context** | 88,700 | **88,745** | **+0.05 %** |
+| Prefix (system + tools + skills) | 46,200 | 61,667 | **+33 %** |
+| Messages | 42,900 | 27,078 | **−37 %** |
+
+The total is essentially exact. **The split is not**, and the two errors are
+equal and opposite: `ContextView::prefix` — the first API call's total —
+overstates the true fixed prefix by ~15.5 k, because that first call already
+carries the opening user message and its attachments. Those 15.5 k are then
+missing from `messages()`.
+
+Consequences:
+
+1. **Calibration is not a nice-to-have for the prefix row.** In `Estimated`
+   mode the prefix row is systematically ~⅓ too large and every message row's
+   *share* is correspondingly wrong. The header must say so, and the view
+   should invite the person to run `/context` once — it is the cheapest
+   accuracy the feature can buy.
+2. **`session-b`'s capture is borrowed, not native.** Its capture text is
+   byte-identical to `session-d`'s (sha1 `57bb2ec8a799f111`, 1 842 chars) while
+   its real context at that line is 193,094 against the table's 88,700. The
+   fixture composer copied it. Phase 2 of the plan must test calibration on
+   **D only**; B would validate against a table that was never its own.
+
+### 3.2 H — Three defects the simulation found
+
+| # | Defect | Evidence | Fix |
+|---|---|---|---|
+| 1 | **Trailing tool results are counted but are not resident.** Results that arrive after the last API call have not entered any measured context, yet they are attributed — so the rows can exceed `messages()` and the identity breaks | `session-c` over-attributes by 503, `session-d` by 1,549; `Text` clamps to 0 and the total exceeds `size` | **FR-12**: count only results that landed *before* the last API call |
+| 2 | **The prefix overstates** (§3.2 G) | +33 % on the only ground truth | Calibrate; mark the row in `Estimated` mode |
+| 3 | **`Summary` cannot be a positive bucket.** Set from the boundary reading it already equals all of `messages()`, so anything attributed afterwards overflows — FR-12 alone left `session-d` over by 959 | simulation, after FR-12 | **FR-15**: one remainder row, computed last, named by context: `summary + text` when a boundary is in range, `text` otherwise |
+| 4 | **After a compaction the view is nearly empty, and that is correct.** B, C and D have 1–3 calls since their boundary; their remainder is 92–100 % of messages | simulation, all three | Not a defect — the header says how many calls have happened since the boundary |
+
+**After FR-12 and FR-15 the identity holds on all six transcripts with no
+clamping** — re-run and verified, which is the only reason they are stated as
+requirements rather than guesses.
+
+| Transcript | Remainder | % of messages | Identity |
+|---|---|---|---|
+| session-a (capped) | text | 66 % | holds |
+| session-b (post-compaction) | summary + text | 92 % | holds |
+| session-c (post-compaction) | summary + text | 100 % | holds |
+| session-d (post-compaction) | summary + text | 99 % | holds |
+| session-e (capped) | text | 39 % | holds |
+| **live (uncapped)** | text | **34 %** | holds |
+
+Coverage: on the live transcript the model attributes **66 %** of messages
+against the **33 %** a naive `chars / 4` over tool results reaches (§3.2 C
+control) — it doubles what the obvious implementation would explain. The 34 %
+remainder is a minority, which is the bar the view has to clear to be worth
+drawing. `session-a`'s 66 % is a cap artefact, not a result.
+
 ## 4. Design
 
 ### 4.1 The source kinds
@@ -237,6 +321,10 @@ The `sources` array, the MCP tool, the registry entries with `estimate` set and 
 9. The coach rule fires on the prefix share, not on files, at most once per session.
 10. Context that arrived after the first API call and is explained by neither output nor a tool result is reported as `LatePrefix`, never folded into `Text` (§3.2 E).
 11. `Thinking` is marked exact; every other row is marked `≈`. When `thinking_tokens` is absent the row is omitted, not zeroed.
+12. Only tool results that landed **before the last API call** are attributed; trailing results are not yet resident and must not be counted (§3.2 H.1).
+13. `LATE_PREFIX_MIN = 5_000` (§3.2 F).
+14. In `Estimated` mode the prefix row carries a mark saying it overstates (§3.2 G); the header invites one `/context` run to make the split exact.
+15. There is exactly **one** remainder row, computed last. A compaction summary is never a positive bucket (§3.2 H.3); the row is named `summary + text` when a boundary is in range and `text` otherwise.
 
 ## 7. Non-goals
 
