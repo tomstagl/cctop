@@ -39,7 +39,7 @@ between the last contract change and the next one:
 |---|---|---|
 | 0.2.0 – 0.4.0 | 2.1.269 / 2.1.270 | 2.1.269 – 2.1.270 only (`$.clock.now()` became a Promise in 2.1.271, issue #3) |
 | 0.4.1 – 0.7.0 | 2.1.272 / 2.1.273 | 2.1.269 and later, as far as CI has seen (the module awaits every host call) |
-| 0.8.0 | 2.1.274 | 2.1.269 – 2.1.274 (2.1.274 added `$.agent.register`, `position: "absolute"` on `Box` and a `Markdown` element — nothing the pane calls moved); says so at session start (`cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
+| 0.8.0 | 2.1.274 | 2.1.269 – 2.1.278 (2.1.274 added `$.agent.register`, `position: "absolute"` on `Box` and a `Markdown` element; 2.1.275 – 2.1.278 an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next` and four events, and re-typed `$.fs.read` (a bytes form) and `$.prompt.fill`'s result — additive, nothing the pane calls moved; `main` typechecks against 2.1.278 and its module says so); says so at session start (`cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
 
 Function hooks are early access and change between Claude Code releases.
 CI checks the contract against the latest release daily
@@ -129,8 +129,10 @@ once the pane was open, and `cctop pane status` reporting the hooks module
 as not loaded (issue #3). Plugin 0.4.1 awaits every reading and runs on
 2.1.270 and 2.1.272 alike; the header's `hooks …` light names the Claude
 Code version the module's contract was generated from (`2.1.274` for plugin
-0.8.0; 2.1.273 added a `vscode` render surface, 2.1.274 `$.agent.register`
-and absolute `Box` placement — neither moved anything the pane calls).
+0.8.0, `2.1.278` on `main`; 2.1.273 added a `vscode` render surface, 2.1.274
+`$.agent.register` and absolute `Box` placement, 2.1.278 an `Image` element,
+`$.prompt.read()` and a bytes form of `$.fs.read` — none moved anything the
+pane calls).
 Update with
 `claude plugin marketplace update cctop && claude plugin update
 cctop@cctop`, then restart Claude Code.

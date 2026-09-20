@@ -19,12 +19,15 @@ import type {
   Elements,
   ElementTable,
   EngineInterface,
+  FsReadCall,
+  FsReadOptions,
   HookFailure,
   On,
   PaneCloseArgs,
   PaneOpenArgs,
   ProcessRunResult,
-  PromptFillResult,
+  PromptFillArgs,
+  PromptFilled,
   RenderElement,
   RenderInput,
   RenderNode,
@@ -317,11 +320,14 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     },
     fs: {
       files,
-      read: async (path: string) => {
+      // Overloaded since 2.1.278: text by default, `{ base64 }` under
+      // `{ as: "bytes" }`. The fake keeps text and encodes on demand; the cast
+      // is how one arrow function stands in for the overload set.
+      read: (async (path: string, options?: FsReadOptions) => {
         const text = files.get(path);
         if (text === undefined) throw new Error(`ENOENT: ${path}`);
-        return text;
-      },
+        return options?.as === 'bytes' ? { base64: btoa(text) } : text;
+      }) as FsReadCall,
       write: async (path: string, text: string) => {
         files.set(path, text);
       },
@@ -373,10 +379,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       fills,
       filled: true,
       // The return type is spelled so the body may read `engine` back (a
-      // literal under `satisfies` cannot otherwise name itself).
-      fill: async ({ text }: { text: string }): Promise<PromptFillResult> => {
+      // literal under `satisfies` cannot otherwise name itself). Since 2.1.278
+      // the result carries the box after the fill and the cursor (PromptFilled).
+      fill: async ({ text }: PromptFillArgs): Promise<PromptFilled> => {
         fills.push(text);
-        return { isFilled: engine.prompt.filled };
+        const isFilled = engine.prompt.filled;
+        return { isFilled, text: isFilled ? text : '', cursor: isFilled ? text.length : 0 };
       },
       submit: async () => {
         throw new Error('fakeEngine: prompt.submit is never called by cctop');

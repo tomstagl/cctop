@@ -15,7 +15,7 @@ export type Visibility = 'unknown' | 'visible' | 'hidden';
 /** The Claude Code version this hooks module's `$` contract was checked
  * against (`plugin/.claude/types/claude-code.d.ts`'s own first line);
  * `scripts/check-plugin-types.sh` catches drift, the header badge shows it. */
-export const TESTED_WITH = '2.1.274';
+export const TESTED_WITH = '2.1.278';
 
 /** The narrowest terminal (whole screen, columns) at which the fullscreen
  * renderer docks a pane beside the transcript; below it the pane is drawn
