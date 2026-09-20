@@ -13,7 +13,7 @@
 > 6. **Surfaces: the inspector, `cctop query`, `mcp.rs`, the coach rule. Not the pane in v1.** All nine digit slots in `ui/panels/mod.rs` are taken, so this is a full-height inspector like `prefix_view`, not a tenth panel.
 >
 > Added after the corpus sweep (§3.2 I, 2026-09-20):
-> 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". Open until the v4 dump is read: what the three over-attributing transcripts were, and how a model switch re-bases the rows (FR-17, §10.4–5).
+> 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". The three over-attributing transcripts are explained (§3.2 I, FR-18/19/20). **Open for the user:** how a `ModelSwitch` re-bases the rows (FR-17, §10.5 has the proposal).
 
 ---
 
@@ -272,9 +272,37 @@ turns (above). The two structural findings that came out instead:
    also switch model mid-session, all with non-negative Δ, so a switch does
    not always shrink — it depends on the pair.
 
-Whether the three transcripts are model switches, sub-heuristic shrinks, or
-something else is **open** until the v4 sweep (per-call numbers-only dump)
-is read; §10.4.
+**Resolved by the v4 per-call dump — three transcripts, three different
+causes, each fixed and each reproduced on a synthetic case:**
+
+| Transcript | What the numbers showed | Cause | Fix |
+|---|---|---|---|
+| #104 (33 calls, over by 13,168) | call 25: `Δ −22,748`, 83,199 → 60,451 — a **27.3 % drop**, under the 30 % heuristic; no boundary declared, buckets kept everything, `msgs` fell to 3,646 | content left the window unmarked | **FR-18**: any negative Δ is a boundary. cctop's own `COMPACTION_DROP_RATIO = 0.30` (`metrics/context.rs`) has the same blind spot — §11 |
+| #60 (8 calls, over by 3,630) | calls 2/5/6/7: estimate over the exact budget by 8 %, 15 %, **42 %**, 5 % on large results | content that tokenizes better than 4 chars/token | **FR-16** per-step reconciliation removed exactly 5,768; corpus-wide it engages on 45 of 9,580 steps (0.5 %) |
+| #129 (2 calls, over by 309) | `est 436` **at call 0** against `msgs 280` | content seen before the first API call was attributed to a message bucket — but the first call's context *carries* it, so it is inside `prefix` | **FR-19**: discard everything pending at the first commit |
+
+A fourth defect surfaced while reproducing #104 synthetically: a boundary
+that lands **below the first call's context** makes `msgs` negative
+(`prefix 62,000 > size 60,700`), and then any attribution overflows. The
+first call overstates the fixed prefix (§3.2 G, +33 %) because it carries
+the opening message; the true prefix survives every compaction, so the
+smallest context seen right after a boundary is a tighter upper bound on
+it — **FR-20**, `prefix = min(prefix, ctx_after_boundary)`.
+
+**Calibration, corpus-wide** (what per-step reconciliation had to remove):
+
+| Source | Removed | Kept | Removed % |
+|---|---|---|---|
+| Images (flat 1 500/image in the prototype) | 19,726 | 341,774 | **5.5 %** |
+| Web | 1,914 | 78,142 | 2.4 % |
+| Files | 4,110 | 2,046,517 | 0.2 % |
+| BashOutput | 2,941 | 2,368,634 | 0.1 % |
+| McpResults | 195 | 139,387 | 0.1 % |
+
+chars/4 is well calibrated for code; the prototype's flat 1 500 per image
+is not — Phase 1 uses `tool_result.rs::image_tokens()` (`w·h/750`), which
+already exists. Model changes: **9/140** transcripts, Δ at the switch
+negative on 5 (median −15,372) and non-negative on 5.
 
 **Consequences for §4 — FR-16, FR-17, FR-18.** Reconcile every step's
 estimate against that step's *exact* growth, treat a model change as a
@@ -399,7 +427,9 @@ The `sources` array, the MCP tool, the registry entries with `estimate` set and 
 15. There is exactly **one** remainder row, computed last. A compaction summary is never a positive bucket (§3.2 H.3); the row is named `summary + text` when a boundary is in range and `text` otherwise.
 16. **Per-step reconciliation.** At each API call, `Δcontext − previous output_tokens` is the exact number of tokens everything injected between the two calls could have cost. Estimates for that step are scaled down to fit it, never up; the amount removed per source is kept and reported (§3.2 I). `Σ rows == size` holds by construction and is **not** the correctness test — the pre-reconciliation overflow is.
 17. **A model change is a boundary of its own kind** (`Reference::ModelSwitch`). Estimates before it are in a different model's tokens than `size`; the header names the switch and the Δ it produced. How the pre-switch rows are re-based (uniform scale by the observed ratio, or shown as one "before the switch" row) is decision 7, taken at Phase 1 with the v4 numbers in hand.
-18. A sub-heuristic shrink (Δcontext < 0 that is not a ≥ 30 % drop) is recorded and shown; content left the window and the rows that carried it are scaled by the global reconciliation, which is reported as a factor.
+18. **Any negative Δcontext is a boundary.** Within a session the window never shrinks except by removal or re-measurement; the 30 % rule distinguished a compaction from anything else, but for residency both invalidate what was attributed before. Kinds: `Compaction` (explicit `compact_boundary`), `Heuristic` (≥ 30 % drop, unmarked), `Shrink` (a smaller drop, unmarked — #104's 27 %), `ModelSwitch` (the model changed on that call). All reset the rows; the header names the kind and the Δ.
+19. **Content seen before the first API call is inside `prefix`**, never in a message bucket (#129).
+20. **`prefix` is a running minimum.** It starts as the first call's context and is lowered to the context right after any boundary that lands below it. The first call overstates the fixed prefix (§3.2 G); each compaction tightens the bound.
 
 ## 7. Non-goals
 
@@ -429,11 +459,12 @@ The inspector borrows `prefix_view`'s frame, column widths and `Esc` behaviour s
 1. ~~Does the inspector key collide?~~ **Answered 2026-09-20.** `c` is taken twice in `app.rs` (l589, l635) plus `ctrl+c`. The bound set is `$ + - / 0 = ? A G L N S a c d e f g i j k l n p q s t x`; `m` is free, which is why §4.4 binds it.
 2. ~~Should `Conversation` split into assistant text vs thinking?~~ **Answered 2026-09-20, yes — see §3.2 D.** It is the one row that can be exact.
 3. **The prefix row in `calibrated` mode** takes three `/context` categories; if Claude Code renames or adds one, `harness_facts::first_seen` needs an entry. Worth checking against 2.1.274 before US-002.
-4. **What over-attributed on the three corpus transcripts** (§3.2 I). Candidates left: a model switch that shrank the measurement, a shrink with no marked boundary, a content type whose chars/4 overshoots. The v4 sweep's per-call dump answers it from numbers alone; Phase 1 does not start until it is read.
-5. **Model-switch re-basing** (FR-17): uniform scale, or a separate row? Needs the Δ distribution across the corpus's switches, which v4 reports.
+4. ~~What over-attributed on the three corpus transcripts~~ **Answered 2026-09-20** — §3.2 I: a 27 % drop under the heuristic, chars/4 overshoot on large results, and pre-first-call content attributed as messages. FR-16, FR-18, FR-19, FR-20.
+5. **Model-switch re-basing** (FR-17) — **decision 7, proposed:** a switch whose Δ is negative is a `ModelSwitch` boundary (rows reset, like any shrink; 5 of the corpus's 9 switches); a switch whose Δ is non-negative does not reset — the pre-switch rows are kept, in the old model's tokens, and the header notes the switch (the other 4). Uniform rescaling by the observed ratio was considered and rejected: one number cannot separate a tokenizer change from a per-model prefix change, and the prototype's 3-of-5 fixtures that switch with non-negative Δ show it is not always a shrink. The user decides.
 
 ## 11. Follow-ups
 
+- **`COMPACTION_DROP_RATIO = 0.30` in `metrics/context.rs` misses real drops** — the corpus has a 27.3 % one (#104) and 9/140 transcripts shrink below the heuristic. That constant feeds `ContextView::compactions` and the `threshold_learned` logic today; it should be re-examined against the corpus independently of this PRD.
 - The pane view (decision 6), once the inspector's rows have settled.
 - A persisted chars→tokens ratio per model, if the estimated/calibrated gap proves stable over a dogfood week.
 - A second rule on the `bash output` row if the dogfood week shows it routinely dominating — §3.2 A suggests it might, and "pipe it to a file" is an action.

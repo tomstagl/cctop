@@ -72,11 +72,17 @@ Order of work:
    string lengths (`raw_string_chars`), never `json.dumps` (+13 % escaping
    inflation, §3.2 I), and cap a call's own tool_use bytes at its `out −
    think` — `out` includes thinking (slope −0.07).
-9. **Model change = `Reference::ModelSwitch` (FR-17)** — `message.model`
-   differs from the previous committed call. Record the Δ; re-basing is
-   decision 7, after the v4 numbers.
-10. **Sub-heuristic shrink (FR-18)** — Δctx < 0 without a ≥ 30 % drop;
-    record, and let the global reconciliation report its factor.
+9. **Any negative Δctx is a boundary (FR-18)**, labelled `Compaction` /
+   `Heuristic` / `Shrink` / `ModelSwitch` (the last when `message.model`
+   changed on that call — detect the model *before* the boundary check so
+   the label is right). All reset the rows.
+10. **Discard everything pending at the first commit (FR-19)** — it is
+    inside `prefix`.
+11. **`prefix = min(prefix, ctx_after_boundary)` (FR-20)** at every
+    boundary; for an explicit `compact_boundary` the ctx arrives with the
+    next call, so tighten there.
+12. Images use `tool_result.rs::image_tokens()`, not a flat number (the
+    prototype's 1 500 overshoots by 5.5 % corpus-wide).
 
 Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
 
@@ -93,6 +99,13 @@ Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
   exact budget;
 - a synthetic `message.model` change between two calls yields
   `Reference::ModelSwitch` with the observed Δ;
+- the three corpus shapes, as synthetic fixtures: a list-form opening
+  message with ~440 tokens against ~280 of messages (#129: pre-first-call
+  content must not attribute); a 27 % drop with no marker (#104: must
+  become a `Shrink` boundary), including the variant that lands below the
+  first call's context (`msgs` must not go negative — FR-20); a step whose
+  estimate exceeds its exact budget by 40 % (#60: reconciliation must
+  remove the excess on that step and nowhere else);
 - a single-path `cat` lands on its file; a two-path `cat a b` lands in
   `BashOutput` and on neither file;
 - a fixture with a `compact_boundary` reports `Reference::Compaction` and
@@ -103,10 +116,10 @@ Verified on the prototype before writing the Rust: with FR-12 and FR-15 the
 identity holds on all five fixtures and the live transcript; with FR-16 the
 pre-reconciliation overflow is zero on all of them and on the synthetic
 large-Edit case, while the live transcript's model switch (Δ −28,700) and
-shrink step are detected. **Blocked** on PRD §10.4: three real transcripts
-over-attributed by 309 / 3,630 / 13,168 for a reason four hypotheses did not
-explain; the v4 sweep's per-call dump is the next input, and Phase 1 does not
-start before it is read.
+shrink step are detected. The three real transcripts that over-attributed (309 / 3,630 / 13,168) are
+explained by the v4 per-call dump — PRD §3.2 I — and each shape is now a
+synthetic case above, all passing. **Phase 1 waits on decision 7** (model-
+switch re-basing, PRD §10.5) and the user's go.
 
 Commit: `Context: residency — what is in the window, by source`.
 
