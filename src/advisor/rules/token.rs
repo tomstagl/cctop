@@ -975,6 +975,11 @@ impl Rule for BigPrefix {
     fn acted(&self, state: &State, fired: &Advice) -> bool {
         state.inspector_opens > fired.mark
     }
+    /// Once per session (PRD §4.5): the prefix moves within a session, but
+    /// the lever — which servers and files are always on — does not.
+    fn cooldown_turns(&self) -> usize {
+        usize::MAX / 2
+    }
 }
 
 #[cfg(test)]

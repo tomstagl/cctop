@@ -587,8 +587,8 @@ impl RefKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reference {
     SessionStart,
-    /// The index into `agg.calls` of the window's first call, and the
-    /// Δcontext that opened it.
+    /// The index of the window's first call among the calls that carried a
+    /// context (API-error lines excluded), and the Δcontext that opened it.
     Boundary {
         kind: RefKind,
         call: usize,
@@ -796,7 +796,36 @@ pub fn residency(
         return r;
     }
     let n = calls.len();
-    let at = |k: usize| calls[k].at_ms;
+    // Calls are chronological, so every "which call carried this" lookup is
+    // a binary search: a call without a timestamp inherits its predecessor's
+    // (the linear scans this replaced made a 6 000-call session's coach
+    // replay thirty times slower).
+    let times: Vec<i64> = {
+        let mut last = i64::MIN;
+        calls
+            .iter()
+            .map(|c| {
+                if let Some(a) = c.at_ms {
+                    last = last.max(a);
+                }
+                last
+            })
+            .collect()
+    };
+    // The first call at or after `ms`.
+    let first_at_or_after = |ms: i64| -> Option<usize> {
+        let k = times.partition_point(|&t| t < ms);
+        (k < n).then_some(k)
+    };
+    // The last call at or before `ms` — never one before the first timestamp.
+    let last_at_or_before = |ms: i64| -> Option<usize> {
+        let k = times.partition_point(|&t| t <= ms).checked_sub(1)?;
+        (times[k] != i64::MIN).then_some(k)
+    };
+    let mut first_call_of_turn: std::collections::HashMap<usize, usize> = Default::default();
+    for (k, c) in calls.iter().enumerate() {
+        first_call_of_turn.entry(c.turn).or_insert(k);
+    }
 
     // An explicit boundary applies from the first call after its line.
     let explicit: Vec<(usize, RefKind)> = agg
@@ -804,7 +833,7 @@ pub fn residency(
         .iter()
         .filter_map(|b| {
             let k = match b.at.as_deref().and_then(super::cost::parse_ts_ms) {
-                Some(ms) => (0..n).find(|&k| at(k).is_some_and(|a| a >= ms)),
+                Some(ms) => first_at_or_after(ms),
                 None => (0..n).find(|&k| calls[k].turn >= b.turn),
             }?;
             Some((k, RefKind::from_boundary(&b.kind)))
@@ -905,12 +934,12 @@ pub fn residency(
     };
     // A result finished at `f` is in the context of the first call after it.
     let result_step = |f: i64| -> Option<usize> {
-        let k = (0..n).find(|&k| at(k).is_some_and(|a| a >= f))?;
+        let k = first_at_or_after(f)?;
         (k >= start).then(|| k - start)
     };
     // A tool_use started at `s` was written by the last call at or before it.
     let issue_step = |s: i64| -> Option<usize> {
-        let k = (0..n).rev().find(|&k| at(k).is_some_and(|a| a <= s))?;
+        let k = last_at_or_before(s)?;
         (k >= start).then(|| k - start)
     };
     for c in &tools.calls {
@@ -934,12 +963,8 @@ pub fn residency(
     // A turn's prompt lands at the turn's first call. A turn that began before
     // the window lost its prompt to the boundary.
     let first_step_of_turn = |turn: usize| -> Option<usize> {
-        if (0..start).any(|j| calls[j].turn == turn) {
-            return None;
-        }
-        (start..n)
-            .find(|&k| calls[k].turn == turn)
-            .map(|k| k - start)
+        let k = *first_call_of_turn.get(&turn)?;
+        (k >= start).then(|| k - start)
     };
     for t in &agg.turns {
         if let Some(step) = first_step_of_turn(t.number) {
