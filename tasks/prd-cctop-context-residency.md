@@ -424,7 +424,7 @@ A sibling of `prefix_view`, full height, opened with `m` on the Context panel (`
 
 ### 4.6 Query and MCP
 
-`cctop query context` gains a `sources` array (one object per row: `kind`, `tokens` with a metric id, `share`, `note`) and a `files` array inside the files row. `mcp.rs` exposes the same object as a tool so a model can ask what is filling its own window. Both are mechanical once `residency.rs` exists — "one state, many surfaces".
+`cctop query sources` is the inspector's object: size, window, prefix (share, tightened, mode), the reference, the rows with shares, the per-file list, `reconciled`, `overflow_raw`, a model switch kept. **On MCP there is no tenth tool**: `mcp.rs` keeps its schemas under 800 tokens (`descriptions_are_short_and_schema_is_small`) because they ride in every request — the very cost this PRD measures — and a tenth did not fit (887). `cctop_prefix` already answers "what is in the window" for the fixed half; it now returns the other half too, as an additive `sources` key, and its description says so. Mechanical once `residency()` exists — "one state, many surfaces".
 
 ## 5. User stories
 

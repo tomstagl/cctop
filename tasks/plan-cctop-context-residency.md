@@ -176,7 +176,7 @@ absolute tokens"). Then:
 
 - `query.rs`: a `sources` array on the `context` verb, each value tagged
   with its registry id through `m(…)`, and `files` inside the files row;
-- `mcp.rs`: the same object as a tool;
+- `mcp.rs`: **not** a tenth tool — the 800-token schema budget (`descriptions_are_short_and_schema_is_small`) is the project's own guard against exactly this PRD's cost, and a tenth tool measured 887; `cctop_prefix` returns `sources` as an additive key instead;
 - regenerate: `cctop metrics --md > docs/metrics.md && cctop metrics
   --readme README.md`, then `make site`.
 

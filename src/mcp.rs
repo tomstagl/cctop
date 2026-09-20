@@ -22,7 +22,7 @@ pub fn tools() -> Vec<Value> {
         json!({"name":"cctop_agents","description":"Per subagent: type, model, state, status, tokens, priced cost, returned tokens, waste with its reason, cold start; totals; workflow runs; the team led (own cost, liveness, turns, waste); MCP servers.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_advice","description":"The coach's nudge (primary: class, headline, action_text, evidence, saving, explanation), the ranked queue, snoozed rules, session mode.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_coach","description":"The coach: state line, four lights (context, cache, limits, rework), the nudge to act on now, what is next or snoozed.","inputSchema":obj(json!({"session":session}), vec![])}),
-        json!({"name":"cctop_prefix","description":"What rides on every request: CLAUDE.md files, tool schemas per MCP server, skills listing, memory index, reconciled against the first call.","inputSchema":obj(json!({"session":session}), vec![])}),
+        json!({"name":"cctop_prefix","description":"What is in the context window: what rides on every request (CLAUDE.md, tool schemas, skills, memory) and, as `sources`, the rest by kind since the last boundary, with per-file tokens.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_events","description":"Recent events (tool start/end, hooks, permissions, compactions, alerts). `since` like 10m, 2h.","inputSchema":obj(json!({"session":session,"since":{"type":"string"}}), vec![])}),
         json!({"name":"cctop_explain_metric","description":"Definition, formula, sources and caveats of a metric id from docs/metrics.md.","inputSchema":obj(json!({"metric_id":{"type":"string"}}), vec!["metric_id"])}),
     ]
@@ -81,7 +81,12 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
         "cctop_agents" => Ok(query::agents(&state_for(args)?)),
         "cctop_advice" => Ok(query::advice(&state_for(args)?)),
         "cctop_coach" => Ok(query::coach(&state_for(args)?, None)),
-        "cctop_prefix" => Ok(query::prefix(&state_for(args)?)),
+        "cctop_prefix" => {
+            let state = state_for(args)?;
+            let mut v = query::prefix(&state);
+            v["sources"] = query::sources(&state);
+            Ok(v)
+        }
         "cctop_events" => {
             let since = match args.get("since").and_then(Value::as_str) {
                 Some(s) => Some(

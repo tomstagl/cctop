@@ -587,6 +587,64 @@ pub fn prefix(state: &State) -> Value {
     json!({"total": m(ctx.prefix, "tokens", "context_prefix", false), "rows": rows})
 }
 
+/// What is in the window right now and what put it there (registry
+/// `context_sources`): the rows the `m` inspector draws, the per-file list,
+/// the reference and the mode.
+pub fn sources(state: &State) -> Value {
+    use crate::metrics::context::{Mode, Reference};
+    let v = state.context();
+    let r = state.residency();
+    let since = match &r.since {
+        Reference::SessionStart => {
+            json!({"kind": "session-start", "metric_id": "context_reference"})
+        }
+        Reference::Boundary { kind, call, delta } => {
+            json!({"kind": kind.label(), "call": call, "delta": delta, "metric_id": "context_reference"})
+        }
+    };
+    let mode = match r.mode {
+        Mode::Estimated => json!("estimated"),
+        Mode::Calibrated { turn } => json!({"calibrated_at_turn": turn}),
+    };
+    let share = |t: u64| {
+        if r.size > 0 {
+            t as f64 / r.size as f64
+        } else {
+            0.0
+        }
+    };
+    let rows: Vec<Value> = r
+        .rows()
+        .iter()
+        .map(|(label, tokens, exact)| {
+            json!({"source": label, "tokens": m(*tokens, "tokens", "source_tokens", !exact), "share": share(*tokens)})
+        })
+        .collect();
+    let files: Vec<Value> = r
+        .files
+        .iter()
+        .map(|f| {
+            json!({"path": f.path, "read": m(f.tokens, "tokens", "file_tokens", true), "written": m(f.written, "tokens", "file_tokens", true), "reads": f.reads})
+        })
+        .collect();
+    json!({
+        "size": m(r.size, "tokens", "context_size", state.context_size_exact.is_none()),
+        "window": m(v.window, "tokens", "context_window", !v.window_exact),
+        "prefix": m(r.prefix, "tokens", "context_prefix", matches!(r.mode, Mode::Estimated)),
+        "prefix_share": share(r.prefix),
+        "prefix_tightened": r.prefix_tightened,
+        "mode": mode,
+        "since": since,
+        "calls_since": r.calls_since,
+        "rows": rows,
+        "files": files,
+        "thinking_known": r.thinking_known,
+        "reconciled": m(r.reconciled, "tokens", "source_tokens", true),
+        "overflow_raw": m(r.overflow_raw, "tokens", "source_tokens", true),
+        "model_switch_kept": r.model_switch_kept.as_ref().map(|(from, to, delta)| json!({"from": from, "to": to, "delta": delta})),
+    })
+}
+
 pub fn events(state: &State, since_ms: Option<i64>) -> Value {
     let cutoff = since_ms.map(|s| state.clock_ms() - s).unwrap_or(i64::MIN);
     Value::Array(
@@ -779,6 +837,38 @@ mod tests {
             assert!(a.get("team").is_none());
             assert_eq!(a["teammates"], json!([]));
         }
+    }
+
+    #[test]
+    fn sources_rows_sum_to_the_size_and_name_the_reference() {
+        let a = state();
+        let s = sources(&a);
+        let size = s["size"]["value"].as_u64().unwrap();
+        let rows = s["rows"].as_array().unwrap();
+        assert_eq!(
+            rows.len(),
+            12,
+            "eight sources, thinking, inputs, prose, other"
+        );
+        let sum: u64 = rows
+            .iter()
+            .map(|r| r["tokens"]["value"].as_u64().unwrap())
+            .sum();
+        assert_eq!(s["prefix"]["value"].as_u64().unwrap() + sum, size);
+        assert_eq!(s["since"]["kind"], "session-start");
+        assert_eq!(s["mode"], "estimated");
+        assert!(!s["files"].as_array().unwrap().is_empty());
+        assert_eq!(s["files"][0]["read"]["metric_id"], "file_tokens");
+        let exact: Vec<&str> = rows
+            .iter()
+            .filter(|r| r["tokens"]["approx"] == false)
+            .map(|r| r["source"].as_str().unwrap())
+            .collect();
+        assert_eq!(exact, ["thinking", "prose"]);
+        let b = state_b();
+        let s = sources(&b);
+        assert_eq!(s["since"]["kind"], "model switch");
+        assert!(s["since"]["delta"].as_i64().unwrap() < 0);
     }
 
     #[test]
