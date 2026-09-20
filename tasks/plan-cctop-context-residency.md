@@ -47,13 +47,26 @@ Order of work:
 2. Classify each `tools::Call` newer than the reference by the PRD §4.2
    table. The `Bash` arm calls `files::bash_read_paths` — make it `pub(crate)`
    (it is private today, `files.rs:333`) rather than duplicating it.
-3. `Conversation` last, as `messages().saturating_sub(sum of the rest)`.
-4. `files` map: `Read`/`Edit`/`Write` by `file_path`, single-path bash by
+3. `Thinking`, exact, summed from `usage.output_tokens_details.thinking_tokens`
+   over the calls after the reference point (§3.2 D) — gate it on a
+   `harness_facts::first_seen` entry so an older transcript omits the row
+   rather than zeroing it.
+4. `LatePrefix` (§3.2 E): per call, `Δcontext − (previous output + tool
+   results in between)`; anything above the threshold is schema or listing
+   injection, not conversation. Pick the threshold from the corpus, not by
+   taste — on the live session the two real jumps were ~19.7 k and ~7.8 k
+   while ordinary per-call residual was ~828.
+5. `Text` last, as `messages().saturating_sub(sum of the rest)`.
+6. `files` map: `Read`/`Edit`/`Write` by `file_path`, single-path bash by
    its resolved path.
 
 Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
 
-- rows are in `Source` order and `Conversation` is last;
+- rows are in `Source` order and `Text` is last;
+- `Thinking` is exact and marked so; it is omitted, not zero, on a transcript
+  without `thinking_tokens`;
+- a synthetic call with a large unexplained Δcontext lands in `LatePrefix`
+  and not in `Text`;
 - `Σ rows == ContextView::size` exactly, on every fixture;
 - a single-path `cat` lands on its file; a two-path `cat a b` lands in
   `BashOutput` and on neither file;
@@ -134,9 +147,14 @@ Commit: `Coach: a LATER nudge when the fixed prefix dominates the window`.
   couples `residency.rs` to `files.rs`'s definition of a read. That is
   intended: if it ever learns `grep`, both should change together, and
   PRD FR-3 gets re-read.
-- **Fixtures cap strings at 4 000 chars** (`scripts/anonymise-transcript.py:136`).
-  No test may assert an absolute token figure. Reviewers should push back
-  on any test that does.
+- **Fixtures cap strings** (`scripts/anonymise-transcript.py:136`) — at 4 000
+  in session A, at 2 000 in B–E. Measured: `chars / 4` recovers 5–16 % of real
+  message tokens on fixtures against 33 % live. No test may assert an absolute
+  token figure **or a ranking between two files** — the cap flattens both to
+  the same value. Reviewers should push back on any test that does.
+- **`Thinking` is the one exact row** and comes from a different mechanism
+  (Claude Code's counter, not characters). Do not let it drift into the
+  `chars / 4` path during review.
 - **A stale capture mis-scales.** A `/context` from turn 4 read at turn 90
   describes a different window. Phase 2 carries the turn number and the
   header shows it; if dogfooding says that is not enough, expiring the
