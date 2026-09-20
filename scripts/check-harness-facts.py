@@ -44,28 +44,49 @@ def claude_version() -> str | None:
     return m.group(0) if m else None
 
 
+def bundle_version(text: str) -> str | None:
+    """The version a bundle says it is: the `VERSION:"2.1.278"` literal every
+    build carries. (A bare `"2.1.278"` is not enough — a launcher's changelog
+    strings name other releases too.)"""
+    m = re.search(r'VERSION:"(\d+\.\d+\.\d+)"', text)
+    return m.group(1) if m else None
+
+
 def find_bundle(explicit: str | None) -> Path | None:
-    """The file that holds Claude Code's JavaScript: the native install's
-    versioned executable, or the npm package's cli.js (what CI has)."""
+    """The file that holds Claude Code's JavaScript, tried in the order the
+    installs lay it out: the executable `claude` resolves to, when it is the
+    runtime itself (the native install's versioned binary, a machine image's
+    /opt binary, or the npm launcher's `bin/claude.exe`, which its postinstall
+    replaces with a hard link to the platform package's binary since 2.1.278);
+    the platform package `@anthropic-ai/claude-code-<platform>/bin/claude`
+    beside a launcher whose postinstall did not run; the single-file `cli.js`
+    of the npm packages before 2.1.278. A shim, wrapper or stub is a few KB
+    and a runtime tens of MB at least, so anything under a megabyte is
+    skipped. The caller then checks the pick against `claude --version`: a
+    global npm prefix can hold a stale package next to a newer shim (a 2.1.42
+    `cli.js` beside a 2.1.278 binary on one machine read every probe as
+    missing), and its constants are another release's."""
     if explicit:
         return Path(explicit).expanduser()
     claude = shutil.which("claude")
     if claude is None:
         return None
     real = Path(claude).resolve()
-    if real.suffix == ".js":
-        return real
-    # The npm install: a shell shim beside node_modules.
-    for root in (real.parent.parent / "lib" / "node_modules", real.parent / "node_modules"):
-        cli = root / "@anthropic-ai" / "claude-code" / "cli.js"
-        if cli.is_file():
-            return cli
+    candidates: list[Path] = [real]
+    roots: list[Path] = list(real.parents[:4])
+    roots += [real.parent.parent / "lib" / "node_modules", real.parent / "node_modules"]
     npm = shutil.which("npm")
     if npm is not None:
         out = subprocess.run([npm, "root", "-g"], capture_output=True, text=True, check=False)
-        cli = Path(out.stdout.strip()) / "@anthropic-ai" / "claude-code" / "cli.js"
-        if cli.is_file():
-            return cli
+        if out.stdout.strip():
+            roots.append(Path(out.stdout.strip()))
+    for root in roots:
+        candidates.extend(sorted(root.glob("@anthropic-ai/claude-code-*/bin/claude*")))
+        candidates.append(root / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe")
+        candidates.append(root / "@anthropic-ai" / "claude-code" / "cli.js")
+    for c in candidates:
+        if c.is_file() and c.stat().st_size >= 1 << 20:
+            return c
     return real if real.is_file() else None
 
 
@@ -334,7 +355,20 @@ def main() -> int:
         return 1
     installed = claude_version() if args.bundle is None else None
     text = bundle_text(bundle)
-    print(f"check-harness-facts: READ_FROM {read_from.group(1) if read_from else '?'}; bundle {bundle}" + (f" (claude {installed})" if installed else "") + f", {len(text) // 1024} KiB of text")
+    says = bundle_version(text)
+    print(
+        f"check-harness-facts: READ_FROM {read_from.group(1) if read_from else '?'}; bundle {bundle}"
+        + (f" (claude {installed})" if installed else "")
+        + (f", which says it is {says}" if says else "")
+        + f", {len(text) // 1024} KiB of text"
+    )
+    if installed and says and says != installed:
+        print(
+            f"check-harness-facts: {bundle} is Claude Code {says}, but `claude --version` says {installed} — a stale package beside the shim, not the running runtime. "
+            f"Pass --bundle with the executable that runs (`readlink -f \"$(command -v claude)\"`, or the platform package's bin/claude).",
+            file=sys.stderr,
+        )
+        return 1
 
     r = Report()
     probe_autocompact(text, facts, r)
@@ -357,7 +391,7 @@ def main() -> int:
     if r.failed:
         print(f"\ncheck-harness-facts: something differs or was not found — re-read it by hand, fix src/harness_facts.rs, then bump READ_FROM. {facts_not_here}.")
         return 1
-    print(f"\ncheck-harness-facts: every probed constant matches; bump READ_FROM to {installed or 'this version'} if it is behind. {facts_not_here}.")
+    print(f"\ncheck-harness-facts: every probed constant matches; bump READ_FROM to {installed or says or 'this version'} if it is behind. {facts_not_here}.")
     return 0
 
 
