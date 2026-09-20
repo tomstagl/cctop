@@ -66,6 +66,17 @@ Order of work:
    measured, `session-c` over-attributes by 503 and `session-d` by 1,549.
 7. `files` map: `Read`/`Edit`/`Write` by `file_path`, single-path bash by
    its resolved path.
+8. **Per-step reconciliation (FR-16).** At each commit, `budget = Δctx −
+   previous out`; scale this step's pending attributions down to fit it and
+   record what came off which source. Measure tool_use input as decoded
+   string lengths (`raw_string_chars`), never `json.dumps` (+13 % escaping
+   inflation, §3.2 I), and cap a call's own tool_use bytes at its `out −
+   think` — `out` includes thinking (slope −0.07).
+9. **Model change = `Reference::ModelSwitch` (FR-17)** — `message.model`
+   differs from the previous committed call. Record the Δ; re-basing is
+   decision 7, after the v4 numbers.
+10. **Sub-heuristic shrink (FR-18)** — Δctx < 0 without a ≥ 30 % drop;
+    record, and let the global reconciliation report its factor.
 
 Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
 
@@ -74,8 +85,14 @@ Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
   without `thinking_tokens`;
 - a synthetic call with a large unexplained Δcontext lands in `LatePrefix`
   and not in `Text`;
-- `Σ rows == ContextView::size` exactly, on every fixture, **with no clamping**
-  — a clamped `Text` is the bug of PRD §3.2 H.1, not a rounding detail;
+- `Σ rows == ContextView::size` exactly, on every fixture — but **this is
+  no longer the correctness test** (PRD §3.2 I.1: it only fails past `Text`'s
+  headroom). The test is the pre-reconciliation overflow: assert it is zero
+  on fixtures A–E and the synthetic large-Edit case, and assert the
+  reconciliation *engaged* on a synthetic step whose estimate exceeds its
+  exact budget;
+- a synthetic `message.model` change between two calls yields
+  `Reference::ModelSwitch` with the observed Δ;
 - a single-path `cat` lands on its file; a two-path `cat a b` lands in
   `BashOutput` and on neither file;
 - a fixture with a `compact_boundary` reports `Reference::Compaction` and
@@ -83,8 +100,13 @@ Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
 - a `persisted_output_size` result contributes only its result text.
 
 Verified on the prototype before writing the Rust: with FR-12 and FR-15 the
-identity holds with no clamping on all five fixtures and the live transcript.
-Without them, `session-c` over-attributes by 503 and `session-d` by 1,549.
+identity holds on all five fixtures and the live transcript; with FR-16 the
+pre-reconciliation overflow is zero on all of them and on the synthetic
+large-Edit case, while the live transcript's model switch (Δ −28,700) and
+shrink step are detected. **Blocked** on PRD §10.4: three real transcripts
+over-attributed by 309 / 3,630 / 13,168 for a reason four hypotheses did not
+explain; the v4 sweep's per-call dump is the next input, and Phase 1 does not
+start before it is read.
 
 Commit: `Context: residency — what is in the window, by source`.
 
