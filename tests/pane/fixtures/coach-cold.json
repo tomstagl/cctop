@@ -89,7 +89,7 @@
     "action_text": "",
     "class": "LATER",
     "evidence": "  LATER · since turn 6 · +1 queued (n)",
-    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn; it fires from 50 k tokens whatever the window, because the cost is absolute. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project. On the Context panel, i breaks the prefix down and m shows what else fills the window.",
+    "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn; it fires from 50 k tokens whatever the window, because the cost is absolute — once a /context you ran has measured the prefix, since the first call's own figure overstates it by about a third. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project. On the Context panel, i breaks the prefix down and m shows what else fills the window.",
     "family": "prefix-tip",
     "fired_at_ms": 1789428336352,
     "id": "A17",
