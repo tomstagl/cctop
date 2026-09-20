@@ -13,8 +13,9 @@
 > 6. **Surfaces: the inspector, `cctop query`, `mcp.rs`, the coach rule. Not the pane in v1.** All nine digit slots in `ui/panels/mod.rs` are taken, so this is a full-height inspector like `prefix_view`, not a tenth panel.
 >
 > Added after the corpus sweep (§3.2 I, 2026-09-20):
-> 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". The three over-attributing transcripts are explained (§3.2 I, FR-18/19/20). **Open for the user:** how a `ModelSwitch` re-bases the rows (FR-17, §10.5 has the proposal).
-> 8. **Open for the user:** the coach rule's denominator and threshold (§4.5) — the corpus measured a different ratio than the rule uses.
+> 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". The three over-attributing transcripts are explained (§3.2 I, FR-18/19/20). **A `ModelSwitch` resets the rows only when its Δ is negative**; a switch that does not shrink keeps the rows and the header notes it (FR-17; corpus 6/4).
+> 9. **The coach rule fires on an absolute prefix: `prefix ≥ 50_000` tokens**, not a share of the window or the size (§4.5). The prefix is paid on every request; its cost is absolute.
+> 10. **Phases 1–5 run without a stop** — the user reviews the finished thing.
 
 ---
 
@@ -392,7 +393,7 @@ A sibling of `prefix_view`, full height, opened with `m` on the Context panel (`
 
 `prefix-heavy`, `advisor/rules/token.rs`, urgency **LATER**:
 
-- **Evidence:** `ContextView::prefix / window ≥ 0.30`, with `prefix ≥ 20_000` so a small window does not trip it. **Decision 8, open.** The corpus measured prefix / *size* (median 32 %, p75 75 %), not prefix / *window* — a different denominator, and the sweep did not collect each transcript's window (derivable from `message.model` through `default_window`). So the corpus does not validate 0.30 either way. On a 200 k window 0.30 means a prefix over 60 k; on a 1 m window it would almost never fire. Alternatives: a share of the *window* (as written), a share of the *current size* (fires far more often), or an absolute prefix size.
+- **Evidence:** `ContextView::prefix ≥ 50_000` tokens — **decision 9**. The prefix is paid on every request, so its cost is absolute (tokens × calls), not a share of the window. A share-of-window rule (the first draft's 0.30) is inert on a 1 m window however large the prefix; a share-of-size rule fires on half of all sessions (corpus median 32 %). The corpus did not collect windows, so neither ratio was validated; the absolute figure needs none.
 - **Text:** names the two largest prefix rows and what to do — defer MCP servers behind `ToolSearch`, trim the CLAUDE.md it names. Never quotes their content.
 - **`acted`:** the prefix inspector or the sources inspector was opened. `State.agents_view_opens` exists and A48 reads it (`advisor/rules/token.rs:892`); the equivalent counter for these two inspectors **does not exist yet** and is part of US-005.
 - **TTL / cooldown:** fires once per session and snoozes long. (The prefix *does* change within a session — §3.2 E grows it, a model switch re-measures it — but the person's lever, which servers and files are always on, does not; once is enough.)
@@ -472,7 +473,7 @@ The inspector borrows `prefix_view`'s frame, column widths and `Esc` behaviour s
 2. ~~Should `Conversation` split into assistant text vs thinking?~~ **Answered 2026-09-20, yes — see §3.2 D.** It is the one row that can be exact.
 3. **The prefix row in `calibrated` mode** takes three `/context` categories; if Claude Code renames or adds one, `harness_facts::first_seen` needs an entry. Worth checking against 2.1.274 before US-002.
 4. ~~What over-attributed on the three corpus transcripts~~ **Answered 2026-09-20** — §3.2 I: a 27 % drop under the heuristic, chars/4 overshoot on large results, and pre-first-call content attributed as messages. FR-16, FR-18, FR-19, FR-20.
-5. **Model-switch re-basing** (FR-17) — **decision 7, proposed:** a switch whose Δ is negative is a `ModelSwitch` boundary (rows reset, like any shrink; 5 of the corpus's 9 switches); a switch whose Δ is non-negative does not reset — the pre-switch rows are kept, in the old model's tokens, and the header notes the switch (the other 4). Uniform rescaling by the observed ratio was considered and rejected: one number cannot separate a tokenizer change from a per-model prefix change, and the prototype's 3-of-5 fixtures that switch with non-negative Δ show it is not always a shrink. The user decides.
+5. ~~Model-switch re-basing~~ **Decided 2026-09-20 (decision 7):** a switch whose Δ is negative is a `ModelSwitch` boundary (rows reset; 6 of the corpus's 9 switches); a switch whose Δ is non-negative keeps the rows, in the old model's tokens, and the header notes the switch (the other 4). Uniform rescaling by the observed ratio was rejected: one number cannot separate a tokenizer change from a per-model prefix change.
 
 ## 11. Follow-ups
 
