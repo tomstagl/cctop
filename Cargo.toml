@@ -1,6 +1,6 @@
 [package]
 name = "cctop"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 rust-version = "1.85"
 description = "btop-style live dashboard for Claude Code internals, in a pane beside your session"
