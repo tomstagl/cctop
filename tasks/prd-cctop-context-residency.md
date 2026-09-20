@@ -16,6 +16,7 @@
 > 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". The three over-attributing transcripts are explained (§3.2 I, FR-18/19/20). **A `ModelSwitch` resets the rows only when its Δ is negative**; a switch that does not shrink keeps the rows and the header notes it (FR-17; corpus 6/4).
 > 9. **The coach rule fires on an absolute prefix: `prefix ≥ 50_000` tokens**, not a share of the window or the size (§4.5). The prefix is paid on every request; its cost is absolute.
 > 10. **Phases 1–5 run without a stop** — the user reviews the finished thing.
+> 11. **Corrected before code:** `anatomy()` and A17 already exist (§3.1). Phase 1 upgrades `anatomy()` in place; Phase 5 retunes A17. Same goal, less new code, one anatomy.
 
 ---
 
@@ -47,7 +48,10 @@ This PRD adds that join and the surfaces that show it.
 | `ContextCapture` parses `/context`'s table into `(category, tokens)` in printed order plus `Free space` | `transcript/local_command.rs:33,70,123` | Ground truth for calibration whenever the person ran `/context`; already on `Prefix::context_capture` |
 | `tool_result.rs` parses `content_chars` (Read), `stdout_chars` / `stderr_chars` (Bash), `result_chars` (Agent), `persisted_output_size`, `truncated_by_token_cap`, `image_tokens()` (`w·h/750`, 1 500 unknown) | `transcript/tool_result.rs` | Every per-source length is already parsed |
 | `Call { result_tokens_est, truncated, persisted_output_size, name, turn, input_summary }`; `top_ctx(n)` ranks by `result_tokens_est`; `State::reread_tax(call)` prices a result against later calls | `tools.rs:622`, `ui/state.rs:1655` | Per-call tokens exist; they are not grouped by source kind and not reset at a boundary |
-| **`content_chars`, `stdout_chars` and `result_chars` have exactly one consumer** — `tools.rs:378` reads `image_tokens()`. Nothing else | `grep` over `src/` | The join is the whole of the new work |
+| ~~`content_chars` … have exactly one consumer~~ **Corrected 2026-09-20:** nobody reads the raw lengths, but `tools.rs` folds them into `Call.result_tokens_est` / `input_chars`, and **`metrics/context.rs::anatomy()` already joins them** into a seven-slice `Anatomy` (prefix · inputs · results · thinking · harness · prose · other) drawn as the Context panel's stacked bar and sent to the pane as `Body.slices` (`dashboard.rs::body_context`, registry `context_anatomy`) | `metrics/context.rs:488–570`, `ui/panels/context.rs:72`, `dashboard.rs:693` | **This PRD upgrades `anatomy()`; it does not add a sibling.** Two anatomies of one window would be the disagreement the architecture forbids |
+| `anatomy()` has every blind spot §3.2 I found: its reference is `since_boundary_turn()` = the last *explicit* `agg.boundaries` entry (no heuristic drop, no shrink, no model switch); it counts the in-flight call's own thinking / inputs / prose; prose is `prose_chars / 4` although prose sits *inside the exact `output_tokens`*; on overshoot it scales **prefix** down with the estimates | `metrics/context.rs:525–570`, `ui/state.rs:1454` | FR-12/16/18/19/20 apply to it; prose becomes exact (`out − thinking − inputs`) |
+| **A17 `BigPrefix` (family `prefix-tip`) already nudges on the prefix**: ≥ $0.25/turn at the cache-read price or ≥ 100 k tokens; LATER; no `acted` | `advisor/rules/token.rs:906` | Decision 9 **retunes A17** (50 k, `acted` on opening an inspector) — no 37th rule |
+| `Turn.harness_tokens` / `harness_approx` measure reminders, listings and injected files from `rendered[]` attachments (2.1.266+, ratios before) | `metrics/usage.rs:167,579` | The structural source for §3.2 E's "late prefix"; the residual heuristic is what is left *after* it |
 | `files.rs::FileStats` keys `reads`, `edits`, `writes`, `reads_since_edit`, `cheap_reads`, `bash_reads`, `stale`, `lines_added/removed` by path; `reread_warning()` at ≥ 3 | `files.rs` | The per-path container exists and has no size field |
 | `bash_read_paths(cmd)` splits on `\|` `;` `\n` `&&` and returns file arguments of `cat` / `head` / `tail` / `sed -n` only — **not `grep`** | `files.rs:333` | Reusable verbatim for decision 2; grep output stays unattributed by construction |
 | A ranged `Read` (`is_ranged()`) and a `file_unchanged` result (~30 tokens) are already classed as cheap | `files.rs`, `tool_result.rs:356` | The cheap/expensive split the view needs already exists |
@@ -325,7 +329,7 @@ boundary kind of its own, and stop treating the identity as the test.
 
 ### 4.1 The source kinds
 
-A new `src/metrics/residency.rs`, derived on read from `agg`, `state.tools` and `state.files` — no new collector, no new watcher, nothing added to `State::apply`.
+**Not a new module — an upgrade of `metrics/context.rs::anatomy()`** (§3.1, corrected). A per-call walk `residency(agg, tools, …) -> Residency` carries the reference, the reconciliation and the source split; `Anatomy` is derived from it (`From<&Residency>`), so the Context panel's bar and the pane's `Body.slices` keep their seven labels and steps and simply become right. Derived on read; no new collector, nothing added to `State::apply`.
 
 ```rust
 pub enum Source {
@@ -359,6 +363,8 @@ pub enum Source {
 | `Agent` result | `AgentReturns` | `result_chars / 4` — a subagent's own context never lands here, only its summary |
 | everything else | `Conversation` | by remainder |
 
+**Prose is exact, not estimated.** A call's `output_tokens` is text + thinking + tool-use JSON, and thinking is reported exactly — so `prose = out − thinking − inputs` per call, where `inputs` is the call's tool_use bytes capped at `out − thinking`. The old `prose_chars / 4` is dropped.
+
 **Boundary reset.** Only calls whose `finished_at` is newer than the last `compact_boundary` are counted. `ContextView::compactions` already carries the turn; `agg` carries the timestamps. Before the first compaction the reference point is the transcript's start. When `compactions_heuristic` is set (transcripts before 2.1.263, the ≥ 30 % drop rule) the header marks the reference point approximate.
 
 ### 4.3 Calibration
@@ -391,14 +397,14 @@ A sibling of `prefix_view`, full height, opened with `m` on the Context panel (`
 
 ### 4.5 The coach rule
 
-`prefix-heavy`, `advisor/rules/token.rs`, urgency **LATER**:
+**A17 `BigPrefix` retuned** (`advisor/rules/token.rs:906`, family `prefix-tip`, urgency **LATER**) — it already exists (§3.1, corrected); no 37th rule:
 
 - **Evidence:** `ContextView::prefix ≥ 50_000` tokens — **decision 9**. The prefix is paid on every request, so its cost is absolute (tokens × calls), not a share of the window. A share-of-window rule (the first draft's 0.30) is inert on a 1 m window however large the prefix; a share-of-size rule fires on half of all sessions (corpus median 32 %). The corpus did not collect windows, so neither ratio was validated; the absolute figure needs none.
 - **Text:** names the two largest prefix rows and what to do — defer MCP servers behind `ToolSearch`, trim the CLAUDE.md it names. Never quotes their content.
-- **`acted`:** the prefix inspector or the sources inspector was opened. `State.agents_view_opens` exists and A48 reads it (`advisor/rules/token.rs:892`); the equivalent counter for these two inspectors **does not exist yet** and is part of US-005.
+- **`acted`:** the prefix inspector or the sources inspector was opened — a new `State.inspector_opens`, bumped by both views, read the way A48 reads `agents_view_opens` (`token.rs:892`). A17 has no `acted` today.
 - **TTL / cooldown:** fires once per session and snoozes long. (The prefix *does* change within a session — §3.2 E grows it, a model switch re-measures it — but the person's lever, which servers and files are always on, does not; once is enough.)
 
-This makes 37 rules. `docs/metrics.md`, the README block and the site regenerate; `cctop coach-replay` must show no existing rule's fire count moving on fixtures A–D.
+36 rules stay 36. A17's fire count on fixtures A–D may move (its threshold did); no other rule's may. `docs/metrics.md`, the README block and the site regenerate.
 
 ### 4.6 Query and MCP
 

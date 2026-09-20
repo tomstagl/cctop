@@ -13,11 +13,11 @@ state exists ("one state, many surfaces").
 
 | Phase | Stories | Touches | Shipped in |
 |---|---|---|---|
-| 1 — The join | US-001 | `src/metrics/residency.rs` (new), `metrics/mod.rs`, `files.rs` | |
+| 1 — The join | US-001 | `metrics/context.rs` (`residency()`, `Anatomy` derived from it), `tools.rs` (`Call.path`), `files.rs` (`bash_read_paths` pub(crate)), `harness_facts.rs`, regenerated `fixture_b_console_context` snapshot and `tests/pane/fixtures/dashboard*.json` | |
 | 2 — Calibration | US-002 | `residency.rs`, `prefix.rs` | |
 | 3 — The inspector | US-003 | `ui/sources_view.rs` (new), `ui/panels/context.rs`, `ui/panels/files.rs`, `ui/state.rs` | |
 | 4 — Query, MCP, registry | US-004 | `query.rs`, `mcp.rs`, `metrics/registry.rs`, `docs/metrics.md`, `README.md` | |
-| 5 — The coach rule | US-005 | `advisor/rules/token.rs`, `ui/state.rs`, registry, site | |
+| 5 — A17 retuned | US-005 | `advisor/rules/token.rs` (A17), `ui/state.rs` (`inspector_opens`), registry, site | |
 
 Nothing in `plugin/` is touched (PRD §7). Nothing is added to
 `State::apply` — `residency.rs` is derived on read, like `metrics/`.
@@ -26,7 +26,15 @@ Nothing in `plugin/` is touched (PRD §7). Nothing is added to
 
 ### Phase 1 — The join (US-001)
 
-`src/metrics/residency.rs`, pure, no I/O:
+**Corrected before code (PRD §3.1):** `metrics/context.rs::anatomy()` already
+joins these numbers into the seven-slice bar. Phase 1 replaces its body with a
+per-call walk and derives `Anatomy` from the result, so the bar, the pane's
+`Body.slices` (five labels, same steps) and `docs/metrics.md`'s
+`context_anatomy` entry keep their shape and become right. The
+`fixture_b_console_context_85x24` snapshot and `tests/pane/fixtures/dashboard*.json`
+regenerate — deliberately, once.
+
+In `metrics/context.rs`, pure, no I/O:
 
 ```rust
 pub struct Row { pub source: Source, pub tokens_est: u64, pub note: String }
@@ -186,7 +194,7 @@ Before and after: `cctop coach-replay` on fixtures A–D, and no existing
 rule's fire count may move. 37 rules; the registry, `docs/metrics.md` and
 the guide regenerate.
 
-Commit: `Coach: a LATER nudge when the fixed prefix dominates the window`.
+Commit: `Coach: A17 fires at a 50 k prefix and retires when an inspector is opened`.
 
 ## 3. Risks and decisions taken early
 
