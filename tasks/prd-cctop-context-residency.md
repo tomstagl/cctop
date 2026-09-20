@@ -14,6 +14,7 @@
 >
 > Added after the corpus sweep (§3.2 I, 2026-09-20):
 > 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". The three over-attributing transcripts are explained (§3.2 I, FR-18/19/20). **Open for the user:** how a `ModelSwitch` re-bases the rows (FR-17, §10.5 has the proposal).
+> 8. **Open for the user:** the coach rule's denominator and threshold (§4.5) — the corpus measured a different ratio than the rule uses.
 
 ---
 
@@ -289,6 +290,17 @@ the opening message; the true prefix survives every compaction, so the
 smallest context seen right after a boundary is a tighter upper bound on
 it — **FR-20**, `prefix = min(prefix, ctx_after_boundary)`.
 
+**v5 confirmation (same corpus, 140 transcripts):** `overflow_raw > 0` on
+**1/140** — #60 only, `per-step 5,768 / global 0`, the estimate-variance
+case FR-16 exists for. #104 and #129 are gone. Model changes on 9/140,
+Δ at the switch negative on **6** (median −19,405) and non-negative on 4.
+
+**The price of FR-18.** Making every negative Δ a boundary resets the rows
+more often, so content before a shrink or a model switch is no longer
+attributed: coverage moved from median 65 % (IQR 58–72) to **61 % (IQR
+53–67)**. Four points of coverage for no phantom attribution of content
+that has left the window. Still roughly double the naive 33 %.
+
 **Calibration, corpus-wide** (what per-step reconciliation had to remove):
 
 | Source | Removed | Kept | Removed % |
@@ -380,10 +392,10 @@ A sibling of `prefix_view`, full height, opened with `m` on the Context panel (`
 
 `prefix-heavy`, `advisor/rules/token.rs`, urgency **LATER**:
 
-- **Evidence:** `ContextView::prefix / window ≥ 0.30`, with `prefix ≥ 20_000` so a small window does not trip it.
+- **Evidence:** `ContextView::prefix / window ≥ 0.30`, with `prefix ≥ 20_000` so a small window does not trip it. **Decision 8, open.** The corpus measured prefix / *size* (median 32 %, p75 75 %), not prefix / *window* — a different denominator, and the sweep did not collect each transcript's window (derivable from `message.model` through `default_window`). So the corpus does not validate 0.30 either way. On a 200 k window 0.30 means a prefix over 60 k; on a 1 m window it would almost never fire. Alternatives: a share of the *window* (as written), a share of the *current size* (fires far more often), or an absolute prefix size.
 - **Text:** names the two largest prefix rows and what to do — defer MCP servers behind `ToolSearch`, trim the CLAUDE.md it names. Never quotes their content.
 - **`acted`:** the prefix inspector or the sources inspector was opened. `State.agents_view_opens` exists and A48 reads it (`advisor/rules/token.rs:892`); the equivalent counter for these two inspectors **does not exist yet** and is part of US-005.
-- **TTL / cooldown:** the prefix does not change within a session, so it fires once per session and snoozes long.
+- **TTL / cooldown:** fires once per session and snoozes long. (The prefix *does* change within a session — §3.2 E grows it, a model switch re-measures it — but the person's lever, which servers and files are always on, does not; once is enough.)
 
 This makes 37 rules. `docs/metrics.md`, the README block and the site regenerate; `cctop coach-replay` must show no existing rule's fire count moving on fixtures A–D.
 
