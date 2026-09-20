@@ -33,6 +33,22 @@
       "window_turns": 1
     },
     {
+      "action": "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins — i on Context shows what the prefix is, m what else fills the window",
+      "action_kind": "setting",
+      "action_text": "",
+      "class": "LATER",
+      "doc_key": "A17",
+      "evidence": "largest: skills listing (1.0k)",
+      "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn; it fires from 50 k tokens whatever the window, because the cost is absolute. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project. On the Context panel, i breaks the prefix down and m shows what else fills the window.",
+      "family": "prefix-tip",
+      "headline": "Fixed prefix 60k tokens ≈$0.10/turn at 8 calls",
+      "retires_on": "an inspector opened (i or m on Context)",
+      "rule": "A17",
+      "saving": "~96k/turn",
+      "since_turn": 14,
+      "window_turns": 1
+    },
+    {
       "action": "pipe through head/grep or Glob, or ask a subagent for a summary — every later call re-reads it",
       "action_kind": "advice",
       "action_text": "",

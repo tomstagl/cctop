@@ -902,8 +902,18 @@ impl Rule for AgentsWaste {
 }
 
 /// A17 — the fixed prefix costs ≥ $0.25 per turn at the cache-read price,
-/// or is ≥ 100 k tokens (a fifth of a 200 k window).
+/// or is ≥ 50 k tokens. The prefix is paid on every request, so its cost is
+/// absolute, not a share of the window (context-residency PRD, decision 9:
+/// a share-of-window rule is inert on a 1 m window, a share-of-size rule
+/// fires on half of all sessions). The figure is the residency model's —
+/// calibrated by a `/context` when one ran, lowered at a boundary that
+/// landed below the first call's — not the raw first call, which overstates
+/// by a third. Acted on when the person opens either inspector (`i`, `m`).
 pub struct BigPrefix;
+
+/// The prefix size A17 fires at when the price arm does not.
+pub const PREFIX_TOKENS: u64 = 50_000;
+
 impl Rule for BigPrefix {
     fn id(&self) -> &'static str {
         "A17"
@@ -915,17 +925,17 @@ impl Rule for BigPrefix {
         Urgency::Later
     }
     fn evaluate(&self, state: &State) -> Option<Advice> {
-        let v = state.context();
-        if v.prefix == 0 {
+        let prefix = state.residency().prefix;
+        if prefix == 0 {
             return None;
         }
         let cpt = calls_per_turn(state);
-        let per_turn_tokens = (v.prefix as f64 * cpt) as u64;
+        let per_turn_tokens = (prefix as f64 * cpt) as u64;
         let per_turn_usd = super::usd(state, per_turn_tokens, PriceKind::CacheRead);
-        if per_turn_usd.is_none_or(|u| u < 0.25) && v.prefix < 100_000 {
+        if per_turn_usd.is_none_or(|u| u < 0.25) && prefix < PREFIX_TOKENS {
             return None;
         }
-        let rows = state.prefix.rows(v.prefix);
+        let rows = state.prefix.rows(prefix);
         let biggest = rows
             .iter()
             .find(|r| r.kind != crate::prefix::Kind::Other)
@@ -940,17 +950,22 @@ impl Rule for BigPrefix {
         let mut a = Advice::new("A17", "prefix-tip", Urgency::Later);
         a.headline = format!(
             "Fixed prefix {} tokens ≈{}/turn at {cpt:.0} calls",
-            fmt::tokens(v.prefix),
+            fmt::tokens(prefix),
             per_turn_usd.map(fmt::usd).unwrap_or_else(|| "?".into())
         );
         a.evidence = format!("{biggest}{captured}");
         a.action =
-            "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins"
+            "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins — i on Context shows what the prefix is, m what else fills the window"
                 .into();
         a.action_kind = ActionKind::Setting;
         // Assumes a fifth of the prefix is trimmable.
         a.saving = Saving::Tokens(per_turn_tokens / 5);
+        a.retires_on = "an inspector opened (i or m on Context)";
+        a.mark = state.inspector_opens;
         Some(a)
+    }
+    fn acted(&self, state: &State, fired: &Advice) -> bool {
+        state.inspector_opens > fired.mark
     }
 }
 
@@ -1007,6 +1022,34 @@ mod tests {
             "cache writes alone never fire A01 now"
         );
         assert!(CacheMiss.evaluate(&fixture_state()).is_none());
+    }
+
+    #[test]
+    fn a17_fires_from_a_50k_prefix_and_retires_when_an_inspector_opens() {
+        // Decision 9 (context-residency PRD): the prefix is paid on every
+        // request, so the rule fires on an absolute size, below the price arm.
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&response("m1", "2026-01-01T00:00:05Z", 10, 60_000, 0));
+        s.apply(&prompt("2026-01-01T00:01:00Z"));
+        s.apply(&response("m2", "2026-01-01T00:01:05Z", 10, 0, 60_010));
+        let a = BigPrefix.evaluate(&s).expect("a 60k prefix fires");
+        assert!(
+            a.headline.starts_with("Fixed prefix 60k tokens"),
+            "{}",
+            a.headline
+        );
+        assert_eq!(a.retires_on, "an inspector opened (i or m on Context)");
+        assert!(!BigPrefix.acted(&s, &a));
+        s.inspector_opens += 1;
+        assert!(BigPrefix.acted(&s, &a), "opening i or m is the act");
+        // Under the threshold the token arm is quiet.
+        let mut q = State::new(Pricing::bundled());
+        q.apply(&prompt("2026-01-01T00:00:00Z"));
+        q.apply(&response("m1", "2026-01-01T00:00:05Z", 10, 40_000, 0));
+        q.apply(&prompt("2026-01-01T00:01:00Z"));
+        q.apply(&response("m2", "2026-01-01T00:01:05Z", 10, 0, 40_010));
+        assert!(BigPrefix.evaluate(&q).is_none());
     }
 
     #[test]
@@ -1665,7 +1708,7 @@ mod tests {
     fn a17_big_prefix_is_priced_per_turn() {
         let mut s = State::new(Pricing::bundled());
         s.apply(&prompt("2026-01-01T00:00:00Z"));
-        // 120k of prefix on the first call: over the 100k floor.
+        // 120k of prefix on the first call: over the token arm.
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":120000,"input_tokens":10}}}"#).unwrap());
         let a = BigPrefix.evaluate(&s).expect("fires");
         assert!(
@@ -1676,11 +1719,16 @@ mod tests {
         assert!(a.headline.ends_with("/turn at 1 calls"), "{}", a.headline);
         assert_eq!(a.action_kind, ActionKind::Setting);
         assert_eq!(a.saving, Saving::Tokens(24_000));
-        // 60k on Opus at one call per turn: $0.03/turn, quiet — a prefix
-        // this size is every session's on a plugin-heavy setup.
+        // 40k on Opus at one call per turn: $0.02/turn and under PREFIX_TOKENS,
+        // quiet. (This case was 60k when the token arm sat at 100k, with the
+        // note that a 60k prefix "is every session's on a plugin-heavy
+        // setup" — decision 9 of the context-residency PRD moved the arm to
+        // 50k on the grounds that the cost is absolute; the raw first-call
+        // figure runs 47–62k on this machine, so the threshold is flagged
+        // for review in that PRD's hand-off.)
         let mut small = State::new(Pricing::bundled());
         small.apply(&prompt("2026-01-01T00:00:00Z"));
-        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":60000,"input_tokens":10}}}"#).unwrap());
+        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":40000,"input_tokens":10}}}"#).unwrap());
         assert!(BigPrefix.evaluate(&small).is_none());
         // 60k at 15 calls per turn on Opus: ≈$0.45/turn, fires.
         let mut busy = State::new(Pricing::bundled());
