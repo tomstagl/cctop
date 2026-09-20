@@ -11,6 +11,9 @@
 > 4. **Opportunistic calibration.** The raw estimate is `chars / 4`, the divisor `tools.rs::top_ctx` already uses. When the session has a `/context` capture (`ContextCapture`, already parsed in `transcript/local_command.rs`), the total is reconciled against its real `Messages` figure and the rows are scaled; the header says which mode it is in. No persisted per-model ratio in v1.
 > 5. **One new coach rule, on the prefix share** — not on files. The lever the measurement found is the fixed prefix, and it is the one a person can act on. Urgency LATER, `acted` when the inspector is opened.
 > 6. **Surfaces: the inspector, `cctop query`, `mcp.rs`, the coach rule. Not the pane in v1.** All nine digit slots in `ui/panels/mod.rs` are taken, so this is a full-height inspector like `prefix_view`, not a tenth panel.
+>
+> Added after the corpus sweep (§3.2 I, 2026-09-20):
+> 7. **Per-step reconciliation against the exact Δcontext** (FR-16) replaces "the identity is the test". Open until the v4 dump is read: what the three over-attributing transcripts were, and how a model switch re-bases the rows (FR-17, §10.4–5).
 
 ---
 
@@ -208,6 +211,75 @@ control) — it doubles what the obvious implementation would explain. The 34 %
 remainder is a minority, which is the bar the view has to clear to be worth
 drawing. `session-a`'s 66 % is a cap artefact, not a result.
 
+### 3.2 I — The real corpus (139 transcripts, the user's machine, 2026-09-20)
+
+A privacy-safe sweep script (numbers only, never content or paths) ported the
+§4 model and was run over `~/.claude/projects` on the user's machine: 165
+files, 139 usable, 8,823 API calls, Claude Code 2.1.247–2.1.278, four runs as
+the script was corrected. What follows is what survived.
+
+**Confirmed.**
+
+| Claim | Corpus result |
+|---|---|
+| Coverage: the model attributes a majority of messages | **median 65 %**, IQR 58–72 %, over 119 transcripts — the single-session 66 % sits at the median |
+| `output_tokens` includes `thinking_tokens` | Regressing the per-step residual on `think_prev`: slope **−0.07** (n = 136 clean steps). The cap `out − think` in §4.2 is right |
+| Thinking is resident across **human-turn** boundaries | On every local transcript, 2.1.247–2.1.278: the "stripped at a new human message" model leaves a residual of +3 k to +30 k where the resident model leaves a few hundred to ~3 k. Not stripped |
+| chars/4 on tool **results** does not overshoot | 31 steps with ≥ 500 estimated tokens injected, uncapped live transcript: estimate/exact **median 0.62**, overshoot on **0/31**. It undershoots code by ~40 %; it is not an over-attribution source |
+| The prefix/messages split bias | The one real `/context` capture found reproduces +0.05 % total, **+33 % prefix** — but it is the same session `session-d.jsonl` was anonymised from (identical token figures). Still **n = 1** |
+
+**Refined — `LatePrefix` is real, common, one-off, early; it is not bimodal.**
+
+| Fires at 5 000 per transcript | Transcripts |
+|---|---|
+| 0 | 69 (50 %) |
+| 1 | 41 |
+| 2 | 13 |
+| 3–4 | 12 |
+| 5+ | 4 |
+
+Position of the *first* fire: **median 8 %** through the session, p75 25 %.
+Half of sessions never trip it; of the half that do, most trip it once, early.
+That is the §3.2 E story (tools and skills landing at the start) — but the
+pooled residual distribution is continuous (p95 2,621, p99 6,812, max
+66,472), not two clusters with a gap, so **no single threshold is a clean
+cut**. `LATE_PREFIX_MIN = 5_000` stays as an approximation of a continuous
+phenomenon; the row is framed as "this session's one-time tool/skill cost",
+not as an anomaly flag.
+
+**Falsified — the identity check is a weak test, and the model missed a
+whole class of event.**
+
+Four hypotheses for three transcripts that over-attributed (`Σ rows > size`
+by 309, 3,630 and 13,168) were tested and refuted by counters that read zero
+on all three: a duplicated `tool_use`/`tool_result` line (retry, resume); an
+orphan result; `len(json.dumps(tool_use.input))` re-escaping a large Edit
+(+13 % measured — real, and fixed by measuring decoded string lengths like
+every other bucket, but not the cause); and thinking stripped at human
+turns (above). The two structural findings that came out instead:
+
+1. **The identity `Σ rows == size` only fails when over-attribution exceeds
+   `Text`'s headroom.** The live transcript carries a 28,700-token error
+   and *holds*, because `Text` has ~50 k of slack to hide it in. Passing
+   the identity is not evidence the rows are right.
+2. **The measuring stick moves.** At exactly the `/model claude-sonnet-5`
+   switch (line 445 → first sonnet call at line 460), the cache rebuilt
+   from zero (`cache_read 219,492 → 0`, `cache_creation 214 → 191,006`)
+   and the *same* conversation re-measured **28,700 tokens (13 %) smaller**.
+   A different tokenizer, a different per-model prefix, or both — it cannot
+   be told from one number. Every estimate is in model-independent chars/4;
+   `msgs` is in whatever the current model's tokens are. 3 of 5 fixtures
+   also switch model mid-session, all with non-negative Δ, so a switch does
+   not always shrink — it depends on the pair.
+
+Whether the three transcripts are model switches, sub-heuristic shrinks, or
+something else is **open** until the v4 sweep (per-call numbers-only dump)
+is read; §10.4.
+
+**Consequences for §4 — FR-16, FR-17, FR-18.** Reconcile every step's
+estimate against that step's *exact* growth, treat a model change as a
+boundary kind of its own, and stop treating the identity as the test.
+
 ## 4. Design
 
 ### 4.1 The source kinds
@@ -325,6 +397,9 @@ The `sources` array, the MCP tool, the registry entries with `estimate` set and 
 13. `LATE_PREFIX_MIN = 5_000` (§3.2 F).
 14. In `Estimated` mode the prefix row carries a mark saying it overstates (§3.2 G); the header invites one `/context` run to make the split exact.
 15. There is exactly **one** remainder row, computed last. A compaction summary is never a positive bucket (§3.2 H.3); the row is named `summary + text` when a boundary is in range and `text` otherwise.
+16. **Per-step reconciliation.** At each API call, `Δcontext − previous output_tokens` is the exact number of tokens everything injected between the two calls could have cost. Estimates for that step are scaled down to fit it, never up; the amount removed per source is kept and reported (§3.2 I). `Σ rows == size` holds by construction and is **not** the correctness test — the pre-reconciliation overflow is.
+17. **A model change is a boundary of its own kind** (`Reference::ModelSwitch`). Estimates before it are in a different model's tokens than `size`; the header names the switch and the Δ it produced. How the pre-switch rows are re-based (uniform scale by the observed ratio, or shown as one "before the switch" row) is decision 7, taken at Phase 1 with the v4 numbers in hand.
+18. A sub-heuristic shrink (Δcontext < 0 that is not a ≥ 30 % drop) is recorded and shown; content left the window and the rows that carried it are scaled by the global reconciliation, which is reported as a factor.
 
 ## 7. Non-goals
 
@@ -354,6 +429,8 @@ The inspector borrows `prefix_view`'s frame, column widths and `Esc` behaviour s
 1. ~~Does the inspector key collide?~~ **Answered 2026-09-20.** `c` is taken twice in `app.rs` (l589, l635) plus `ctrl+c`. The bound set is `$ + - / 0 = ? A G L N S a c d e f g i j k l n p q s t x`; `m` is free, which is why §4.4 binds it.
 2. ~~Should `Conversation` split into assistant text vs thinking?~~ **Answered 2026-09-20, yes — see §3.2 D.** It is the one row that can be exact.
 3. **The prefix row in `calibrated` mode** takes three `/context` categories; if Claude Code renames or adds one, `harness_facts::first_seen` needs an entry. Worth checking against 2.1.274 before US-002.
+4. **What over-attributed on the three corpus transcripts** (§3.2 I). Candidates left: a model switch that shrank the measurement, a shrink with no marked boundary, a content type whose chars/4 overshoots. The v4 sweep's per-call dump answers it from numbers alone; Phase 1 does not start until it is read.
+5. **Model-switch re-basing** (FR-17): uniform scale, or a separate row? Needs the Δ distribution across the corpus's switches, which v4 reports.
 
 ## 11. Follow-ups
 
