@@ -18,9 +18,9 @@ pub fn all() -> Vec<Box<dyn Rule>> {
     ]
 }
 
-/// A06 — a compaction happened (exact `compact_boundary`; the ≥ 30 % drop
-/// heuristic only before 2.1.263) and either the compacted context is still
-/// within 20 k of the threshold, or it was the second one.
+/// A06 — a compaction happened (exact `compact_boundary`; inferred from the
+/// drops between API calls before 2.1.263) and either the compacted context
+/// is still within 20 k of the threshold, or it was the second one.
 pub struct PostCompaction;
 impl Rule for PostCompaction {
     fn id(&self) -> &'static str {

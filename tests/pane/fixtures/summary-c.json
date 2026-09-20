@@ -124,7 +124,7 @@
       "approx": false,
       "metric_id": "compactions",
       "unit": "count",
-      "value": 0
+      "value": 1
     },
     "prefix": {
       "approx": false,
@@ -144,12 +144,17 @@
       "unit": "tokens",
       "value": 60070
     },
-    "turns_until_compaction": null,
+    "turns_until_compaction": {
+      "approx": false,
+      "metric_id": "turns_until_compaction",
+      "unit": "turns",
+      "value": 27.262105355467824
+    },
     "velocity": {
       "approx": false,
       "metric_id": "context_velocity",
       "unit": "tokens/turn",
-      "value": -1262.86528
+      "value": 4086.9184000000005
     },
     "window": {
       "approx": true,

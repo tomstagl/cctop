@@ -42,7 +42,7 @@
             "tone": "dim"
           },
           {
-            "text": "967k",
+            "text": "171k",
             "tone": "fg"
           },
           {
@@ -50,7 +50,7 @@
             "tone": "dim"
           },
           {
-            "text": "906k",
+            "text": "111k",
             "tone": "fg"
           },
           {
@@ -58,7 +58,7 @@
             "tone": "dim"
           },
           {
-            "text": "   +0/turn",
+            "text": "   +4.1k/turn",
             "tone": "dim"
           }
         ],
@@ -220,7 +220,7 @@
             "tone": "dim"
           },
           {
-            "text": "0",
+            "text": "1",
             "tone": "fg"
           },
           {
@@ -238,6 +238,14 @@
           {
             "text": "0",
             "tone": "fg"
+          },
+          {
+            "text": "   autocompact in ",
+            "tone": "dim"
+          },
+          {
+            "text": "~28 turns",
+            "tone": "fg"
           }
         ],
         [],
@@ -249,7 +257,7 @@
         ],
         [
           {
-            "text": "  threshold 967k · 906k left · prefix 58k (97 %)",
+            "text": "  threshold 171k · 111k left · prefix 58k (97 %)",
             "tone": "dim"
           }
         ]
@@ -2338,7 +2346,7 @@
           "tone": "dim"
         },
         {
-          "text": "906k left",
+          "text": "111k left",
           "tone": "fg"
         }
       ],
@@ -2356,7 +2364,7 @@
           "tone": "dim"
         },
         {
-          "text": "906k left",
+          "text": "111k left",
           "tone": "fg"
         }
       ],

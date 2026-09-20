@@ -386,7 +386,7 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>Each compaction spends output tokens on a summary and loses detail the model then has to re-derive.</dd>
 <dt class="act">What to do</dt><dd>Two or more compactions in one session usually means it would have been cheaper to end the session at a natural boundary and start fresh.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A06">A06 Compaction churn</a> · <a href="advisor.html#A42">A42 Natural boundary</a></dd>
-<dt>Measured</dt><dd class="meta">count · from the transcript · hook events (after cctop install) · Before Claude Code 2.1.263 a ≥ 30 % context drop between turns is taken as a compaction · <a href="../metrics.html#compactions">how</a></dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · hook events (after cctop install) · Before Claude Code 2.1.263 (no `compact_boundary`) a drop between two API calls is a compaction when the compaction summary or a `/compact` sits between them, or when it is ≥ 30 % on the same model with no `/model` between (a model switch or a handover re-measures the window) · <a href="../metrics.html#compactions">how</a></dd>
 </dl></article>
 <nav class="pager" aria-label="Panels"><a href="coach.html">← c Coach</a><a href="tokens-cost.html">2 Tokens &amp; Cost →</a></nav>
 <footer class="colophon">

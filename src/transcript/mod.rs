@@ -307,6 +307,10 @@ impl UserLine {
         }
         let text = self.message.content.text();
         let t = text.trim_start();
+        // Before 2.1.263 the summary has no flag: its first sentence marks it.
+        if t.starts_with(crate::harness_facts::compaction::SUMMARY_PREAMBLE) {
+            return PromptKind::CompactSummary;
+        }
         if self.interrupted_message_id.is_some() || t.starts_with("[Request interrupted by user") {
             return PromptKind::Interrupt;
         }
@@ -1666,6 +1670,23 @@ mod tests {
         );
         assert_eq!(
             mk(r#","isCompactSummary":true"#, &q("summary")).prompt_kind(),
+            PromptKind::CompactSummary
+        );
+        // Before 2.1.263 the summary carries no flag: its first sentence.
+        assert_eq!(
+            mk(
+                "",
+                &q(&format!(
+                    "{} The conversation is summarized below:",
+                    crate::harness_facts::compaction::SUMMARY_PREAMBLE
+                ))
+            )
+            .prompt_kind(),
+            PromptKind::CompactSummary
+        );
+        // A session moved between machines opens differently: a handover.
+        assert_ne!(
+            mk("", &q(crate::harness_facts::compaction::HANDOVER_PREAMBLE)).prompt_kind(),
             PromptKind::CompactSummary
         );
         assert_eq!(
