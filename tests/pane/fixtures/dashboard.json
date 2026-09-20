@@ -1286,7 +1286,7 @@
         ],
         [
           {
-            "text": "    NEXT · since turn 14 · +3 queued (n)",
+            "text": "    NEXT · since turn 14 · +2 queued (n)",
             "tone": "dim"
           }
         ],
@@ -1333,12 +1333,6 @@
         [
           {
             "text": "  NEXT A23 ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
-            "tone": "dim"
-          }
-        ],
-        [
-          {
-            "text": "  LATER A17 Fixed prefix 60k tokens ≈$0.10/turn at 8 calls",
             "tone": "dim"
           }
         ],

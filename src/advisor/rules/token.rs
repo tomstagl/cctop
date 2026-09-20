@@ -7,6 +7,7 @@
 use super::{calls_per_turn, human_turns_since, model_short, recent_turns, usd_label, PriceKind};
 use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
 use crate::harness_facts::context_suggestions as ctx_rules;
+use crate::metrics::context::Mode;
 use crate::phase::ToolClass;
 use crate::ui::fmt;
 use crate::ui::State;
@@ -902,16 +903,21 @@ impl Rule for AgentsWaste {
 }
 
 /// A17 — the fixed prefix costs ≥ $0.25 per turn at the cache-read price,
-/// or is ≥ 50 k tokens. The prefix is paid on every request, so its cost is
-/// absolute, not a share of the window (context-residency PRD, decision 9:
-/// a share-of-window rule is inert on a 1 m window, a share-of-size rule
-/// fires on half of all sessions). The figure is the residency model's —
-/// calibrated by a `/context` when one ran, lowered at a boundary that
-/// landed below the first call's — not the raw first call, which overstates
-/// by a third. Acted on when the person opens either inspector (`i`, `m`).
+/// or, once a `/context` has measured it, is ≥ 50 k tokens. The prefix is
+/// paid on every request, so its cost is absolute, not a share of the window
+/// (context-residency PRD, decision 9: a share-of-window rule is inert on a
+/// 1 m window, a share-of-size rule fires on half of all sessions). The
+/// figure is the residency model's — the `/context` table's when one ran,
+/// lowered at a boundary that landed below the first call's. The token arm
+/// waits for that calibration (PRD §10.6): the raw first call overstates the
+/// prefix by a third and runs 47–62 k on a plugin-heavy setup, so an
+/// `Estimated` figure over 50 k gets the sources inspector's own invitation
+/// to run `/context`, not a nudge. The price arm reads either figure. Acted
+/// on when the person opens either inspector (`i`, `m`).
 pub struct BigPrefix;
 
-/// The prefix size A17 fires at when the price arm does not.
+/// The prefix size A17 fires at when the price arm does not — compared
+/// only against a calibrated prefix (`Mode::Calibrated`, a `/context` ran).
 pub const PREFIX_TOKENS: u64 = 50_000;
 
 impl Rule for BigPrefix {
@@ -925,14 +931,16 @@ impl Rule for BigPrefix {
         Urgency::Later
     }
     fn evaluate(&self, state: &State) -> Option<Advice> {
-        let prefix = state.residency().prefix;
+        let r = state.residency();
+        let prefix = r.prefix;
         if prefix == 0 {
             return None;
         }
         let cpt = calls_per_turn(state);
         let per_turn_tokens = (prefix as f64 * cpt) as u64;
         let per_turn_usd = super::usd(state, per_turn_tokens, PriceKind::CacheRead);
-        if per_turn_usd.is_none_or(|u| u < 0.25) && prefix < PREFIX_TOKENS {
+        let calibrated = matches!(r.mode, Mode::Calibrated { .. });
+        if per_turn_usd.is_none_or(|u| u < 0.25) && !(calibrated && prefix >= PREFIX_TOKENS) {
             return None;
         }
         let rows = state.prefix.rows(prefix);
@@ -1024,32 +1032,78 @@ mod tests {
         assert!(CacheMiss.evaluate(&fixture_state()).is_none());
     }
 
-    #[test]
-    fn a17_fires_from_a_50k_prefix_and_retires_when_an_inspector_opens() {
-        // Decision 9 (context-residency PRD): the prefix is paid on every
-        // request, so the rule fires on an absolute size, below the price arm.
+    /// What `/context` printed, as Claude Code records it: a `local_command`
+    /// stdout with one `Name: Nk tokens` line per category.
+    fn context_table(ts: &str, categories: &[(&str, &str)]) -> Line {
+        let rows: String = categories
+            .iter()
+            .map(|(name, tokens)| format!("\\n  {name}: {tokens} tokens (1.0%)"))
+            .collect();
+        Line::parse(&format!(
+            r#"{{"type":"system","subtype":"local_command","timestamp":"{ts}","content":"<local-command-stdout> Context Usage\n  claude-opus-5\n  88.7k/1m tokens (9%){rows}\n</local-command-stdout>"}}"#
+        ))
+        .unwrap()
+    }
+
+    /// Two turns on a raw first-call prefix of 60 k.
+    fn sixty_k() -> State {
         let mut s = State::new(Pricing::bundled());
         s.apply(&prompt("2026-01-01T00:00:00Z"));
         s.apply(&response("m1", "2026-01-01T00:00:05Z", 10, 60_000, 0));
         s.apply(&prompt("2026-01-01T00:01:00Z"));
         s.apply(&response("m2", "2026-01-01T00:01:05Z", 10, 0, 60_010));
-        let a = BigPrefix.evaluate(&s).expect("a 60k prefix fires");
+        s
+    }
+
+    #[test]
+    fn a17_fires_from_a_calibrated_50k_prefix_and_retires_when_an_inspector_opens() {
+        // Decision 9 (context-residency PRD): the prefix is paid on every
+        // request, so the rule fires on an absolute size, below the price
+        // arm — but only on the figure a /context measured (§10.6): the raw
+        // first call overstates it by a third.
+        let mut s = sixty_k();
+        s.apply(&context_table(
+            "2026-01-01T00:01:10Z",
+            &[
+                ("System prompt", "10k"),
+                ("System tools", "45k"),
+                ("Messages", "5k"),
+            ],
+        ));
+        assert!(matches!(s.residency().mode, Mode::Calibrated { .. }));
+        let a = BigPrefix
+            .evaluate(&s)
+            .expect("a calibrated 55k prefix fires");
         assert!(
-            a.headline.starts_with("Fixed prefix 60k tokens"),
+            a.headline.starts_with("Fixed prefix 55k tokens"),
             "{}",
             a.headline
         );
+        assert!(a.evidence.ends_with("/context: 88k used"), "{}", a.evidence);
         assert_eq!(a.retires_on, "an inspector opened (i or m on Context)");
         assert!(!BigPrefix.acted(&s, &a));
         s.inspector_opens += 1;
         assert!(BigPrefix.acted(&s, &a), "opening i or m is the act");
-        // Under the threshold the token arm is quiet.
-        let mut q = State::new(Pricing::bundled());
-        q.apply(&prompt("2026-01-01T00:00:00Z"));
-        q.apply(&response("m1", "2026-01-01T00:00:05Z", 10, 40_000, 0));
-        q.apply(&prompt("2026-01-01T00:01:00Z"));
-        q.apply(&response("m2", "2026-01-01T00:01:05Z", 10, 0, 40_010));
-        assert!(BigPrefix.evaluate(&q).is_none());
+        // The same raw 60k, calibrated to fixture D's 46.2k: under the
+        // threshold, quiet.
+        let mut d = sixty_k();
+        d.apply(&context_table(
+            "2026-01-01T00:01:10Z",
+            &[
+                ("System prompt", "10.2k"),
+                ("System tools", "31.2k"),
+                ("Skills", "4.8k"),
+                ("Messages", "42.9k"),
+            ],
+        ));
+        assert_eq!(d.residency().prefix, 46_200);
+        assert!(BigPrefix.evaluate(&d).is_none());
+        // No /context: the raw 60k is an estimate, and the token arm waits.
+        // The sources inspector's footer invites the /context instead.
+        let e = sixty_k();
+        assert_eq!(e.residency().mode, Mode::Estimated);
+        assert_eq!(e.residency().prefix, 60_000);
+        assert!(BigPrefix.evaluate(&e).is_none());
     }
 
     #[test]
@@ -1708,8 +1762,22 @@ mod tests {
     fn a17_big_prefix_is_priced_per_turn() {
         let mut s = State::new(Pricing::bundled());
         s.apply(&prompt("2026-01-01T00:00:00Z"));
-        // 120k of prefix on the first call: over the token arm.
+        // 120k of prefix on the first call, confirmed by a /context: over the
+        // token arm at Haiku's cache-read price of a cent per turn.
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-haiku-4-5","content":[],"usage":{"cache_read_input_tokens":120000,"input_tokens":10}}}"#).unwrap());
+        assert!(
+            BigPrefix.evaluate(&s).is_none(),
+            "estimated, the token arm waits for a /context"
+        );
+        s.apply(&context_table(
+            "2026-01-01T00:00:02Z",
+            &[
+                ("System prompt", "20k"),
+                ("System tools", "90k"),
+                ("Memory files", "10k"),
+                ("Messages", "1k"),
+            ],
+        ));
         let a = BigPrefix.evaluate(&s).expect("fires");
         assert!(
             a.headline.starts_with("Fixed prefix 120k tokens ≈$"),
@@ -1719,18 +1787,17 @@ mod tests {
         assert!(a.headline.ends_with("/turn at 1 calls"), "{}", a.headline);
         assert_eq!(a.action_kind, ActionKind::Setting);
         assert_eq!(a.saving, Saving::Tokens(24_000));
-        // 40k on Opus at one call per turn: $0.02/turn and under PREFIX_TOKENS,
-        // quiet. (This case was 60k when the token arm sat at 100k, with the
-        // note that a 60k prefix "is every session's on a plugin-heavy
-        // setup" — decision 9 of the context-residency PRD moved the arm to
-        // 50k on the grounds that the cost is absolute; the raw first-call
-        // figure runs 47–62k on this machine, so the threshold is flagged
-        // for review in that PRD's hand-off.)
+        // A raw 60k on Opus at one call per turn is every session's on a
+        // plugin-heavy setup and $0.03/turn: quiet. Decision 9 of the
+        // context-residency PRD put the token arm at 50k because the cost is
+        // absolute, and its §10.6 kept it there but gated on a /context — the
+        // raw figure runs 47–62k on this machine and overstates by a third.
         let mut small = State::new(Pricing::bundled());
         small.apply(&prompt("2026-01-01T00:00:00Z"));
-        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":40000,"input_tokens":10}}}"#).unwrap());
+        small.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"id":"p1","model":"claude-opus-5","content":[],"usage":{"cache_read_input_tokens":60000,"input_tokens":10}}}"#).unwrap());
         assert!(BigPrefix.evaluate(&small).is_none());
-        // 60k at 15 calls per turn on Opus: ≈$0.45/turn, fires.
+        // 60k at 15 calls per turn on Opus: ≈$0.45/turn, fires — the price
+        // arm reads the estimate; only the token arm waits for a /context.
         let mut busy = State::new(Pricing::bundled());
         busy.apply(&prompt("2026-01-01T00:00:00Z"));
         for i in 0..15 {
