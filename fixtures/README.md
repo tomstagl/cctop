@@ -51,7 +51,11 @@ Layout mirrors `~/.claude`:
   synthetic lines in `src/agent_ledger.rs`. The anonymiser keeps the
   notification's element names, ids, statuses and numbers and fills its
   text; agent ids stay as written so the file name, the launch result and
-  the notification agree.
+  the notification agree. The seam where the spliced segment begins is a
+  171 488 → 60 070 drop inside one turn, same model, nothing between: on a
+  2.1.258 transcript that reads as one inferred compaction (`compactions 1
+  ≈`, the threshold learned from it), which is what the unmarked case of
+  `metrics::context::inferred_compactions` is tested on.
 
 - `session-d.jsonl` + `session-d/teammates/` + `session-d.team.json` — the
   team fixture (722 lines, 2.1.269): a lead that spawned a teammate through

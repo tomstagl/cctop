@@ -275,6 +275,20 @@ pub struct CacheMissRecord {
     pub message_id: String,
 }
 
+/// A line between two API calls that says what a context drop across them
+/// is, on transcripts too old for `compact_boundary`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropMark {
+    /// The post-compaction summary: the drop after it is a compaction,
+    /// whatever its size.
+    CompactSummary,
+    /// The person ran `/compact`: so is the drop after that.
+    CompactCommand,
+    /// The person ran `/model`: the window is re-measured, and a drop after
+    /// it is not a compaction unless a summary says so.
+    ModelCommand,
+}
+
 /// A point after which the model's context is not what it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoundaryKind {
@@ -359,6 +373,10 @@ pub struct Aggregate {
     pub compactions: Vec<CompactionRecord>,
     /// Context boundaries, in order.
     pub boundaries: Vec<Boundary>,
+    /// `(calls so far, mark)`: the mark sits between call `n − 1` and call
+    /// `n` of `calls`. What the context view reads a drop by on transcripts
+    /// before 2.1.263 (`metrics::context::inferred_compactions`).
+    pub drop_marks: Vec<(usize, DropMark)>,
     /// The Claude Code version that wrote the transcript (first seen).
     pub version: Option<String>,
     /// The transcript's own `sessionId` (first seen): a fixture has no
@@ -541,8 +559,20 @@ impl Aggregate {
                                     kind: BoundaryKind::Clear,
                                 });
                             }
+                            let mark = match cmd.as_str() {
+                                "/compact" => Some(DropMark::CompactCommand),
+                                "/model" => Some(DropMark::ModelCommand),
+                                _ => None,
+                            };
+                            if let Some(mark) = mark {
+                                self.drop_marks.push((self.calls.len(), mark));
+                            }
                             self.slash_commands.push((turn, cmd));
                         }
+                    }
+                    PromptKind::CompactSummary => {
+                        self.drop_marks
+                            .push((self.calls.len(), DropMark::CompactSummary));
                     }
                     _ => {}
                 }
@@ -1203,6 +1233,48 @@ mod tests {
             .turns
             .iter()
             .all(|t| t.first_call_input > 0 || t.api_calls == 0));
+    }
+
+    #[test]
+    fn drop_marks_sit_between_calls() {
+        let mut a = Aggregate::default();
+        let user = |text: &str| {
+            Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"2026-01-01T00:00:00Z","version":"2.1.247","message":{{"role":"user","content":{}}}}}"#,
+                serde_json::to_string(text).unwrap()
+            ))
+            .unwrap()
+        };
+        let call = |id: &str| {
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{{"id":"{id}","model":"m","content":[],"usage":{{"input_tokens":10}}}}}}"#
+            ))
+            .unwrap()
+        };
+        a.push(&user("go"));
+        a.push(&call("c1"));
+        a.push(&user("<command-name>/model</command-name>"));
+        a.push(&call("c2"));
+        // Before 2.1.263 the summary has no flag: its first sentence marks it.
+        a.push(&user(&format!(
+            "{} The conversation is summarized below:",
+            crate::harness_facts::compaction::SUMMARY_PREAMBLE
+        )));
+        a.push(&user("<command-name>/compact</command-name>"));
+        a.push(&call("c3"));
+        a.push(&user("<command-name>/clear</command-name>"));
+        assert_eq!(
+            a.drop_marks,
+            vec![
+                (1, DropMark::ModelCommand),
+                (2, DropMark::CompactSummary),
+                (2, DropMark::CompactCommand),
+            ],
+            "/clear is a boundary already, not a mark"
+        );
+        // The summary and the commands are not turns.
+        assert_eq!(a.turns.len(), 1);
+        assert_eq!(a.calls.len(), 3);
     }
 
     #[test]

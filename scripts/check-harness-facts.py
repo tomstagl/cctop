@@ -2,7 +2,8 @@
 """Re-verifies src/harness_facts.rs against the installed Claude Code.
 
 The binary's constants (autocompact arithmetic, /usage weights, /context
-thresholds, the model catalog's effort_cost_index) live as literals inside
+thresholds, the model catalog's effort_cost_index, the compaction summary's
+first sentence) live as literals inside
 Claude Code's bundle. Each probe below finds one by a stable anchor — a
 user-facing string, an env-var name, a field name — never by a minified
 identifier (those change every release), and compares what it finds with
@@ -111,6 +112,14 @@ def rust_consts(text: str, module: str) -> dict[str, str]:
         name: value.replace("_", "")
         for name, value in re.findall(r"pub const ([A-Z_]+): [a-z0-9]+ = ([0-9._]+);", body)
     }
+
+
+def rust_str_consts(text: str, module: str) -> dict[str, str]:
+    """`pub const NAME: &str = "VALUE";` inside `pub mod <module> { … }`."""
+    m = re.search(r"pub mod " + module + r" \{(.*?)\n\}", text, re.S)
+    if not m:
+        return {}
+    return dict(re.findall(r'pub const ([A-Z_]+): &str =\s*"([^"]*)";', m.group(1)))
 
 
 def rust_table(text: str, name: str) -> list[tuple[str, list[str]]]:
@@ -341,6 +350,19 @@ def probe_teams(facts: str, r: Report) -> None:
 
 
 # -------------------------------------------------------------------- main
+def probe_compaction(text: str, facts: str, r: Report) -> None:
+    """The compaction summary's first sentence (and the handover's): user-facing
+    strings, each its own anchor — the bundle either still says it or not."""
+    have = rust_str_consts(facts, "compaction")
+    for name in ("SUMMARY_PREAMBLE", "HANDOVER_PREAMBLE"):
+        want = have.get(name)
+        if want is None:
+            r.add(f"compaction::{name}", "(declared)", None, "not found in harness_facts.rs")
+            continue
+        shown = want[:48] + "…"
+        r.add(f"compaction::{name}", shown, shown if want in text else None, "a user-facing string")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--bundle", help="the Claude Code bundle to read (default: the installed claude)")
@@ -374,6 +396,7 @@ def main() -> int:
     probe_autocompact(text, facts, r)
     probe_usage_weight(text, facts, r)
     probe_context_suggestions(text, facts, r)
+    probe_compaction(text, facts, r)
     rows = probe_catalog(text, facts, r)
     probe_teams(facts, r)
     r.print()

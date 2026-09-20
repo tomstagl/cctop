@@ -3,7 +3,7 @@
 
 use crate::harness_facts::{autocompact, first_seen};
 
-use super::usage::Aggregate;
+use super::usage::{Aggregate, DropMark};
 
 /// Default context window per model family when the status line is absent.
 pub fn default_window(model: Option<&str>) -> u64 {
@@ -15,8 +15,32 @@ pub fn default_window(model: Option<&str>) -> u64 {
     }
 }
 
-/// A drop of at least this share between consecutive turns is taken as a
-/// compaction on transcripts too old to carry `compact_boundary`.
+/// The last resort of [`inferred_compactions`] on transcripts before
+/// 2.1.263 (no `compact_boundary`): an unmarked drop of at least this share
+/// between two API calls of the same model, with no `/model` between them,
+/// is a compaction. Also the discontinuity filter of the velocity EMA.
+///
+/// Re-derived 2026-09-20 against this machine's corpus — 168 transcripts,
+/// 2.1.247 – 2.1.278; the §3.2 I sweep of
+/// `tasks/prd-cctop-context-residency.md` (PR #10) redone per API call,
+/// with the lines between each pair of calls classified — and left at
+/// 0.30. The compactions its markers confirm dropped 73 % (fixture B) and
+/// 91 % (twice, 1M windows). The unmarked drops that are not compactions
+/// were nine of ≤ 10 %, two on model switches (21 %, 36 %) and, on the same
+/// model, one of 27.3 % — the PRD's #104, "content left the window
+/// unmarked": a session handed over to another machine
+/// (`remote_session_change`), with no summary after it. Once the switches
+/// are excluded, any value in (0.28, 0.73) fits that corpus; and the ratio
+/// cannot go much higher, because on a 200 k window a compaction leaves the
+/// prefix (47–62 k on a plugin-heavy setup), the summary (~30 k, the
+/// corpus's `postTokens`) and the files it re-injects behind, against a
+/// 167 k threshold — a real drop of 20–35 %, which is what the summary mark
+/// exists to catch. The drops a ratio alone cannot separate from a
+/// compaction are excluded by their own evidence instead: the model
+/// changed (fixture B's switch re-measured the window 30 % smaller), or a
+/// `/model` ran (fixture D's kept the model id and re-measured it 47 %
+/// smaller). The corpus holds no compaction before 2.1.263 to test the
+/// fallback on; the marks are the mechanism, this ratio the net.
 pub const COMPACTION_DROP_RATIO: f64 = 0.30;
 const EMA_ALPHA: f64 = 1.0 / 5.0;
 
@@ -47,8 +71,9 @@ pub struct ContextView {
     /// not `+0/turn` (PRD dashboard-v2 FR-11).
     pub velocity: Option<f64>,
     pub compactions: Vec<Compaction>,
-    /// The compactions come from the ≥ 30 % drop heuristic (transcripts
-    /// before 2.1.263), not from `compact_boundary` lines.
+    /// The compactions were inferred from the drops between API calls
+    /// ([`inferred_compactions`]; transcripts before 2.1.263), not read
+    /// from `compact_boundary` lines.
     pub compactions_heuristic: bool,
     /// Autocompact threshold in tokens: effective window − 13 000, or the
     /// size observed just before a compaction when one was seen.
@@ -102,11 +127,11 @@ pub fn view(
         .filter(|t| t.api_calls > 0)
         .map(|t| t.number)
         .collect();
-    // Exact records when the transcript can carry them; the drop heuristic
-    // only on older transcripts (and never on API-error lines, which have no
-    // usage and no turn entry here).
+    // Exact records when the transcript can carry them; inferred from the
+    // drops between API calls only on older transcripts (and never from
+    // API-error lines, which have no usage and are not calls).
     let exact = first_seen::COMPACT_BOUNDARY.at_most(agg.version.as_deref());
-    let mut compactions: Vec<Compaction> = if exact {
+    let compactions: Vec<Compaction> = if exact {
         agg.compactions
             .iter()
             .map(|c| Compaction {
@@ -118,22 +143,18 @@ pub fn view(
             })
             .collect()
     } else {
-        Vec::new()
+        inferred_compactions(agg)
     };
     let mut velocity: Option<f64> = None;
     for i in 1..history.len() {
         let (prev, cur) = (history[i - 1], history[i]);
-        let dropped = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
-        if dropped {
-            if !exact {
-                compactions.push(Compaction {
-                    turn: turn_numbers[i],
-                    before: prev,
-                    after: cur,
-                    trigger: String::new(),
-                    duration_ms: None,
-                });
-            }
+        // A step that shrank past the ratio is a discontinuity of some kind
+        // (a compaction, a model switch, a handover), and a step whose turn
+        // holds a compaction is one however small it looks per turn: neither
+        // is velocity.
+        let discontinuity = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
+        let compacted = compactions.iter().any(|c| c.turn == turn_numbers[i]);
+        if discontinuity || compacted {
             continue;
         }
         let delta = cur as f64 - prev as f64;
@@ -164,9 +185,51 @@ pub fn view(
     }
 }
 
+/// Compactions read from the drops between consecutive API calls, for
+/// transcripts too old to carry `compact_boundary` (before 2.1.263).
+///
+/// A drop is a compaction when the summary Claude Code writes after one,
+/// or a `/compact`, sits between the two calls — at any size — and
+/// otherwise when the same model made both calls, no `/model` sits between
+/// them, and the drop is at least [`COMPACTION_DROP_RATIO`] (whose comment
+/// has the evidence). `before` and `after` are the two calls' contexts, so
+/// a compaction that fired inside a turn is measured at the call it fired
+/// after, not at the previous turn's last call. Slash commands are `user`
+/// lines on the transcripts this runs on.
+pub fn inferred_compactions(agg: &Aggregate) -> Vec<Compaction> {
+    let calls = &agg.calls;
+    let mut out = Vec::new();
+    for i in 1..calls.len() {
+        let (before, after) = (calls[i - 1].context(), calls[i].context());
+        if before == 0 || after >= before {
+            continue;
+        }
+        let mut marked = false;
+        let mut remeasured = calls[i - 1].model != calls[i].model;
+        for (_, mark) in agg.drop_marks.iter().filter(|(n, _)| *n == i) {
+            match mark {
+                DropMark::CompactSummary | DropMark::CompactCommand => marked = true,
+                DropMark::ModelCommand => remeasured = true,
+            }
+        }
+        let past_ratio = (after as f64) < before as f64 * (1.0 - COMPACTION_DROP_RATIO);
+        if marked || (!remeasured && past_ratio) {
+            out.push(Compaction {
+                turn: calls[i].turn,
+                before,
+                after,
+                trigger: String::new(),
+                duration_ms: None,
+            });
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::harness_facts::compaction;
     use crate::transcript::{parse_file, Line};
     use std::path::Path;
 
@@ -232,8 +295,8 @@ mod tests {
         assert_eq!(c.trigger, "auto");
         assert_eq!(c.duration_ms, Some(80_690));
         assert_eq!(v.threshold, 567_672, "learned from the observed compaction");
-        // The two API-error lines carry zero usage; they are not in the
-        // history, so no ≥ 30 % drop is invented from them.
+        // The two API-error lines carry zero usage; they are not calls, so
+        // no drop is invented from them.
         assert!(v.history.iter().all(|&h| h > 0));
     }
 
@@ -297,6 +360,131 @@ mod tests {
         let v = view(&b, None, None, None);
         assert!(!v.compactions_heuristic);
         assert!(v.compactions.is_empty());
+    }
+
+    /// A `user` line and an API response on a 2.1.247 transcript (before
+    /// `compact_boundary`), for the fallback's cases.
+    fn old_user(text: &str) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:00:00Z","version":"2.1.247","message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(text).unwrap()
+        ))
+        .unwrap()
+    }
+    fn old_call(id: &str, model: &str, ctx: u64) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{{"id":"{id}","model":"{model}","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":{ctx},"output_tokens":1}}}}}}"#
+        ))
+        .unwrap()
+    }
+    fn old_summary() -> Line {
+        old_user(&format!(
+            "{} The conversation is summarized below:",
+            compaction::SUMMARY_PREAMBLE
+        ))
+    }
+
+    #[test]
+    fn small_drop_with_a_summary_counts_and_a_model_switch_does_not() {
+        let mut a = Aggregate::default();
+        let lines = [
+            old_user("go"),
+            old_call("c1", "claude-opus-5", 100_000),
+            old_user("more"),
+            old_call("c2", "claude-opus-5", 150_000),
+            // Autocompact fired inside turn 2: the summary, then a call 27 %
+            // smaller — under the ratio, a compaction all the same.
+            old_summary(),
+            old_call("c3", "claude-opus-5", 109_500),
+            // /model: another model measured the same conversation 13 %
+            // smaller. Not a compaction.
+            old_user("<command-name>/model</command-name>"),
+            old_user("on"),
+            old_call("c4", "claude-sonnet-5", 95_000),
+            old_user("grow"),
+            old_call("c5", "claude-sonnet-5", 130_000),
+            // An unmarked 40 % drop on the same model: inferred.
+            old_user("x"),
+            old_call("c6", "claude-sonnet-5", 78_000),
+            // An unmarked 27 % drop: a handover or a re-measure, not one.
+            old_user("y"),
+            old_call("c7", "claude-sonnet-5", 57_000),
+            // /compact by hand: the drop after it is one, at 12 %.
+            old_user("<command-name>/compact</command-name>"),
+            old_user("z"),
+            old_call("c8", "claude-sonnet-5", 50_000),
+        ];
+        for l in &lines {
+            a.push(l);
+        }
+        let v = view(&a, None, None, None);
+        assert!(v.compactions_heuristic);
+        let steps: Vec<(usize, u64, u64)> = v
+            .compactions
+            .iter()
+            .map(|c| (c.turn, c.before, c.after))
+            .collect();
+        assert_eq!(
+            steps,
+            vec![
+                (2, 150_000, 109_500),
+                (5, 130_000, 78_000),
+                (7, 57_000, 50_000)
+            ]
+        );
+        assert!(v
+            .compactions
+            .iter()
+            .all(|c| c.trigger.is_empty() && c.duration_ms.is_none()));
+        assert_eq!(v.threshold, 150_000, "the largest size seen before one");
+        assert!(v.threshold_learned);
+    }
+
+    #[test]
+    fn velocity_skips_the_turn_a_marked_compaction_landed_in() {
+        // Per turn, turn 2 is a 9.5 % shrink; the EMA must not read it.
+        let mut a = Aggregate::default();
+        for l in [
+            old_user("go"),
+            old_call("c1", "claude-opus-5", 100_000),
+            old_user("more"),
+            old_call("c2", "claude-opus-5", 150_000),
+            old_summary(),
+            old_call("c3", "claude-opus-5", 109_500),
+            old_user("next"),
+            old_call("c4", "claude-opus-5", 120_000),
+        ] {
+            a.push(&l);
+        }
+        let v = view(&a, None, None, None);
+        assert_eq!(v.compactions.len(), 1);
+        assert_eq!(v.velocity, Some(10_500.0), "the one clean step, turn 2 → 3");
+    }
+
+    #[test]
+    fn the_fallback_read_on_the_fixtures() {
+        let pairs = |cs: &[Compaction]| cs.iter().map(|c| (c.before, c.after)).collect::<Vec<_>>();
+        // B (2.1.270, exact): the fallback agrees with the record — the 73 %
+        // drop after the summary is the compaction; the opus → sonnet switch
+        // one call later, which re-measured the window 30 % smaller, is not.
+        assert_eq!(
+            pairs(&inferred_compactions(&agg("session-b"))),
+            vec![(720_842, 193_094)]
+        );
+        // D (2.1.269): a /model that kept the model id re-measured
+        // 266 718 → 140 778 (−47 %). Not a compaction.
+        assert!(inferred_compactions(&agg("session-d")).is_empty());
+        // A (2.1.247) only grows.
+        assert!(inferred_compactions(&agg("session-a")).is_empty());
+        // C (2.1.258, so the fallback is what the view shows): the seam where
+        // the composer spliced another session's segment — 171 488 → 60 070
+        // inside one turn, same model, nothing between — reads as an
+        // inferred compaction; a transcript of that version cannot say
+        // otherwise, and neither could the person.
+        let c = view(&agg("session-c"), None, None, None);
+        assert!(c.compactions_heuristic);
+        assert_eq!(pairs(&c.compactions), vec![(171_488, 60_070)]);
+        assert_eq!(c.threshold, 171_488);
     }
 
     #[test]

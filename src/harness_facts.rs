@@ -75,6 +75,20 @@ pub mod first_seen {
     pub const TEAM_NAME: Version = Version(2, 1, 232);
 }
 
+/// The summary Claude Code writes as a `user` line after a compaction:
+/// flagged `isCompactSummary` since 2.1.263 (`first_seen::COMPACT_BOUNDARY`),
+/// before that recognisable only by its text. Only the first sentence is
+/// matched, so a reworded continuation keeps matching: the 2.1.275 – 2.1.278
+/// bundles on this machine carry it, and every `isCompactSummary` line of
+/// this machine's corpus (2.1.263 – 2.1.278) opens with it. A session moved
+/// between machines opens with a different sentence: a handover rebuilt the
+/// context, nothing was compacted, and a drop across it is not a compaction.
+pub mod compaction {
+    pub const SUMMARY_PREAMBLE: &str =
+        "This session is being continued from a previous conversation that ran out of context.";
+    pub const HANDOVER_PREAMBLE: &str = "This session is being continued from another machine.";
+}
+
 /// How Claude Code records an agent team (read on this machine's 19 team
 /// directories and 23 teammate transcripts, 2.1.232 – 2.1.272; the keys are
 /// in `docs/teams.md`).
@@ -328,6 +342,7 @@ mod tests {
             "TIERS",
             "TIER_DEFAULT",
             "TOOL_WINDOW_SHARE",
+            "SUMMARY_PREAMBLE",
             "LIVENESS_KEY",
             "NAME_PREFIX",
         ] {
