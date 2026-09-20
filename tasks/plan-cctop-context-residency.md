@@ -54,10 +54,17 @@ Order of work:
 4. `LatePrefix` (§3.2 E): per call, `Δcontext − (previous output + tool
    results in between)`; anything above the threshold is schema or listing
    injection, not conversation. Pick the threshold from the corpus, not by
-   taste — on the live session the two real jumps were ~19.7 k and ~7.8 k
-   while ordinary per-call residual was ~828.
-5. `Text` last, as `messages().saturating_sub(sum of the rest)`.
-6. `files` map: `Read`/`Edit`/`Write` by `file_path`, single-path bash by
+   taste — **swept, PRD §3.2 F: `LATE_PREFIX_MIN = 5_000`**, the centre of a
+   4 k–7.5 k plateau that detects both known injections and nothing else.
+5. **One** remainder row, computed last (PRD FR-15), named `summary + text`
+   when a boundary is in range and `text` otherwise. A compaction summary is
+   never a positive bucket: set from the boundary reading it already equals
+   all of `messages()` and everything attributed afterwards overflows.
+   If the subtraction ever clamps, the attribution is wrong — see the next item.
+6. **Count only results that landed before the last API call** (PRD FR-12).
+   Without this the rows exceed `messages()` and the identity breaks:
+   measured, `session-c` over-attributes by 503 and `session-d` by 1,549.
+7. `files` map: `Read`/`Edit`/`Write` by `file_path`, single-path bash by
    its resolved path.
 
 Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
@@ -67,12 +74,17 @@ Tests on fixtures A–D, none asserting an absolute token count (PRD §3.2 C):
   without `thinking_tokens`;
 - a synthetic call with a large unexplained Δcontext lands in `LatePrefix`
   and not in `Text`;
-- `Σ rows == ContextView::size` exactly, on every fixture;
+- `Σ rows == ContextView::size` exactly, on every fixture, **with no clamping**
+  — a clamped `Text` is the bug of PRD §3.2 H.1, not a rounding detail;
 - a single-path `cat` lands on its file; a two-path `cat a b` lands in
   `BashOutput` and on neither file;
 - a fixture with a `compact_boundary` reports `Reference::Compaction` and
   excludes calls older than it;
 - a `persisted_output_size` result contributes only its result text.
+
+Verified on the prototype before writing the Rust: with FR-12 and FR-15 the
+identity holds with no clamping on all five fixtures and the live transcript.
+Without them, `session-c` over-attributes by 503 and `session-d` by 1,549.
 
 Commit: `Context: residency — what is in the window, by source`.
 
@@ -87,7 +99,10 @@ category names off Claude Code 2.1.274 before writing the lookup, and if
 any is new or renamed add a `harness_facts::first_seen` entry so older
 transcripts fall back to `Mode::Estimated` rather than mis-scaling.
 
-Fixtures B and D hold captures; A and C exercise the estimated path.
+**Fixture D only.** `session-b`'s capture is byte-identical to D's and does not
+match B's own context at that line (PRD §3.2 G.2) — the composer copied it.
+Testing calibration on B would validate against a borrowed table. A, B, C and E
+exercise the estimated path.
 
 Commit: `Context: calibrate residency against /context when it was run`.
 
