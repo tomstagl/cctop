@@ -756,13 +756,17 @@ fn writes_file(c: &crate::tools::Call) -> bool {
 
 /// Attribute `size` tokens of context. `prefix_first` is the first call's
 /// cached part ([`ContextView::prefix`]); `cwd` resolves the relative paths
-/// a Bash reader names.
+/// a Bash reader names; `capture` is the `/context` table the person ran,
+/// with the turn it ran in — its non-`Messages` categories are Claude Code's
+/// own prefix and replace the first-call estimate (+33 % on the one ground
+/// truth, PRD §3.2 G), unless a model switch since re-measured everything.
 pub fn residency(
     agg: &Aggregate,
     tools: &crate::tools::Stats,
     prefix_first: u64,
     size: u64,
     cwd: Option<&std::path::Path>,
+    capture: Option<(&crate::transcript::ContextCapture, usize)>,
 ) -> Residency {
     let calls = &agg.calls;
     let mut r = Residency {
@@ -854,6 +858,27 @@ pub fn residency(
         }
         if !mdl.is_empty() && mdl != "<synthetic>" {
             last_model = Some(mdl);
+        }
+    }
+    // Calibration: the /context table's own prefix, when the person ran one
+    // and no model switch since has re-measured the window (FR-14, decision 4).
+    if let Some((cap, turn)) = capture {
+        let switched_since = matches!(
+            r.since,
+            Reference::Boundary { kind: RefKind::ModelSwitch, call, .. } if calls[call].turn > turn
+        );
+        let cal: u64 = cap
+            .categories
+            .iter()
+            .filter(|(name, _)| !name.eq_ignore_ascii_case("Messages"))
+            .map(|(_, t)| *t)
+            .sum();
+        if cal > 0 && !switched_since {
+            // The running minimum still applies: a boundary below the table's
+            // figure is the tighter bound.
+            let floor = if r.prefix_tightened { prefix } else { u64::MAX };
+            prefix = cal.min(floor);
+            r.mode = Mode::Calibrated { turn };
         }
     }
     r.prefix = prefix;
@@ -1139,7 +1164,7 @@ mod band_tests {
                 .unwrap(),
             );
             let v = view(&a, None, None, None);
-            let r = residency(&a, &tools, v.prefix, v.size, None);
+            let r = residency(&a, &tools, v.prefix, v.size, None, None);
             assert_eq!(placed(&r), v.size, "{name}: {r:?}");
             let an = Anatomy::from(&r);
             let sum: u64 = an.slices().iter().map(|(_, v)| v).sum();
@@ -1175,7 +1200,7 @@ mod band_tests {
             .unwrap(),
         );
         let v = view(&a, None, None, None);
-        let r = residency(&a, &tools, v.prefix, v.size, None);
+        let r = residency(&a, &tools, v.prefix, v.size, None, None);
         assert!(
             matches!(r.since, Reference::Boundary { .. }),
             "{:?}",
@@ -1183,6 +1208,44 @@ mod band_tests {
         );
         assert!(r.calls_since < a.calls.len());
         assert!(r.thinking_known);
+    }
+
+    #[test]
+    fn a_context_table_calibrates_the_prefix() {
+        // Fixture D holds the corpus's one native /context capture: System
+        // prompt 10.2 k + System tools 31.2 k + Skills 4.8 k = 46 200, against a
+        // first-call estimate a third larger (PRD §3.2 G).
+        let lines = crate::transcript::parse_file(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl"),
+        )
+        .unwrap();
+        let a = Aggregate::from_lines(&lines);
+        let tools = crate::tools::Stats::from_lines(&lines);
+        let mut pfx = crate::prefix::Prefix::default();
+        for l in &lines {
+            pfx.push(l);
+        }
+        let cap = pfx
+            .context_capture
+            .as_ref()
+            .expect("fixture D has the table");
+        let turn = a
+            .slash_commands
+            .iter()
+            .rev()
+            .find(|(_, c)| c == "/context")
+            .map(|(t, _)| *t)
+            .unwrap_or(0);
+        let v = view(&a, None, None, None);
+        let r = residency(&a, &tools, v.prefix, v.size, None, Some((cap, turn)));
+        assert_eq!(r.mode, Mode::Calibrated { turn });
+        assert_eq!(r.prefix, 46_200, "{r:?}");
+        assert!(v.prefix > 46_200, "the first call overstated: {}", v.prefix);
+        assert_eq!(placed(&r), v.size);
+        // Without the table the first call's figure stands.
+        let e = residency(&a, &tools, v.prefix, v.size, None, None);
+        assert_eq!(e.mode, Mode::Estimated);
+        assert!(e.prefix >= 46_200);
     }
 
     #[test]
@@ -1194,7 +1257,7 @@ mod band_tests {
             call(1, "r1", "m", (10_000, 200), 100, 0, text()),
             call(2, "r2", "m", (10_300, 0), 50, 0, text()),
         ]);
-        let r = residency(&a, &t, 10_000, 10_300, None);
+        let r = residency(&a, &t, 10_000, 10_300, None, None);
         assert_eq!(r.source(Source::Prompts), 200, "{r:?}");
         assert_eq!(r.reconciled, 800);
         assert_eq!(placed(&r), 10_300);
@@ -1212,7 +1275,7 @@ mod band_tests {
             call(3, "r3", "m", (58_400, 0), 100, 0, text()),
             call(4, "r4", "m", (59_600, 0), 100, 0, text()),
         ]);
-        let r = residency(&a, &t, 60_000, 59_600, None);
+        let r = residency(&a, &t, 60_000, 59_600, None, None);
         assert_eq!(
             r.since,
             Reference::Boundary {
@@ -1232,7 +1295,7 @@ mod band_tests {
             call(2, "r2", "m", (80_000, 0), 100, 0, text()),
             call(3, "r3", "m", (40_000, 0), 100, 0, text()),
         ]);
-        let r = residency(&a, &t, 60_000, 40_000, None);
+        let r = residency(&a, &t, 60_000, 40_000, None, None);
         assert!(matches!(
             r.since,
             Reference::Boundary {
@@ -1251,7 +1314,7 @@ mod band_tests {
             call(2, "r2", "m1", (12_000, 0), 100, 0, text()),
             call(3, "r3", "m2", (11_000, 0), 100, 0, text()),
         ]);
-        let r = residency(&a, &t, 10_000, 11_000, None);
+        let r = residency(&a, &t, 10_000, 11_000, None, None);
         assert!(matches!(
             r.since,
             Reference::Boundary {
@@ -1267,7 +1330,7 @@ mod band_tests {
             call(2, "r2", "m1", (12_000, 0), 100, 0, text()),
             call(3, "r3", "m2", (13_000, 0), 100, 0, text()),
         ]);
-        let r = residency(&a, &t, 10_000, 13_000, None);
+        let r = residency(&a, &t, 10_000, 13_000, None, None);
         assert_eq!(r.since, Reference::SessionStart);
         assert_eq!(
             r.model_switch_kept,
@@ -1285,7 +1348,7 @@ mod band_tests {
             result(2, "t1", 40_000), // ≈ 10 000 tokens claimed
             call(3, "r2", "m", (14_100, 0), 50, 0, text()), // room: 4 100 − 100 = 4 000
         ]);
-        let r = residency(&a, &t, 10_000, 14_100, None);
+        let r = residency(&a, &t, 10_000, 14_100, None, None);
         assert_eq!(r.source(Source::Files), 4_000, "{r:?}");
         assert_eq!(r.reconciled, 6_000);
         assert_eq!(r.overflow_raw, 6_000, "what it would have been");
@@ -1307,7 +1370,7 @@ mod band_tests {
             call(2, "r2", "m", (10_100, 0), 800, 500, read("t1", "/p/a.rs")),
             result(3, "t1", 8_000),
         ]);
-        let r = residency(&a, &t, 10_000, 10_100, None);
+        let r = residency(&a, &t, 10_000, 10_100, None, None);
         assert_eq!(r.thinking, 20);
         assert_eq!(r.source(Source::Files), 0);
         assert!(r.files.is_empty());
@@ -1323,7 +1386,7 @@ mod band_tests {
             call(1, "r1", "m", (10_000, 0), 1_000, 300, bash),
             call(2, "r2", "m", (11_000, 0), 10, 0, text()),
         ]);
-        let r = residency(&a, &t, 10_000, 11_000, None);
+        let r = residency(&a, &t, 10_000, 11_000, None, None);
         assert_eq!(r.thinking, 300);
         assert_eq!(r.tool_inputs, 200);
         assert_eq!(r.prose, 500);
@@ -1337,7 +1400,7 @@ mod band_tests {
             result(2, "t1", 2_000),
             call(3, "r2", "m", (10_700, 0), 40, 0, text()),
         ]);
-        let r = residency(&a, &t, 10_000, 10_700, None);
+        let r = residency(&a, &t, 10_000, 10_700, None, None);
         let an = Anatomy::from(&r);
         assert_eq!(an.prefix, 10_000);
         assert_eq!(an.thinking, 30);

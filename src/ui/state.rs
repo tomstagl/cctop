@@ -1464,7 +1464,18 @@ impl State {
     pub fn residency(&self) -> crate::metrics::context::Residency {
         let v = self.context();
         let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
-        crate::metrics::context::residency(&self.agg, &self.tools, v.prefix, v.size, cwd)
+        let capture = self.prefix.context_capture.as_ref().map(|c| {
+            let turn = self
+                .agg
+                .slash_commands
+                .iter()
+                .rev()
+                .find(|(_, cmd)| cmd == "/context")
+                .map(|(t, _)| *t)
+                .unwrap_or(0);
+            (c, turn)
+        });
+        crate::metrics::context::residency(&self.agg, &self.tools, v.prefix, v.size, cwd, capture)
     }
 
     /// What the context is made of since the last boundary: the seven
