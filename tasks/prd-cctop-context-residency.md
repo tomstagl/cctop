@@ -83,6 +83,47 @@ Tool schemas are **3× the system prompt**, and 297 MCP tools cost nothing becau
 
 Consequence, and it is a hard constraint on §8: **fixtures cannot validate absolute token figures.** A real 30 k-token file read is a 4 k-character lorem-ipsum string in every fixture. Fixtures validate *structure* — row ordering, bash attribution, the boundary reset, that the residual reconciles — and the absolute arithmetic is validated against a live `ContextCapture` (decision 4) and in `docs/verification/`. Raising `MAX_STR` was considered and rejected: `fill()` emits lorem ipsum so there is no privacy cost, but `session-a.jsonl` is already 2.1 MB and the cap is what keeps the corpus committable.
 
+### 3.2 D — Thinking (measured 2026-09-20, live transcript)
+
+| Question | Answer | Evidence |
+|---|---|---|
+| Does the **main** session's transcript carry `thinking_tokens`? | **Yes**, on every assistant line | 99/99 lines, 42 unique API calls, `usage.output_tokens_details.thinking_tokens`; Σ 16,560 over the session |
+| Do thinking **blocks** carry text? | **No** — signature only | 31 blocks of `type: "thinking"`, **0 characters** of `thinking` text between them |
+| Is past thinking **resident** in later context? | **Yes**, on the evidence | Fitting Δcontext against `output + tool_result` (thinking resident) vs `output − thinking + tool_result` (dropped) over 36 usable calls: mean \|residual\| **828** resident vs **1,285** dropped. Resident fits better by about the magnitude of thinking itself |
+
+Three consequences for §4:
+
+1. The `Conversation` row **splits into `Thinking` and `Text`**, and `Thinking`
+   is the only **exact** row in the view — it comes from Claude Code's own
+   counter, not from `chars / 4`. It is marked as such; every other row keeps
+   the `≈` mark.
+2. It is the one row that **cannot** be estimated from characters, because the
+   text is not in the transcript. If a future Claude Code stops writing
+   `thinking_tokens`, the row disappears rather than degrading — a
+   `harness_facts::first_seen` entry gates it.
+3. Both models leave a **positive** residual of ~828 tokens per call. That is
+   per-turn harness injection (system reminders re-sent each turn), and it
+   belongs in `Text`. It is real context that no tool result explains.
+
+### 3.2 E — The prefix grows mid-session, and `messages()` absorbs it
+
+`ContextView::prefix` is the **first API call's** total. On the live transcript
+two jumps are not explained by the previous output or by any plausible tool
+result:
+
+| At | Jump | Previous output | Unexplained | Almost certainly |
+|---|---|---|---|---|
+| call 1 | +20,379 | 641 | ~19,738 | MCP servers connecting — tool schemas arriving |
+| call 34 | +8,662 | 882 | ~7,780 | the skills listing re-injected |
+
+Together ~27.5 k, **22 % of all context growth in the session**. Because the
+prefix is measured once at call 1, every one of those tokens is inside
+`messages()` today, and under §4.1 the `Conversation` row would silently
+absorb them and blame them on conversation.
+
+**FR-10 follows from this** (§6). The reconciliation identity still holds — the
+rows always sum to `size` — but a row would be lying about *what* it holds.
+
 ## 4. Design
 
 ### 4.1 The source kinds
@@ -98,11 +139,14 @@ pub enum Source {
     AgentReturns,    // ToolUseDetail::Agent result_chars
     Web,             // WebFetch / WebSearch results
     Images,          // image_tokens()
-    Conversation,    // the reconciled remainder
+    Thinking,        // usage.output_tokens_details.thinking_tokens — EXACT, §3.2 D
+    LatePrefix,      // schemas and listings that arrived after call 1 — §3.2 E
+    Text,            // the reconciled remainder: assistant prose, user turns,
+                     // per-turn harness injections (~828 tok/call, §3.2 D)
 }
 ```
 
-`Conversation` is computed, never summed: `messages() − Σ(the rows above it)`, floored at zero. It is the row that carries assistant prose, thinking blocks, user turns and every harness injection cctop does not classify, and it is expected to be the largest row in most sessions (§3.2 A: ~39 %).
+`Thinking` is exact and summed from `thinking_tokens` (§3.2 D). `LatePrefix` is the sum of context jumps that no output or tool result explains (§3.2 E), detected as `Δcontext − (previous output + tool results between the two calls)` above a threshold. `Text` is computed, never summed: `messages() − Σ(every row above it)`, floored at zero — assistant prose, user turns and the ~828 tokens per call of re-sent harness reminders.
 
 ### 4.2 Attribution rules
 
@@ -191,6 +235,8 @@ The `sources` array, the MCP tool, the registry entries with `estimate` set and 
 7. Panel 7 shows per-file tokens and can sort by them.
 8. `cctop query context` and the MCP tool carry the same numbers as the inspector, tagged with registry ids.
 9. The coach rule fires on the prefix share, not on files, at most once per session.
+10. Context that arrived after the first API call and is explained by neither output nor a tool result is reported as `LatePrefix`, never folded into `Text` (§3.2 E).
+11. `Thinking` is marked exact; every other row is marked `≈`. When `thinking_tokens` is absent the row is omitted, not zeroed.
 
 ## 7. Non-goals
 
@@ -205,7 +251,8 @@ The `sources` array, the MCP tool, the registry entries with `estimate` set and 
 ## 8. Technical considerations
 
 - **Budget:** no new collector, watcher or file handle. `residency.rs` is derived on read over `state.tools.calls` and `state.files`, both already in memory — O(calls) per render, the same order as `top_ctx`. The stated budget (≤ 2 % CPU idle, ≤ 5 % in a turn, ≤ 50 MB RSS) is unaffected.
-- **Fixtures cannot check absolute tokens** (§3.2 C). Structure, ordering, reconciliation and the boundary reset are fixture-testable; absolute arithmetic is checked against a live `/context` capture and recorded in `docs/verification/`.
+- **Fixtures cannot check absolute tokens, and cannot check ranking either** (§3.2 C). Measured 2026-09-20: the same `chars / 4` estimator recovers **5–16 %** of real message tokens on fixtures A–E against **33 %** on an uncapped live transcript, so the cap costs 2–6×. Worse than the shrinkage is the flattening: a 3 k-character file and a 300 k-character one both land at the cap, so "sorted by tokens, descending" is *unfalsifiable* on fixtures — a test can prove the comparator runs, not that the order is real. Structure, reconciliation, bash attribution and the boundary reset are fixture-testable; absolute arithmetic and ranking are checked against a live `/context` capture and recorded in `docs/verification/`.
+- **The corpus is not even internally consistent.** `session-a.jsonl` has 195 strings at exactly 4 000 characters; B–E have theirs at exactly 2 000 and none at 4 000. Two different caps were in force when the corpus was built, so cross-fixture comparisons of size are meaningless.
 - **`bash_read_paths` is reused verbatim.** If it is ever widened to `grep`, the attribution rule inherits that and FR-3 must be re-read.
 - **Registry first.** Adding a figure before its registry entry fails the staleness test; `cctop metrics --md` and `--readme` regenerate, never hand-edited.
 - **`coach-replay` on fixtures A–D** before and after US-005; no existing rule's fire count may move.
@@ -217,7 +264,7 @@ The inspector borrows `prefix_view`'s frame, column widths and `Esc` behaviour s
 ## 10. Open questions
 
 1. ~~Does the inspector key collide?~~ **Answered 2026-09-20.** `c` is taken twice in `app.rs` (l589, l635) plus `ctrl+c`. The bound set is `$ + - / 0 = ? A G L N S a c d e f g i j k l n p q s t x`; `m` is free, which is why §4.4 binds it.
-2. **Should `Conversation` split** into assistant text vs thinking? `thinking_tokens` is parsed on agent usage (`output_tokens_details`); whether the main session's transcript carries it per turn has not been checked.
+2. ~~Should `Conversation` split into assistant text vs thinking?~~ **Answered 2026-09-20, yes — see §3.2 D.** It is the one row that can be exact.
 3. **The prefix row in `calibrated` mode** takes three `/context` categories; if Claude Code renames or adds one, `harness_facts::first_seen` needs an entry. Worth checking against 2.1.274 before US-002.
 
 ## 11. Follow-ups
