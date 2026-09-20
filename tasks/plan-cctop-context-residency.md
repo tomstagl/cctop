@@ -226,6 +226,15 @@ unchanged. `cctop coach-replay` on A–D is back to the pre-Phase-5 counts.
 - **Snapshot churn.** Phase 3 touches Panel 7, which has snapshots and a
   fixture test asserting a literal summary string
   (`ui/panels/files.rs:250`). Expect to regenerate.
+- **Every read walks every call.** `residency()` is derived on read and runs
+  two or three times per frame (the bar, Panel 7's tokens column, A17) and
+  once per turn in `coach-replay`. Its lookups — which call carried a
+  result, an input, an attachment — are `partition_point` over the calls'
+  timestamps and a map for a turn's first call, `O(log calls)` each. The
+  first cut scanned linearly: on a 6 400-call transcript `cctop coach-replay`
+  took 80 s against 2.7 s on main and `query dashboard` twice as long.
+  Measured and fixed in the review of PR #10; a linear scan inside that
+  walk is a review rejection.
 
 ## 4. What is deliberately not in the plan
 
