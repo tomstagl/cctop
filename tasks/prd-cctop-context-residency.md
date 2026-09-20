@@ -1,6 +1,6 @@
 # PRD: context residency — what is in the window right now, and what put it there
 
-**Status:** v1.0 · 2026-09-20 — draft, not implemented. Sits beside the two spend PRDs but is not one of them: this is about *space*, not money.
+**Status:** v1.0 · 2026-09-20 — **implemented**, Phases 1–5 one commit each (`86d2b86` `1e4fd8c` `db2c5f6` `633ebbd` `3e1fe32`); §10.6 open. Sits beside the two spend PRDs but is not one of them: this is about *space*, not money.
 **Target:** cctop ≥ 0.7.0 attached to Claude Code CLI ≥ 2.1.274 (`READ_FROM`).
 **Depends on:** `tasks/prd-cctop.md` v1.1 (collectors, `attach.rs`, `metrics/`); the prefix inspector (`src/prefix.rs`, `src/ui/prefix_view.rs`) whose reconciliation model this PRD copies for the other half of the window.
 
@@ -495,6 +495,7 @@ The inspector borrows `prefix_view`'s frame, column widths and `Esc` behaviour s
 2. ~~Should `Conversation` split into assistant text vs thinking?~~ **Answered 2026-09-20, yes — see §3.2 D.** It is the one row that can be exact.
 3. **The prefix row in `calibrated` mode** takes three `/context` categories; if Claude Code renames or adds one, `harness_facts::first_seen` needs an entry. Worth checking against 2.1.274 before US-002.
 4. ~~What over-attributed on the three corpus transcripts~~ **Answered 2026-09-20** — §3.2 I: a 27 % drop under the heuristic, chars/4 overshoot on large results, and pre-first-call content attributed as messages. FR-16, FR-18, FR-19, FR-20.
+6. **A17's threshold (decision 9) — re-opened with evidence.** Shipped at 50 k as decided. `cctop coach-replay` on fixtures A–D: A17 moves from 2 fires in 1 session to **5 fires in 4 of 4**, and the one-slot engine then displaces A01 (2 → 1 fires) and A10 (1 → 0 snoozed) — the plan's gate "no other rule's count moves" fails by consequence. The raw first-call prefix on this machine runs 47–62 k (A 60,582 · B 49,267 · D 61,667 raw, 46,200 calibrated · this session 47,196); §3.2 G says the raw figure overstates by a third; the pre-existing test's own comment had rejected 60 k as "every session's on a plugin-heavy setup". Options: keep 50 k and accept a nudge on most sessions; fire the token arm **only in `Calibrated` mode** (the figure is then Claude Code's own — D stays quiet at 46,200, and the `Estimated` header already invites the one `/context` that calibrates); 75 k raw; back to 100 k. One constant (`PREFIX_TOKENS`), one test line, regenerated fixtures.
 5. ~~Model-switch re-basing~~ **Decided 2026-09-20 (decision 7):** a switch whose Δ is negative is a `ModelSwitch` boundary (rows reset; 6 of the corpus's 9 switches); a switch whose Δ is non-negative keeps the rows, in the old model's tokens, and the header notes the switch (the other 4). Uniform rescaling by the observed ratio was rejected: one number cannot separate a tokenizer change from a per-model prefix change.
 
 ## 11. Follow-ups

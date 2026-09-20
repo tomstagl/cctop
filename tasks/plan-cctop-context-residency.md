@@ -13,11 +13,11 @@ state exists ("one state, many surfaces").
 
 | Phase | Stories | Touches | Shipped in |
 |---|---|---|---|
-| 1 — The join | US-001 | `metrics/context.rs` (`residency()`, `Anatomy` derived from it), `tools.rs` (`Call.path`), `files.rs` (`bash_read_paths` pub(crate)), `harness_facts.rs`, regenerated `fixture_b_console_context` snapshot and `tests/pane/fixtures/dashboard*.json` | |
-| 2 — Calibration | US-002 | `residency.rs`, `prefix.rs` | |
-| 3 — The inspector | US-003 | `ui/sources_view.rs` (new), `ui/panels/context.rs`, `ui/panels/files.rs`, `ui/state.rs` | |
-| 4 — Query, MCP, registry | US-004 | `query.rs`, `mcp.rs`, `metrics/registry.rs`, `docs/metrics.md`, `README.md` | |
-| 5 — A17 retuned | US-005 | `advisor/rules/token.rs` (A17), `ui/state.rs` (`inspector_opens`), registry, site | |
+| 1 — The join | US-001 | `metrics/context.rs` (`residency()`, `Anatomy` derived from it), `tools.rs` (`Call.path`), `files.rs` (`bash_read_paths` pub(crate)), `harness_facts.rs`, regenerated `fixture_b_console_context` snapshot and `tests/pane/fixtures/dashboard*.json` | `86d2b86` |
+| 2 — Calibration | US-002 | `metrics/context.rs`, `ui/state.rs` | `1e4fd8c` |
+| 3 — The inspector | US-003 | `ui/sources_view.rs` (new), `ui/panels/context.rs`, `ui/panels/files.rs`, `ui/state.rs` | `db2c5f6` |
+| 4 — Query, MCP, registry | US-004 | `query.rs`, `mcp.rs`, `metrics/registry.rs`, `docs/metrics.md`, `README.md`, `docs/query.md`, `docs/mcp.md`, `site/` | `633ebbd` |
+| 5 — A17 retuned | US-005 | `advisor/rules/token.rs` (A17), `advisor/rules/mod.rs`, the coach/dashboard pane fixtures, `site/guide/advisor.html` | `3e1fe32` — **§10.6 open: A17 now fires on 4 of 4 fixtures** |
 
 Nothing in `plugin/` is touched (PRD §7). Nothing is added to
 `State::apply` — `residency.rs` is derived on read, like `metrics/`.
