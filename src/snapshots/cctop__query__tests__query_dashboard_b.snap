@@ -124,11 +124,11 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "     ",
             "tone": "dim"
           },
           {
-            "text": "≈7.8k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -136,11 +136,11 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "dim"
           },
           {
-            "text": "▆▆",
+            "text": "",
             "tone": "s0"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -154,11 +154,11 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "    ",
             "tone": "dim"
           },
           {
-            "text": "≈355",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -188,7 +188,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "dim"
           },
           {
-            "text": "≈538",
+            "text": "≈221",
             "tone": "bold"
           },
           {
@@ -218,7 +218,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "dim"
           },
           {
-            "text": "≈180",
+            "text": "≈131",
             "tone": "bold"
           },
           {
@@ -292,22 +292,22 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
         {
           "label": "harness",
           "step": 0,
-          "tokens": 7759
+          "tokens": 0
         },
         {
           "label": "thinking",
           "step": 1,
-          "tokens": 355
+          "tokens": 0
         },
         {
           "label": "inputs",
           "step": 2,
-          "tokens": 538
+          "tokens": 221
         },
         {
           "label": "results",
           "step": 2,
-          "tokens": 180
+          "tokens": 131
         }
       ],
       "title": "context"

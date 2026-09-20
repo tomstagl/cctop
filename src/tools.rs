@@ -33,6 +33,13 @@ pub struct Call {
     pub read_only: bool,
     /// File basenames the call touches.
     pub paths: Vec<String>,
+    /// The one file the call reads or writes, as written in its input: the
+    /// `file_path` of a Read / Edit / Write / NotebookEdit, or the single path
+    /// a Bash `cat` / `sed -n` / `head` / `tail` reads (`None` when the
+    /// command reads two or more — their output stays unattributed). What
+    /// the residency view keys its per-file rows on; `paths` keeps basenames
+    /// for the phase assignment.
+    pub path: Option<String>,
     /// What the output said about a test run.
     pub test_marker: TestMarker,
     /// Epoch ms of the assistant line that issued the call.
@@ -461,6 +468,19 @@ impl Stats {
                                 _ => false,
                             },
                             paths: phase::paths_of(name, input),
+                            path: match name.as_str() {
+                                "Read" | "Edit" | "Write" | "MultiEdit" | "NotebookEdit"
+                                | "NotebookRead" => input
+                                    .get("file_path")
+                                    .or_else(|| input.get("notebook_path"))
+                                    .and_then(Value::as_str)
+                                    .map(str::to_string),
+                                "Bash" => {
+                                    let ps = crate::files::bash_read_paths(command.unwrap_or(""));
+                                    (ps.len() == 1).then(|| ps[0].clone())
+                                }
+                                _ => None,
+                            },
                             test_marker: TestMarker::None,
                             started_at: at,
                             finished_at: None,

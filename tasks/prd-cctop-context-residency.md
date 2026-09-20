@@ -306,6 +306,22 @@ attributed: coverage moved from median 65 % (IQR 58–72) to **61 % (IQR
 53–67)**. Four points of coverage for no phantom attribution of content
 that has left the window. Still roughly double the naive 33 %.
 
+**Two more, found while replacing `anatomy()` (Phase 1):**
+
+- **The first turn's attachments are inside `prefix`.** `ContextView::prefix`
+  is the first call's `cache_read + cache_write`, and Claude Code caches the
+  whole first request — system prompt, tools, *and* the opening message's
+  reminders and listings. On fixture A that is 6,095 tokens of harness the
+  old bar counted a second time on top of the prefix (harness 9.1 k → 3.0 k;
+  step 0's exact budget is the 2 uncached tokens). FR-19 as stated in
+  cctop's own terms: step 0 reconciles against `ctx₀ − prefix`.
+- **Fixture B's window starts at a model switch, not its compaction.** The
+  compaction at call 109 (720 842 → 193 094) is followed one call later by a
+  model change that re-measured the window 30 % smaller (193 094 →
+  134 464). The reference is the later boundary (FR-17); turn 6's 7,759
+  attachment tokens and its 355 of thinking all landed before it and are
+  gone — the old bar showed both.
+
 **Calibration, corpus-wide** (what per-step reconciliation had to remove):
 
 | Source | Removed | Kept | Removed % |

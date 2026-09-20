@@ -11,10 +11,10 @@ expression: text
   396k of 1.00M est   autocompact 967k   570k left   +50k/t.
 
   prefix    ~60k  #####---------
-  harness  ~9.1k  =-------------
+  harness  ~3.0k  --------------
   thinking  ~30k  ###-----------
   inputs   ~1.4k  --------------
-  results  ~168k  ##############
+  results  ~166k  ##############
 
   compactions 0   re-reads 0   stale 0   autocompact in ~12.
 

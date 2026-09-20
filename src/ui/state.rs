@@ -1459,16 +1459,18 @@ impl State {
             .unwrap_or(1)
     }
 
-    /// What the context is made of since the last boundary.
-    pub fn anatomy(&self) -> crate::metrics::context::Anatomy {
+    /// What is in the window right now and what put it there: the per-call
+    /// model behind the bar (PRD context-residency §4).
+    pub fn residency(&self) -> crate::metrics::context::Residency {
         let v = self.context();
-        crate::metrics::context::anatomy(
-            &self.agg,
-            &self.tools,
-            v.size,
-            v.prefix,
-            self.since_boundary_turn(),
-        )
+        let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
+        crate::metrics::context::residency(&self.agg, &self.tools, v.prefix, v.size, cwd)
+    }
+
+    /// What the context is made of since the last boundary: the seven
+    /// slices of the bar, derived from [`Self::residency`].
+    pub fn anatomy(&self) -> crate::metrics::context::Anatomy {
+        crate::metrics::context::Anatomy::from(&self.residency())
     }
 
     /// Harness tokens per human turn since the last boundary.
