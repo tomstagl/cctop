@@ -131,6 +131,8 @@ enum QueryWhat {
     },
     /// What rides on every request.
     Prefix,
+    /// What is in the window right now and what put it there.
+    Sources,
     /// Event log.
     Events {
         /// Only events newer than this (e.g. 10m, 2h).
@@ -686,6 +688,7 @@ fn query(q: QueryArgs) {
                         .or_else(|| snooze_session.as_deref().map(|r| (r, true))),
                 ),
                 QueryWhat::Prefix => qy::prefix(&state),
+                QueryWhat::Sources => qy::sources(&state),
                 QueryWhat::Baseline => qy::baseline(state.baseline.as_ref()),
                 QueryWhat::Events { since } => {
                     let since_ms = match since.as_deref() {

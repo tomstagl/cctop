@@ -12,7 +12,7 @@ counterpart prints, so `docs/query.md` describes the shapes.
 | `cctop_agents` | `cctop query agents` |
 | `cctop_advice` | `cctop query advice` |
 | `cctop_coach` | `cctop query coach` |
-| `cctop_prefix` | `cctop query prefix` |
+| `cctop_prefix` | `cctop query prefix`, plus `cctop query sources` as the `sources` key — the whole window, both halves |
 | `cctop_events` (`since`) | `cctop query events --since` |
 | `cctop_explain_metric` (`metric_id`) | `cctop query explain <id>` |
 

@@ -305,7 +305,35 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>The fixed cost paid on every single turn regardless of task: system prompt, CLAUDE.md, tool definitions, skills. A bloated prefix taxes the whole session, forever.</dd>
 <dt class="act">What to do</dt><dd>Trim CLAUDE.md, move rarely-used rules into skills, and disable MCP servers this project doesn't use.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A17">A17 Oversized prefix</a></dd>
-<dt>Measured</dt><dd class="meta">tokens · from the transcript · exact · <a href="../metrics.html#context_prefix">how</a></dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ until a /context has run · <a href="../metrics.html#context_prefix">how</a></dd>
+</dl></article>
+<article class="entry" id="context_sources">
+<div class="mg">
+<h3>Context sources</h3>
+</div><dl>
+<dt>What it means</dt><dd>One row per kind of content in the window since the last boundary: prefix · files · bash output · mcp results · agent returns · web · other results · prompts · harness · thinking · tool inputs · prose · other. Results, inputs and prompts are chars / 4 placed on the API call that first carried them and reconciled per step against <code>Δcontext − previous output_tokens</code>; thinking and prose are exact</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ on every row but thinking and prose · <a href="../metrics.html#context_sources">how</a></dd>
+</dl></article>
+<article class="entry" id="source_tokens">
+<div class="mg">
+<h3>Tokens by source</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ <code>tokens_to_ctx</code> of the calls whose results a step carried, by kind: <code>Read</code> and a Bash <code>cat</code> / <code>sed -n</code> / <code>head</code> / <code>tail</code> of exactly one path → files; other Bash → bash output; <code>mcp:*</code> → mcp results; <code>Agent</code> → agent returns; <code>WebFetch</code> / <code>WebSearch</code> → web; the rest → other results. Prompts: <code>prompt_chars / 4</code> + 1 500 per pasted image. Harness: the attachments' tokens</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ · <a href="../metrics.html#source_tokens">how</a></dd>
+</dl></article>
+<article class="entry" id="file_tokens">
+<div class="mg">
+<h3>Per-file tokens</h3>
+</div><dl>
+<dt>What it means</dt><dd>A file's <code>Read</code> results in the window (<code>read</code>: in the files row) and the bytes the model wrote into <code>Edit</code> / <code>Write</code> of it (<code>written</code>: in tool inputs), with its read count</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ · <a href="../metrics.html#file_tokens">how</a></dd>
+</dl></article>
+<article class="entry" id="context_reference">
+<div class="mg">
+<h3>Context reference</h3>
+</div><dl>
+<dt>What it means</dt><dd>Where the window's accounting starts: <code>session-start</code>, or the last boundary's kind with the index of its first call and the Δcontext that opened it</dd>
+<dt>Measured</dt><dd class="meta">enum · from the transcript · exact · <a href="../metrics.html#context_reference">how</a></dd>
 </dl></article>
 <article class="entry" id="context_velocity">
 <div class="mg">
@@ -334,7 +362,7 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>What the context is made of, drawn as a bar whose colour is a list of levers rather than a chart of what happened. The slices run in the order of what you can do about them, and the hue ramps from dim to bright in the theme's own accent: the dim end is the prefix and the harness, fixed for this session; the middle is retained thinking, which the next context boundary drops whether or not anyone acts; the bright end is tool inputs, tool results and prose — the part you can move this afternoon, and results is the biggest of them. Amber and red are kept for thresholds and mean nothing here; adjacent slices alternate the fill glyph so the order still reads on sixteen colours, with <code>NO_COLOR</code>, and in the pane.</dd>
 <dt class="act">What to do</dt><dd>Read the bright block first. If it is mostly results, hand the next read-heavy stretch to an Explore subagent — the same work returns a few dozen tokens instead of tens of thousands. The dim block only changes between sessions: trim CLAUDE.md, drop unused MCP servers.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A25">A25 Exploring in the main context</a> · <a href="advisor.html#A17">A17 Oversized prefix</a></dd>
-<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ whenever a slice rests on chars / 4 or an attachment fallback · <a href="../metrics.html#context_anatomy">how</a></dd>
+<dt>Measured</dt><dd class="meta">tokens · from the transcript · ≈ on every slice but thinking and prose · <a href="../metrics.html#context_anatomy">how</a></dd>
 </dl></article>
 <article class="entry" id="harness_tokens">
 <div class="mg">
