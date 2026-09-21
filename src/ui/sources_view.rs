@@ -31,8 +31,10 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> Handled {
     }
 }
 
-/// `since session start` / `since model switch (−28.7k)`.
-fn since_text(r: &Residency) -> String {
+/// `since session start` / `since model switch (−28.7k)`. Shared with
+/// `dashboard.rs` so the pane and the inspector name the reference in the
+/// same characters ("one state, many surfaces").
+pub(crate) fn since_text(r: &Residency) -> String {
     match &r.since {
         Reference::SessionStart => "session start".to_string(),
         Reference::Boundary { kind, delta, .. } => {
@@ -43,6 +45,17 @@ fn since_text(r: &Residency) -> String {
                 fmt::tokens(delta.unsigned_abs())
             )
         }
+    }
+}
+
+/// How the prefix was arrived at, in one clause. Shared with `dashboard.rs`
+/// so both surfaces say it the same way.
+pub(crate) fn mode_text(r: &Residency) -> String {
+    match r.mode {
+        Mode::Estimated => {
+            "prefix ≈ the first call's cached part — run /context once to calibrate it".to_string()
+        }
+        Mode::Calibrated { turn } => format!("prefix from the /context you ran in turn {turn}"),
     }
 }
 
@@ -183,14 +196,11 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             dim,
         )));
     }
-    let mode = match r.mode {
-        Mode::Estimated => {
-            " prefix ≈ the first call's cached part — run /context once to calibrate it".to_string()
-        }
-        Mode::Calibrated { turn } => format!(" prefix from the /context you ran in turn {turn}"),
-    };
     let w = inner.width as usize;
-    lines.push(Line::from(Span::styled(fmt::clip(&mode, w), dim)));
+    lines.push(Line::from(Span::styled(
+        fmt::clip(&format!(" {}", mode_text(&r)), w),
+        dim,
+    )));
     lines.push(Line::from(Span::styled(
         fmt::clip(
             " results, inputs and prompts ≈ chars / 4, reconciled per step against Δcontext − previous output; thinking and prose exact",

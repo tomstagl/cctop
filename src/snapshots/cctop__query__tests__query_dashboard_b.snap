@@ -237,6 +237,97 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
         [],
         [
           {
+            "text": "  since model switch (−58k) · 3 calls",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "bash output",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈48",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other results",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈83",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other",
+            "tone": "fg"
+          },
+          {
+            "text": "             ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈92k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "64%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  prefix ≈ the first call's cached part — run /context once to calibrate it",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
             "text": "  compactions ",
             "tone": "dim"
           },
