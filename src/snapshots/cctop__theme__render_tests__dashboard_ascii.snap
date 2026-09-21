@@ -16,6 +16,15 @@ expression: text
   inputs   ~1.4k  --------------
   results  ~166k  ##############
 
+  since session start . 143 calls
+  files            ~2.2k   0%
+  bash output      ~3.9k   0%
+  mcp results      ~150k  38%
+  other results    ~9.3k   2%
+  prompts          ~1.6k   0%
+  other             ~98k  24%
+  prefix ~ the first call's cached part - run /context once.
+
   compactions 0   re-reads 0   stale 0   autocompact in ~12.
 
   next 8c ~$.66 . fresh ~$.18

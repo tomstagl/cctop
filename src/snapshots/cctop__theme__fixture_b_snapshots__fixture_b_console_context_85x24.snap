@@ -16,6 +16,12 @@ expression: "render_to_string(&app, 85, 24)"
   inputs    ≈221  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
   results   ≈131  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
+  since model switch (−58k) · 3 calls
+  bash output        ≈48   0%
+  other results      ≈83   0%
+  other             ≈92k  64%
+  prefix ≈ the first call's cached part — run /context once to calibrate it
+
   compactions 1   re-reads 0   stale 0   autocompact in ~3 turns
 
   next 15c ≈$.50 · fresh ≈$.38

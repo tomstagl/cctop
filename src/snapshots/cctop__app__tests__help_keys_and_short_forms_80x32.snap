@@ -1,0 +1,36 @@
+---
+source: src/app.rs
+expression: out
+---
+╭coach ─  ───────────────────────────────── — · turn 0 ╮
+│ IDLE                                                 │
+├──────────────────────────────────────────────────────┤
+│ ○ cont┌ cctop keys & short forms — any key closes ───────────────────┐
+│ ○ cach│                                                              │
+│ ○ limi│  ?               key map (Console) · this help               │
+│ ○ rewo│  1-6 · a · 0     open a body (a advisor, 0 home)             │
+├───────│  Esc             home (events) · back from a panel           │
+│   quie│  Enter           the body's panel · nudge (advisor)          │
+│       │  A               ask about the panel or nudge                │
+│       │  p               pause updates                               │
+│       │  c               coach view · x snooze · e why               │
+│ next  │  + / -           render interval 100 ms … 2 s                │
+│ snooze│  q / Ctrl-C      quit (never touches the session)            │
+╰───────│                                                              │
+        │  what the short forms mean                                   │
+        │  ctx 42%         context window used                         │
+        │  5h 23%          the five-hour rate-limit window             │
+        │  ↻ 2h            when that window resets                     │
+        │  159c            tool calls this session (c is calls)        │
+        │  1 err           tool results that came back an error        │
+        │  R× E× W×        reads, edits, writes of one file            │
+        │  +12 −3          lines added and removed                     │
+        │  ↕tokens         the column a list is sorted by (s rotates)  │
+        │  ≈               estimated, not read from the transcript     │
+        │  —               no source for it on this machine            │
+        │  ⚠ re-read       a file read again with no edit between      │
+        │                                                              │
+        └──────────────────────────────────────────────────────────────┘
+
+
+ c dashboard  Enter act  x snooze  e why  1-4 light  q
