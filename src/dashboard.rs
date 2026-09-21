@@ -799,8 +799,8 @@ fn body_context(state: &State, c: &Coach) -> Body {
                 format!("{approx}{}", fmt::tokens(tokens)),
                 Tone::Bold,
             );
-            if r.size > 0 {
-                rt(&mut l, 29, format!("{}%", tokens * 100 / r.size), Tone::Dim);
+            if let Some(pct) = (tokens * 100).checked_div(r.size) {
+                rt(&mut l, 29, format!("{pct}%"), Tone::Dim);
             }
             rows.push(l);
         }
