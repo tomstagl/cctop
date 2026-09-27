@@ -26,6 +26,10 @@ enum Command {
     Uninstall(InstallArgs),
     /// Hook entry point: record one Claude Code hook event.
     Hook,
+    /// Recompute the 7-day baseline cache; started detached by a one-shot
+    /// reader that found it stale.
+    #[command(hide = true)]
+    BaselineRefresh,
     /// Status-line entry point: tee the status JSON, then run the original command.
     StatuslineShim {
         /// The original status-line command and its arguments (after `--`).
@@ -356,6 +360,15 @@ fn main() {
             }
         }
         Command::Hook => std::process::exit(cctop::hooks::run_hook()),
+        Command::BaselineRefresh => {
+            if let Some(projects) = cctop::baseline::default_projects_dir() {
+                cctop::baseline::refresh(
+                    &cctop::status::cctop_dir(),
+                    &projects,
+                    cctop::app::now_ms(),
+                );
+            }
+        }
         Command::StatuslineShim { original } => {
             let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
             std::process::exit(cctop::status::run_shim(&original));

@@ -1040,10 +1040,13 @@ mod tests {
     /// What `/context` printed, as Claude Code records it: a `local_command`
     /// stdout with one `Name: Nk tokens` line per category.
     fn context_table(ts: &str, categories: &[(&str, &str)]) -> Line {
-        let rows: String = categories
+        use std::fmt::Write;
+        let rows = categories
             .iter()
-            .map(|(name, tokens)| format!("\\n  {name}: {tokens} tokens (1.0%)"))
-            .collect();
+            .fold(String::new(), |mut rows, (name, tokens)| {
+                let _ = write!(rows, "\\n  {name}: {tokens} tokens (1.0%)");
+                rows
+            });
         Line::parse(&format!(
             r#"{{"type":"system","subtype":"local_command","timestamp":"{ts}","content":"<local-command-stdout> Context Usage\n  claude-opus-5\n  88.7k/1m tokens (9%){rows}\n</local-command-stdout>"}}"#
         ))

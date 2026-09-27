@@ -166,17 +166,37 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
         }
     }
     // Your last-7-days medians are an account fact too: never beside a
-    // fixture file, so its query output is the same on every machine.
+    // fixture file, so its query output is the same on every machine. Read
+    // from the cache as it is; a stale one is recomputed behind us, since a
+    // compute inline outlasts the pane's 5 s timeout (issue #15).
     if state.session.pid.is_some() {
-        if let Some(projects) = crate::baseline::default_projects_dir() {
-            state.baseline = Some(crate::baseline::load_or_compute(
-                &crate::status::cctop_dir(),
-                &projects,
-                state.now_ms,
-            ));
-        }
+        state.baseline = crate::baseline::load_or_refresh(
+            &crate::status::cctop_dir(),
+            state.now_ms,
+            spawn_baseline_refresh,
+        );
     }
     state
+}
+
+/// `cctop baseline-refresh`, detached in its own process group so a caller
+/// killed at its timeout does not take the refresh with it. Only from the
+/// `cctop` binary itself: a test binary is no `cctop`.
+fn spawn_baseline_refresh() -> Option<u32> {
+    use std::os::unix::process::CommandExt;
+    let exe = std::env::current_exe().ok()?;
+    if exe.file_stem().is_none_or(|s| s != "cctop") {
+        return None;
+    }
+    std::process::Command::new(exe)
+        .arg("baseline-refresh")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0)
+        .spawn()
+        .ok()
+        .map(|child| child.id())
 }
 
 /// The lead as the team collector sees it: its id from the registry, or
