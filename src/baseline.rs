@@ -280,18 +280,83 @@ pub fn compute_with(
 
 /// `<home>/baseline.json`, recomputed when older than an hour.
 pub fn load_or_compute(home: &Path, projects_dir: &Path, now_ms: i64) -> Baseline {
-    let cache = home.join("baseline.json");
-    if let Ok(text) = std::fs::read_to_string(&cache) {
-        if let Ok(b) = serde_json::from_str::<Baseline>(&text) {
-            if now_ms - b.computed_at_ms < REFRESH_MS {
-                return b;
-            }
-        }
+    if let Some(b) = cached(home).filter(|b| now_ms - b.computed_at_ms < REFRESH_MS) {
+        return b;
     }
     let b = compute(projects_dir, DEFAULT_DAYS, now_ms);
-    let _ = std::fs::create_dir_all(home);
-    let _ = std::fs::write(&cache, serde_json::to_string_pretty(&b).unwrap_or_default());
+    write_cache(home, &b);
     b
+}
+
+/// The baseline for a one-shot reader (`cctop query`, the MCP tools, the
+/// pane): the cache as it is, however old, never computed inline. A compute
+/// parses every transcript of the week — seconds over a heavy one — and the
+/// pane kills a query at 5 s, before it writes the cache, so every later
+/// query started over (issue #15). A stale or missing cache starts one
+/// [`refresh`] through `spawn` (which answers the child's pid), unless a
+/// live refresh already holds the lock.
+pub fn load_or_refresh(
+    home: &Path,
+    now_ms: i64,
+    spawn: impl FnOnce() -> Option<u32>,
+) -> Option<Baseline> {
+    let b = cached(home);
+    if b.as_ref()
+        .is_some_and(|b| now_ms - b.computed_at_ms < REFRESH_MS)
+    {
+        return b;
+    }
+    let lock = lock_path(home);
+    if !refresh_running(&lock) {
+        if let Some(pid) = spawn() {
+            let _ = std::fs::create_dir_all(home);
+            let _ = std::fs::write(&lock, pid.to_string());
+        }
+    }
+    b
+}
+
+/// `cctop baseline-refresh`: compute, write the cache, free the lock.
+pub fn refresh(home: &Path, projects_dir: &Path, now_ms: i64) -> Baseline {
+    let lock = lock_path(home);
+    let _ = std::fs::create_dir_all(home);
+    let _ = std::fs::write(&lock, std::process::id().to_string());
+    let b = compute(projects_dir, DEFAULT_DAYS, now_ms);
+    write_cache(home, &b);
+    // Only our own lock: a newer refresh may have taken over a dead one.
+    if lock_pid(&lock) == Some(std::process::id()) {
+        let _ = std::fs::remove_file(&lock);
+    }
+    b
+}
+
+/// `<home>/baseline.json`, however old.
+pub fn cached(home: &Path) -> Option<Baseline> {
+    let text = std::fs::read_to_string(home.join("baseline.json")).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Through a temporary file and a rename: a reader never sees half a cache.
+fn write_cache(home: &Path, b: &Baseline) {
+    let _ = std::fs::create_dir_all(home);
+    let tmp = home.join(format!("baseline.json.{}.tmp", std::process::id()));
+    let text = serde_json::to_string_pretty(b).unwrap_or_default();
+    if std::fs::write(&tmp, text).is_ok() {
+        let _ = std::fs::rename(&tmp, home.join("baseline.json"));
+    }
+}
+
+fn lock_path(home: &Path) -> PathBuf {
+    home.join("baseline.lock")
+}
+
+fn lock_pid(lock: &Path) -> Option<u32> {
+    std::fs::read_to_string(lock).ok()?.trim().parse().ok()
+}
+
+/// The lock names a live process; one left by a killed refresh holds nothing.
+fn refresh_running(lock: &Path) -> bool {
+    lock_pid(lock).is_some_and(crate::registry::pid_alive)
 }
 
 /// `~/.claude/projects`.
@@ -313,6 +378,18 @@ impl Baseline {
 mod tests {
     use super::*;
 
+    /// Copy a fixture as a transcript written just now: macOS keeps the
+    /// source's mtime on a copy, and the window counts from the mtime.
+    pub(crate) fn copy_fresh(src: &Path, dst: &Path) {
+        std::fs::copy(src, dst).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(dst)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now())
+            .unwrap();
+    }
+
     #[test]
     fn computes_from_fixture_and_caches() {
         let now = crate::app::now_ms();
@@ -322,8 +399,8 @@ mod tests {
         std::fs::create_dir_all(projects.join("-p1")).unwrap();
         std::fs::create_dir_all(projects.join("-p2")).unwrap();
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
-        std::fs::copy(&src, projects.join("-p1/a.jsonl")).unwrap();
-        std::fs::copy(&src, projects.join("-p2/b.jsonl")).unwrap();
+        copy_fresh(&src, &projects.join("-p1/a.jsonl"));
+        copy_fresh(&src, &projects.join("-p2/b.jsonl"));
         std::fs::write(
             projects.join("-p2/short.jsonl"),
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
@@ -359,5 +436,95 @@ mod tests {
         assert_eq!(median(vec![3.0, 1.0, 2.0]), Some(2.0));
         assert_eq!(median(vec![1.0, 2.0]), Some(1.5));
         assert_eq!(median(vec![]), None);
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("cctop-baseline-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn cache_at(home: &Path, computed_at_ms: i64, sessions: usize) {
+        let b = Baseline {
+            computed_at_ms,
+            sessions,
+            ..Baseline::default()
+        };
+        write_cache(home, &b);
+    }
+
+    /// Issue #15: a one-shot reader never computes; the pane kills a query
+    /// at 5 s, and a compute over a heavy week ran longer than that.
+    #[test]
+    fn a_stale_cache_is_served_as_it_is_and_starts_one_refresh() {
+        let home = scratch("stale");
+        cache_at(&home, 0, 7);
+        let mut spawned = 0;
+        let b = load_or_refresh(&home, REFRESH_MS + 1, || {
+            spawned += 1;
+            Some(std::process::id())
+        });
+        assert_eq!(
+            b.map(|b| b.sessions),
+            Some(7),
+            "the stale cache, not a compute"
+        );
+        assert_eq!(spawned, 1);
+        // The refresh now holds the lock (a live pid): the next reader starts none.
+        let b = load_or_refresh(&home, REFRESH_MS + 2, || {
+            spawned += 1;
+            Some(1)
+        });
+        assert_eq!(b.map(|b| b.sessions), Some(7));
+        assert_eq!(spawned, 1, "one refresh at a time");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_missing_cache_answers_none_and_starts_a_refresh() {
+        let home = scratch("missing");
+        let mut spawned = 0;
+        let b = load_or_refresh(&home, 1, || {
+            spawned += 1;
+            None
+        });
+        assert!(b.is_none());
+        assert_eq!(spawned, 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_fresh_cache_starts_nothing_and_a_dead_lock_is_taken_over() {
+        let home = scratch("fresh");
+        cache_at(&home, 1_000, 3);
+        let b = load_or_refresh(&home, 2_000, || panic!("no refresh within the hour"));
+        assert_eq!(b.map(|b| b.sessions), Some(3));
+        // A refresh that died (killed, crashed) leaves its pid behind.
+        std::fs::write(home.join("baseline.lock"), u32::MAX.to_string()).unwrap();
+        let mut spawned = 0;
+        load_or_refresh(&home, 1_000 + REFRESH_MS, || {
+            spawned += 1;
+            None
+        });
+        assert_eq!(spawned, 1, "a lock naming a dead pid holds nothing");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn refresh_writes_the_cache_and_frees_its_lock() {
+        let root = scratch("refresh");
+        let (home, projects) = (root.join("home"), root.join("projects"));
+        std::fs::create_dir_all(projects.join("-p")).unwrap();
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        copy_fresh(&src, &projects.join("-p/a.jsonl"));
+        let now = crate::app::now_ms();
+        let b = refresh(&home, &projects, now);
+        assert_eq!(b.sessions, 1);
+        let c = cached(&home).unwrap();
+        assert_eq!((c.computed_at_ms, c.sessions), (now, 1));
+        assert!(!home.join("baseline.lock").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
