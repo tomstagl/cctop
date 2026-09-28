@@ -94,7 +94,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈56k",
+            "text": "≈46k",
             "tone": "bold"
           },
           {
@@ -120,11 +120,11 @@
             "tone": "fg"
           },
           {
-            "text": "   ",
+            "text": "     ",
             "tone": "dim"
           },
           {
-            "text": "≈12k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -132,11 +132,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆▆▆",
+            "text": "",
             "tone": "s0"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -154,7 +154,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈36k",
+            "text": "≈369",
             "tone": "bold"
           },
           {
@@ -162,11 +162,11 @@
             "tone": "dim"
           },
           {
-            "text": "▇▇▇▇▇▇▇▇▇",
+            "text": "",
             "tone": "s1"
           },
           {
-            "text": "▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -184,7 +184,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈11k",
+            "text": "≈502",
             "tone": "bold"
           },
           {
@@ -192,11 +192,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆▆▆",
+            "text": "",
             "tone": "s2"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -210,11 +210,11 @@
             "tone": "fg"
           },
           {
-            "text": "   ",
+            "text": "     ",
             "tone": "dim"
           },
           {
-            "text": "≈20k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -222,11 +222,50 @@
             "tone": "dim"
           },
           {
-            "text": "▇▇▇▇▇",
+            "text": "",
             "tone": "s2"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  since compaction (inferred) (−125k) · 2 calls",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other",
+            "tone": "fg"
+          },
+          {
+            "text": "             ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈93k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "66%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  prefix from the /context you ran in turn 0",
             "tone": "dim"
           }
         ],
@@ -283,27 +322,27 @@
         {
           "label": "prefix",
           "step": 0,
-          "tokens": 56698
+          "tokens": 46200
         },
         {
           "label": "harness",
           "step": 0,
-          "tokens": 12704
+          "tokens": 0
         },
         {
           "label": "thinking",
           "step": 1,
-          "tokens": 36356
+          "tokens": 369
         },
         {
           "label": "inputs",
           "step": 2,
-          "tokens": 11462
+          "tokens": 502
         },
         {
           "label": "results",
           "step": 2,
-          "tokens": 20297
+          "tokens": 0
         }
       ],
       "title": "context"
