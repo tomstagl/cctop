@@ -74,7 +74,7 @@ def find_bundle(explicit: str | None) -> Path | None:
         return None
     real = Path(claude).resolve()
     candidates: list[Path] = [real]
-    roots: list[Path] = list(real.parents[:4])
+    roots: list[Path] = list(real.parents)[:4]
     roots += [real.parent.parent / "lib" / "node_modules", real.parent / "node_modules"]
     npm = shutil.which("npm")
     if npm is not None:
