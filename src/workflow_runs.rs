@@ -656,6 +656,16 @@ fn pct_text(p: Option<f64>) -> String {
     p.map_or("—".to_string(), |p| format!("{:.0} %", p * 100.0))
 }
 
+/// The run's dollars after `mark`, or `—` when none of its agents is
+/// priced: the group row, the detail header and the strip say the same.
+fn run_usd(g: &crate::agent_ledger::WorkflowGroup, mark: &str) -> String {
+    if g.cost.source == crate::metrics::cost::Source::Unpriced {
+        "—".to_string()
+    } else {
+        format!("{mark}{:.2}", g.cost.usd)
+    }
+}
+
 /// The agents view's group row, cut to the view's width: state glyph, run,
 /// name, `✗n` when agents failed, then the journal's counts and the run's
 /// dollars.
@@ -669,11 +679,7 @@ pub fn group_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
     if let Some(e) = g.empty_result {
         parts.push(format!("{e} empty"));
     }
-    let cost = if g.cost.source == crate::metrics::cost::Source::Unpriced {
-        "—".to_string()
-    } else {
-        format!("≈${:.2}", g.cost.usd)
-    };
+    let cost = run_usd(g, "≈$");
     let failed = if g.verdict.failed > 0 {
         format!(" ✗{}", g.verdict.failed)
     } else {
@@ -753,7 +759,7 @@ pub fn detail_lines(g: &crate::agent_ledger::WorkflowGroup, width: usize) -> Vec
     }
     head.push(v.state.word().to_string());
     head.push(elapsed.unwrap_or_else(|| "—".to_string()));
-    head.push(format!("${:.2}", g.cost.usd));
+    head.push(run_usd(g, "$"));
     head.push(format!("{}×main", overhead_text(v)));
     head.push(format!("cold {}", pct_text(v.cold_start_pct)));
     out.push(row(format!(" {}", head.join("  "))));
@@ -822,7 +828,7 @@ pub fn strip_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
     let phase = v.phases.iter().rev().find(|p| p.started > 0);
     let (title, results, started, failed, cause) = match phase {
         Some(p) => (
-            phase_title(p).to_string(),
+            crate::ui::fmt::clip(phase_title(p), 10),
             p.results,
             p.started,
             p.failed,
@@ -834,8 +840,8 @@ pub fn strip_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
         None => ("—".to_string(), 0, 0, 0, String::new()),
     };
     format!(
-        "▸ {title:<10} {results}/{started} ✗{failed} {cause:<8} ${:.2} {}×main  {}",
-        g.cost.usd,
+        "▸ {title:<10} {results}/{started} ✗{failed} {cause:<8} {} {}×main  {}",
+        run_usd(g, "$"),
         overhead_text(v),
         g.name.as_deref().unwrap_or(&g.run)
     )
@@ -1521,5 +1527,41 @@ mod tests {
         // Half an hour on, both runs have stalled past the drop.
         s.now_ms += STALLED_DROP_MS;
         assert_eq!(strip_line(&s, &groups(&s)), None);
+    }
+
+    #[test]
+    fn a_long_phase_title_keeps_its_ten_cells_on_the_strip() {
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        s.workflow_journals[0].mtime_ms = Some(s.now_ms - 5_000);
+        s.workflow_journals[0].phases[1].title = "Design the whole long pass".into(); // 25+ chars
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let groups = crate::agent_ledger::workflow_groups(&s, &rows);
+        let line = crate::dashboard::cut(strip_line(&s, &groups).unwrap(), 52);
+        let text = crate::dashboard::text_of(&line);
+        assert!(text.contains("▸ Design th… 0/1 ✗1 429×1"), "{text}");
+    }
+
+    #[test]
+    fn an_unpriced_run_shows_a_dash_not_zero_dollars() {
+        let s = state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let mut g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        g.cost = crate::metrics::cost::Cost {
+            usd: 0.0,
+            approx: true,
+            source: crate::metrics::cost::Source::Unpriced,
+        };
+        // The group row cuts before its dollars at these counts; the three
+        // surfaces share one helper.
+        assert_eq!(run_usd(&g, "≈$"), "—");
+        assert!(!group_text(&g).contains('$'), "{}", group_text(&g));
+        assert!(strip_text(&g).contains(" — "), "{}", strip_text(&g));
+        assert!(!strip_text(&g).contains("$0.00"));
+        let head = &detail_lines(&g, DETAIL_WIDE)[0];
+        assert!(
+            head.contains("completed  5:00  —  ") && !head.contains('$'),
+            "{head}"
+        );
     }
 }
