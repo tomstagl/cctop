@@ -142,11 +142,14 @@ pub struct WorkflowGroup {
     pub running: usize,
     pub cost: Cost,
     pub waste_usd: f64,
+    /// The run's latest launch's `workflowName`, else the record's.
+    pub name: Option<String>,
+    /// State, window, per-phase figures, causes and fix lines.
+    pub verdict: crate::workflow_runs::RunVerdict,
 }
 
-/// One group per workflow run seen in `rows` or in the journals, in run
-/// order.
-pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
+/// Every workflow run seen in the journals or in `rows`, in run order.
+pub fn workflow_runs(state: &State, rows: &[AgentRow]) -> Vec<String> {
     let mut runs: Vec<String> = state
         .workflow_journals
         .iter()
@@ -160,17 +163,34 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
         }
     }
     runs.sort();
-    // A notification whose `Workflow` launch was not seen (a cut prefix, a
-    // resumed session) is keyed by its task id; it can only be the run's
-    // when there is exactly one of each.
-    let unkeyed: Vec<&crate::transcript::TaskNotification> = state
+    runs
+}
+
+/// The key of `run`'s task notification in `state.workflow_notifications`
+/// (and `workflow_notified_at`), among `runs` (from [`workflow_runs`]): the
+/// run id, else — a notification whose `Workflow` launch was not seen (a cut
+/// prefix, a resumed session) is keyed by its task id — the one unkeyed
+/// notification when there is exactly one run and one of those.
+pub fn notification_key<'a>(state: &'a State, runs: &[String], run: &str) -> Option<&'a str> {
+    if let Some((k, _)) = state.workflow_notifications.get_key_value(run) {
+        return Some(k.as_str());
+    }
+    let mut unkeyed = state
         .workflow_notifications
-        .iter()
-        .filter(|(k, _)| !runs.contains(k))
-        .map(|(_, n)| n)
-        .collect();
-    let lone = (runs.len() == 1 && unkeyed.len() == 1).then(|| unkeyed[0]);
-    runs.into_iter()
+        .keys()
+        .filter(|k| !runs.contains(k));
+    match (runs.len(), unkeyed.next(), unkeyed.next()) {
+        (1, Some(k), None) if runs[0] == run => Some(k.as_str()),
+        _ => None,
+    }
+}
+
+/// One group per workflow run seen in `rows` or in the journals, in run
+/// order.
+pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
+    let runs = workflow_runs(state, rows);
+    runs.iter()
+        .cloned()
         .map(|run| {
             let journal = state.workflow_journals.iter().find(|j| j.run == run);
             let members: Vec<&AgentRow> = rows
@@ -187,13 +207,14 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
                 }
                 waste_usd += r.waste.map_or(0.0, |w| w.usd);
             }
+            let verdict = crate::workflow_runs::verdict(state, rows, &run);
             WorkflowGroup {
-                empty_result: state
-                    .workflow_notifications
-                    .get(&run)
-                    .or(lone)
+                empty_result: notification_key(state, &runs, &run)
+                    .and_then(|k| state.workflow_notifications.get(k))
                     .and_then(|n| n.workflow)
                     .map(|w| w.empty_result),
+                name: verdict.name.clone(),
+                verdict,
                 launched: journal.map_or(members.len(), |j| j.launched),
                 done: journal.map_or(0, |j| j.results),
                 failed: journal.map_or(0, |j| j.failed),

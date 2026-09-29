@@ -711,6 +711,8 @@ git add src/workflow_runs.rs src/agent_ledger.rs src/tools.rs src/transcript/too
 git commit -m "Workflows: a cause per failed agent, the run's verdict and its fix lines"
 ```
 
+> Implementation note: the lone-notification fallback is factored out of `workflow_groups` into `agent_ledger::{workflow_runs, notification_key}` so `verdict` looks up the notification and `workflow_notified_at` by the same key. The terminal marker takes the status of whichever of notification/record is later (a notification with an unrecognised status falls back to the record's, else `Completed`); `workflow_notified_at` keeps the latest of a notification's deliveries. Any API error ends `cause` at step 1 (a tokenless one is `Unknown`, labelled by its status digits in the fix line). `pointer_stale` is judged over the phase's agents with a cause (its failed ones, plus those cut off in a killed run). A journal `failed` id that no phase started is counted in `failed`/`failed_usd` but gets no cause.
+
 ---
 
 ### Task 6: Metrics
