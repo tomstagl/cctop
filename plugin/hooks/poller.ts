@@ -15,7 +15,7 @@ import { IDLE_ONLY_VERBS, QUERY_VERBS, TESTED_WITH, isSupported, reduce, type Ac
 export type PollerEngine = {
   /** `now` resolves a Promise: a host round trip since Claude Code 2.1.271 (issue #3). */
   clock: Pick<EngineInterface['clock'], 'now' | 'every'>;
-  process: EngineInterface['process'];
+  process: Pick<EngineInterface['process'], 'run'>;
   session: Pick<EngineInterface['session'], 'id'>;
   fs: Pick<EngineInterface['fs'], 'write'>;
   ui: Pick<EngineInterface['ui'], 'log'>;

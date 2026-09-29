@@ -90,10 +90,10 @@ test('usage rows from fixtures/usage.json', () => {
 });
 
 test('usage rows draw what the engine left out as ?', () => {
-  const rows = usageRows({ context: { window: 200000 }, rateLimits: [] }, T0);
+  const rows = usageRows({ startedAt: 0, context: { window: 200000 }, rateLimits: [] }, T0);
   assert.deepEqual(rows, [{ key: 'context_size', label: 'Context', value: '? / 200k (? %)' }]);
   const passed = usageRows(
-    { context: { tokens: 50000, window: 200000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 99.6, resetsAt: '2026-09-12T11:00:00Z' }] },
+    { startedAt: 0, context: { tokens: 50000, window: 200000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 99.6, resetsAt: '2026-09-12T11:00:00Z' }] },
     T0,
   );
   assert.equal(passed[0].value, '50k / 200k (25 %)');
@@ -212,7 +212,7 @@ test('the pane draws the turn, the running tool and the usage rows', async () =>
 });
 
 test('turn.complete records the context size for the sparkline, capped at HISTORY_TURNS', () => {
-  const usage = (tokens: number): SessionUsage => ({ context: { tokens, window: 200_000 }, rateLimits: [] });
+  const usage = (tokens: number): SessionUsage => ({ startedAt: 0, context: { tokens, window: 200_000 }, rateLimits: [] });
   let model = initialModel();
   const turn = (tokens: number | undefined): void => {
     model = reduce(model, { type: 'turn.start', at: T0 });
@@ -242,7 +242,7 @@ test('turn.complete records the context size for the sparkline, capped at HISTOR
 // Issue #2: `/clear` gives the session a new id under the running pane.
 test('session.id: the first id is learned, the same id is a no-op, a new id drops the old session', () => {
   let model = run(SEQUENCE);
-  model = reduce(model, { type: 'usage', usage: { context: { tokens: 90_000, window: 200_000 }, rateLimits: [] }, at: T0 });
+  model = reduce(model, { type: 'usage', usage: { startedAt: 0, context: { tokens: 90_000, window: 200_000 }, rateLimits: [] }, at: T0 });
   model = reduce(model, { type: 'binary', binary: 'present' });
   model = reduce(model, { type: 'verbs', verbs: ['summary', 'tools'] });
   model = reduce(model, { type: 'query', verb: 'summary', data: fixture('summary') });

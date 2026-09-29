@@ -216,9 +216,10 @@ def probe_autocompact(text: str, facts: str, r: Report) -> None:
     m = re.search(rf"\{{let {ID}={ID}-(\d+),{ID}={ID}\.testPctOverride", text)
     r.add("autocompact threshold = effective − BUFFER", num(want["BUFFER_TOKENS"]), num(m.group(1)) if m else None)
     # The effective window: `window − min(maxOutputTokens, CAP)`; the cap is
-    # a `var` near the level function.
+    # a `var` near the level function. The lookup's argument is a bare name
+    # up to 2.1.278 and `e.model` from 2.1.284.
     m = re.search(
-        rf"\{{let {ID}=Math\.min\({ID}\({ID}\),({ID})\),{ID}={ID}\(\)\?{ID}:void 0,\{{window:{ID}\}}={ID}\({ID},{ID}\);return {ID}-{ID}\}}",
+        rf"\{{let {ID}=Math\.min\({ID}\({ID}(?:\.{ID})?\),({ID})\),{ID}={ID}\(\)\?{ID}:void 0,\{{window:{ID}\}}={ID}\({ID},{ID}\);return {ID}-{ID}\}}",
         text,
     )
     cap = None

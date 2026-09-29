@@ -238,7 +238,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     model: 'claude-sonnet-5',
     turns: 0,
     cwd: '/home/user/project',
-    usage: { context: { window: 200000 }, rateLimits: [] },
+    usage: { startedAt: 0, context: { window: 200000 }, rateLimits: [] },
     ...opts.session,
   };
   const env = { ...(opts.env ?? {}) };
@@ -292,6 +292,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       open: async (pane: PaneOpenArgs) => {
         opens.push({ ...pane });
         openIds.add(pane.id);
+        return { isPlaced: true };
       },
       close: async (pane: PaneCloseArgs) => {
         closes.push({ ...pane });

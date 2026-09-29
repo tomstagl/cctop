@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 
 /// The Claude Code version these facts were recovered from.
-pub const READ_FROM: &str = "2.1.278";
+pub const READ_FROM: &str = "2.1.284";
 
 /// A `major.minor.patch` Claude Code version, comparable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
