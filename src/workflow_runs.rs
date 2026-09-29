@@ -486,7 +486,7 @@ pub fn verdict(
             started: p.started,
             results: p.results,
             failed: p.failed,
-            failed_usd: failed.iter().map(|id| cost_of(id)).sum(),
+            failed_usd: usd_sum(failed.iter().map(|id| cost_of(id))),
             waste_pct: (cost > 0.0).then(|| waste / cost),
             causes,
             pointer,
@@ -495,28 +495,27 @@ pub fn verdict(
     }
 
     // The run's figures.
-    let run_usd: f64 = member_rows.iter().map(|r| r.cost.usd).sum();
+    let run_usd = usd_sum(member_rows.iter().map(|r| r.cost.usd));
     let share = |x: f64| (run_usd > 0.0).then(|| x / run_usd);
-    let waste_usd: f64 = member_rows
-        .iter()
-        .map(|r| r.waste.map_or(0.0, |w| w.usd))
-        .sum();
+    let waste_usd = usd_sum(member_rows.iter().map(|r| r.waste.map_or(0.0, |w| w.usd)));
     // As `agent_ledger::totals` sums `Totals.cold_start_usd`.
-    let cold_start_usd: f64 = member_rows
-        .iter()
-        .filter(|r| r.cold_start)
-        .map(|r| r.cold_start_usd)
-        .sum();
+    let cold_start_usd = usd_sum(
+        member_rows
+            .iter()
+            .filter(|r| r.cold_start)
+            .map(|r| r.cold_start_usd),
+    );
     let pricing = state.cost.pricing();
     let overhead = started_ms.and_then(|start| {
         let end = ended_ms.unwrap_or(now);
-        let main: f64 = state
-            .agg
-            .calls
-            .iter()
-            .filter(|c| c.at_ms.is_some_and(|t| t >= start && t <= end))
-            .filter_map(|c| pricing.estimate(&c.usage, &c.model))
-            .sum();
+        let main = usd_sum(
+            state
+                .agg
+                .calls
+                .iter()
+                .filter(|c| c.at_ms.is_some_and(|t| t >= start && t <= end))
+                .filter_map(|c| pricing.estimate(&c.usage, &c.model)),
+        );
         (main >= 0.01).then(|| run_usd / main)
     });
 
@@ -570,7 +569,7 @@ pub fn verdict(
         state: run_state,
         phases,
         failed: journal.map_or(0, |j| j.failed),
-        failed_usd: journal.map_or(0.0, |j| j.failed_ids.iter().map(|id| cost_of(id)).sum()),
+        failed_usd: journal.map_or(0.0, |j| usd_sum(j.failed_ids.iter().map(|id| cost_of(id)))),
         waste_pct: share(waste_usd),
         overhead,
         cold_start_pct: share(cold_start_usd),
@@ -640,6 +639,17 @@ fn short_causes(p: &PhaseRow) -> Vec<(&'static str, usize)> {
     by
 }
 
+/// A sum of dollars folded from `+0.0`: `Iterator::sum` of no `f64` is
+/// `-0.0`, which renders as `-0.00` and serialises as `-0.0`.
+fn usd_sum(xs: impl Iterator<Item = f64>) -> f64 {
+    xs.fold(0.0, |a, b| a + b)
+}
+
+/// Dollars to the cent, never `-0.00`.
+fn usd2(x: f64) -> String {
+    format!("{:.2}", x + 0.0)
+}
+
 fn phase_title(p: &PhaseRow) -> &str {
     if p.title.is_empty() {
         "—"
@@ -662,7 +672,7 @@ fn run_usd(g: &crate::agent_ledger::WorkflowGroup, mark: &str) -> String {
     if g.cost.source == crate::metrics::cost::Source::Unpriced {
         "—".to_string()
     } else {
-        format!("{mark}{:.2}", g.cost.usd)
+        format!("{mark}{}", usd2(g.cost.usd))
     }
 }
 
@@ -788,7 +798,7 @@ pub fn detail_lines(g: &crate::agent_ledger::WorkflowGroup, width: usize) -> Vec
             &p.started.to_string(),
             &p.results.to_string(),
             &p.failed.to_string(),
-            &format!("{:.2}", p.failed_usd),
+            &usd2(p.failed_usd),
             &pct_text(p.waste_pct),
             &causes.join(" "),
         )));
@@ -1604,5 +1614,31 @@ mod tests {
             assert!(head.ends_with("cause  empty 3"), "{head}");
             assert!(head.chars().count() <= w, "{head}");
         }
+    }
+
+    #[test]
+    fn a_phase_without_failures_costs_zero_not_minus_zero() {
+        let mut s = state_with_run();
+        s.workflow_journals[0]
+            .phases
+            .push(crate::agents::JournalPhase {
+                title: "Merge".into(),
+                started: 1,
+                ..Default::default()
+            });
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        let merge = g
+            .verdict
+            .phases
+            .iter()
+            .find(|p| p.title == "Merge")
+            .unwrap();
+        assert!(merge.failed_usd.is_sign_positive(), "an empty sum is +0.0");
+        let row = detail_lines(&g, DETAIL_WIDE)
+            .into_iter()
+            .find(|l| l.starts_with(" Merge"))
+            .unwrap();
+        assert!(row.contains(" 0.00 ") && !row.contains("-0.00"), "{row}");
     }
 }

@@ -277,7 +277,21 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
             .workflow_journals
             .iter()
             .any(|j| j.failed_ids.contains(&a.id));
-    let heuristic = a.state(now);
+    // A `result` entry is the run's word that the agent returned: its
+    // transcript may end on the `StructuredOutput` call and its tool result,
+    // with no closing assistant line, which the heuristic reads as running.
+    let journal_returned = status.is_none()
+        && !journal_failed
+        && state.workflow_journals.iter().any(|j| {
+            j.phases
+                .iter()
+                .any(|p| p.result_ids.iter().any(|id| *id == a.id))
+        });
+    let heuristic = if journal_returned {
+        AgentState::Done
+    } else {
+        a.state(now)
+    };
     let agent_state = match &status {
         Some(TaskStatus::Completed) => AgentState::Done,
         Some(TaskStatus::Failed) | Some(TaskStatus::Killed) => AgentState::Failed,
@@ -298,6 +312,10 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
                 .zip(a.last_line_at)
                 .map(|(s, l)| (l - s).max(0))
         }),
+        None if journal_returned => a
+            .started_at
+            .zip(a.last_line_at)
+            .map(|(s, l)| (l - s).max(0)),
         None => a.elapsed_ms(now),
     };
     let idle_for = a
@@ -1097,6 +1115,53 @@ mod tests {
         assert!((t.waste_by_reason[1] - w.usd).abs() < 1e-12);
         assert_eq!(t.cold_starts, 1);
         assert!(t.returned_ratio.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn an_agent_the_journal_says_returned_is_finished() {
+        // A workflow agent returns through `StructuredOutput`: its last
+        // lines are the call and its tool result, no closing assistant
+        // line. Silent for eight minutes, the transcript alone reads it as
+        // running and idle; the journal's `result` entry says it returned.
+        use crate::workflow_runs::test_support::{agent, journal, state};
+        let t = "2026-01-01T00:02:00Z";
+        let call = Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"{t}","message":{{"id":"m1","model":"claude-haiku-4-5-20251001","content":[{{"type":"tool_use","id":"tum1","name":"StructuredOutput","input":{{}}}}],"stop_reason":"tool_use","usage":{{"input_tokens":1000,"output_tokens":200}}}}}}"#
+        ))
+        .unwrap();
+        let result = Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"{t}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tum1","content":"ok"}}]}}}}"#
+        ))
+        .unwrap();
+        let a = agent("r1", "wf_t", &[call, result]);
+        assert_eq!(a.transcript_pending(), 0);
+        assert_eq!(
+            a.state(i64::MAX),
+            AgentState::Running,
+            "the heuristic alone"
+        );
+
+        let open = state(
+            vec![a.clone()],
+            vec![journal("wf_t", &[("Verify", &[("r1", "open")])], t)],
+        );
+        let r = row(&open, &open.agents["r1"]);
+        assert_eq!(r.state, AgentState::Running);
+        assert_eq!(r.waste.map(|w| w.reason), Some(WasteReason::Idle));
+
+        let returned = state(
+            vec![a],
+            vec![journal("wf_t", &[("Verify", &[("r1", "ok")])], t)],
+        );
+        let r = row(&returned, &returned.agents["r1"]);
+        assert_eq!(r.state, AgentState::Done);
+        assert_eq!(r.waste, None, "its cost is not idle waste");
+        assert_eq!(
+            r.elapsed_ms,
+            Some(0),
+            "timed by its transcript, not the clock"
+        );
+        assert_eq!(totals(&[r]).running, 0);
     }
 
     #[test]
