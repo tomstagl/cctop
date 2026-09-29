@@ -227,6 +227,9 @@ pub struct RunVerdict {
     /// The holding marker's time; `None` while `Live` (the window runs to
     /// now); else the last activity.
     pub ended_ms: Option<i64>,
+    /// The latest member line, journal write (capped at the clock) or
+    /// launch: what the header strip ranks live runs by.
+    pub last_activity_ms: Option<i64>,
     /// The two causes with the most agents, `Killed` excluded.
     pub fixes: Vec<Fix>,
 }
@@ -573,8 +576,318 @@ pub fn verdict(
         cold_start_pct: share(cold_start_usd),
         started_ms,
         ended_ms,
+        last_activity_ms: last_activity,
         fixes,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Rendered text: the rows every surface draws verbatim (spec §4.5).
+
+/// The run detail's wide layout: the rows inside a 120-column frame.
+pub const DETAIL_WIDE: usize = 116;
+/// The narrow layout: the rows inside a 56-column frame.
+pub const DETAIL_NARROW: usize = 52;
+
+impl RunState {
+    /// The group row's state glyph.
+    pub fn glyph(self) -> char {
+        match self {
+            RunState::Live => '▶',
+            RunState::Stalled => '‖',
+            RunState::Completed => '✓',
+            RunState::Killed | RunState::Failed => '✗',
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            RunState::Live => "live",
+            RunState::Stalled => "stalled",
+            RunState::Completed => "completed",
+            RunState::Killed => "killed",
+            RunState::Failed => "failed",
+        }
+    }
+}
+
+impl Cause {
+    /// The strip's and the phase table's short form, before `×n`.
+    pub fn short(self) -> &'static str {
+        match self {
+            Cause::RateLimitFirst | Cause::RateLimitMid => "429",
+            Cause::Overloaded => "529",
+            Cause::ContextOverflow => "ctx",
+            Cause::NoStructuredOutput => "schema",
+            Cause::Killed => "kill",
+            Cause::Unknown => "?",
+        }
+    }
+}
+
+/// A phase's causes by short form, most agents first (the causes'
+/// declaration order on a tie): `429×201`, `?×1`. Both rate-limit causes count as one
+/// `429`.
+fn short_causes(p: &PhaseRow) -> Vec<(&'static str, usize)> {
+    let mut by: Vec<(&'static str, usize)> = Vec::new();
+    for (c, n) in &p.causes {
+        match by.iter_mut().find(|(s, _)| *s == c.short()) {
+            Some((_, m)) => *m += n,
+            None => by.push((c.short(), *n)),
+        }
+    }
+    by.sort_by(|a, b| b.1.cmp(&a.1));
+    by
+}
+
+fn phase_title(p: &PhaseRow) -> &str {
+    if p.title.is_empty() {
+        "—"
+    } else {
+        &p.title
+    }
+}
+
+fn overhead_text(v: &RunVerdict) -> String {
+    v.overhead.map_or("—".to_string(), |o| format!("{o:.1}"))
+}
+
+fn pct_text(p: Option<f64>) -> String {
+    p.map_or("—".to_string(), |p| format!("{:.0} %", p * 100.0))
+}
+
+/// The agents view's group row, cut to the view's width: state glyph, run,
+/// name, `✗n` when agents failed, then the journal's counts and the run's
+/// dollars.
+pub fn group_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
+    use crate::ui::fmt;
+    let mut parts = vec![
+        format!("{} launched", g.launched),
+        format!("{} done", g.done),
+        format!("{} failed", g.failed),
+    ];
+    if let Some(e) = g.empty_result {
+        parts.push(format!("{e} empty"));
+    }
+    let cost = if g.cost.source == crate::metrics::cost::Source::Unpriced {
+        "—".to_string()
+    } else {
+        format!("≈${:.2}", g.cost.usd)
+    };
+    let failed = if g.verdict.failed > 0 {
+        format!(" ✗{}", g.verdict.failed)
+    } else {
+        String::new()
+    };
+    let row = format!(
+        " {} {:<11} {:<12}{failed}  {}  {cost}",
+        g.verdict.state.glyph(),
+        fmt::clip(&g.run, 11),
+        fmt::clip(g.name.as_deref().unwrap_or(""), 12),
+        parts.join(" · ")
+    );
+    fmt::clip(&row, crate::ui::agents_view::WIDTH)
+        .trim_end()
+        .to_string()
+}
+
+/// `text` word-wrapped at `width`: the first row after `indent`, the rest
+/// two cells further in; a word longer than a row is broken. Never clipped.
+fn wrap(text: &str, width: usize, indent: &str) -> Vec<String> {
+    let hang = format!("{indent}  ");
+    let mut out = Vec::new();
+    let mut line = indent.to_string();
+    let mut empty = true;
+    for word in text.split_whitespace() {
+        let mut word: Vec<char> = word.chars().collect();
+        loop {
+            let used = line.chars().count();
+            let need = word.len() + usize::from(!empty);
+            if used + need <= width {
+                if !empty {
+                    line.push(' ');
+                }
+                line.extend(word.iter());
+                empty = false;
+                break;
+            }
+            if !empty {
+                out.push(std::mem::replace(&mut line, hang.clone()));
+                empty = true;
+                continue;
+            }
+            // A word wider than a whole row: break it.
+            let room = width.saturating_sub(used).max(1);
+            let rest = word.split_off(room.min(word.len()));
+            line.extend(word.iter());
+            out.push(std::mem::replace(&mut line, hang.clone()));
+            word = rest;
+            if word.is_empty() {
+                break;
+            }
+        }
+    }
+    if !empty {
+        out.push(line);
+    }
+    out
+}
+
+/// The run detail at `width` ([`DETAIL_WIDE`] or [`DETAIL_NARROW`]): a
+/// header row, the column heads, one row per phase, a rule, then each fix
+/// line and its pointer, wrapped. No row carries trailing spaces or
+/// exceeds `width`.
+pub fn detail_lines(g: &crate::agent_ledger::WorkflowGroup, width: usize) -> Vec<String> {
+    use crate::ui::fmt;
+    let v = &g.verdict;
+    let wide = width >= DETAIL_WIDE;
+    let row = |s: String| fmt::clip(&s, width).trim_end().to_string();
+    let mut out = Vec::new();
+
+    let elapsed = v.started_ms.map(|s| {
+        fmt::duration_ms(v.ended_ms.unwrap_or(v.last_activity_ms.unwrap_or(s)).max(s) - s)
+    });
+    let mut head = vec![g.run.clone()];
+    if let Some(n) = &g.name {
+        head.push(n.clone());
+    }
+    head.push(v.state.word().to_string());
+    head.push(elapsed.unwrap_or_else(|| "—".to_string()));
+    head.push(format!("${:.2}", g.cost.usd));
+    head.push(format!("{}×main", overhead_text(v)));
+    head.push(format!("cold {}", pct_text(v.cold_start_pct)));
+    out.push(row(format!(" {}", head.join("  "))));
+
+    let cols =
+        |title: &str, start: &str, res: &str, f: &str, fusd: &str, waste: &str, cause: &str| {
+            if wide {
+                format!(" {title:<12} {start:>5} {res:>5} {f:>4} {fusd:>7} {waste:>6}  {cause}")
+            } else {
+                format!(" {title:<12} {start:>5} {res:>5} {f:>4}  {cause}")
+            }
+        };
+    out.push(row(cols(
+        "phase", "start", "res", "✗", "✗$", "waste", "cause",
+    )));
+    for p in &v.phases {
+        let causes: Vec<String> = short_causes(p)
+            .iter()
+            .map(|(s, n)| format!("{s}×{n}"))
+            .collect();
+        out.push(row(cols(
+            &fmt::clip(phase_title(p), 12),
+            &p.started.to_string(),
+            &p.results.to_string(),
+            &p.failed.to_string(),
+            &format!("{:.2}", p.failed_usd),
+            &pct_text(p.waste_pct),
+            &causes.join(" "),
+        )));
+    }
+    out.push(" ───".to_string());
+    for f in &v.fixes {
+        out.extend(wrap(&f.text, width, " "));
+        if let Some(ptr) = f.pointer {
+            let file = f
+                .script_path
+                .as_deref()
+                .and_then(|p| Path::new(p).file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("script");
+            let mut s = format!("→ {file}:{} {}()", ptr.line, call_name(ptr.call));
+            if f.pointer_stale {
+                s.push_str(" · script changed since");
+            }
+            out.extend(wrap(&s, width, "   "));
+        }
+    }
+    out
+}
+
+fn call_name(c: crate::workflow_script::Call) -> &'static str {
+    use crate::workflow_script::Call;
+    match c {
+        Call::Parallel => "parallel",
+        Call::Pipeline => "pipeline",
+        Call::PhaseMarker => "phase",
+    }
+}
+
+/// The header strip's text after its label (spec §4.5), in order of
+/// importance so a narrow cut drops the least useful: the last phase with
+/// a start and its figures and top cause, then the run's dollars and
+/// overhead, the name last.
+pub fn strip_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
+    let v = &g.verdict;
+    let phase = v.phases.iter().rev().find(|p| p.started > 0);
+    let (title, results, started, failed, cause) = match phase {
+        Some(p) => (
+            phase_title(p).to_string(),
+            p.results,
+            p.started,
+            p.failed,
+            short_causes(p)
+                .first()
+                .map(|(s, n)| format!("{s}×{n}"))
+                .unwrap_or_default(),
+        ),
+        None => ("—".to_string(), 0, 0, 0, String::new()),
+    };
+    format!(
+        "▸ {title:<10} {results}/{started} ✗{failed} {cause:<8} ${:.2} {}×main  {}",
+        g.cost.usd,
+        overhead_text(v),
+        g.name.as_deref().unwrap_or(&g.run)
+    )
+}
+
+/// Whether a run belongs on the strip: `Live`, or `Stalled` for less than
+/// [`STALLED_DROP_MS`].
+fn on_strip(g: &crate::agent_ledger::WorkflowGroup, now: i64) -> bool {
+    match g.verdict.state {
+        RunState::Live => true,
+        RunState::Stalled => g
+            .verdict
+            .last_activity_ms
+            .is_some_and(|t| now - t < STALLED_DROP_MS),
+        _ => false,
+    }
+}
+
+/// The dashboard header's second row: the run with the latest activity
+/// among those on the strip, `+n live` for the others; `None` when no run
+/// is on it (the header is then as it was, FR-3).
+pub fn strip_line(
+    state: &crate::ui::State,
+    groups: &[crate::agent_ledger::WorkflowGroup],
+) -> Option<crate::dashboard::Line> {
+    use crate::dashboard::{dim, seg, Tone};
+    let now = state.clock_ms();
+    let live: Vec<&crate::agent_ledger::WorkflowGroup> =
+        groups.iter().filter(|g| on_strip(g, now)).collect();
+    let shown = live
+        .iter()
+        .copied()
+        .max_by_key(|g| g.verdict.last_activity_ms)?;
+    let failed = shown
+        .verdict
+        .phases
+        .iter()
+        .rev()
+        .find(|p| p.started > 0)
+        .map_or(0, |p| p.failed);
+    let tone = if failed > 0 {
+        Tone::Crit
+    } else if shown.verdict.state == RunState::Stalled {
+        Tone::Dim
+    } else {
+        Tone::Fg
+    };
+    let mut line = vec![dim(" wf     "), seg(strip_text(shown), tone)];
+    if live.len() > 1 {
+        line.push(dim(format!(" +{} live", live.len() - 1)));
+    }
+    Some(line)
 }
 
 #[cfg(test)]
@@ -1168,5 +1481,45 @@ mod tests {
         let r = v(&state_with_run());
         assert!(r.failed_usd > 0.0, "d1 made one priced call before its 429");
         assert!(r.waste_pct.unwrap() > 0.0 && r.waste_pct.unwrap() < 1.0);
+    }
+
+    #[test]
+    fn wrap_breaks_a_word_wider_than_the_row_and_hangs_two_cells() {
+        let rows = wrap(
+            "→ an-extremely-long-script-file-name.js:12 parallel()",
+            20,
+            "   ",
+        );
+        assert!(rows.iter().all(|r| r.chars().count() <= 20), "{rows:#?}");
+        assert!(
+            rows[1..].iter().all(|r| r.starts_with("     ")),
+            "{rows:#?}"
+        );
+        let flat: String = rows.iter().map(|r| r.trim()).collect();
+        assert_eq!(flat, "→an-extremely-long-script-file-name.js:12parallel()");
+    }
+
+    #[test]
+    fn the_strip_counts_other_live_runs_and_drops_a_long_stall() {
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        s.workflow_journals[0].mtime_ms = Some(s.now_ms - 5_000);
+        let mut other = s.workflow_journals[0].clone();
+        other.run = "wf_u".into();
+        other.mtime_ms = Some(s.now_ms - 10 * 60_000); // stalled 10 min
+        s.workflow_journals.push(other);
+        let groups = |s: &State| {
+            let rows = crate::agent_ledger::rows(s, crate::agent_ledger::Sort::Waste, false);
+            crate::agent_ledger::workflow_groups(s, &rows)
+        };
+        let line = strip_line(&s, &groups(&s)).unwrap();
+        assert!(
+            line[1].text.ends_with("wf_t"),
+            "the latest activity is shown"
+        );
+        assert_eq!(line[2].text, " +1 live");
+        // Half an hour on, both runs have stalled past the drop.
+        s.now_ms += STALLED_DROP_MS;
+        assert_eq!(strip_line(&s, &groups(&s)), None);
     }
 }

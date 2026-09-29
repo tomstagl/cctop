@@ -821,6 +821,8 @@ fn the_header_strip_shows_only_while_a_run_is_live() {
 - [ ] **Step 4: Run** — `cargo test` — PASS, with no changed snapshot for fixtures A–D (none has a workflow run, so `header.workflow` is absent).
 - [ ] **Step 5: Commit** — `git add src/query.rs src/dashboard.rs src/ui/dashboard.rs src/workflow_runs.rs docs/query.md && git commit -m "Workflows: the verdict in cctop query agents, and a header strip while a run is live"`
 
+> Implementation note: ruling R7 — `workflow_waste_pct` and `workflow_cold_start_pct` take the registry's `"%"` unit (Task 6 had `"percent"`), `workflow_waste_pct` lists `D4` like `agent_waste`, and the query serialises both on the 0–100 scale the other `%` values use (`cache_miss_pct`); `RunVerdict` keeps fractions. `RunVerdict` gains `last_activity_ms` (the value `verdict` already computed), which the strip ranks live runs by and a `Stalled` run's 30-min drop reads. `RunState::Failed` takes the `✗` glyph like `Killed`. Short causes merge by short form (`RateLimitFirst` + `RateLimitMid` → one `429×n`), in the strip and the phase table's cause column (all of a phase's short causes, most first). The strip's tone is judged on the shown phase's `failed` (the `✗n` it prints): `Crit` > `Dim` (stalled) > `Fg`. `header()` reads the ledger only when a journal or a workflow agent exists. The detail's elapsed runs to `ended_ms`, else (live) the last activity — `detail_lines` takes no clock. `group_text` is cut to `agents_view::WIDTH` (60), which at real counts drops the trailing dollars; Task 8 owns that row's layout.
+
 ---
 
 ### Task 8: The run detail in the agents view
