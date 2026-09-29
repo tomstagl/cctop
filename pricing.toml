@@ -1,4 +1,4 @@
-# USD per million tokens. Anthropic first-party API list prices (cached 2026-06-24).
+# USD per million tokens. Anthropic first-party API list prices (cached 2026-09-25).
 # cache_write_5m / cache_write_1h / cache_read default to 1.25× / 2× / 0.1× input
 # when omitted. Override per model in ~/.config/cctop/pricing.toml.
 #
@@ -9,9 +9,19 @@ input = 10.0
 output = 50.0
 cache_read = 0.25
 
+[models."claude-mythos-5-1"]
+input = 10.0
+output = 50.0
+cache_read = 0.25
+
 [models."claude-fable-5"]
 input = 10.0
 output = 50.0
+
+[models."claude-opus-5-5"]
+input = 4.0
+output = 20.0
+cache_read = 0.20
 
 [models."claude-opus-5"]
 input = 5.0
@@ -28,6 +38,11 @@ output = 25.0
 [models."claude-opus-4-6"]
 input = 5.0
 output = 25.0
+
+[models."claude-sonnet-5-5"]
+input = 2.0
+output = 10.0
+cache_read = 0.20
 
 [models."claude-sonnet-5"]
 input = 2.0
