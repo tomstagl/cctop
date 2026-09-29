@@ -32,6 +32,7 @@
 8. **Fix lines wrap, never clip:** at 56 columns (52 inside the frame) the advice after the dash must still be on screen — pinned in Task 7.
 9. **The journal's mtime is not evidence of time:** its lines carry no timestamps and a copied or checked-out session (fixture W) has a fresh mtime; only launches and member lines supersede a terminal marker — pinned in Task 5 and on fixture W in Task 9.
 10. **A pointer into a script that moved on:** the record holds the last invocation's script only; when a phase's failures all predate it, the pointer is marked stale — pinned in Task 5, and the real run is this case (Task 9).
+11. **The strip is in the header, not a body:** visible from every body, home included, and absent (byte-identical JSON and snapshots) when no run is live — pinned in Task 7, and TUI↔pane row-identical on the live cut in Tasks 9–10.
 
 ---
 
@@ -47,7 +48,7 @@
 | `src/ui/state.rs`, `src/attach.rs`, `src/load.rs` (modify) | `State.workflow_records`, re-read on the 5 s tick and at load |
 | `src/metrics/registry.rs` (modify) | Five `workflow_*` metrics |
 | `src/query.rs` (modify) | `workflows[]` extended |
-| `src/dashboard.rs` (modify) | The live strip row |
+| `src/dashboard.rs`, `src/ui/dashboard.rs` (modify) | `Header.workflow`: the live strip as a second header row, drawn by the TUI under the header line |
 | `src/ui/agents_view.rs` (modify) | Group row glyph/✗; `Enter` opens `RunDetail`; `o` copies the pointer |
 | `src/harness_facts.rs` (modify) | `mod workflow_run` facts: journal/record fields, observed error tokens, concurrency cap |
 | `scripts/compose-workflow-fixture.py` (create), `fixtures/session-w*` | The anonymised workflow fixture |
@@ -731,10 +732,10 @@ metric!(workflow_cold_start_pct, "Agents & MCP", "Workflow cold starts", "percen
 
 ---
 
-### Task 7: `cctop query agents` and the dashboard strip
+### Task 7: `cctop query agents` and the header strip
 
 **Files:**
-- Modify: `src/query.rs:405-420`, `src/dashboard.rs:1460` (in `body_tools`, body 6, before the agents row), `docs/query.md`
+- Modify: `src/query.rs:405-420`, `src/dashboard.rs:149` (`Header`), `:296` (`header()`), `src/ui/dashboard.rs:282` (the TUI draws the row under the header line), `docs/query.md`
 - Test: `src/query.rs` tests; `src/dashboard.rs` tests
 
 **Interfaces:**
@@ -750,11 +751,12 @@ metric!(workflow_cold_start_pct, "Agents & MCP", "Workflow cold starts", "percen
   Rendered text lives in `workflow_runs.rs`, so the TUI and the pane draw identical characters:
   - `group_text(&WorkflowGroup) -> String` — the agents view's group row: state glyph (`▶` live, `‖` stalled, `✓` completed, `✗` killed), run, name, `✗{failed}` when > 0, then today's `group_line` fields. Task 8 makes `agents_view::group_line` call it.
   - `detail_lines(&WorkflowGroup, width: usize) -> Vec<String>` — `DETAIL_WIDE = 116` and `DETAIL_NARROW = 52` are the only widths used: the rows inside a 120- and a 56-column frame (the pane's `innerWidth` is columns − 4, `frame.tsx:161`; the TUI's bordered `Block` leaves width − 2). `detail` is the wide layout, `detail_narrow` the narrow one; a surface uses the wide layout when its inner width is ≥ 116. No row carries trailing spaces (the pane's test `body()` right-trims, `tests/pane/render.ts:48`).
-  - `strip_text(&WorkflowGroup) -> String` — the dashboard strip.
+  - `strip_text(&WorkflowGroup) -> String` — the strip's text after its label.
+  - `strip_line(state, &[WorkflowGroup]) -> Option<dashboard::Line>` — the header's second row: `dim(" wf     ")` (8 cells, the width of ` cctop  `) + `seg(strip_text(g), tone)` for the shown run, + `dim(" +{n} live")` when other runs are `Live`/`Stalled` too. The shown run is the one with the latest activity among those whose state is `Live`, or `Stalled` with `now − last activity < STALLED_DROP_MS`; `None` when there is none.
 
-  Dashboard: a row `"  workflow "` (11 cells) + `strip_text(g)` for each group whose state is `Live` or (`Stalled` and `now − last activity < STALLED_DROP_MS`).
+  Dashboard (spec §4.5, decision 4 as amended 2026-09-29): `Header` gains `#[serde(skip_serializing_if = "Option::is_none")] pub workflow: Option<Line>`, set in `header()` from `strip_line`. Absent, the dashboard JSON and every existing snapshot stay byte-identical (FR-3). The TUI's `ui/dashboard.rs:282` pushes the row right after `header(t, d, w)` when present — `spans(t, row, w)`, which cuts once at the width — so it shows above the cells whichever body is open, and the body gets one row less. Nothing goes into `body_tools`.
 
-`strip_text` format (spec §4.5), fields in order of importance so a narrow clip drops the least useful: `"▸ {phase:10} {results}/{started} ✗{failed} {cause:8} ${usd} {overhead}×main  {name}"` where `phase` is the last phase in journal order with a start (`—` for the untitled phase), `cause` is the short form (`429×n`, `529×n`, `ctx×n`, `schema×n`, `kill×n`, `?×n`) of that phase's top cause, `overhead` is `—` when `None`, `name` is the run id when there is no name. Tone: `Crit` when `failed > 0`, `Dim` when `Stalled`.
+`strip_text` format (spec §4.5), fields in order of importance so a narrow clip drops the least useful: `"▸ {phase:10} {results}/{started} ✗{failed} {cause:8} ${usd} {overhead}×main  {name}"` where `phase` is the last phase in journal order with a start and `{results}/{started} ✗{failed}` are **that phase's** figures (what is running now; the run's totals are in the detail) (`—` for the untitled phase), `cause` is the short form (`429×n`, `529×n`, `ctx×n`, `schema×n`, `kill×n`, `?×n`) of that phase's top cause, `overhead` is `—` when `None`, `name` is the run id when there is no name. Tone: `Crit` when `failed > 0`, `Dim` when `Stalled`.
 
 `detail_lines` rows, in order: header (`run name state elapsed $ overhead×main cold n %`, clipped), column heads, one row per phase (`title:12 start:5 res:5 ✗:4 ✗$:7 waste:6 cause`; the narrow layout drops `✗$` and `waste`; the untitled phase shows `—`), a rule, then for each fix its `text` **word-wrapped** at `width` with a two-cell hanging indent (never clipped — Review Focus 8), and, when it has a pointer, `"  → {file name}:{line} {call}()"`, followed by `" · script changed since"` when `pointer_stale` (wrapped like the fix text).
 
@@ -785,27 +787,33 @@ fn fix_lines_wrap_at_56_and_keep_the_advice() {
     assert!(flat.contains("batch this phase's items, or lower its effort/model"));
 }
 #[test]
-fn the_strip_shows_only_while_a_run_is_live() {
+fn the_header_strip_shows_only_while_a_run_is_live() {
     use crate::workflow_runs::test_support::*;
-    let label = |s: &State| snapshot(s, &crate::advisor::Engine::for_state(s)).bodies.iter().flat_map(|b| &b.rows)
-        .filter(|r| r.first().is_some_and(|seg| seg.text == "  workflow ")).count();
+    let strip = |s: &State| snapshot(s, &crate::advisor::Engine::for_state(s)).header.workflow;
     let mut s = state_with_run();
-    assert_eq!(label(&s), 0, "completed");
+    assert_eq!(strip(&s), None, "completed");
     s.workflow_records.clear();
     s.workflow_journals[0].mtime_ms = Some(s.now_ms - 5_000);
-    assert_eq!(label(&s), 1, "live");
-    assert_eq!(label(&state(vec![], vec![])), 0, "no run");
+    let row = strip(&s).expect("live");
+    assert_eq!(row[0].text, " wf     ");
+    let text: String = row.iter().map(|g| g.text.as_str()).collect();
+    assert!(text.contains("▸ Design") && text.contains("0/1 ✗1 429×1"), "{text}");
+    assert_eq!(strip(&state(vec![], vec![])), None, "no run");
+    // Absent means absent from the JSON too (FR-3).
+    assert!(crate::query::dashboard(&state_with_run())["header"].get("workflow").is_none());
 }
 ```
 
-(`snapshot` is `src/dashboard.rs:270`; `Engine::for_state` is how `fixture_at` at `:1711` builds the engine; `Seg.text` is `:39`.)
+(`snapshot` is `src/dashboard.rs:270`; `Engine::for_state` is how `fixture_at` at `:1711` builds the engine; `Seg.text` is `:39`. `▸ Design`: the last phase in journal order with a start.)
+
+(The console snapshots with the strip come in Task 9, on the live fixture, where the pane can be checked against them row for row.)
 
 `cctop_agents` in `src/mcp.rs:81` already returns `query::agents`, so the MCP tool needs no change.
 
 - [ ] **Step 2: Run** — `cargo test query:: dashboard::` — FAIL.
-- [ ] **Step 3: Implement** the JSON fields with `m(value, unit, metric_id, estimate)` as the existing `waste` does; `group_text`, `detail_lines` and `strip_text` in `workflow_runs.rs`; the dashboard row before the `agents` row using `dim("  workflow ")` + `seg(strip_text(g), tone)`. Document the fields in `docs/query.md` under `agents`.
-- [ ] **Step 4: Run** — `cargo test` — PASS; `INSTA_UPDATE=no` shows no changed snapshots for fixtures A–D.
-- [ ] **Step 5: Commit** — `git add src/query.rs src/dashboard.rs src/workflow_runs.rs docs/query.md && git commit -m "Workflows: the verdict in cctop query agents, and a dashboard strip while a run is live"`
+- [ ] **Step 3: Implement** the JSON fields with `m(value, unit, metric_id, estimate)` as the existing `waste` does; `group_text`, `detail_lines` and `strip_text` in `workflow_runs.rs`; `Header.workflow` and its TUI row as above. Document the `workflows[]` fields in `docs/query.md` under `agents`, and `header.workflow` under `dashboard`.
+- [ ] **Step 4: Run** — `cargo test` — PASS, with no changed snapshot for fixtures A–D (none has a workflow run, so `header.workflow` is absent).
+- [ ] **Step 5: Commit** — `git add src/query.rs src/dashboard.rs src/ui/dashboard.rs src/workflow_runs.rs docs/query.md && git commit -m "Workflows: the verdict in cctop query agents, and a header strip while a run is live"`
 
 ---
 
@@ -846,7 +854,8 @@ fn enter_opens_the_detail_and_esc_returns_to_the_list() {
 ### Task 9: Fixture W
 
 **Files:**
-- Create: `scripts/compose-workflow-fixture.py`; `fixtures/session-w.jsonl`, `fixtures/session-w/subagents/workflows/<run>/…`, `fixtures/session-w/workflows/<run>.json`
+- Create: `scripts/compose-workflow-fixture.py`; `fixtures/session-w.jsonl`, `fixtures/session-w/subagents/workflows/<run>/…`, `fixtures/session-w/workflows/<run>.json`; the live cut `fixtures/session-w-live.jsonl`, `fixtures/session-w-live/…`, `fixtures/session-w-live.now`
+- Modify: `src/theme.rs` (a `fixture_w_snapshots` module beside `fixture_b_snapshots` at `:692`)
 - Modify: `fixtures/README.md` (a `session-w` entry and the rebuild command)
 
 Script behaviour (`compose-workflow-fixture.py <session.jsonl> <run> <out-stem> [--mid N] [--ok N] [--ghosts N]`):
@@ -855,12 +864,17 @@ Script behaviour (`compose-workflow-fixture.py <session.jsonl> <run> <out-stem> 
 3. Journal: every `launched`/`started`/`result` line, and the `failed` lines of copied agents plus `--ghosts` (default 2) failed ids chosen on purpose without a transcript (Review Focus 5); the `failed` lines of other uncopied agents are dropped, so their causes cannot turn into `Unknown` and outvote the real 429s. `label` → `<prefix>:<n>` (n = ordinal), `result` lines' value fields emptied (keep `type`, `agentId`, `key`).
 4. Run record: keep `runId`, `workflowName` (**rewritten to `sweep-<n>`** from the real `cctop-research-sweep-<n>`; the launch `toolUseResult.workflowName` likewise), `status`, `startTime`, `durationMs`, `scriptPath` (rewritten to `/home/user/project/.claude/workflows/scripts/sweep-<n>.js`), and `script` with (a) every string/template literal's content replaced by same-newline-count filler **except** `phase:` values, `phase(` arguments and `label` template heads, (b) every comment's text replaced by same-length filler, and (c) identifiers in a denylist (`--rename word=replacement`, at least every identifier containing `cctop` or `research`, e.g. the bare object key on line 37) renamed — so line numbers and the matcher survive; every other key dropped.
 5. Every transcript goes through `scripts/anonymise-transcript.py [--max-str N] <src> <dst>` (file arguments, not a pipe).
+6. `--live-cut <ISO time>` writes the same run cut mid-flight to `<out-stem>-live`: main transcript up to the cut (the launch in, the notification out), journal lines of agents started by the cut (a `result`/`failed` line only if that agent's last transcript line is before the cut), each copied agent's lines up to the cut, **no run record** (spec §8 Q1's pessimistic case: the record may only appear at the end), and `<out-stem>-live.now` holding the cut + 5 s in epoch ms — the one clock both the Rust snapshots and `pane-fixtures.sh` read. Pick the cut inside the first invocation's Verify phase, after its first 429s, so the strip shows `▸ Verify` with failures; record the chosen time in `fixtures/README.md`.
 
-- [ ] **Step 1:** Write the script. Run: `scripts/compose-workflow-fixture.py ~/.claude/projects/-Users-tom-code-cctop/28c68a61-3744-474d-83a5-58141249e54f.jsonl wf_0aa065ff-0a0 fixtures/session-w`
+- [ ] **Step 1:** Write the script. Run: `scripts/compose-workflow-fixture.py ~/.claude/projects/-Users-tom-code-cctop/28c68a61-3744-474d-83a5-58141249e54f.jsonl wf_0aa065ff-0a0 fixtures/session-w --live-cut <time>`
 - [ ] **Step 2:** Verify no prose: `grep -rIl "cctop\|Users/tom\|research" fixtures/session-w* ; echo $?` — Expected: `1` (no matches).
 - [ ] **Step 3:** `cargo run -q -- query agents --session fixtures/session-w.jsonl | jq '.workflows[0] | {state, failed, phases: [.phases[] | {title, failed, causes, pointer}]}'` — Expected: `state` is `completed`; `Verify`'s top cause is `rate_limit_first`, `Unknown` is at most `--ghosts`; its pointer is `{"line": 144, "call": "parallel"}` with `pointer_stale: true` (the real run: Verify failed under script v2's `pipeline(` at 136, and v4 — the record's script — had already batched it). Verify by hand once against the real record before committing: `phase('Verify')` at 137, `parallel(` at 144.
 - [ ] **Step 4:** Add insta snapshots `agents_w_120x30`, `agents_w_detail_120x30`, `agents_w_detail_56x20` on the fixture; accept as in Task 8. Add a sibling test `workflows_on_fixture_w` loading `fixtures/session-w.jsonl` the way `agent_ledger.rs:1026-1029` loads fixture C (`SessionInfo::from_fixture` + `load::state_from`), asserting `Verify`'s top cause is `rate_limit_first`, its pointer is line 144 `parallel` and `pointer_stale`, and the run is `Completed` whatever the fixture files' mtimes (they are checkout times). `cargo test` — PASS.
-- [ ] **Step 5: Commit** — `git add scripts/compose-workflow-fixture.py fixtures/session-w* fixtures/README.md src && git commit -m "Workflows: fixture W, composed from a real run and anonymised"`
+- [ ] **Step 5: The live cut in the console.** In `src/theme.rs`, a `mod fixture_w_snapshots` shaped like `fixture_b_snapshots` (`:692-709`): attach `fixtures/session-w-live.jsonl` headless, then set `app.state.now_ms` from `include_str!("../fixtures/session-w-live.now")` and `clock_override = true`. Tests:
+  - `live_cut_is_live_and_its_strip_is_under_the_header`: `app.dashboard().header.workflow` is `Some`, starts with ` wf     ▸ Verify`, and contains `✗`; the verdict's state is `Live`.
+  - insta snapshots `fixture_w_live_dashboard_{54,85}x24` of `render_to_string` with the home (events) body open — the strip is row 2, above the cells. Accept as in Task 8.
+  `cargo test` — PASS.
+- [ ] **Step 6: Commit** — `git add scripts/compose-workflow-fixture.py fixtures/session-w* fixtures/README.md src && git commit -m "Workflows: fixture W and its live cut, composed from a real run and anonymised"`
 
 ---
 
@@ -868,11 +882,12 @@ Script behaviour (`compose-workflow-fixture.py <session.jsonl> <run> <out-stem> 
 
 **Files:**
 - Modify: `plugin/hooks/views/agents.tsx` (`renderAgents`, `:170`), `plugin/hooks/views/index.ts` (`ViewActions`, the `agents` case at `:32`), `tests/pane/fixture.ts` (`QUERY_FIXTURES`), `plugin/hooks/model.ts` (`openRun`, action `agents.run`), `plugin/hooks/pane.tsx` (the action wiring, beside `why` at `:284`), `scripts/pane-fixtures.sh` (add `fixtures/session-w.jsonl w` to the documented runs), `tests/pane/views.test.ts`, `tests/pane/reducer.test.ts`, `tests/pane/overview.test.ts`
-- Create (generated): `tests/pane/fixtures/agents-w.json`, `dashboard-w.json`
+- Modify also: `plugin/hooks/views/overview.tsx` (`renderOverview`, `:469`: the header strip row), `tests/pane/overview.test.ts`
+- Create (generated): `tests/pane/fixtures/*-w.json`, `*-wlive.json`
 
 Behaviour: the pane reads no hotkeys (`pane.tsx:597`, `docs/claude-code-panels.md` §5.5), so opening a run is a `Button`, the way the coach's `why` is (`views/coach.tsx:237` → `pane.tsx:284` → `coach.why`). For each `workflows[]` entry the agents view draws its `row` verbatim as a `Button` (`key` = the run id) whose press dispatches `{ type: 'agents.run', run }`; the reducer sets `openRun: string | null` (a pure field, `null` initially, reset to `null` on `session.id`). While `openRun` names a run in the data, the view draws a `Button` labelled `back` (dispatching `{ type: 'agents.run', run: null }`) and then that run's `detail` (≥ 120 columns) or `detail_narrow` verbatim, instead of the list; a run no longer in the data falls back to the list. `renderAgents(model, el, columns, now, actions?)` takes an optional `{ el, open(run: string | null) }`: `views/index.ts:32` passes it from `ViewActions` (add an `agents` member beside `coach`/`overview`, built in `pane.tsx` like `why`), so `$` stays in `pane.tsx`. Without actions (tests, the inline placement) the rows are plain `Text` and the detail still draws when `openRun` is set. The detail is `detail` when `innerWidth(columns) >= 116`, else `detail_narrow`. The strip reaches the pane through `dashboard.bodies[].rows` with no pane change.
 
-- [ ] **Step 1: Regenerate fixtures** — `scripts/pane-fixtures.sh fixtures/session-w.jsonl w`
+- [ ] **Step 1: Regenerate fixtures** — `scripts/pane-fixtures.sh fixtures/session-w.jsonl w`, then `CCTOP_FAKE_NOW=$(cat fixtures/session-w-live.now) scripts/pane-fixtures.sh fixtures/session-w-live.jsonl wlive`; document both runs in the script's header comment beside the b line.
 - [ ] **Step 2: Failing test** (`tests/pane/views.test.ts`)
 
 ```ts
@@ -892,11 +907,30 @@ test('agents-w: the run detail is the query rows, row for row', () => {
 
 And in `tests/pane/reducer.test.ts`: `agents.run` sets and clears `openRun`; `session.id` resets it.
 
-(`build`, `rows` and `fixture` are the helpers of `tests/pane/views.test.ts:30-58`, used by the `agents-c` test at `:239`; import `reduce` from `model.ts`. Add `'agents-w'` and `'dashboard-w'` to `QUERY_FIXTURES` in `tests/pane/fixture.ts:8`; `pane-fixtures.sh … w` writes all eight verbs, as it does for b–d — commit them all, as those runs do.)
+The header strip (`tests/pane/overview.test.ts`), row for row against Task 9's TUI snapshots, the way fixture B's harness at `:309` does:
+
+```ts
+test('fixture W live: the header strip renders row-identical on both surfaces at 54 and 85 columns', () => {
+  const model = build({ dashboard: fixture('dashboard-wlive') });
+  for (const columns of [54, 85]) {
+    const snap = readFileSync(join(repo, 'src', 'snapshots', `cctop__theme__fixture_w_snapshots__fixture_w_live_dashboard_${columns}x24.snap`), 'utf8');
+    const tui = snap.split('\n---\n')[1].split('\n').map((l) => l.replace(/\s+$/, ''));
+    while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
+    tui.pop(); // the footer
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    assert.match(pane[1], /^ wf {5}▸ Verify/);
+    for (let i = 0; i < tui.length; i++) assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}`);
+  }
+});
+```
+
+(Check the snapshot file name insta actually writes and match it.) In `overview.tsx`, read `header.workflow` into the `Dashboard` shape beside `headerLine` (`:164`) and, when present, push `textRow(fit(row, columns), el, 'workflow_strip')` right after the header row (`:469`).
+
+(`build`, `rows` and `fixture` are the helpers of `tests/pane/views.test.ts:30-58`, used by the `agents-c` test at `:239`; import `reduce` from `model.ts`. Add `'agents-w'`, `'dashboard-w'` and `'dashboard-wlive'` to `QUERY_FIXTURES` in `tests/pane/fixture.ts:8`; `pane-fixtures.sh … w` writes all eight verbs, as it does for b–d — commit them all, as those runs do.)
 
 - [ ] **Step 3: Run** — `npm test` — FAIL.
-- [ ] **Step 4: Implement** in `agents.tsx`, `model.ts` and `pane.tsx`; `npm run typecheck && npm test` — PASS; `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin` — passes (no new `$` use outside `pane.tsx`).
-- [ ] **Step 5: Commit** — `git add plugin/hooks tests/pane scripts/pane-fixtures.sh && git commit -m "Workflows: the pane draws the run detail from the query rows"`
+- [ ] **Step 4: Implement** in `agents.tsx`, `overview.tsx`, `model.ts` and `pane.tsx`; `npm run typecheck && npm test` — PASS; `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin` — passes (no new `$` use outside `pane.tsx`).
+- [ ] **Step 5: Commit** — `git add plugin/hooks tests/pane scripts/pane-fixtures.sh && git commit -m "Workflows: the pane draws the header strip and the run detail from the query"`
 
 ---
 
@@ -905,7 +939,7 @@ And in `tests/pane/reducer.test.ts`: `agents.run` sets and clears `openRun`; `se
 **Files:**
 - Modify: `docs/verification/pane.md`, `tasks/prd-cctop-workflows.md` (status line)
 
-- [ ] **Step 1:** Add live checks to `docs/verification/pane.md`, each `Result: pending` (automation never marks them): (a) start a small workflow; the strip appears within 5 s and shows the live phase; (b) when it ends, the strip goes and the run detail shows `completed`; (c) note in the entry when `<session>/workflows/<run>.json` first appeared (answers spec §8 Q1); (d) whether a resumed run appends a second `launched` line (§8 Q2); (e) resume a completed run: the strip comes back within 5 s and the detail shows `live`, then `completed` again at its end; (f) in the pane at < 120 columns, open a run with its button and read a whole fix line.
+- [ ] **Step 1:** Add live checks to `docs/verification/pane.md`, each `Result: pending` (automation never marks them): (a) start a small workflow with the home (events) body open; the strip appears under the header within 5 s, in the TUI and in the pane, and shows the live phase; (b) when it ends, the strip goes and the run detail shows `completed`; (c) note in the entry when `<session>/workflows/<run>.json` first appeared (answers spec §8 Q1); (d) whether a resumed run appends a second `launched` line (§8 Q2); (e) resume a completed run: the strip comes back within 5 s and the detail shows `live`, then `completed` again at its end; (f) in the pane at < 120 columns, open a run with its button and read a whole fix line.
 - [ ] **Step 2:** `make check && npm test` — all green. `make check-contract` if `claude` is installed.
 - [ ] **Step 3:** Set the PRD status to `v1.1 — implemented on <branch>, live checks pending`.
 - [ ] **Step 4: Commit** — `git add docs/verification/pane.md tasks/prd-cctop-workflows.md && git commit -m "Workflows: live checks recorded as pending; PRD status"`

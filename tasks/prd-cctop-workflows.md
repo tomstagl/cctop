@@ -9,7 +9,7 @@
 > 1. Two jobs, in this order: **live awareness** (a run is going — which phase, how far, what it costs, is it failing) and a **verdict** when it ends (was it worth it, and how to fix it).
 > 2. The verdict leads with **waste** — failed $ as one figure, beside a failed *count* — and shows the **overhead ratio** (run $ ÷ main-thread $ over the same window) next to it. No counterfactual: cctop never claims the main thread would have done the work cheaper.
 > 3. **Digging deeper says how to fix it**: every failed agent gets one structural cause; each cause maps to one fixed fix line; the fix line points at the `parallel(` / `pipeline(` call in the workflow script (`path:line`).
-> 4. **No new top-level view.** A one-line strip on the dashboard while a run is live; the run detail opens from the agents view's workflow group row with `Enter`. `cctop query agents` carries `workflows[]`.
+> 4. **No new top-level view.** A one-line strip under the dashboard's header while a run is live (2026-09-29: the header, not body 6 — the strip must be seen from any body, home included); the run detail opens from the agents view's workflow group row with `Enter`. `cctop query agents` carries `workflows[]`.
 > 5. The coach stays silent about workflows in v1.
 
 ---
@@ -49,9 +49,9 @@ The two runs on the user's machine show why that matters:
 | `WorkflowNotification { agent_count, done, error, skipped, empty_result }`, keyed by run id via `tools.workflow_launches` | `transcript/task_notification.rs:48`; `ui/state.rs:1563`, `:370` | `Done` detection and `empty_result` are already linked to the run |
 | Agents view: `Entry::Group`, `Enter` toggles `expanded`; `group_line` at `:221` | `ui/agents_view.rs:58`, `:111`, `:221` | `Enter` on a group changes meaning: it opens the detail (members listed inside it) |
 | `query agents` → `workflows[] { run, launched, done, failed, empty_result, agents, cost, waste }` | `query.rs:403-417` | Extended, not replaced — existing keys keep their meaning |
-| Dashboard `body_tools` (body 6) has an agents row (label 11 cells, conditional on rows) | `dashboard.rs:1354`, `:1454-1500` | The strip is a sibling row, same label width, same conditional pattern |
+| Dashboard `Header { …, line }` is one row, drawn first by both surfaces above the six cells, whichever body is open; the agents row lives in `body_tools` (body 6) only | `dashboard.rs:149`, `:296`; `ui/dashboard.rs:67`, `:282`; `overview.tsx:229`, `:469` | The strip is an optional second header row (`Header.workflow`), so it shows from every body, home included |
 | Metrics via `metric!(id, panel, name, unit, formula, [sources], caveats, estimate_when)` | `metrics/registry.rs:21` | Five new entries |
-| Pane `agents.tsx` has no workflow handling; `overview.tsx` draws `bodies[].rows` generically | `plugin/hooks/views/` | The strip is free in the pane; the run detail is new pane code |
+| Pane `agents.tsx` has no workflow handling; `overview.tsx` draws the header line then the cells | `plugin/hooks/views/` | The strip is one new row in `renderOverview`; the run detail is new pane code |
 | Nothing reads `<session>/workflows/<run>.json` | — | New reader |
 
 ### 3.2 What Claude Code writes (measured on this machine)
@@ -167,9 +167,9 @@ Shown as `→ <file name>:<line> <call>()`; in the TUI `o` copies `<scriptPath>:
 
 ### 4.5 Surfaces
 
-**Dashboard strip** (present only while a run is `Live` or `Stalled`, one line, fixed widths). The row label is `  workflow ` (11 cells, like `  agents   `); the fields come in order of importance so that a clip at a narrow width drops the least useful ones — the name last:
-`▸ <phase:10> <results>/<started> ✗<failed> <top cause short:8> $<run$> <overhead>×main  <name>`
-e.g. `▸ Verify    12/246 ✗201 429×201 $41.20 3.4×main  research-sweep`. At 56 columns everything up to `$41.20` survives.
+**Header strip** — a second header row, directly under ` cctop  …  ● WORKING 52:11` and above the six cells, so it is on screen whichever body is open. Present only while a run is `Live` or `Stalled` (< 30 min); absent otherwise, and then the dashboard is byte-identical to today (FR-3). One row however many runs: the run with the latest activity, and ` +{n} live` at the end when others are live too. It is carried in the dashboard object as `header.workflow` (segments, so `✗n` keeps its `Crit` tone and a stalled run is `Dim`) and drawn verbatim by the TUI and the pane. The row starts with ` wf     ` (8 cells, the width of ` cctop  `); the fields come in order of importance so that a clip at a narrow width drops the least useful ones — the name last:
+`▸ <phase:10> <results>/<started> ✗<failed> <top cause short:8> $<run$> <overhead>×main  <name>` — the counts and the cause are the shown phase's (what is running now), the dollars and the ratio the run's.
+e.g. ` wf     ▸ Verify    12/246 ✗201 429×201 $41.20 3.4×main  research-sweep`. At 56 columns everything up to `$41.20` survives. The row costs the open body one line while a run is live.
 
 **Agents view.** The workflow group row gains the state glyph and `✗n`. `Enter` on it now opens the run detail (replacing the expand toggle; the member rows move into the detail, below the phase table). The detail has two fixed layouts, 116 and 52 cells wide — the rows inside a 120- and a 56-column frame (the pane's `innerWidth` is columns − 4) — and a surface uses the wide one when its inner width is ≥ 116, so the TUI and the pane draw the same rows at the same width. In the pane, which reads no hotkeys, each run row is a `Button` that opens its detail, and the detail has a `Button` back:
 
@@ -215,16 +215,16 @@ Journal `result` values, labels beyond the prefix before `:` (kept only as a pha
 ### US-004: Metrics
 - [ ] The five §4.2 metrics in the registry; `docs/metrics.md` and the README block regenerated; the staleness test passes.
 
-### US-005: Run detail in the agents view and the dashboard strip
+### US-005: Run detail in the agents view and the header strip
 - [ ] `Enter` on a workflow group row opens the detail; `Esc` returns; `o` copies the pointer.
-- [ ] Insta snapshots at 120 × 30 and 56 × 20 on the fixture; the strip on a synthetic live state.
+- [ ] Insta snapshots at 120 × 30 and 56 × 20 on the fixture; the dashboard with the header strip on the live fixture (`session-w-live`), home body open.
 
 ### US-006: Query, MCP and the pane
 - [ ] `workflows[]` in `cctop query agents` and the MCP tool; `workflow` in the dashboard object.
 - [ ] `plugin/hooks/views/agents.tsx` renders the run rows as `Button`s and the run detail (`detail` or `detail_narrow` by width) with a back `Button`; `openRun` is a pure reducer field in `model.ts`; `overview.tsx` draws the strip unchanged; pane fixtures regenerated with `scripts/pane-fixtures.sh`; row-identical tests.
 
 ### US-007: Fixture
-- [ ] `fixtures/session-w/`: a composed, anonymised session from `wf_0aa065ff` — journal (labels reduced to `<prefix>:<n>`, `result` values emptied), **every** first-call 429 agent (≤ 10 lines each, so Verify keeps its real 201-scale majority), a capped sample of mid-task 429 agents and `result` agents, the run record with `script` kept and every prompt string replaced by filler, and the main-transcript launch and notification lines. The `failed` entries of failed agents not copied are dropped from the journal, except two kept on purpose as transcript-less ids. `workflowName` becomes `sweep` and `scriptPath` `/home/user/project/.claude/workflows/sweep.js`, so no `cctop`/`research` string survives. Built by `scripts/compose-workflow-fixture.py`, never hand-edited.
+- [ ] `fixtures/session-w/`: a composed, anonymised session from `wf_0aa065ff` — journal (labels reduced to `<prefix>:<n>`, `result` values emptied), **every** first-call 429 agent (≤ 10 lines each, so Verify keeps its real 201-scale majority), a capped sample of mid-task 429 agents and `result` agents, the run record with `script` kept and every prompt string replaced by filler, and the main-transcript launch and notification lines. The `failed` entries of failed agents not copied are dropped from the journal, except two kept on purpose as transcript-less ids. `workflowName` becomes `sweep` and `scriptPath` `/home/user/project/.claude/workflows/sweep.js`, so no `cctop`/`research` string survives. The same script writes `fixtures/session-w-live/`: the run cut mid-Verify, with no run record and a `.now` clock file, so the header strip has a deterministic live fixture that the TUI snapshots and the pane test share. Built by `scripts/compose-workflow-fixture.py`, never hand-edited.
 
 ## 6. Functional requirements
 
@@ -233,6 +233,7 @@ Journal `result` values, labels beyond the prefix before `:` (kept only as a pha
 - FR-3: A session with no workflow run renders byte-identically to today (snapshots unchanged).
 - FR-4: A run with no run record, no notification, or no script still renders; the missing parts show `—`.
 - FR-6: A resumed run is `Live` while it runs, whatever the previous invocation's notification and record say.
+- FR-7: While a run is `Live` or `Stalled`, its strip is visible from every dashboard body, in the TUI and in the pane.
 - FR-5: The coach's rules do not read `WorkflowGroup`'s new fields in v1.
 
 ## 7. Non-goals
