@@ -301,6 +301,32 @@ test('agents-w: the run is one row of the list, a Button that opens it; back ret
   assert.deepEqual(rows('agents', gone, 80), list);
 });
 
+test('agents-w: the open run lists its own agents under the detail rows, within MAX_ROWS', () => {
+  const data = fixture<Record<string, unknown>>('agents-w');
+  const wf = (data.workflows as Array<Record<string, unknown>>)[0];
+  const model = reduce(build({ query: { agents: data } }), { type: 'agents.run', run: wf.run as string });
+  const detail = wf.detail as string[];
+  const text = rows('agents', model, 120);
+  const after = text.slice(text.indexOf(detail[0]) + detail.length);
+  assert.ok(after.some((r) => /^[✗✓◐·] \S/.test(r)), `no agent row under the detail: ${JSON.stringify(after.slice(0, 3))}`);
+  assert.ok(text.length <= MAX_ROWS, `${text.length} rows`);
+  // The run's agents only: the listed ones outside it stay in the list.
+  const members = (data.agents as Array<Record<string, unknown>>).filter((a) => a.workflow === wf.run).length;
+  assert.equal(after.length, Math.min(members, MAX_ROWS - detail.length));
+});
+
+test('agents: a run entry without a row (an older binary) keeps its agents in the list and draws no run row', () => {
+  const data = fixture<Record<string, unknown>>('agents-w');
+  const old = { ...data, workflows: (data.workflows as Array<Record<string, unknown>>).map(({ row: _row, detail: _d, detail_narrow: _n, ...w }) => w) };
+  const presses = new Map<string, () => void>();
+  const bel = fakeElements(presses);
+  const model = build({ query: { agents: old } });
+  const list = body(renderToText(renderAgents({ ...model, view: 'agents' }, bel, 80, NOW, { el: bel, open: () => undefined }), 80));
+  assert.equal(list.length, MAX_ROWS, 'the run agents are listed one by one');
+  assert.ok(list.every((r) => !r.includes('wf_0aa065f')), 'no run row');
+  assert.equal(presses.size, 0, 'no Button');
+});
+
 test('agents on fixture D: the team group under the subagents, its members in the TUI columns', () => {
   // `cctop query agents` on fixture D (tests/pane/fixtures/agents-d.json):
   // no subagents; a team of three — the real teammate (ended, Claude

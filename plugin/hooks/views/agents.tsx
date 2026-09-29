@@ -212,20 +212,26 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
   const fel = actions?.el ?? el;
-  const workflows = listAt(data, 'workflows');
+  // The runs the query drew a row for; an older binary's entry without one
+  // leaves its agents listed one by one and draws no run row (ruling R17).
+  const workflows = listAt(data, 'workflows').filter((w) => (stringAt(w, 'row') ?? '') !== '');
+  const runs = new Set(workflows.map((w) => stringAt(w, 'run') ?? ''));
+  const agents = listAt(data, 'agents');
   const open = model.openRun === null ? undefined : workflows.find((w) => stringAt(w, 'run') === model.openRun);
   if (open !== undefined) {
     const rows: FrameRow[] = [];
     if (actions !== undefined) rows.push({ line: [seg('back')], press: { key: 'agents-back', onPress: () => actions.open(null) } });
     const detail = at(open, inner >= DETAIL_WIDE ? 'detail' : 'detail_narrow');
     rows.push(...detailRows(Array.isArray(detail) ? detail.filter((t): t is string => typeof t === 'string') : []));
+    // The run's agents under its phase table, one row each, as the TUI's detail (spec §4.4).
+    for (const a of agents) if (at(a, 'workflow') === model.openRun) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
     return panel(p, rows, columns, fel);
   }
   const rows: FrameRow[] = [];
   // A run's agents are its row, not a row each (the TUI's list).
-  for (const a of listAt(data, 'agents')) {
+  for (const a of agents) {
     const run = at(a, 'workflow');
-    if (run === null || run === undefined) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+    if (typeof run !== 'string' || !runs.has(run)) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
   }
   for (const w of workflows) {
     const run = stringAt(w, 'run') ?? '';
