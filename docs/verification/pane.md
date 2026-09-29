@@ -545,6 +545,99 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+33. **The workflow strip appears while a run is live** (the workflows PRD
+    §4.5, FR-7). A second header row, ` wf     ▸ <phase> <res>/<started>
+    ✗<failed> <cause>×<n> $<run$> <ratio>×main  <name>`, sits under the header
+    and above the six cells while a run is `Live` or `Stalled`.
+    Setup: as item 28, cctop and the plugin from `workflows-prd`; a small
+    workflow ready to start (two phases, a handful of agents); `cctop run`
+    in a second terminal on the same session.
+    Keys: `0` (home, the events body) in the TUI and in the pane; then ask
+    Claude to run the workflow.
+    Expected: within 5 s of the launch the strip appears in both, the same
+    characters at the same width; its phase field names the phase that is
+    running and moves on when the next one starts; the counts are that
+    phase's, the dollars the run's; the body below loses one line and
+    nothing else moves.
+    Claude Code version:
+    Result: pending
+
+34. **The strip goes when the run ends; the detail says `completed`**
+    (the workflows PRD §4.1, §4.5).
+    Setup: as item 33, the run of item 33 left to finish.
+    Keys: none until the completion notification; then `/cctop-pane agents`
+    and press the run's row; in the TUI the agents view, `Enter` on the
+    run's group row.
+    Expected: within 5 s of the notification the strip is gone and the
+    dashboard reads as it did before the launch; the run detail's first row
+    reads `completed` in both, with its duration and dollars.
+    Claude Code version:
+    Result: pending
+
+35. **When the run record is first written** (the workflows PRD §8 Q1).
+    `<session>/workflows/<run>.json` was only ever seen after a run ended;
+    whether it appears at launch, per phase or only at the end decides
+    whether the run's name and the pointer exist while it is live.
+    Setup: as item 33; `ls -lT ~/.claude/projects/<project>/<session>/workflows/`
+    run every few seconds from the launch on (the journal is
+    `<session>/subagents/workflows/<run>/journal.jsonl`).
+    Keys: none.
+    Expected: record here the time the file first appeared against the
+    launch, the phase changes and the completion notification, and whether
+    its `status` was already set when it appeared.
+    First written:
+    Claude Code version:
+    Result: pending
+
+36. **Whether a resume appends a second `launched` line** (the workflows
+    PRD §8 Q2). Both recorded runs show one `launched` line in the journal
+    though one was resumed three times; if a resume writes none, the
+    invocations cannot be told apart from the journal.
+    Setup: the run of item 34, completed; `grep -c '"type":"launched"'
+    <session>/subagents/workflows/<run>/journal.jsonl` before the resume.
+    Keys: ask Claude to resume the run; after it ends, the same `grep -c`.
+    Expected: record the count before and after.
+    Count before / after:
+    Claude Code version:
+    Result: pending
+
+37. **A resumed run is live again, then completed again** (the workflows
+    PRD §4.1, FR-6). A resume keeps the `runId`, so the earlier
+    invocation's notification and run record stay on disk; a later launch
+    of the same run supersedes them.
+    Setup: as item 36, the same resume.
+    Keys: `0` in the TUI and the pane while it runs; the run detail as in
+    item 34 while it runs and after it ends.
+    Expected: within 5 s of the resume the strip is back in both; the run
+    detail's first row reads `live` while it runs, whatever the previous
+    notification said, and `completed` again once it ends, when the strip
+    goes as in item 34.
+    Claude Code version:
+    Result: pending
+
+38. **A run opened with its Button in the pane, a whole fix line read**
+    (the workflows PRD §4.3, §4.5). Below 116 body columns the pane draws
+    the query's `detail_narrow` (the 52-cell layout); fix lines are
+    wrapped, never clipped, with a two-cell hanging indent. The run row
+    and `back` are each a `plain` Button whose label is the row's text
+    padded with spaces to the pane's inner width; the test fake draws the
+    label as given, and how the real engine lays out such a label (one
+    row, or wrapped or truncated at the border, the padding kept or
+    trimmed) is unread.
+    Setup: as item 34, a run with at least one failed agent (a phase that
+    hits the rate limit gives one); the terminal under 120 columns, or any
+    docked pane (every dock is narrower than 116 body columns).
+    Keys: `/cctop-pane agents`; click the run's row; click `back`.
+    Expected: the run row and `back` each draw on one line between the
+    borders, the padding blank and not wrapped onto a second line, and the
+    whole width presses; the click on the run row opens its detail — the
+    phase table and every fix line in full, each continuation line
+    indented two cells, the `→ <file>:<line> <call>()` pointer under it —
+    and the same rows as `cctop query agents --session <id> | jq
+    '.workflows[0].detail_narrow'`; `back` returns to the list.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

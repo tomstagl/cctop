@@ -178,6 +178,32 @@ pub mod task_notification {
     pub const AGENT_ID_HEX_LEN: usize = 17;
 }
 
+/// A `Workflow` run as Claude Code writes it (spec §3.2, measured on this
+/// machine 2026-09). Read:
+///
+/// - the journal `<session>/subagents/workflows/<run>/journal.jsonl`: the
+///   `type` of each line (`launched`, `started`, `result`, `failed`), and
+///   `agentId`, `label` (its prefix before `:` only) and `phase` of a start,
+///   `agentId` of a result or failure — never a `result` line's value; its
+///   lines carry no timestamps, so only the file's mtime dates it;
+/// - the run record `<session>/workflows/<run>.json`: `runId`,
+///   `workflowName`, `status` (`completed` / `killed`), `startTime`,
+///   `durationMs`, `scriptPath`, and `script` for the pointer scan only —
+///   never `detail`, `args`, `result`, `logs`, `summary` or `error`. It
+///   describes the run's last invocation only;
+/// - a failed agent's last line: `isApiErrorMessage`, `apiErrorStatus`,
+///   `error` (a machine token).
+pub mod workflow_run {
+    /// The `error` token of an input over the model's window. Claude Code
+    /// writes it on the main session (the coach's A47 `turn-died` rule maps
+    /// it); it has not yet been seen from a workflow agent, so
+    /// `ContextOverflow` ships behind a synthetic test only.
+    pub const PROMPT_TOO_LONG_TOKENS: &[&str] = &["prompt_too_long"];
+    /// The `error` tokens seen on a workflow agent's last line so far
+    /// (429s); every other cause is unobserved.
+    pub const OBSERVED_ERROR_TOKENS: &[&str] = &["rate_limit"];
+}
+
 /// Autocompact arithmetic (recovered from the 2.1.269 binary and the debug
 /// log's `autocompact: tokens=… effectiveWindow=…` line; re-read from the
 /// 2.1.273 bundle by `scripts/check-harness-facts.py`).

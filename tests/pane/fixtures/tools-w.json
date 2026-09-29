@@ -1,0 +1,390 @@
+{
+  "bash_by_class": [
+    {
+      "calls": 16,
+      "class": "explore",
+      "errors": 0
+    },
+    {
+      "calls": 4,
+      "class": "implement",
+      "errors": 0
+    },
+    {
+      "calls": 1,
+      "class": "gitread",
+      "errors": 0
+    },
+    {
+      "calls": 1,
+      "class": "wait",
+      "errors": 0
+    }
+  ],
+  "errors_by_class": [],
+  "input_to_ctx": [
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 27
+      },
+      "tool": "Agent"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 5154
+      },
+      "tool": "Bash"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 171
+      },
+      "tool": "Edit"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 98
+      },
+      "tool": "Read"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 2
+      },
+      "tool": "TaskStop"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 770
+      },
+      "tool": "Workflow"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 836
+      },
+      "tool": "Write"
+    }
+  ],
+  "tool_search_loads": {},
+  "tools": [
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 22
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789287569692,
+      "p50": null,
+      "p95": null,
+      "running": 22,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Bash"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 12
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789287572492,
+      "p50": null,
+      "p95": null,
+      "running": 12,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Read"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 6
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789287544165,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 1923
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 4153
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 1776
+      },
+      "tool": "Workflow"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 3
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789234245054,
+      "p50": null,
+      "p95": null,
+      "running": 3,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Edit"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 2
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789234220020,
+      "p50": null,
+      "p95": null,
+      "running": 2,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Write"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789234421549,
+      "p50": null,
+      "p95": null,
+      "running": 1,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Agent"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789233512710,
+      "p50": null,
+      "p95": null,
+      "running": 1,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "TaskStop"
+    }
+  ],
+  "top_ctx": [
+    {
+      "input": "/home/user/project/src/b66b20…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 40,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.00296
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "lorem ipsum dol",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 21,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.001554
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "lorem ipsum dol",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 17,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.001258
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 1
+    },
+    {
+      "input": "lorem ipsum dolor sit amet co…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 10,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.00074
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 2
+    },
+    {
+      "input": "lorem ipsum dolor sit amet co…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 6,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.000444
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 3
+    }
+  ]
+}

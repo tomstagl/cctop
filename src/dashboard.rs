@@ -161,6 +161,11 @@ pub struct Header {
     pub phase: PhaseCell,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
     pub line: String,
+    /// The header's second row while a workflow run is live or recently
+    /// stalled (workflows PRD §4.5): ` wf     ▸ Verify    12/246 ✗201 …`.
+    /// Absent otherwise, so a session without one serialises as before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<Line>,
 }
 
 /// One cell of the glance: a whole-area target. The hotkey is the
@@ -364,7 +369,18 @@ fn header(state: &State, c: &Coach) -> Header {
             tokens: c.state.tokens.clone(),
         },
         line: format!("cctop  {}", parts.join(" · ")),
+        workflow: workflow_strip(state),
     }
+}
+
+/// The header's workflow row; the ledger is read only when a run exists.
+fn workflow_strip(state: &State) -> Option<Line> {
+    if state.workflow_journals.is_empty() && state.agents.values().all(|a| a.workflow.is_none()) {
+        return None;
+    }
+    let rows = crate::agent_ledger::rows(state, crate::agent_ledger::Sort::Waste, false);
+    let groups = crate::agent_ledger::workflow_groups(state, &rows);
+    crate::workflow_runs::strip_line(state, &groups)
 }
 
 fn light<'a>(c: &'a Coach, id: &str) -> Option<&'a coach::Light> {
@@ -2021,5 +2037,34 @@ mod tests {
         assert_eq!(text_of(&bar(1.0, 5, Tone::Ok)), "▇▁▁▁▁");
         assert_eq!(text_of(&bar(99.0, 5, Tone::Ok)), "▇▇▇▇▁");
         assert_eq!(text_of(&bar(100.0, 5, Tone::Ok)), "▇▇▇▇▇");
+    }
+
+    #[test]
+    fn the_header_strip_shows_only_while_a_run_is_live() {
+        use crate::workflow_runs::test_support::*;
+        let strip = |s: &State| {
+            snapshot(s, &crate::advisor::Engine::for_state(s))
+                .header
+                .workflow
+        };
+        let mut s = state_with_run();
+        assert_eq!(strip(&s), None, "completed");
+        s.workflow_records.clear();
+        s.workflow_journals[0].mtime_ms = Some(s.now_ms - 5_000);
+        let row = strip(&s).expect("live");
+        assert_eq!(row[0].text, " wf     ");
+        let text: String = row.iter().map(|g| g.text.as_str()).collect();
+        assert!(
+            text.contains("▸ Design") && text.contains("0/1 ✗1 429×1"),
+            "{text}"
+        );
+        // `✗n` alone is crit; a live run's other text is the foreground.
+        assert_eq!((row[2].text.as_str(), row[2].tone), (" ✗1", Tone::Crit));
+        assert_eq!((row[1].tone, row[3].tone), (Tone::Fg, Tone::Fg));
+        assert_eq!(strip(&state(vec![], vec![])), None, "no run");
+        // Absent means absent from the JSON too (FR-3).
+        assert!(crate::query::dashboard(&state_with_run())["header"]
+            .get("workflow")
+            .is_none());
     }
 }

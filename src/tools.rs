@@ -76,6 +76,21 @@ pub struct Call {
     pub denial: Option<crate::transcript::DenialKind>,
 }
 
+/// A `Workflow` call's launch result (`toolUseResult`), one per launch: a
+/// resume of the same run adds another.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowLaunch {
+    pub tool_use_id: String,
+    /// What the run's task notification will carry.
+    pub task_id: Option<String>,
+    /// `runId`: names `subagents/workflows/<run>/` and `workflows/<run>.json`.
+    pub run_id: Option<String>,
+    /// `workflowName`.
+    pub name: Option<String>,
+    /// The result line's time.
+    pub at_ms: Option<i64>,
+}
+
 /// What an `Agent` call reported back (`toolUseResult`), without its text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSpawn {
@@ -307,8 +322,8 @@ pub struct Stats {
     pub git_events: Vec<(i64, String)>,
     /// Every `Agent` result, in order.
     pub agent_spawns: Vec<AgentSpawn>,
-    /// Every `Workflow` launch: `(tool_use_id, task id, run id)`.
-    pub workflow_launches: Vec<(String, Option<String>, Option<String>)>,
+    /// Every `Workflow` launch, in order; a resume adds one.
+    pub workflow_launches: Vec<WorkflowLaunch>,
     /// `TaskUpdate` results that completed a task: `(epoch ms, turn)`.
     pub task_completions: Vec<(i64, usize)>,
 }
@@ -389,12 +404,18 @@ impl Stats {
                         Some(ToolUseDetail::TaskUpdate(tu)) if tu.completed() => {
                             self.task_completions.push((at.unwrap_or(0), c.turn));
                         }
-                        Some(ToolUseDetail::Workflow { task_id, run_id }) => {
-                            self.workflow_launches.push((
-                                r.tool_use_id.clone(),
-                                task_id.clone(),
-                                run_id.clone(),
-                            ));
+                        Some(ToolUseDetail::Workflow {
+                            task_id,
+                            run_id,
+                            name,
+                        }) => {
+                            self.workflow_launches.push(WorkflowLaunch {
+                                tool_use_id: r.tool_use_id.clone(),
+                                task_id: task_id.clone(),
+                                run_id: run_id.clone(),
+                                name: name.clone(),
+                                at_ms: at,
+                            });
                         }
                         Some(ToolUseDetail::Agent(ag)) => {
                             self.agent_spawns.push(AgentSpawn {

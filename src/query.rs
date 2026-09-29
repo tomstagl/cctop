@@ -9,6 +9,7 @@ use crate::ledger;
 use crate::metrics::{cost, registry};
 use crate::ui::fmt;
 use crate::ui::State;
+use crate::workflow_runs;
 
 /// A measured value with provenance.
 pub fn m(value: impl Into<Value>, unit: &str, metric_id: &str, approx: bool) -> Value {
@@ -405,6 +406,7 @@ pub fn agents(state: &State) -> Value {
     let workflows: Vec<Value> = agent_ledger::workflow_groups(state, &rows)
         .iter()
         .map(|g| {
+            let v = &g.verdict;
             json!({
                 "run": g.run,
                 "launched": g.launched,
@@ -414,6 +416,35 @@ pub fn agents(state: &State) -> Value {
                 "agents": g.agents,
                 "cost": CostValue::new(g.cost, "agents_cost"),
                 "waste": m(g.waste_usd, "USD", "agents_waste", true),
+                "name": g.name,
+                "state": v.state,
+                "failed_usd": m(v.failed_usd, "USD", "workflow_failed_usd", true),
+                "waste_pct": v.waste_pct.map(|p| m(p * 100.0, "%", "workflow_waste_pct", true)),
+                "overhead": v.overhead.map(|o| m(o, "ratio", "workflow_overhead", true)),
+                "cold_start_pct": v.cold_start_pct.map(|p| m(p * 100.0, "%", "workflow_cold_start_pct", true)),
+                "phases": v.phases.iter().map(|p| json!({
+                    "title": p.title,
+                    "started": p.started,
+                    "results": p.results,
+                    "failed": p.failed,
+                    "failed_usd": m(p.failed_usd, "USD", "workflow_failed_usd", true),
+                    "waste_pct": p.waste_pct.map(|w| m(w * 100.0, "%", "workflow_waste_pct", true)),
+                    "causes": p.causes,
+                    "pointer": p.pointer,
+                    "pointer_stale": p.pointer_stale,
+                })).collect::<Vec<_>>(),
+                "fixes": v.fixes.iter().map(|f| json!({
+                    "cause": f.cause,
+                    "agents": f.agents,
+                    "text": f.text,
+                    "phase": f.phase,
+                    "pointer": f.pointer,
+                    "pointer_stale": f.pointer_stale,
+                    "script_path": f.script_path,
+                })).collect::<Vec<_>>(),
+                "row": workflow_runs::group_text(g),
+                "detail": workflow_runs::detail_lines(g, workflow_runs::DETAIL_WIDE),
+                "detail_narrow": workflow_runs::detail_lines(g, workflow_runs::DETAIL_NARROW),
             })
         })
         .collect();
@@ -949,5 +980,61 @@ mod tests {
         assert_eq!(parse_since("2h"), Some(7_200_000));
         assert_eq!(parse_since("4w"), Some(4 * 7 * 86_400_000));
         assert_eq!(parse_since("x"), None);
+    }
+
+    #[test]
+    fn workflows_carry_the_verdict_and_old_keys_keep_their_meaning() {
+        let state = crate::workflow_runs::test_support::state_with_run(); // Task 9 switches this to fixture W
+        let v = agents(&state);
+        let w = &v["workflows"][0];
+        for k in [
+            "run",
+            "launched",
+            "done",
+            "failed",
+            "empty_result",
+            "agents",
+            "cost",
+            "waste",
+        ] {
+            assert!(w.get(k).is_some(), "{k}");
+        }
+        assert_eq!(w["phases"][0]["title"], "Verify");
+        assert_eq!(w["phases"][0]["pointer"]["call"], "pipeline");
+        assert!(w["detail"].as_array().unwrap().len() >= 4);
+        assert!(w["detail_narrow"].as_array().unwrap().len() >= 4);
+        assert!(w["row"].as_str().unwrap().contains("✗4"));
+        assert_eq!(w["state"], "completed");
+        assert_eq!(w["waste_pct"]["unit"], "%");
+        assert_eq!(w["waste_pct"]["metric_id"], "workflow_waste_pct");
+        assert_eq!(w["failed_usd"]["metric_id"], "workflow_failed_usd");
+        assert_eq!(w["fixes"][0]["cause"], "rate_limit_first");
+        assert_eq!(w["phases"][0]["causes"]["rate_limit_first"], 3);
+        for rows in [&w["detail"], &w["detail_narrow"]] {
+            for r in rows.as_array().unwrap() {
+                assert!(!r.as_str().unwrap().ends_with(' '), "{r}");
+            }
+        }
+    }
+
+    #[test]
+    fn fix_lines_wrap_at_56_and_keep_the_advice() {
+        // Review Focus 8
+        let s = crate::workflow_runs::test_support::state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let g = &crate::agent_ledger::workflow_groups(&s, &rows)[0];
+        let lines = crate::workflow_runs::detail_lines(g, crate::workflow_runs::DETAIL_NARROW);
+        assert!(
+            lines
+                .iter()
+                .all(|l| l.chars().count() <= 52 && !l.ends_with(' ')),
+            "{lines:#?}"
+        );
+        let flat = lines
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(flat.contains("batch this phase's items, or lower its effort/model"));
     }
 }

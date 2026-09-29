@@ -306,6 +306,24 @@ test('every keyed metric row is a metric id from docs/metrics.md and colours are
 // it (the insta snapshots at 54 / 67 / 85 columns, src/snapshots/) and as the
 // pane draws the same object (dashboard-b.json), row for row. The TUI's last
 // row is its footer, which the pane does not draw.
+test('fixture W live: the header strip renders row-identical on both surfaces at 54 and 85 columns', () => {
+  const model = build({ dashboard: fixture('dashboard-wlive') });
+  for (const columns of [54, 85]) {
+    const snap = readFileSync(join(repo, 'src', 'snapshots', `cctop__theme__fixture_w_snapshots__fixture_w_live_dashboard_${columns}x24.snap`), 'utf8');
+    const tui = snap.split('\n---\n')[1].split('\n').map((l) => l.replace(/\s+$/, ''));
+    while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
+    tui.pop(); // the footer
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    assert.match(pane[1], /^ wf {5}▸ Verify/);
+    for (let i = 0; i < tui.length; i++) assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}`);
+  }
+  // The strip's row is keyed by the metric its crit figure is (docs/metrics.md).
+  assert.match(keyed(renderOverview(model, el, 85, 'dock', NOW)).get('workflow_failed') ?? '', /^ wf {5}▸ Verify/);
+  // A completed run draws no strip: row 2 is the cells.
+  const done = raw(build({ dashboard: fixture('dashboard-w') }), 85);
+  assert.match(done[1], /^ 1: /);
+});
+
 test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns', () => {
   const model = build({ dashboard: fixture('dashboard-b') });
   for (const columns of [54, 67, 85]) {

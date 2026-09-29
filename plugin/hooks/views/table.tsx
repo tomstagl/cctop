@@ -4,8 +4,8 @@
 // is, and the row cap they keep to. A cell that shows a metric carries its
 // id as the row's `key` (docs/metrics.md).
 import type { RenderElement } from 'claude-code';
-import { THEME, clip, frame, innerWidth, pad, width, type Line, type Seg } from './frame';
-import type { Color, ViewElements } from './overview';
+import { THEME, clip, frame, innerWidth, pad, width, type FrameElements, type Line, type Press, type Seg } from './frame';
+import type { Color } from './overview';
 
 /** The most rows a view's frame holds: longer lists are cut, the pane scrolls the rest. */
 export const MAX_ROWS = 120;
@@ -25,8 +25,8 @@ export type Cell = {
   key?: string;
 };
 
-/** One row of a framed panel: its segments and the metric id it shows. */
-export type FrameRow = { line: Line; key?: string };
+/** One row of a framed panel: its segments, the metric id it shows, and its press when it is a Button. */
+export type FrameRow = { line: Line; key?: string; press?: Press };
 
 /** `text` kept from its end when it overflows `cells` (a path), else cut at the end. */
 function clipTail(text: string, cells: number): string {
@@ -96,7 +96,7 @@ export type Panel = {
 };
 
 /** A detail view: one framed panel `columns` wide holding at most MAX_ROWS rows. */
-export function panel(p: Panel, rows: FrameRow[], columns: number, el: ViewElements): RenderElement {
+export function panel(p: Panel, rows: FrameRow[], columns: number, el: FrameElements): RenderElement {
   return frame({ hotkey: p.hotkey, title: p.title, summary: p.summary, width: columns, rows: rows.slice(0, MAX_ROWS) }, el);
 }
 

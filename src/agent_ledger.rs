@@ -142,11 +142,14 @@ pub struct WorkflowGroup {
     pub running: usize,
     pub cost: Cost,
     pub waste_usd: f64,
+    /// The run's latest launch's `workflowName`, else the record's.
+    pub name: Option<String>,
+    /// State, window, per-phase figures, causes and fix lines.
+    pub verdict: crate::workflow_runs::RunVerdict,
 }
 
-/// One group per workflow run seen in `rows` or in the journals, in run
-/// order.
-pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
+/// Every workflow run seen in the journals or in `rows`, in run order.
+pub fn workflow_runs(state: &State, rows: &[AgentRow]) -> Vec<String> {
     let mut runs: Vec<String> = state
         .workflow_journals
         .iter()
@@ -160,17 +163,34 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
         }
     }
     runs.sort();
-    // A notification whose `Workflow` launch was not seen (a cut prefix, a
-    // resumed session) is keyed by its task id; it can only be the run's
-    // when there is exactly one of each.
-    let unkeyed: Vec<&crate::transcript::TaskNotification> = state
+    runs
+}
+
+/// The key of `run`'s task notification in `state.workflow_notifications`
+/// (and `workflow_notified_at`), among `runs` (from [`workflow_runs`]): the
+/// run id, else — a notification whose `Workflow` launch was not seen (a cut
+/// prefix, a resumed session) is keyed by its task id — the one unkeyed
+/// notification when there is exactly one run and one of those.
+pub fn notification_key<'a>(state: &'a State, runs: &[String], run: &str) -> Option<&'a str> {
+    if let Some((k, _)) = state.workflow_notifications.get_key_value(run) {
+        return Some(k.as_str());
+    }
+    let mut unkeyed = state
         .workflow_notifications
-        .iter()
-        .filter(|(k, _)| !runs.contains(k))
-        .map(|(_, n)| n)
-        .collect();
-    let lone = (runs.len() == 1 && unkeyed.len() == 1).then(|| unkeyed[0]);
-    runs.into_iter()
+        .keys()
+        .filter(|k| !runs.contains(k));
+    match (runs.len(), unkeyed.next(), unkeyed.next()) {
+        (1, Some(k), None) if runs[0] == run => Some(k.as_str()),
+        _ => None,
+    }
+}
+
+/// One group per workflow run seen in `rows` or in the journals, in run
+/// order.
+pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
+    let runs = workflow_runs(state, rows);
+    runs.iter()
+        .cloned()
         .map(|run| {
             let journal = state.workflow_journals.iter().find(|j| j.run == run);
             let members: Vec<&AgentRow> = rows
@@ -187,13 +207,14 @@ pub fn workflow_groups(state: &State, rows: &[AgentRow]) -> Vec<WorkflowGroup> {
                 }
                 waste_usd += r.waste.map_or(0.0, |w| w.usd);
             }
+            let verdict = crate::workflow_runs::verdict(state, rows, &run);
             WorkflowGroup {
-                empty_result: state
-                    .workflow_notifications
-                    .get(&run)
-                    .or(lone)
+                empty_result: notification_key(state, &runs, &run)
+                    .and_then(|k| state.workflow_notifications.get(k))
                     .and_then(|n| n.workflow)
                     .map(|w| w.empty_result),
+                name: verdict.name.clone(),
+                verdict,
                 launched: journal.map_or(members.len(), |j| j.launched),
                 done: journal.map_or(0, |j| j.results),
                 failed: journal.map_or(0, |j| j.failed),
@@ -236,8 +257,66 @@ pub struct Totals {
     pub returned_ratio: Option<f64>,
 }
 
+/// What a run's journal says of its agents, gathered once per pass: an id
+/// with a `result` entry returned, one with a `failed` entry failed.
+#[derive(Debug, Default)]
+pub struct JournalWord<'a> {
+    returned: std::collections::HashSet<&'a str>,
+    failed: std::collections::HashSet<&'a str>,
+}
+
+impl<'a> JournalWord<'a> {
+    pub fn of_state(state: &'a State) -> Self {
+        let mut w = JournalWord::default();
+        for j in &state.workflow_journals {
+            w.failed.extend(j.failed_ids.iter().map(String::as_str));
+            for p in &j.phases {
+                w.returned.extend(p.result_ids.iter().map(String::as_str));
+            }
+        }
+        w
+    }
+
+    /// `Failed` for a `failed` entry (the journal's last word on a retried
+    /// key is its own line; a failed id never also returned), `Done` for a
+    /// `result` entry, else nothing.
+    pub fn of(&self, id: &str) -> Option<AgentState> {
+        if self.failed.contains(id) {
+            Some(AgentState::Failed)
+        } else if self.returned.contains(id) {
+            Some(AgentState::Done)
+        } else {
+            None
+        }
+    }
+}
+
+/// An agent's state as every surface reads it: what its run's journal says
+/// (a `result` entry → done: the transcript may end on the
+/// `StructuredOutput` call and its result, with no closing line; a `failed`
+/// entry → failed), else the transcript's own reading
+/// ([`Agent::state`]). The ledger lets a task notification speak first.
+pub fn effective_state(journal: &JournalWord, a: &Agent, now_ms: i64) -> AgentState {
+    journal.of(&a.id).unwrap_or_else(|| a.state(now_ms))
+}
+
+/// How many of `state`'s agents are in `want`, through [`effective_state`].
+pub fn count_in(state: &State, want: AgentState) -> usize {
+    let journal = JournalWord::of_state(state);
+    let now = state.clock_ms();
+    state
+        .agents
+        .values()
+        .filter(|a| effective_state(&journal, a, now) == want)
+        .count()
+}
+
 /// One agent's row.
 pub fn row(state: &State, a: &Agent) -> AgentRow {
+    row_with(state, &JournalWord::of_state(state), a)
+}
+
+fn row_with(state: &State, journal: &JournalWord, a: &Agent) -> AgentRow {
     let now = state.clock_ms();
     let pricing = state.cost.pricing();
     let cost = match pricing.estimate(&a.usage, &a.model) {
@@ -249,18 +328,15 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         },
     };
     let status = a.notified.as_ref().map(|n| n.status.clone());
-    // The journal's `failed` entry counts while Claude Code has not said
-    // otherwise: a notification that says `completed` is the later word.
-    let journal_failed = status.is_none()
-        && state
-            .workflow_journals
-            .iter()
-            .any(|j| j.failed_ids.contains(&a.id));
-    let heuristic = a.state(now);
+    // Claude Code's notification is the later word; without one, the
+    // journal's (see [`effective_state`]).
+    let said = status.is_none().then(|| journal.of(&a.id)).flatten();
+    let journal_failed = said == Some(AgentState::Failed);
+    let journal_said = said.is_some();
+    let heuristic = said.unwrap_or_else(|| a.state(now));
     let agent_state = match &status {
         Some(TaskStatus::Completed) => AgentState::Done,
         Some(TaskStatus::Failed) | Some(TaskStatus::Killed) => AgentState::Failed,
-        _ if journal_failed => AgentState::Failed,
         _ => heuristic,
     };
     let result_chars = a
@@ -277,6 +353,10 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
                 .zip(a.last_line_at)
                 .map(|(s, l)| (l - s).max(0))
         }),
+        None if journal_said => a
+            .started_at
+            .zip(a.last_line_at)
+            .map(|(s, l)| (l - s).max(0)),
         None => a.elapsed_ms(now),
     };
     let idle_for = a
@@ -352,7 +432,12 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
 
 /// Every agent's row, in `sort` order (descending unless `ascending`).
 pub fn rows(state: &State, sort: Sort, ascending: bool) -> Vec<AgentRow> {
-    let mut out: Vec<AgentRow> = state.agents.values().map(|a| row(state, a)).collect();
+    let journal = JournalWord::of_state(state);
+    let mut out: Vec<AgentRow> = state
+        .agents
+        .values()
+        .map(|a| row_with(state, &journal, a))
+        .collect();
     let key = |r: &AgentRow| -> (f64, f64, i64) {
         match sort {
             Sort::Spend => (r.cost.usd, r.waste.map_or(0.0, |w| w.usd), 0),
@@ -1076,6 +1161,106 @@ mod tests {
         assert!((t.waste_by_reason[1] - w.usd).abs() < 1e-12);
         assert_eq!(t.cold_starts, 1);
         assert!(t.returned_ratio.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn an_agent_the_journal_says_returned_is_finished() {
+        // A workflow agent returns through `StructuredOutput`: its last
+        // lines are the call and its tool result, no closing assistant
+        // line. Silent for eight minutes, the transcript alone reads it as
+        // running and idle; the journal's `result` entry says it returned.
+        use crate::workflow_runs::test_support::{agent, journal, state};
+        let t = "2026-01-01T00:02:00Z";
+        let call = Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"{t}","message":{{"id":"m1","model":"claude-haiku-4-5-20251001","content":[{{"type":"tool_use","id":"tum1","name":"StructuredOutput","input":{{}}}}],"stop_reason":"tool_use","usage":{{"input_tokens":1000,"output_tokens":200}}}}}}"#
+        ))
+        .unwrap();
+        let result = Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"{t}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tum1","content":"ok"}}]}}}}"#
+        ))
+        .unwrap();
+        let a = agent("r1", "wf_t", &[call, result]);
+        assert_eq!(a.transcript_pending(), 0);
+        assert_eq!(
+            a.state(i64::MAX),
+            AgentState::Running,
+            "the heuristic alone"
+        );
+
+        let open = state(
+            vec![a.clone()],
+            vec![journal("wf_t", &[("Verify", &[("r1", "open")])], t)],
+        );
+        let r = row(&open, &open.agents["r1"]);
+        assert_eq!(r.state, AgentState::Running);
+        assert_eq!(r.waste.map(|w| w.reason), Some(WasteReason::Idle));
+
+        let returned = state(
+            vec![a],
+            vec![journal("wf_t", &[("Verify", &[("r1", "ok")])], t)],
+        );
+        let r = row(&returned, &returned.agents["r1"]);
+        assert_eq!(r.state, AgentState::Done);
+        assert_eq!(r.waste, None, "its cost is not idle waste");
+        assert_eq!(
+            r.elapsed_ms,
+            Some(0),
+            "timed by its transcript, not the clock"
+        );
+        assert_eq!(totals(&[r]).running, 0);
+    }
+
+    #[test]
+    fn workflows_on_fixture_w() {
+        // A real run, composed by `scripts/compose-workflow-fixture.py`
+        // (fixtures/README.md): six invocations, every first-call 429
+        // agent, a sample of the others, two failed ids kept without a
+        // transcript. Verify failed under an earlier script; the record's
+        // script (the last invocation's) had already batched it.
+        use crate::workflow_runs::{verdict, Cause, RunState};
+        use crate::workflow_script::{Call, Pointer};
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-w.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let mut s = crate::load::state_from(&path, info);
+        let run = "wf_0aa065ff-0a0";
+        let rs = rows(&s, Sort::Waste, false);
+        let v = verdict(&s, &rs, run);
+        assert_eq!(v.state, RunState::Completed);
+        assert_eq!(v.name.as_deref(), Some("sweep-4"));
+
+        let verify = v.phases.iter().find(|p| p.title == "Verify").unwrap();
+        let top = verify.causes.iter().max_by_key(|(_, n)| **n).unwrap();
+        assert_eq!(*top.0, Cause::RateLimitFirst);
+        assert_eq!(verify.causes.get(&Cause::RateLimitFirst), Some(&166));
+        assert_eq!(verify.causes.get(&Cause::RateLimitMid), Some(&5));
+        assert_eq!(
+            verify.causes.get(&Cause::Unknown),
+            Some(&2),
+            "the two transcript-less ids, and nothing else"
+        );
+        assert_eq!(
+            verify.pointer,
+            Some(Pointer {
+                line: 144,
+                call: Call::Parallel
+            })
+        );
+        assert!(verify.pointer_stale, "Verify failed under script v2");
+        assert_eq!(v.fixes[0].cause, Cause::RateLimitFirst);
+        assert_eq!(v.fixes[0].phase, "Verify");
+
+        // The fixture files' mtimes are checkout times: the journal's
+        // cannot move a run that has ended.
+        for m in [
+            Some(s.clock_ms()),
+            Some(crate::app::now_ms()),
+            Some(0),
+            None,
+        ] {
+            s.workflow_journals[0].mtime_ms = m;
+            assert_eq!(verdict(&s, &rs, run).state, RunState::Completed, "{m:?}");
+        }
     }
 
     #[test]

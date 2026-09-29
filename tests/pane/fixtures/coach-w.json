@@ -1,0 +1,110 @@
+{
+  "agents": "agents 0 run · 38%",
+  "exposed": true,
+  "lights": [
+    {
+      "alt": "757k ▇▇▇▇▇▇▇▇▁▁ 76% · re-reads 757k/call",
+      "approx": true,
+      "figure": 76.0,
+      "glyph": "◐",
+      "id": "context",
+      "level": "watch",
+      "lines": [
+        "next 5c ≈$1.1 · fresh ≈$.28",
+        "threshold 967k · 209k left · prefix 377k (50 %)"
+      ],
+      "number": "757k",
+      "source": "transcript",
+      "text": "757k ▇▇▇▇▇▇▇▇▁▁ 76% · ≈$.22/call",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": true,
+      "figure": 13.0,
+      "glyph": "○",
+      "id": "cache",
+      "level": "quiet",
+      "lines": [
+        "hit ratio 85 % · misses 0",
+        "TTL 1h (observed)",
+        "re-write if cold 757k ≈$9.5"
+      ],
+      "number": "13m",
+      "source": "transcript",
+      "text": "warm 13m (1h) ≈",
+      "unit": "m"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": 9.0,
+      "glyph": "◐",
+      "id": "rework",
+      "level": "watch",
+      "lines": [
+        "no check yet this session",
+        "no failed calls",
+        "rewind 0 checkpoints this turn"
+      ],
+      "number": "9 unchecked",
+      "source": "transcript",
+      "text": "edits 9 ✓ none 15h36",
+      "unit": "unchecked"
+    }
+  ],
+  "lines": {
+    "l0": "◐757k ≈$.22 · ○cache 13m · ○5h — · ◐edits 9",
+    "l1": "◐76% ○— ○13m ◐9 unchecked",
+    "l2": "◐○○◐"
+  },
+  "model": "claude-fable-5-1",
+  "next": null,
+  "next_row": "next     —",
+  "nudge": null,
+  "nudges_this_hour": 0,
+  "queued": 0,
+  "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
+  "recent": [],
+  "schema": 1,
+  "session": "session-w",
+  "session_mode": "machine",
+  "snoozed": [],
+  "snoozed_row": "snoozed  —",
+  "start_line": null,
+  "state": {
+    "kind": "EXPLORING",
+    "line": "EXPLORING",
+    "tokens": []
+  },
+  "suppressed": [
+    [
+      "A10",
+      "machine turn"
+    ],
+    [
+      "A17",
+      "machine turn"
+    ],
+    [
+      "A23",
+      "machine turn"
+    ]
+  ],
+  "turn": 1
+}

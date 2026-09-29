@@ -9,7 +9,7 @@
 // the person's theme: `suggestion` is the accent (what the engine colours a
 // Button's hotkey with), `success` / `warning` / `error` the three bands,
 // and the borders are dimmed default text like the engine's own frames.
-import type { RenderElement } from 'claude-code';
+import type { ElementTable, RenderElement } from 'claude-code';
 import type { Color, ViewElements } from './overview';
 
 export const ACCENT = 'suggestion';
@@ -150,12 +150,18 @@ export type Frame = {
   /** Drawn after the title, `─ summary`, as the TUI's panel summaries. */
   summary?: string;
   /** Rows inside the frame; each is fitted to the inner width. A `key` names its metric. */
-  rows: { line: Line; key?: string }[];
+  rows: { line: Line; key?: string; press?: Press }[];
   /** The whole frame's width in columns, borders included. */
   width: number;
   /** Accent-coloured border, as the TUI draws the focused panel. */
   focused?: boolean;
 };
+
+/** A frame row drawn as one plain Button (its text, dim) between the borders, when the frame has a Button to draw with. */
+export type Press = { key: string; onPress: () => void };
+
+/** The elements a frame draws with: Box and Text, and Button for the rows that press. */
+export type FrameElements = ViewElements & Partial<Pick<ElementTable<'terminal'>, 'Button'>>;
 
 /** Columns a frame leaves for its rows: the two borders and one space each side. */
 export function innerWidth(frameWidth: number): number {
@@ -166,8 +172,8 @@ export function innerWidth(frameWidth: number): number {
  * A framed panel like the TUI's: `╭1 Title ─ summary ────╮`, the rows between
  * `│ ` and ` │`, `╰────╯`. Every line is exactly `width` columns.
  */
-export function frame(f: Frame, el: ViewElements): RenderElement {
-  const { Box } = el;
+export function frame(f: Frame, el: FrameElements): RenderElement {
+  const { Box, Button } = el;
   const w = Math.max(4, f.width);
   const border: Omit<Seg, 'text'> = f.focused ? { color: ACCENT } : { dim: true };
   const inner = innerWidth(w);
@@ -183,7 +189,18 @@ export function frame(f: Frame, el: ViewElements): RenderElement {
       ? [...head, seg(H.repeat(w - used - 1), border), seg('╮', border)]
       : [...fit(head, w - 1), seg('╮', border)];
   const bottom: Line = [seg('╰', border), seg(H.repeat(w - 2), border), seg('╯', border)];
-  const rows = f.rows.map((r) => textRow([seg('│ ', border), ...fit(r.line, inner), seg(' │', border)], el, r.key));
+  const rows = f.rows.map((r) => {
+    const cells = fit(r.line, inner);
+    if (r.press === undefined || Button === undefined) return textRow([seg('│ ', border), ...cells, seg(' │', border)], el, r.key);
+    const press = r.press;
+    return (
+      <Box flexDirection="row">
+        {textRow([seg('│ ', border)], el)}
+        <Button key={press.key} label={cells.map((s) => s.text).join('')} plain dimColor onPress={press.onPress} />
+        {textRow([seg(' │', border)], el)}
+      </Box>
+    );
+  });
   return (
     <Box flexDirection="column" width={w} flexShrink={0}>
       {textRow(top, el)}

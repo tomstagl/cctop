@@ -369,8 +369,14 @@ pub struct State {
     /// launch was seen, else by its task id.
     pub workflow_notifications:
         std::collections::BTreeMap<String, crate::transcript::TaskNotification>,
+    /// The line time of a run's latest notification, keyed as
+    /// `workflow_notifications`: the run's terminal marker.
+    pub workflow_notified_at: std::collections::BTreeMap<String, i64>,
     /// Workflow runs under `subagents/workflows/`, with their failures.
     pub workflow_journals: Vec<crate::agents::WorkflowJournal>,
+    /// Workflow run records under `workflows/`: identifiers, times and each
+    /// phase's pointer into the script.
+    pub workflow_records: Vec<crate::workflow_runs::WorkflowRecord>,
     /// Members of this session's team, when it leads one.
     pub teammates: Vec<crate::agents::Teammate>,
     /// The team's own transcripts, read as sessions (team PRD): each
@@ -1409,7 +1415,8 @@ impl State {
             }
         }
         if let Some(n) = line.task_notification() {
-            self.note_task_notification(n);
+            let at = line.timestamp().and_then(crate::metrics::cost::parse_ts_ms);
+            self.note_task_notification(n, at);
         }
         self.events.apply(line);
         self.files.push(line);
@@ -1559,19 +1566,24 @@ impl State {
     /// A `<task-notification>` landed, by whichever of Claude Code's three
     /// deliveries: an agent's goes to its link (and its `Agent`), a
     /// workflow run's to `workflow_notifications`, a background shell
-    /// command's is dropped — it never creates an agent.
-    fn note_task_notification(&mut self, n: crate::transcript::TaskNotification) {
+    /// command's is dropped — it never creates an agent. `at` is the
+    /// line's time.
+    fn note_task_notification(&mut self, n: crate::transcript::TaskNotification, at: Option<i64>) {
         if n.workflow.is_some() {
             let run = self
                 .tools
                 .workflow_launches
                 .iter()
-                .find(|(tu, task, _)| {
-                    n.tool_use_id.as_deref() == Some(tu.as_str())
-                        || task.as_deref() == Some(n.task_id.as_str())
+                .find(|l| {
+                    n.tool_use_id.as_deref() == Some(l.tool_use_id.as_str())
+                        || l.task_id.as_deref() == Some(n.task_id.as_str())
                 })
-                .and_then(|(_, _, run)| run.clone())
+                .and_then(|l| l.run_id.clone())
                 .unwrap_or_else(|| n.task_id.clone());
+            if let Some(at) = at {
+                let t = self.workflow_notified_at.entry(run.clone()).or_insert(at);
+                *t = (*t).max(at);
+            }
             self.workflow_notifications.insert(run, n);
             return;
         }
@@ -2298,11 +2310,13 @@ mod tests {
         s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_wf","content":"launched"}]},"toolUseResult":{"status":"async_launched","taskId":"wquxwsh3","taskType":"workflow","workflowName":"review","runId":"wf_89cf8717-8a9","summary":"s","transcriptDir":"/d","scriptPath":"/s"}}"#).unwrap());
         assert_eq!(
             s.tools.workflow_launches,
-            vec![(
-                "toolu_wf".to_string(),
-                Some("wquxwsh3".to_string()),
-                Some("wf_89cf8717-8a9".to_string())
-            )]
+            vec![crate::tools::WorkflowLaunch {
+                tool_use_id: "toolu_wf".to_string(),
+                task_id: Some("wquxwsh3".to_string()),
+                run_id: Some("wf_89cf8717-8a9".to_string()),
+                name: Some("review".to_string()),
+                at_ms: crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:01Z"),
+            }]
         );
         let text = "<task-notification><task-id>wquxwsh3</task-id><tool-use-id>toolu_wf</tool-use-id><status>completed</status><summary>s</summary><result>r</result><usage><agent_count>9</agent_count><agents_done>7</agents_done><agents_error>2</agents_error><agents_skipped>0</agents_skipped><agents_empty_result>1</agents_empty_result><subagent_tokens>5</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9</duration_ms></usage></task-notification>";
         s.apply(&Line::parse(&format!(
@@ -2311,6 +2325,11 @@ mod tests {
         )).unwrap());
         let n = &s.workflow_notifications["wf_89cf8717-8a9"];
         assert_eq!(n.workflow.unwrap().empty_result, 1);
+        assert_eq!(
+            s.workflow_notified_at.get("wf_89cf8717-8a9").copied(),
+            crate::metrics::cost::parse_ts_ms("2026-01-01T00:09:00Z"),
+            "keyed like the notification, at the line's time"
+        );
         assert!(s.agents.is_empty(), "a workflow run is not an agent");
     }
 }

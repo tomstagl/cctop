@@ -21,7 +21,7 @@ expression: "render_to_string(&app, 120, 30)"
 │ ✓ Explore  sonnet     7s   82k  0.03   300   0.00                                                                    │
 │ ✓ Explore  haiku      7s   82k  0.02   300   0.00                                                                    │
 │ ✓ Explore  haiku      7s   82k  0.02   300   0.00                                                                    │
-│ wf wf_abc-123     9 launched · 6 done · 2 failed  ≈$0.70                                                             │
+│ ‖ wf_abc-123               ✗2  ≈$0.70  9 launched · 6 done                                                           │
 │────────────────────────────────────────────────────────────                                                          │
 │ waste: failed 0.28 · killed 0.05 · no ret 0.03 · idle 0.08                                                           │
 │ cold starts 3 (≈$0.40 writes) · 5.2 % of output returned                                                             │

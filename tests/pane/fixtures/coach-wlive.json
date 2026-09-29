@@ -1,0 +1,116 @@
+{
+  "agents": "agents 0 run · 98%",
+  "exposed": true,
+  "lights": [
+    {
+      "alt": "380k ▇▇▇▇▁▁▁▁▁▁ 38% · re-reads 380k/call",
+      "approx": true,
+      "figure": 38.0,
+      "glyph": "◐",
+      "id": "context",
+      "level": "watch",
+      "lines": [
+        "next 3c ≈$.38 · fresh ≈$.17",
+        "threshold 967k · 586k left · prefix 377k (99 %)"
+      ],
+      "number": "380k",
+      "source": "transcript",
+      "text": "380k ▇▇▇▇▁▁▁▁▁▁ 38% · ≈$.13/call (cold: next call ≈$4.8)",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": true,
+      "figure": 380.0,
+      "glyph": "◐",
+      "id": "cache",
+      "level": "watch",
+      "lines": [
+        "hit ratio 99 % · misses 0",
+        "TTL 5m (observed)",
+        "re-write if cold 380k ≈$4.8"
+      ],
+      "number": "380k",
+      "source": "transcript",
+      "text": "cold · 380k re-write",
+      "unit": "k"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": null,
+      "glyph": "○",
+      "id": "limits",
+      "level": "quiet",
+      "lines": [
+        "install the status line shim for the limits"
+      ],
+      "number": "—",
+      "source": "status line",
+      "text": "— no status line",
+      "unit": "%"
+    },
+    {
+      "alt": null,
+      "approx": false,
+      "figure": 0.0,
+      "glyph": "○",
+      "id": "rework",
+      "level": "quiet",
+      "lines": [
+        "no check yet this session",
+        "no failed calls",
+        "rewind 0 checkpoints this turn"
+      ],
+      "number": "ok",
+      "source": "transcript",
+      "text": "edits 0 ✓ none",
+      "unit": "ok"
+    }
+  ],
+  "lines": {
+    "l0": "◐380k ≈$.13/call (cold: next call ≈$4.8) · ◐cache 380k · ○5h — · ○edits 0",
+    "l1": "◐38% ○— ◐380k ○ok",
+    "l2": "◐◐○○"
+  },
+  "model": "claude-fable-5-1",
+  "next": null,
+  "next_row": "next     —",
+  "nudge": null,
+  "nudges_this_hour": 0,
+  "queued": 0,
+  "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
+  "recent": [],
+  "schema": 1,
+  "session": "session-w-live",
+  "session_mode": "interactive",
+  "snoozed": [],
+  "snoozed_row": "snoozed  —",
+  "start_line": null,
+  "state": {
+    "kind": "EXPLORING",
+    "line": "EXPLORING · silent 1h24",
+    "tokens": [
+      "silent 1h24"
+    ]
+  },
+  "suppressed": [
+    [
+      "A10",
+      "first two turns"
+    ],
+    [
+      "A17",
+      "first two turns"
+    ],
+    [
+      "A23",
+      "first two turns"
+    ],
+    [
+      "A30",
+      "first two turns"
+    ]
+  ],
+  "turn": 1
+}

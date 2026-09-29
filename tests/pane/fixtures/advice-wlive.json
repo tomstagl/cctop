@@ -1,0 +1,27 @@
+{
+  "items": [],
+  "next": null,
+  "primary": null,
+  "recent": [],
+  "schema": 2,
+  "session_mode": "interactive",
+  "snoozed": [],
+  "suppressed": [
+    {
+      "rule": "A10",
+      "why": "first two turns"
+    },
+    {
+      "rule": "A17",
+      "why": "first two turns"
+    },
+    {
+      "rule": "A23",
+      "why": "first two turns"
+    },
+    {
+      "rule": "A30",
+      "why": "first two turns"
+    }
+  ]
+}

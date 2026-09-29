@@ -214,6 +214,11 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         if last_journal.elapsed() >= Duration::from_secs(5) {
             last_journal = Instant::now();
             state.workflow_journals = crate::agents::workflow_journals(&subagents_dir);
+            state.workflow_records = crate::workflow_runs::read_records(
+                &session_dir,
+                &state.workflow_journals,
+                &state.workflow_records,
+            );
         }
     }));
     if let Some(teams) = crate::agents::teams_dir() {
@@ -280,6 +285,15 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
     }
     app.state
         .merge_agents(&crate::agents::load(&transcript.with_extension("")));
+    // The journals and run records the live attach reads on its tick
+    // (registered only when `live`), as `load::state_from` reads them.
+    app.state.workflow_journals =
+        crate::agents::workflow_journals(&transcript.with_extension("").join("subagents"));
+    app.state.workflow_records = crate::workflow_runs::read_records(
+        &transcript.with_extension(""),
+        &app.state.workflow_journals,
+        &[],
+    );
     if app.state.session.ended_at_ms.is_none() && !app.state.session.alive {
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }

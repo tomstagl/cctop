@@ -23,6 +23,8 @@ pub enum ToolUseDetail {
     Workflow {
         task_id: Option<String>,
         run_id: Option<String>,
+        /// `workflowName`: an identifier the script declares.
+        name: Option<String>,
     },
     /// A denial or a plain error: Claude Code wrote the message as a string.
     Text {
@@ -168,6 +170,7 @@ impl ToolUseDetail {
             return ToolUseDetail::Workflow {
                 task_id: s("taskId"),
                 run_id: s("runId"),
+                name: s("workflowName"),
             };
         }
         if has("status") && (has("agentId") || has("agent_id") || has("resolvedModel")) {

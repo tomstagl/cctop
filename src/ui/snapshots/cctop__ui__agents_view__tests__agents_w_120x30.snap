@@ -1,0 +1,34 @@
+---
+source: src/ui/agents_view.rs
+expression: "render_to_string(&app, 120, 30)"
+---
+┌ Agents ─ 210 · 0 running · ≈$48.6 · wasted ≈$7.97 (16 %)  ↕spend↓  (s/S sort, j/k, Enter expand, Esc back) ──────────┐
+│   type     model    time   tok    ≈$   ret  waste                                                                    │
+│ ✓ wf_0aa065f… sweep-4      ✗206  ≈$48.59  1 launched · 65 …                                                          │
+│────────────────────────────────────────────────────────────                                                          │
+│ waste: failed 7.97 · killed 0.00 · no ret 0.00 · idle 0.00                                                           │
+│ cold starts 5 (≈$8.97 writes) · 0.0 % of output returned                                                             │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

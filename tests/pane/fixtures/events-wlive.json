@@ -1,0 +1,17 @@
+[
+  {
+    "at_ms": 1789228163567,
+    "kind": "tool",
+    "text": "Workflow /home/user/project/src/b66b20… ▶"
+  },
+  {
+    "at_ms": 1789228165021,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789228183433,
+    "kind": "tool",
+    "text": "Bash echo lore status lore lorem_ipsum_ lorem lorem_ip ---\"; lorem_ -t lorem_ipsum_dolor.json 2>/dev/null | head -1); echo lorem jq -c lorem_ip lorem_ipsum_dolor_si lore lorem_ipsum_dol | lorem_ipsum_dolo… ▶"
+  }
+]

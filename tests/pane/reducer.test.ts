@@ -279,3 +279,13 @@ test('session.id: the first id is learned, the same id is a no-op, a new id drop
   assert.equal(rotatedBusy.turn.state, 'busy');
   assert.equal(rotatedBusy.turn.startedAt, T0 + 5000);
 });
+
+test('agents.run opens a run and closes it; a new session id closes it', () => {
+  const learned = reduce(initialModel(), { type: 'session.id', id: 'session-a' });
+  assert.equal(learned.openRun, null);
+  const opened = reduce(learned, { type: 'agents.run', run: 'wf_0aa065ff-0a0' });
+  assert.equal(opened.openRun, 'wf_0aa065ff-0a0');
+  assert.equal(reduce(opened, { type: 'agents.run', run: null }).openRun, null);
+  assert.equal(reduce(opened, { type: 'session.id', id: 'session-a' }).openRun, 'wf_0aa065ff-0a0', 'the same id keeps it');
+  assert.equal(reduce(opened, { type: 'session.id', id: 'session-b' }).openRun, null);
+});
