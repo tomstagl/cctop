@@ -19,7 +19,7 @@ const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 async function boot(opts: { binary?: 'present' | 'missing' } = {}) {
   const $ = fakeEngine({
-    process: opts.binary === 'present' ? { 'cctop --version': { exitCode: 0, stdout: 'cctop 0.2.0\n', stderr: '' } } : {},
+    process: opts.binary === 'present' ? { 'cctop --version': { exitCode: 0, stdout: 'cctop 0.2.0\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } : {},
   });
   const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});

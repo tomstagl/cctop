@@ -38,7 +38,7 @@ Options:
   -h, --help               Print help
 `;
 
-const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '' });
+const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false });
 
 // The scripted answers of a present binary: `--version`, `--help` and each
 // verb answered from its fixture.
@@ -181,7 +181,7 @@ test('a failed or non-JSON call keeps the previous data; stale after 30 s of fai
   // The fake copies the scripts at construction: later answers go through `$.process.script`.
   const scripts = $.process.script;
   scripts[`cctop query summary --session ${SESSION} --surface pane`] = ok('not json {');
-  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 2, stdout: '', stderr: 'no such session' };
+  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 2, stdout: '', stderr: 'no such session', isStdoutTruncated: false, isStderrTruncated: false };
   scripts[`cctop query files --session ${SESSION} --surface pane`] = new Error('spawn failed');
   await advance(10000);
   assert.deepEqual(model().query.summary, summary, 'non-JSON keeps the previous summary');
@@ -276,7 +276,7 @@ test('binary: missing shows the install hint and never spawns a query', async ()
 });
 
 test('a non-zero --version counts as missing too', async () => {
-  const { $, start, open, render } = bootHooks({ 'cctop --version': { exitCode: 1, stdout: '', stderr: 'bad' } });
+  const { $, start, open, render } = bootHooks({ 'cctop --version': { exitCode: 1, stdout: '', stderr: 'bad', isStdoutTruncated: false, isStderrTruncated: false } });
   await start();
   await settle();
   await open();
@@ -333,7 +333,7 @@ test('the pane names each unsupported verb', async () => {
 // exits 2 with "no session matches"; no session.start announces the change.
 const NEXT = 'next-session';
 const NEXT_MARKER = `/home/user/.cctop/pane/${NEXT}.json`;
-const NO_MATCH: ProcessRunResult = { exitCode: 2, stdout: '', stderr: `cctop: no session matches "${SESSION}"` };
+const NO_MATCH: ProcessRunResult = { exitCode: 2, stdout: '', stderr: `cctop: no session matches "${SESSION}"`, isStdoutTruncated: false, isStderrTruncated: false };
 
 // The binary after a `/clear`: the old id is unknown to it, the new one answers.
 function rotatedScripts(): Record<string, ProcessScript> {
@@ -349,7 +349,7 @@ const readMarker = ($: FakeEngine, path: string) => JSON.parse($.fs.files.get(pa
 
 test('a rotated session id: the next tick follows it, swaps the markers and drops the old data', async () => {
   const scripts = binaryScripts();
-  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  scripts[`cctop query tools --session ${SESSION} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken', isStdoutTruncated: false, isStderrTruncated: false };
   const from: Model = { ...reduce(initialModel(), { type: 'binary', binary: 'present' }), open: true, openedAt: T0 };
   const { $, poller, advance, model } = bootPoller(scripts, from);
   poller.start();
@@ -362,7 +362,7 @@ test('a rotated session id: the next tick follows it, swaps the markers and drop
   // and its tools verb is broken as well.
   $.session.scripted.id = NEXT;
   Object.assign($.process.script, rotatedScripts());
-  $.process.script[`cctop query tools --session ${NEXT} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken' };
+  $.process.script[`cctop query tools --session ${NEXT} --surface pane`] = { exitCode: 1, stdout: '', stderr: 'broken', isStdoutTruncated: false, isStderrTruncated: false };
   await advance(10000);
   assert.equal(model().sessionId, NEXT);
   assert.ok($.ui.logs.some((l) => l === `cctop: session ${SESSION} rotated to ${NEXT}: following it`), JSON.stringify($.ui.logs));
@@ -434,7 +434,7 @@ test('/clear between turns: the open pane follows the new id at the next turn, w
 
   // `/clear`: a new id, a fresh context, and the binary forgets the old id.
   $.session.scripted.id = NEXT;
-  $.session.scripted.usage = { context: { tokens: 12_000, window: 200_000 }, rateLimits: [] };
+  $.session.scripted.usage = { startedAt: 0, context: { tokens: 12_000, window: 200_000 }, rateLimits: [] };
   Object.assign($.process.script, rotatedScripts());
   await turnStart();
   await settle();

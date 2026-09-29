@@ -22,7 +22,7 @@ const manifest = readFileSync(join(__dirname, '..', '..', '..', 'plugin', '.clau
 const PLUGIN_VERSION = (JSON.parse(manifest) as { version: string }).version;
 
 const HELP = `Commands:\n${['summary', 'tools', 'files', 'agents', 'advice', 'events'].map((v) => `  ${v}  x`).join('\n')}\n\nOptions:\n`;
-const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '' });
+const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false });
 
 function binaryScripts(): Record<string, ProcessScript> {
   const scripts: Record<string, ProcessScript> = { 'cctop --version': ok('cctop 0.9.0\n'), 'cctop query --help': ok(HELP) };
