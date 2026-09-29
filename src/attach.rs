@@ -214,6 +214,11 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         if last_journal.elapsed() >= Duration::from_secs(5) {
             last_journal = Instant::now();
             state.workflow_journals = crate::agents::workflow_journals(&subagents_dir);
+            state.workflow_records = crate::workflow_runs::read_records(
+                &session_dir,
+                &state.workflow_journals,
+                &state.workflow_records,
+            );
         }
     }));
     if let Some(teams) = crate::agents::teams_dir() {

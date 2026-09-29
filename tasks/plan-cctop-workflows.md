@@ -380,6 +380,8 @@ git add src/workflow_runs.rs src/lib.rs src/ui/state.rs src/attach.rs src/load.r
 git commit -m "Workflows: read the run record — name, status, times and each phase's pointer"
 ```
 
+> Implementation note: the tests use a unique `std::env::temp_dir()` subdirectory (removed after the read) instead of `tempfile`, which the crate does not depend on. `load.rs` passes the loaded `state.workflow_journals` (not `&[]`) as the journals and `&[]` as `prev`. A `prev` entry is reused when its `run` equals the file stem, its mtime matches and the journal's (phase, prefixes) equal its `scanned_with`; records are returned sorted by run id.
+
 ---
 
 ### Task 5: Causes, fixes and the run verdict

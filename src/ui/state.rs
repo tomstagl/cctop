@@ -371,6 +371,9 @@ pub struct State {
         std::collections::BTreeMap<String, crate::transcript::TaskNotification>,
     /// Workflow runs under `subagents/workflows/`, with their failures.
     pub workflow_journals: Vec<crate::agents::WorkflowJournal>,
+    /// Workflow run records under `workflows/`: identifiers, times and each
+    /// phase's pointer into the script.
+    pub workflow_records: Vec<crate::workflow_runs::WorkflowRecord>,
     /// Members of this session's team, when it leads one.
     pub teammates: Vec<crate::agents::Teammate>,
     /// The team's own transcripts, read as sessions (team PRD): each

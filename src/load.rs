@@ -127,6 +127,11 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
     state.merge_agents(&crate::agents::load(&transcript.with_extension("")));
     state.workflow_journals =
         crate::agents::workflow_journals(&transcript.with_extension("").join("subagents"));
+    state.workflow_records = crate::workflow_runs::read_records(
+        &transcript.with_extension(""),
+        &state.workflow_journals,
+        &[],
+    );
     if let Some(teams) = crate::agents::teams_dir() {
         state.teammates = crate::agents::teammates(&teams, &state.session.session_id);
     }
