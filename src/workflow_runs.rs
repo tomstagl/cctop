@@ -348,12 +348,17 @@ pub fn verdict(
         .collect();
 
     // Activity: member lines are line-time evidence; the journal's mtime
-    // (capped at the clock) only keeps a marker-less run alive.
+    // (capped at the clock) only keeps a marker-less run alive, as does a
+    // launch (a resume whose journal has not moved yet).
     let line_activity = members.iter().filter_map(|a| a.last_line_at).max();
-    let last_activity = line_activity.max(journal.and_then(|j| j.mtime_ms).map(|m| m.min(now)));
+    let last_activity = line_activity
+        .max(journal.and_then(|j| j.mtime_ms).map(|m| m.min(now)))
+        .max(launches.iter().filter_map(|l| l.at_ms).max());
 
     // The terminal marker: the later of the notification and the record's
-    // end, each with its own status.
+    // end. Its status is the notification's (else the record's) when both
+    // describe the same invocation — no launch of the run lies between them
+    // — else the later marker's.
     let runs = crate::agent_ledger::workflow_runs(state, rows);
     let from_notification =
         crate::agent_ledger::notification_key(state, &runs, run).and_then(|k| {
@@ -375,9 +380,24 @@ pub fn verdict(
         };
         Some((end, status))
     });
+    let launched_between = |a: i64, b: i64| {
+        let (lo, hi) = (a.min(b), a.max(b));
+        launches
+            .iter()
+            .any(|l| l.at_ms.is_some_and(|at| at > lo && at < hi))
+    };
     let marker = match (from_notification, from_record) {
-        (Some((n, _)), Some((r, rs))) if r > n => Some((r, Some(rs))),
-        (Some((n, ns)), rec) => Some((n, ns.or(rec.map(|(_, rs)| rs)))),
+        (Some((n, ns)), Some((r, rs))) => {
+            let status = if !launched_between(n, r) {
+                ns.or(Some(rs))
+            } else if n >= r {
+                ns
+            } else {
+                Some(rs)
+            };
+            Some((n.max(r), status))
+        }
+        (Some((n, ns)), None) => Some((n, ns)),
         (None, Some((r, rs))) => Some((r, Some(rs))),
         (None, None) => None,
     };
@@ -444,17 +464,20 @@ pub fn verdict(
             cost += r.cost.usd;
             waste += r.waste.map_or(0.0, |w| w.usd);
         }
-        let pointer_stale = record.and_then(|r| r.start_ms).is_some_and(|start| {
-            let with_cause: Vec<&&String> = failed.iter().chain(cut.iter()).collect();
-            !with_cause.is_empty()
-                && !with_cause.iter().any(|id| {
-                    state
-                        .agents
-                        .get(id.as_str())
-                        .and_then(|a| a.started_at)
-                        .is_some_and(|s| s >= start)
-                })
-        });
+        // Judged over the journal's failed agents only: agents cut off by a
+        // kill ran under the latest script (spec §4.4).
+        let pointer = record.and_then(|r| r.pointers.get(&p.title).copied());
+        let pointer_stale = pointer.is_some()
+            && record.and_then(|r| r.start_ms).is_some_and(|start| {
+                !failed.is_empty()
+                    && !failed.iter().any(|id| {
+                        state
+                            .agents
+                            .get(id.as_str())
+                            .and_then(|a| a.started_at)
+                            .is_some_and(|s| s >= start)
+                    })
+            });
         phases.push(PhaseRow {
             title: p.title.clone(),
             started: p.started,
@@ -463,7 +486,7 @@ pub fn verdict(
             failed_usd: failed.iter().map(|id| cost_of(id)).sum(),
             waste_pct: (cost > 0.0).then(|| waste / cost),
             causes,
-            pointer: record.and_then(|r| r.pointers.get(&p.title).copied()),
+            pointer,
             pointer_stale,
         });
     }
@@ -938,6 +961,13 @@ mod tests {
             RunState::Completed,
             "a fresh journal mtime alone (a copied session) does not"
         );
+        let mut s = state_with_run();
+        launch(&mut s, "wf_t", "2026-01-01T00:09:30Z");
+        assert_eq!(
+            v(&s).state,
+            RunState::Live,
+            "a just-resumed run is live before its journal moves"
+        );
     }
 
     #[test]
@@ -949,7 +979,138 @@ mod tests {
         let r = v(&s);
         assert!(r.phases[0].pointer_stale);
         assert!(r.fixes[0].pointer_stale);
+        assert!(
+            !r.phases[1].pointer_stale,
+            "Design's failures predate the script too, but it has no pointer"
+        );
+        assert!(!r.fixes[1].pointer_stale);
         assert!(!v(&state_with_run()).fixes[0].pointer_stale);
+    }
+
+    #[test]
+    fn agents_cut_off_by_a_kill_do_not_clear_a_stale_pointer() {
+        // v1 failed under an earlier script (00:01); x was cut off by the kill
+        // under the last one (started 00:04:30, the record began at 00:04).
+        let v1 = agent(
+            "v1",
+            "wf_t",
+            &[err("2026-01-01T00:01:00Z", 429, "rate_limit")],
+        );
+        let x = agent("x", "wf_t", &[ok("mx", "2026-01-01T00:04:30Z", None)]);
+        let j = journal(
+            "wf_t",
+            &[("Verify", &[("v1", "failed"), ("x", "open")])],
+            "2026-01-01T00:05:00Z",
+        );
+        let mut s = state(vec![v1, x], vec![j]);
+        let mut rec = record("wf_t", "killed");
+        rec.start_ms = parse_ts_ms("2026-01-01T00:04:00Z");
+        rec.duration_ms = Some(60_000);
+        s.workflow_records = vec![rec];
+        let r = v(&s);
+        assert_eq!(r.state, RunState::Killed);
+        assert_eq!(r.phases[0].causes.get(&Cause::Killed), Some(&1));
+        assert!(r.phases[0].pointer_stale);
+        assert_eq!(r.fixes[0].cause, Cause::RateLimitFirst);
+        assert!(r.fixes[0].pointer_stale);
+    }
+
+    /// A workflow run's notification with `status`, keyed `key`, at `ts`.
+    fn notify(s: &mut State, key: &str, status: &str, ts: &str) {
+        let text = format!("<task-notification><task-id>{key}</task-id><status>{status}</status><summary>s</summary><usage><agent_count>5</agent_count><agents_done>1</agents_done><agents_error>4</agents_error><agents_skipped>0</agents_skipped><agents_empty_result>0</agents_empty_result></usage></task-notification>");
+        let n = crate::transcript::TaskNotification::parse(&text).unwrap();
+        assert!(n.workflow.is_some());
+        s.workflow_notifications.insert(key.into(), n);
+        s.workflow_notified_at
+            .insert(key.into(), parse_ts_ms(ts).unwrap());
+    }
+
+    #[test]
+    fn a_failed_notification_ends_the_run_as_failed() {
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        notify(&mut s, "wf_t", "failed", "2026-01-01T00:06:00Z");
+        let r = v(&s);
+        assert_eq!(r.state, RunState::Failed);
+        assert_eq!(r.ended_ms, parse_ts_ms("2026-01-01T00:06:00Z"));
+    }
+
+    #[test]
+    fn the_notification_speaks_for_its_own_invocation() {
+        // The record ends at 00:05 `completed`.
+        let mut s = state_with_run();
+        notify(&mut s, "wf_t", "killed", "2026-01-01T00:05:01Z");
+        assert_eq!(
+            v(&s).state,
+            RunState::Killed,
+            "notification after the record, same invocation"
+        );
+        let mut s = state_with_run();
+        notify(&mut s, "wf_t", "killed", "2026-01-01T00:04:00Z");
+        assert_eq!(
+            v(&s).state,
+            RunState::Killed,
+            "notification before the record, same invocation"
+        );
+        let mut s = state_with_run();
+        notify(&mut s, "wf_t", "killed", "2026-01-01T00:03:00Z");
+        launch(&mut s, "wf_t", "2026-01-01T00:03:30Z");
+        let r = v(&s);
+        assert_eq!(
+            r.state,
+            RunState::Completed,
+            "a resume between them: the later record speaks"
+        );
+        assert_eq!(r.ended_ms, parse_ts_ms("2026-01-01T00:05:00Z"));
+        let mut s = state_with_run();
+        s.workflow_records[0].status = Some("killed".into());
+        launch(&mut s, "wf_t", "2026-01-01T00:06:00Z");
+        notify(&mut s, "wf_t", "completed", "2026-01-01T00:08:00Z");
+        assert_eq!(
+            v(&s).state,
+            RunState::Completed,
+            "a resume between them: the later notification speaks"
+        );
+    }
+
+    #[test]
+    fn a_notification_keyed_by_task_id_still_ends_the_run() {
+        // The launch was not seen: the lone unkeyed notification is the run's.
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        notify(&mut s, "wq12345", "completed", "2026-01-01T00:06:00Z");
+        assert_eq!(v(&s).state, RunState::Completed);
+    }
+
+    #[test]
+    fn a_later_resume_supersedes_the_notification() {
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        notify(&mut s, "wf_t", "completed", "2026-01-01T00:04:00Z");
+        launch(&mut s, "wf_t", "2026-01-01T00:09:30Z");
+        let r = v(&s);
+        assert_eq!(r.state, RunState::Live);
+        assert_eq!(r.ended_ms, None);
+    }
+
+    #[test]
+    fn a_tokenless_api_error_is_unknown_by_its_status() {
+        let mut z = agent("z", "wf_t", &[ok("mz", "2026-01-01T00:01:00Z", None)]);
+        z.api_error = Some(crate::agents::ApiError {
+            status: Some(500),
+            token: None,
+        });
+        assert_eq!(cause(Some(&z), true, true), Cause::Unknown);
+        let j = journal(
+            "wf_t",
+            &[("Verify", &[("z", "failed")])],
+            "2026-01-01T00:05:00Z",
+        );
+        let r = v(&state(vec![z], vec![j]));
+        assert_eq!(
+            r.fixes[0].text,
+            "1 agent failed (500) — cctop has no fix for this yet"
+        );
     }
 
     #[test]
