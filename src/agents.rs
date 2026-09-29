@@ -56,6 +56,15 @@ pub struct Meta {
     pub model: String,
 }
 
+/// An API-error line's machine-readable half: `apiErrorStatus` and the
+/// `error` token (`rate_limit`, `overloaded`). The line's text lives in
+/// `message.content` and is never read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiError {
+    pub status: Option<u16>,
+    pub token: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Agent {
     pub id: String,
@@ -93,6 +102,10 @@ pub struct Agent {
     pub last_line_at: Option<i64>,
     pub usage: Usage,
     pub api_calls: usize,
+    /// The last API-error line; cleared by a later real response.
+    pub api_error: Option<ApiError>,
+    /// `api_calls` when `api_error` was set.
+    pub completed_calls_before_error: usize,
     pub tool_calls: usize,
     /// Tool calls the hook spool attributed to this agent (`agent_id`), and
     /// their exact run time — the agent's transcript may not exist yet.
@@ -152,6 +165,8 @@ impl Agent {
             last_line_at: None,
             usage: Usage::default(),
             api_calls: 0,
+            api_error: None,
+            completed_calls_before_error: 0,
             tool_calls: 0,
             hook_tool_calls: 0,
             hook_tool_ms: 0,
@@ -232,9 +247,20 @@ impl Agent {
                 self.is_fork = true;
                 self.expect_parent_message = true;
             }
-            Line::Assistant(a) if a.is_api_error() => {}
+            Line::Assistant(a) if a.is_api_error() => {
+                // `is_api_error` is also true for any `<synthetic>` line; only a real
+                // API error (the flag, a status or a token) is recorded.
+                if a.is_api_error_message || a.api_error_status.is_some() || a.error.is_some() {
+                    self.api_error = Some(ApiError {
+                        status: a.api_error_status,
+                        token: a.error.clone(),
+                    });
+                    self.completed_calls_before_error = self.api_calls;
+                }
+            }
             Line::Assistant(a) if self.is_parent_message(a) => {}
             Line::Assistant(a) => {
+                self.api_error = None;
                 let usage = Usage::from_api(&a.message.usage);
                 match &mut self.last_message {
                     Some((id, counted)) if *id == a.message.id => {
@@ -1180,5 +1206,38 @@ mod tests {
         assert_eq!(a.api_calls, 1);
         assert_eq!(a.usage.output, 7);
         assert_eq!(w.running(0), 1);
+    }
+
+    #[test]
+    fn a_429_on_the_first_call_is_recorded_without_its_text() {
+        let err = Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"id":"e","model":"<synthetic>","content":[{"type":"text","text":"API Error: secret words"}],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429}"#).unwrap();
+        let a = Agent::from_lines("a1", Meta::default(), [&err]);
+        assert_eq!(
+            a.api_error,
+            Some(ApiError {
+                status: Some(429),
+                token: Some("rate_limit".into())
+            })
+        );
+        assert_eq!(a.completed_calls_before_error, 0);
+        assert_eq!(a.api_calls, 0);
+        assert!(!format!("{a:?}").contains("secret"));
+    }
+
+    #[test]
+    fn a_real_response_after_an_error_clears_it() {
+        let err = Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"id":"e","model":"<synthetic>","content":[],"usage":{"input_tokens":0}},"isApiErrorMessage":true,"error":"overloaded","apiErrorStatus":529}"#).unwrap();
+        let ok = Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"m1","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"x"}],"stop_reason":"end_turn","usage":{"input_tokens":5,"output_tokens":1}}}"#).unwrap();
+        let a = Agent::from_lines("a1", Meta::default(), [&err, &ok]);
+        assert_eq!(a.api_error, None);
+    }
+
+    #[test]
+    fn a_synthetic_line_without_an_error_is_not_an_api_error() {
+        let synthetic = Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"id":"s","model":"<synthetic>","content":[{"type":"text","text":"No response requested."}],"usage":{"input_tokens":0}}}"#).unwrap();
+        let a = Agent::from_lines("a1", Meta::default(), [&synthetic]);
+        assert_eq!(a.api_error, None);
+        assert_eq!(a.completed_calls_before_error, 0);
+        assert_eq!(a.api_calls, 0);
     }
 }
