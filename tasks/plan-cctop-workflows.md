@@ -413,6 +413,7 @@ git commit -m "Workflows: read the run record — name, status, times and each p
       pub failed: usize, pub failed_usd: f64, pub waste_pct: Option<f64>, pub overhead: Option<f64>,
       pub cold_start_pct: Option<f64>, pub started_ms: Option<i64>, pub ended_ms: Option<i64>, pub fixes: Vec<Fix> }
   pub fn cause(a: Option<&crate::agents::Agent>, phase_used_schema: bool, killed: bool) -> Cause;
+  pub fn fix_text(cause: Cause, n: usize, token: Option<&str>) -> String;   // `None` for Killed callers never reach; Unknown's token or `no error`
   pub fn verdict(state: &crate::ui::State, rows: &[crate::agent_ledger::AgentRow], run: &str) -> RunVerdict;
   pub const LIVE_MS: i64 = 60_000;
   pub const RESUME_SLACK_MS: i64 = 10_000;   // the journal's last write may land just after the notification
@@ -435,13 +436,13 @@ Rules:
 - `pointer_stale` (spec §4.4): the phase has failed agents and none of them has `started_at >= record.start_ms`. A `Fix` copies its phase's flag.
 - `overhead`: `run $ ÷ Σ estimate(call) for call in state.agg.calls with at_ms in [started_ms, ended_ms or now]`; `None` when that sum < 0.01 (Review Focus 4).
 - `waste_pct` = Σ member `waste.usd` ÷ run $ (`None` when run $ is 0); `cold_start_pct` = Σ first-call cache-write $ of members with `cold_start` ÷ run $ (reuse the helper behind `Totals.cold_start_usd`).
-- Fix text, exactly (spec §4.3; `{n}` is the count): 
-  - `RateLimitFirst`: `"{n} agents hit the rate limit on their first call — batch this phase's items, or lower its effort/model"`
-  - `RateLimitMid`: `"{n} agents hit the rate limit mid-task — batch this phase, then resume the run after the window resets"`
-  - `Overloaded`: `"{n} agents met an overloaded API — transient; resume the run, finished agents are cached"`
-  - `ContextOverflow`: `"{n} agents' input was too large — pass paths, not contents"`
-  - `NoStructuredOutput`: `"{n} agents never satisfied the schema — loosen it or split the task"`
-  - `Unknown`: `"{n} agents failed ({token}) — cctop has no fix for this yet"` (`{token}` is the api error token; `no transcript` when the agent has none; else `no error`; with several tokens among the cause's agents, the most frequent)
+- Fix text, exactly (spec §4.3). `{n agents}` is `agents_n(n)` = `"1 agent"` / `"{n} agents"`, and `{n agents'}` is `"1 agent's"` / `"{n} agents'"` — one helper in `workflow_runs.rs`, never an `(s)`:
+  - `RateLimitFirst`: `"{n agents} hit the rate limit on their first call — batch this phase's items, or lower its effort/model"`
+  - `RateLimitMid`: `"{n agents} hit the rate limit mid-task — batch this phase, then resume the run after the window resets"`
+  - `Overloaded`: `"{n agents} met an overloaded API — transient; resume the run, finished agents are cached"`
+  - `ContextOverflow`: `"{n agents'} input was too large — pass paths, not contents"`
+  - `NoStructuredOutput`: `"{n agents} never satisfied the schema — loosen it or split the task"`
+  - `Unknown`: `"{n agents} failed ({token}) — cctop has no fix for this yet"` (`{token}` is the api error token; `no transcript` when the agent has none; else `no error`; with several tokens among the cause's agents, the most frequent)
   - `Killed`: no fix.
   `fixes` = the two causes (excluding `Killed`) with the most agents over the run, each with the phase holding most of them and that phase's pointer.
 
@@ -664,6 +665,13 @@ fn the_window_starts_at_the_first_invocation() {
 }
 
 #[test]
+fn the_count_agrees_with_its_noun() {
+    assert_eq!(fix_text(Cause::ContextOverflow, 1, None), "1 agent's input was too large — pass paths, not contents");
+    assert_eq!(fix_text(Cause::ContextOverflow, 3, None), "3 agents' input was too large — pass paths, not contents");
+    assert_eq!(fix_text(Cause::Unknown, 1, Some("authentication_failed")), "1 agent failed (authentication_failed) — cctop has no fix for this yet");
+}
+
+#[test]
 fn fixes_are_the_top_two_causes_with_their_phase_pointer() {
     let r = v(&state_with_run());
     assert_eq!(r.state, RunState::Completed);
@@ -673,6 +681,7 @@ fn fixes_are_the_top_two_causes_with_their_phase_pointer() {
     assert_eq!(r.fixes[0].pointer, Some(Pointer { line: 6, call: Call::Pipeline }));
     assert_eq!(r.fixes[0].text, "3 agents hit the rate limit on their first call — batch this phase's items, or lower its effort/model");
     assert_eq!(r.fixes[1].cause, Cause::RateLimitMid);
+    assert_eq!(r.fixes[1].text, "1 agent hit the rate limit mid-task — batch this phase, then resume the run after the window resets", "singular");
     assert_eq!(r.fixes[1].pointer, None, "Design has no pointer in the record");
 }
 
@@ -725,7 +734,7 @@ metric!(workflow_cold_start_pct, "Agents & MCP", "Workflow cold starts", "percen
 ### Task 7: `cctop query agents` and the dashboard strip
 
 **Files:**
-- Modify: `src/query.rs:405-420`, `src/dashboard.rs:1460` (before the agents row), `docs/query.md`
+- Modify: `src/query.rs:405-420`, `src/dashboard.rs:1460` (in `body_tools`, body 6, before the agents row), `docs/query.md`
 - Test: `src/query.rs` tests; `src/dashboard.rs` tests
 
 **Interfaces:**

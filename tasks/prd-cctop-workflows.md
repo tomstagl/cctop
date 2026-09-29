@@ -49,7 +49,7 @@ The two runs on the user's machine show why that matters:
 | `WorkflowNotification { agent_count, done, error, skipped, empty_result }`, keyed by run id via `tools.workflow_launches` | `transcript/task_notification.rs:48`; `ui/state.rs:1563`, `:370` | `Done` detection and `empty_result` are already linked to the run |
 | Agents view: `Entry::Group`, `Enter` toggles `expanded`; `group_line` at `:221` | `ui/agents_view.rs:58`, `:111`, `:221` | `Enter` on a group changes meaning: it opens the detail (members listed inside it) |
 | `query agents` → `workflows[] { run, launched, done, failed, empty_result, agents, cost, waste }` | `query.rs:403-417` | Extended, not replaced — existing keys keep their meaning |
-| Dashboard `body_work` has an agents row (label 11 cells, conditional on rows) | `dashboard.rs:1205`, `:1454-1500` | The strip is a sibling row, same label width, same conditional pattern |
+| Dashboard `body_tools` (body 6) has an agents row (label 11 cells, conditional on rows) | `dashboard.rs:1354`, `:1454-1500` | The strip is a sibling row, same label width, same conditional pattern |
 | Metrics via `metric!(id, panel, name, unit, formula, [sources], caveats, estimate_when)` | `metrics/registry.rs:21` | Five new entries |
 | Pane `agents.tsx` has no workflow handling; `overview.tsx` draws `bodies[].rows` generically | `plugin/hooks/views/` | The strip is free in the pane; the run detail is new pane code |
 | Nothing reads `<session>/workflows/<run>.json` | — | New reader |
@@ -135,17 +135,17 @@ Caveat on every one: priced from the transcripts, so `≈`; `workflow_overhead` 
 
 ### 4.3 Causes and fix lines
 
-The agents that get a cause are the journal's `failed` ids and, in a `Killed` run, every started agent with neither a `result` nor a `failed` entry. Each gets exactly one `Cause`, from its last API-error line and the calls it completed before it, tested **in this order**: an API error (429 → the two rate-limit causes, 529, `prompt_too_long`, any other token → `Unknown`), then the run being killed, then the missing schema, then `Unknown`. An agent cut off by a kill is `Killed`, never `NoStructuredOutput`. Fix lines are fixed strings; `{n}` fields are numbers. They are **wrapped**, never clipped, at the detail's width (hanging indent of two cells), so the advice survives a 56-column pane.
+The agents that get a cause are the journal's `failed` ids and, in a `Killed` run, every started agent with neither a `result` nor a `failed` entry. Each gets exactly one `Cause`, from its last API-error line and the calls it completed before it, tested **in this order**: an API error (429 → the two rate-limit causes, 529, `prompt_too_long`, any other token → `Unknown`), then the run being killed, then the missing schema, then `Unknown`. An agent cut off by a kill is `Killed`, never `NoStructuredOutput`. Fix lines are fixed strings; `{n agents}` is the count with its noun agreeing — `1 agent`, `201 agents` — and `{n agents'}` the possessive — `1 agent's`, `3 agents'`. They are **wrapped**, never clipped, at the detail's width (hanging indent of two cells), so the advice survives a 56-column pane.
 
 | Cause | Evidence | Fix line | Observed |
 |---|---|---|---|
-| `RateLimitFirst` | `apiErrorStatus: 429` / `error: "rate_limit"`, no completed assistant call before it | `{n} agents hit the rate limit on their first call — batch this phase's items, or lower its effort/model` | yes (212) |
-| `RateLimitMid` | 429 after ≥ 1 completed call | `{n} agents hit the rate limit mid-task — batch this phase, then resume the run after the window resets` | yes (42) |
-| `Overloaded` | `apiErrorStatus: 529` | `{n} agents met an overloaded API — transient; resume the run, finished agents are cached` | no |
-| `ContextOverflow` | `error: "prompt_too_long"` — the token Claude Code already writes on the main session (the coach's A47 `turn-died` rule maps it to `/compact`); listed in `harness_facts.rs` | `{n} agents' input was too large — pass paths, not contents` | not in a workflow agent |
-| `NoStructuredOutput` | ended without a `StructuredOutput` tool_use and without an API error, while ≥ 1 agent of the same phase ended with one (so the phase used a schema) | `{n} agents never satisfied the schema — loosen it or split the task` | no |
+| `RateLimitFirst` | `apiErrorStatus: 429` / `error: "rate_limit"`, no completed assistant call before it | `{n agents} hit the rate limit on their first call — batch this phase's items, or lower its effort/model` | yes (212) |
+| `RateLimitMid` | 429 after ≥ 1 completed call | `{n agents} hit the rate limit mid-task — batch this phase, then resume the run after the window resets` | yes (42) |
+| `Overloaded` | `apiErrorStatus: 529` | `{n agents} met an overloaded API — transient; resume the run, finished agents are cached` | no |
+| `ContextOverflow` | `error: "prompt_too_long"` — the token Claude Code already writes on the main session (the coach's A47 `turn-died` rule maps it to `/compact`); listed in `harness_facts.rs` | `{n agents'} input was too large — pass paths, not contents` | not in a workflow agent |
+| `NoStructuredOutput` | ended without a `StructuredOutput` tool_use and without an API error, while ≥ 1 agent of the same phase ended with one (so the phase used a schema) | `{n agents} never satisfied the schema — loosen it or split the task` | no |
 | `Killed` | no API error, and the run is `Killed` | *(no fix line — reported)* | yes (run-level) |
-| `Unknown` | anything else | `{n} agents failed ({error token}) — cctop has no fix for this yet` | — |
+| `Unknown` | anything else | `{n agents} failed ({error token}) — cctop has no fix for this yet` | — |
 
 `agents_empty_result` from the notification is shown as a count beside the phase table; it has no per-agent cause (the journal cannot say which).
 
