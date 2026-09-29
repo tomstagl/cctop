@@ -1,9 +1,8 @@
 //! The agents view: a sortable ledger of the subagents with dollars and
 //! waste, opened from Panel 6 with Enter (agent PRD §4.3). Rows come from
 //! `crate::agent_ledger`, so this view, `cctop query agents` and the pane
-//! draw the same figures; workflow runs fold into one group row each.
-
-use std::collections::BTreeSet;
+//! draw the same figures; workflow runs fold into one group row each, and
+//! Enter on one opens its detail (workflows spec §4.5).
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
@@ -21,6 +20,7 @@ use crate::team::Liveness;
 use crate::ui::fmt;
 use crate::ui::panel::Handled;
 use crate::ui::State;
+use crate::workflow_runs::{detail_lines, group_text, DETAIL_NARROW, DETAIL_WIDE};
 
 /// The panel id that owns the view (Agents & MCP).
 pub const OWNER: u8 = 6;
@@ -33,8 +33,13 @@ pub struct AgentsUi {
     pub sort: Sort,
     pub ascending: bool,
     pub selected: usize,
-    /// Workflow runs whose agents are listed under their group row.
-    pub expanded: BTreeSet<String>,
+    /// The workflow run whose detail is shown (Enter on its group row).
+    pub detail: Option<String>,
+    /// The detail's first row on screen (j/k).
+    pub scroll: usize,
+    /// The `o` outcome ("copied …:144" / "no pointer for this run"),
+    /// cleared on the next key.
+    pub status: Option<String>,
     /// The team group row alone, its members folded away (Enter on it).
     pub team_collapsed: bool,
 }
@@ -50,11 +55,7 @@ pub fn open(state: &mut State) {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum Entry {
-    Agent {
-        row: AgentRow,
-        /// Listed under an expanded group row.
-        member: bool,
-    },
+    Agent(AgentRow),
     Group(WorkflowGroup),
     /// The team's group row (team PRD §4.3), under the subagents.
     TeamGroup(TeamTotals),
@@ -64,7 +65,7 @@ pub enum Entry {
 }
 
 /// The visible list: agents outside any workflow in sort order, then one
-/// group row per run (its agents beneath it when expanded), then the team
+/// group row per run (its agents are listed in its detail), then the team
 /// as a second group with its members sorted by the same key.
 pub fn entries(state: &State, ui: &AgentsUi) -> Vec<Entry> {
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
@@ -78,25 +79,10 @@ fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow], team: &[TeammateR
     let mut out: Vec<Entry> = rows
         .iter()
         .filter(|r| r.workflow.is_none())
-        .map(|r| Entry::Agent {
-            row: r.clone(),
-            member: false,
-        })
+        .cloned()
+        .map(Entry::Agent)
         .collect();
-    for g in groups {
-        let run = g.run.clone();
-        out.push(Entry::Group(g));
-        if ui.expanded.contains(&run) {
-            out.extend(
-                rows.iter()
-                    .filter(|r| r.workflow.as_deref() == Some(run.as_str()))
-                    .map(|r| Entry::Agent {
-                        row: r.clone(),
-                        member: true,
-                    }),
-            );
-        }
-    }
+    out.extend(groups.into_iter().map(Entry::Group));
     if let Some(totals) = agent_ledger::team_totals(state, team) {
         out.push(Entry::TeamGroup(totals));
         if !ui.team_collapsed {
@@ -107,17 +93,22 @@ fn entries_of(state: &State, ui: &AgentsUi, rows: &[AgentRow], team: &[TeammateR
     out
 }
 
-/// Keys while the view is open. `Handled::No` on Esc closes it (App).
+/// Keys while the view is open. `Handled::No` on Esc closes it (App); in
+/// a run's detail Esc returns to the list instead.
 pub fn handle_key(key: KeyEvent, state: &mut State) -> Handled {
+    state.agents_ui.status = None;
+    if let Some(g) = detail_group(state) {
+        return detail_key(key, state, &g);
+    }
+    state.agents_ui.detail = None;
     let list = entries(state, &state.agents_ui);
     let n = list.len();
     let ui = &mut state.agents_ui;
     match key.code {
         KeyCode::Enter => match list.get(ui.selected) {
             Some(Entry::Group(g)) => {
-                if !ui.expanded.remove(&g.run) {
-                    ui.expanded.insert(g.run.clone());
-                }
+                ui.detail = Some(g.run.clone());
+                ui.scroll = 0;
             }
             Some(Entry::TeamGroup(_)) => ui.team_collapsed = !ui.team_collapsed,
             _ => return Handled::No,
@@ -134,6 +125,66 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> Handled {
         KeyCode::Char('k') | KeyCode::Up => ui.selected = ui.selected.saturating_sub(1),
         KeyCode::Char('g') => ui.selected = 0,
         KeyCode::Char('G') => ui.selected = n.saturating_sub(1),
+        _ => return Handled::No,
+    }
+    Handled::Yes
+}
+
+/// The group of the run whose detail is open, while it is still listed.
+fn detail_group(state: &State) -> Option<WorkflowGroup> {
+    let run = state.agents_ui.detail.as_deref()?;
+    let rows = agent_ledger::rows(state, state.agents_ui.sort, state.agents_ui.ascending);
+    agent_ledger::workflow_groups(state, &rows)
+        .into_iter()
+        .find(|g| g.run == run)
+}
+
+/// What `o` copies: `<scriptPath>:<line>` of the first fix's pointer.
+fn pointer_text(g: &WorkflowGroup) -> Option<String> {
+    let f = g.verdict.fixes.first()?;
+    Some(format!("{}:{}", f.script_path.as_deref()?, f.pointer?.line))
+}
+
+#[cfg(not(test))]
+fn copy(text: &str) -> Result<&'static str, String> {
+    crate::ask::copy_to_clipboard(text)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// What `o` would have put on the clipboard: tests never touch it.
+    static COPIED: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn copy(text: &str) -> Result<&'static str, String> {
+    COPIED.with(|c| *c.borrow_mut() = Some(text.to_string()));
+    Ok("test")
+}
+
+/// Keys in a run's detail: Esc back to the list, `o` copies the pointer,
+/// j/k/g scroll.
+fn detail_key(key: KeyEvent, state: &mut State, g: &WorkflowGroup) -> Handled {
+    let ui = &mut state.agents_ui;
+    match key.code {
+        KeyCode::Esc => ui.detail = None,
+        KeyCode::Char('o') => {
+            ui.status = Some(match pointer_text(g) {
+                Some(p) => match copy(&p) {
+                    Ok(_) => format!("copied {p}"),
+                    Err(e) => format!("could not copy: {e}"),
+                },
+                None => "no pointer for this run".to_string(),
+            });
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            // The narrow layout has the most rows: the render clamps to
+            // what the frame shows.
+            let last = detail_lines(g, DETAIL_NARROW).len() + g.agents;
+            ui.scroll = (ui.scroll + 1).min(last);
+        }
+        KeyCode::Char('k') | KeyCode::Up => ui.scroll = ui.scroll.saturating_sub(1),
+        KeyCode::Char('g') => ui.scroll = 0,
         _ => return Handled::No,
     }
     Handled::Yes
@@ -217,30 +268,38 @@ pub fn agent_line(r: &AgentRow) -> String {
     )
 }
 
-/// The text of a workflow run's group row, cut to `WIDTH`.
-pub fn group_line(g: &WorkflowGroup, expanded: bool) -> String {
-    let mut parts = vec![
-        format!("{} launched", g.launched),
-        format!("{} done", g.done),
-        format!("{} failed", g.failed),
-    ];
-    if let Some(e) = g.empty_result {
-        parts.push(format!("{e} empty"));
+/// A group row's spans: the row dim, its `✗n` in `Crit` when agents
+/// failed (the glyph's own `✗` stays dim).
+fn group_spans(text: String, failed: usize, theme: &crate::theme::Theme) -> Vec<Span<'static>> {
+    let mark = format!(" ✗{failed}");
+    match text.find(&mark).filter(|_| failed > 0) {
+        Some(at) => {
+            let end = at + mark.len();
+            vec![
+                Span::styled(text[..=at].to_string(), theme.dim()),
+                Span::styled(text[at + 1..end].to_string(), theme.crit()),
+                Span::styled(text[end..].to_string(), theme.dim()),
+            ]
+        }
+        None => vec![Span::styled(text, theme.dim())],
     }
-    let cost = if g.cost.source == Source::Unpriced {
-        "—".to_string()
-    } else {
-        format!("≈${}", cents(g.cost.usd).trim())
-    };
-    fmt::clip(
-        &format!(
-            " {} {:<14} {}  {cost}",
-            if expanded { "▾" } else { "wf" },
-            fmt::clip(&g.run, 14),
-            parts.join(" · ")
-        ),
-        WIDTH,
-    )
+}
+
+/// `s` in `width` cells; a long `copied …` keeps its tail, so the line
+/// number stays on screen.
+fn status_fit(s: &str, width: usize) -> String {
+    let n = s.chars().count();
+    match s.strip_prefix("copied ") {
+        Some(path) if n > width => {
+            let keep = width.saturating_sub("copied …".chars().count());
+            let tail: String = path
+                .chars()
+                .skip(path.chars().count() - keep.min(path.chars().count()))
+                .collect();
+            format!("copied …{tail}")
+        }
+        _ => fmt::clip(s, width),
+    }
 }
 
 /// The text of one teammate's row, cut to `WIDTH` (team PRD §4.3): glyph,
@@ -358,6 +417,13 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let ui = &state.agents_ui;
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
     let totals = agent_ledger::totals(&rows);
+    if let Some(g) = ui.detail.as_deref().and_then(|run| {
+        agent_ledger::workflow_groups(state, &rows)
+            .into_iter()
+            .find(|g| g.run == run)
+    }) {
+        return render_detail(frame, area, state, &g, &rows, &totals);
+    }
     let team = agent_ledger::teammate_rows(state, ui.sort, ui.ascending);
     let list = entries_of(state, ui, &rows, &team);
     let dim = state.theme.dim();
@@ -369,13 +435,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     ));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let mut lines = vec![Line::from(Span::styled(
-        format!(
-            "   {:<8} {:<6} {:>6} {:>5} {:>5} {:>5}  {}",
-            "type", "model", "time", "tok", "≈$", "ret", "waste"
-        ),
-        dim,
-    ))];
+    let mut lines = vec![Line::from(Span::styled(columns_line(), dim))];
     let footer = footer_lines(&totals);
     if rows.is_empty() {
         lines.push(Line::from(Span::styled(" no subagents yet", dim)));
@@ -389,27 +449,13 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let cut = |s: String| fmt::clip(&s, inner.width as usize);
     for (i, e) in list.iter().enumerate().skip(first).take(body.max(1)) {
         let mut line = match e {
-            Entry::Agent { row, member } => {
-                let text = agent_line(row);
-                let text = cut(if *member {
-                    format!("  {}", text.trim_start())
-                } else {
-                    text
-                });
-                let style = match row.state {
-                    AgentState::Failed => state.theme.crit(),
-                    AgentState::Running => state.theme.accent(),
-                    AgentState::Done => Style::default(),
-                };
-                Line::from(Span::styled(text, style))
+            Entry::Agent(row) => {
+                Line::from(Span::styled(cut(agent_line(row)), agent_style(state, row)))
             }
-            Entry::Group(g) => Line::from(Span::styled(
-                cut(group_line(g, ui.expanded.contains(&g.run))),
-                if g.failed > 0 {
-                    state.theme.crit()
-                } else {
-                    dim
-                },
+            Entry::Group(g) => Line::from(group_spans(
+                cut(group_text(g)),
+                g.verdict.failed,
+                &state.theme,
             )),
             Entry::TeamGroup(t) => Line::from(Span::styled(
                 cut(team_group_line(t, ui.team_collapsed)),
@@ -442,6 +488,102 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         lines.push(Line::from(Span::styled(cut(f), dim)));
     }
     frame.render_widget(Paragraph::new(lines), inner);
+}
+
+/// An agent row's colour: failed `Crit`, running `Accent`.
+fn agent_style(state: &State, row: &AgentRow) -> Style {
+    match row.state {
+        AgentState::Failed => state.theme.crit(),
+        AgentState::Running => state.theme.accent(),
+        AgentState::Done => Style::default(),
+    }
+}
+
+/// A run's detail: the shared rows of `detail_lines` verbatim at the
+/// layout the frame fits (the rule and fix rows `Warn`, the pointer rows
+/// `Dim`), then the run's agents, one `agent_line` each; the `o` status on
+/// the last row.
+fn render_detail(
+    frame: &mut Frame,
+    area: Rect,
+    state: &State,
+    g: &WorkflowGroup,
+    rows: &[AgentRow],
+    totals: &agent_ledger::Totals,
+) {
+    let ui = &state.agents_ui;
+    let dim = state.theme.dim();
+    let block = Block::default().borders(Borders::ALL).title(format!(
+        "{}  (j/k, o copy pointer, Esc back) ",
+        header_line(totals)
+    ));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let width = if inner.width as usize >= DETAIL_WIDE {
+        DETAIL_WIDE
+    } else {
+        DETAIL_NARROW
+    };
+    let cut = |s: String| fmt::clip(&s, inner.width as usize);
+    let mut lines = Vec::new();
+    let mut fixes = false;
+    for (i, row) in detail_lines(g, width).into_iter().enumerate() {
+        let style = if row == " ───" {
+            fixes = true;
+            state.theme.warn()
+        } else if fixes && (row.starts_with("   →") || row.starts_with("     ")) {
+            dim
+        } else if fixes {
+            state.theme.warn()
+        } else if i == 1 {
+            dim
+        } else {
+            Style::default()
+        };
+        lines.push(Line::from(Span::styled(cut(row), style)));
+    }
+    lines.push(Line::from(Span::styled(cut(columns_line()), dim)));
+    for r in rows
+        .iter()
+        .filter(|r| r.workflow.as_deref() == Some(g.run.as_str()))
+    {
+        lines.push(Line::from(Span::styled(
+            cut(agent_line(r)),
+            agent_style(state, r),
+        )));
+    }
+    let body = inner.height.saturating_sub(u16::from(ui.status.is_some()));
+    let scroll = ui.scroll.min(lines.len().saturating_sub(1));
+    let text = Rect {
+        height: body,
+        ..inner
+    };
+    frame.render_widget(
+        Paragraph::new(lines).scroll((scroll.min(u16::MAX as usize) as u16, 0)),
+        text,
+    );
+    if let Some(status) = &ui.status {
+        let at = Rect {
+            y: inner.y + body,
+            height: 1,
+            ..inner
+        };
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                status_fit(status, inner.width as usize),
+                state.theme.accent(),
+            )),
+            at,
+        );
+    }
+}
+
+/// The agents' column heads, over the list and the detail's members.
+fn columns_line() -> String {
+    format!(
+        "   {:<8} {:<6} {:>6} {:>5} {:>5} {:>5}  {}",
+        "type", "model", "time", "tok", "≈$", "ret", "waste"
+    )
 }
 
 #[cfg(test)]
@@ -665,10 +807,11 @@ mod tests {
         let out = render_to_string(&app, 120, 30);
         assert!(out.contains("Agents ─ 25 · 1 running"), "{out}");
         assert!(
-            out.contains("wf wf_abc-123"),
+            out.contains("‖ wf_abc-123"),
             "the run folds into one row: {out}"
         );
-        assert!(out.contains("9 launched · 6 done · 2 failed"), "{out}");
+        assert!(out.contains(" ✗2  ≈$0.70  9 launched · 6 done"), "{out}");
+        assert!(!out.contains("2 failed"), "✗n says it once: {out}");
         assert!(out.contains("idle 5"), "{out}");
         assert!(out.contains("no ret"), "{out}");
         assert!(out.contains("cold starts 3"), "{out}");
@@ -683,14 +826,23 @@ mod tests {
         );
         assert!(matches!(list.last(), Some(Entry::Group(_))));
         let out = render_to_string(&app, 56, 20);
-        assert!(out.contains("wf wf_abc-123"), "{out}");
-        // Enter expands the run: its eight agents follow the group row.
+        assert!(out.contains("‖ wf_abc-123"), "{out}");
+        // Enter opens the run's detail: its eight agents are listed there,
+        // the list itself stays one row per run.
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        let list = entries(&app.state, &app.state.agents_ui);
-        assert_eq!(list.len(), 26);
-        assert!(matches!(&list[18], Entry::Agent { member: true, .. }));
+        assert_eq!(app.state.agents_ui.detail.as_deref(), Some("wf_abc-123"));
+        assert_eq!(entries(&app.state, &app.state.agents_ui).len(), 18);
         let out = render_to_string(&app, 120, 30);
-        assert!(out.contains("▾ wf_abc-123"), "{out}");
+        assert!(out.contains(" wf_abc-123  stalled"), "{out}");
+        let members = out
+            .lines()
+            .filter(|l| l.contains("sonnet") || l.contains("opus") || l.contains("haiku"))
+            .count();
+        assert_eq!(members, 8, "{out}");
+        // Esc returns to the list, the view stays open.
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.state.overlay, Some(OWNER));
+        assert!(app.state.agents_ui.detail.is_none());
         // Sort: spend → waste → time → started, S flips.
         app.handle_key(key('s'));
         assert_eq!(app.state.agents_ui.sort, Sort::Waste);
@@ -857,5 +1009,124 @@ mod tests {
             !out.contains("wasted"),
             "the inline list has no dollars: {out}"
         );
+    }
+
+    #[test]
+    fn enter_opens_the_detail_and_esc_returns_to_the_list() {
+        let mut s = crate::workflow_runs::test_support::state_with_run();
+        s.agents_ui.selected = entries(&s, &s.agents_ui)
+            .iter()
+            .position(|e| matches!(e, Entry::Group(_)))
+            .unwrap();
+        let k = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        assert_eq!(handle_key(k(KeyCode::Enter), &mut s), Handled::Yes);
+        assert!(s.agents_ui.detail.is_some());
+        assert_eq!(handle_key(k(KeyCode::Esc), &mut s), Handled::Yes);
+        assert!(s.agents_ui.detail.is_none());
+    }
+
+    fn workflow_app() -> App {
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = crate::workflow_runs::test_support::state_with_run();
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.state.overlay, Some(OWNER));
+        app.state.agents_ui.selected = entries(&app.state, &app.state.agents_ui)
+            .iter()
+            .position(|e| matches!(e, Entry::Group(_)))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app
+    }
+
+    #[test]
+    fn the_run_detail_draws_the_shared_rows_then_its_members() {
+        let app = workflow_app();
+        insta::assert_snapshot!(
+            "agents_workflow_detail_120x30",
+            render_to_string(&app, 120, 30)
+        );
+        insta::assert_snapshot!(
+            "agents_workflow_detail_56x20",
+            render_to_string(&app, 56, 20)
+        );
+        let rows = agent_ledger::rows(&app.state, Sort::Spend, false);
+        let g = agent_ledger::workflow_groups(&app.state, &rows).remove(0);
+        for (w, width) in [(120, DETAIL_WIDE), (56, DETAIL_NARROW)] {
+            let out = render_to_string(&app, w, 30);
+            for row in detail_lines(&g, width) {
+                assert!(
+                    out.lines().any(|l| l.starts_with(&format!("│{row}"))),
+                    "{row:?} verbatim at {w}: {out}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn o_copies_the_pointer_and_the_next_key_clears_the_line() {
+        let mut app = workflow_app();
+        app.handle_key(key('o'));
+        assert_eq!(
+            COPIED.with(|c| c.borrow().clone()).as_deref(),
+            Some("/p/.claude/workflows/sweep.js:6")
+        );
+        assert_eq!(
+            app.state.agents_ui.status.as_deref(),
+            Some("copied /p/.claude/workflows/sweep.js:6")
+        );
+        let out = render_to_string(&app, 120, 30);
+        assert!(
+            out.contains("copied /p/.claude/workflows/sweep.js:6"),
+            "{out}"
+        );
+        app.handle_key(key('j'));
+        assert!(app.state.agents_ui.status.is_none());
+        assert_eq!(app.state.overlay, Some(OWNER));
+        // Without a run record there is no pointer to copy.
+        app.state.workflow_records.clear();
+        COPIED.with(|c| *c.borrow_mut() = None);
+        app.handle_key(key('o'));
+        assert_eq!(
+            app.state.agents_ui.status.as_deref(),
+            Some("no pointer for this run")
+        );
+        assert_eq!(COPIED.with(|c| c.borrow().clone()), None);
+    }
+
+    #[test]
+    fn a_long_copied_path_keeps_its_line_number() {
+        let s = format!("copied /{}/sweep.js:144", "d".repeat(80));
+        let fit = status_fit(&s, 40);
+        assert_eq!(fit.chars().count(), 40, "{fit}");
+        assert!(
+            fit.starts_with("copied …") && fit.ends_with("sweep.js:144"),
+            "{fit}"
+        );
+        assert_eq!(
+            status_fit("no pointer for this run", 40),
+            "no pointer for this run"
+        );
+    }
+
+    #[test]
+    fn only_the_failed_count_of_a_group_row_is_crit() {
+        let theme = crate::theme::Theme::default();
+        let spans = group_spans(
+            " ✗ wf_t        sweep        ✗2  ≈$0.40  5 launched".into(),
+            2,
+            &theme,
+        );
+        let crit: Vec<&str> = spans
+            .iter()
+            .filter(|s| s.style == theme.crit())
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert_eq!(crit, ["✗2"]);
+        let spans = group_spans(" ✓ wf_t  1 launched".into(), 0, &theme);
+        assert!(spans.iter().all(|s| s.style == theme.dim()));
     }
 }

@@ -1,0 +1,24 @@
+---
+source: src/ui/agents_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+┌ Agents ─ 5 · 1 running · ≈$0.05 · wasted ≈$0.03 (50 %┐
+│ wf_t  sweep  completed  5:00  $0.05  —×main  cold …  │
+│ phase        start   res    ✗  cause                 │
+│ Verify           4     1    3  429×3                 │
+│ Design           1     0    1  429×1                 │
+│ ───                                                  │
+│ 3 agents hit the rate limit on their first call —    │
+│   batch this phase's items, or lower its             │
+│   effort/model                                       │
+│   → sweep.js:6 pipeline()                            │
+│ 1 agent hit the rate limit mid-task — batch this     │
+│   phase, then resume the run after the window        │
+│   resets                                             │
+│   type     model    time   tok    ≈$   ret  waste    │
+│ ✗          haiku   1m 00   21k  0.03     —   0.03 fa…│
+│ ◐          haiku   9m 00   21k  0.03   ...   0.00    │
+│ ✗                  9m 00     0     —     —      — fa…│
+│ ✗                  9m 00     0     —     —      — fa…│
+└──────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

@@ -667,14 +667,14 @@ fn run_usd(g: &crate::agent_ledger::WorkflowGroup, mark: &str) -> String {
 }
 
 /// The agents view's group row, cut to the view's width: state glyph, run,
-/// name, `✗n` when agents failed, then the journal's counts and the run's
-/// dollars.
+/// name, `✗n` when agents failed, the run's dollars, then the journal's
+/// counts — the dollars before the counts, so a cut at real counts (or at
+/// the pane's 52 cells) drops the tail of the counts, not the money.
 pub fn group_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
     use crate::ui::fmt;
     let mut parts = vec![
         format!("{} launched", g.launched),
         format!("{} done", g.done),
-        format!("{} failed", g.failed),
     ];
     if let Some(e) = g.empty_result {
         parts.push(format!("{e} empty"));
@@ -686,7 +686,7 @@ pub fn group_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
         String::new()
     };
     let row = format!(
-        " {} {:<11} {:<12}{failed}  {}  {cost}",
+        " {} {:<11} {:<12}{failed}  {cost}  {}",
         g.verdict.state.glyph(),
         fmt::clip(&g.run, 11),
         fmt::clip(g.name.as_deref().unwrap_or(""), 12),
@@ -772,9 +772,12 @@ pub fn detail_lines(g: &crate::agent_ledger::WorkflowGroup, width: usize) -> Vec
                 format!(" {title:<12} {start:>5} {res:>5} {f:>4}  {cause}")
             }
         };
-    out.push(row(cols(
-        "phase", "start", "res", "✗", "✗$", "waste", "cause",
-    )));
+    let mut heads = cols("phase", "start", "res", "✗", "✗$", "waste", "cause");
+    // The notification's empty results have no per-agent cause (§4.3).
+    if let Some(n) = g.empty_result.filter(|n| *n > 0) {
+        heads.push_str(&format!("  empty {n}"));
+    }
+    out.push(row(heads));
     for p in &v.phases {
         let causes: Vec<String> = short_causes(p)
             .iter()
@@ -1552,8 +1555,7 @@ mod tests {
             approx: true,
             source: crate::metrics::cost::Source::Unpriced,
         };
-        // The group row cuts before its dollars at these counts; the three
-        // surfaces share one helper.
+        // The three surfaces share one helper.
         assert_eq!(run_usd(&g, "≈$"), "—");
         assert!(!group_text(&g).contains('$'), "{}", group_text(&g));
         assert!(strip_text(&g).contains(" — "), "{}", strip_text(&g));
@@ -1563,5 +1565,44 @@ mod tests {
             head.contains("completed  5:00  —  ") && !head.contains('$'),
             "{head}"
         );
+    }
+
+    #[test]
+    fn the_group_row_keeps_its_dollars_at_real_counts() {
+        let s = state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let mut g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        g.run = "wf_0aa065ff".into();
+        g.name = Some("cctop-research-sweep".into());
+        g.launched = 300;
+        g.done = 65;
+        g.failed = 234;
+        g.verdict.failed = 234;
+        let row = group_text(&g);
+        assert!(
+            row.chars().count() <= crate::ui::agents_view::WIDTH,
+            "{row}"
+        );
+        assert!(row.contains(" ✗234  ≈$"), "{row}");
+        assert!(!row.contains("failed"), "✗n says it once: {row}");
+        assert!(row.starts_with(" ✓ wf_0aa065ff cctop-resea…"), "{row}");
+    }
+
+    #[test]
+    fn the_empty_result_count_sits_beside_the_phase_table() {
+        let s = state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let mut g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        for w in [DETAIL_WIDE, DETAIL_NARROW] {
+            assert!(!detail_lines(&g, w)[1].contains("empty"));
+        }
+        g.empty_result = Some(0);
+        assert!(!detail_lines(&g, DETAIL_WIDE)[1].contains("empty"));
+        g.empty_result = Some(3);
+        for w in [DETAIL_WIDE, DETAIL_NARROW] {
+            let head = &detail_lines(&g, w)[1];
+            assert!(head.ends_with("cause  empty 3"), "{head}");
+            assert!(head.chars().count() <= w, "{head}");
+        }
     }
 }
