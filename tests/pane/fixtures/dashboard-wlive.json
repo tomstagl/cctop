@@ -1512,8 +1512,16 @@
         "tone": "dim"
       },
       {
-        "text": "▸ Verify     0/64 ✗56 429×54   $24.89 75.5×main  sweep-2",
+        "text": "▸ Verify     0/64",
+        "tone": "fg"
+      },
+      {
+        "text": " ✗56",
         "tone": "crit"
+      },
+      {
+        "text": " 429×54   $24.89 75.5×main  sweep-2",
+        "tone": "fg"
       }
     ]
   },

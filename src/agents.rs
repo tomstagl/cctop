@@ -57,12 +57,19 @@ pub struct Meta {
 }
 
 /// An API-error line's machine-readable half: `apiErrorStatus` and the
-/// `error` token (`rate_limit`, `overloaded`). The line's text lives in
-/// `message.content` and is never read.
+/// `error` token (`rate_limit`, `overloaded`) when it is one. The line's
+/// text lives in `message.content` and is never read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiError {
     pub status: Option<u16>,
     pub token: Option<String>,
+}
+
+/// Whether an API-error line's `error` is a machine token (`rate_limit`,
+/// `prompt_too_long`): 1–40 of `a`–`z` and `_`. Anything else may be prose
+/// and is dropped, so the fix line falls back on the status (spec §4.6).
+fn is_machine_token(t: &str) -> bool {
+    (1..=40).contains(&t.len()) && t.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
 }
 
 #[derive(Debug, Clone)]
@@ -253,7 +260,7 @@ impl Agent {
                 if a.is_api_error_message || a.api_error_status.is_some() || a.error.is_some() {
                     self.api_error = Some(ApiError {
                         status: a.api_error_status,
-                        token: a.error.clone(),
+                        token: a.error.clone().filter(|t| is_machine_token(t)),
                     });
                     self.completed_calls_before_error = self.api_calls;
                 }

@@ -2058,7 +2058,9 @@ mod tests {
             text.contains("▸ Design") && text.contains("0/1 ✗1 429×1"),
             "{text}"
         );
-        assert_eq!(row[1].tone, Tone::Crit);
+        // `✗n` alone is crit; a live run's other text is the foreground.
+        assert_eq!((row[2].text.as_str(), row[2].tone), (" ✗1", Tone::Crit));
+        assert_eq!((row[1].tone, row[3].tone), (Tone::Fg, Tone::Fg));
         assert_eq!(strip(&state(vec![], vec![])), None, "no run");
         // Absent means absent from the JSON too (FR-3).
         assert!(crate::query::dashboard(&state_with_run())["header"]

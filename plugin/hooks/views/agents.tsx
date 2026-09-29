@@ -189,8 +189,8 @@ function runLine(w: unknown): Line {
   return [seg(text.slice(0, i + 1), { dim: true }), seg(text.slice(i + 1, end), { color: THEME.red }), seg(text.slice(end), { dim: true })];
 }
 
-/** A run's detail rows, styled as the TUI's: the fixes after ` ───` warn, their pointer lines and the run line dim. */
-function detailRows(rows: string[]): FrameRow[] {
+/** A run's detail rows, styled as the TUI's: the fixes after ` ───` warn, their pointer lines and the column heads (row `heads`) dim. */
+function detailRows(rows: string[], heads: number): FrameRow[] {
   let fixes = false;
   return rows.map((text, i) => {
     if (text === ' ───') fixes = true;
@@ -199,7 +199,7 @@ function detailRows(rows: string[]): FrameRow[] {
         ? { dim: true }
         : fixes
           ? { color: THEME.yellow }
-          : i === 1
+          : i === heads
             ? { dim: true }
             : {};
     return { line: [seg(text, style)], key: i === 0 ? 'workflow_failed' : undefined };
@@ -221,8 +221,10 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   if (open !== undefined) {
     const rows: FrameRow[] = [];
     if (actions !== undefined) rows.push({ line: [seg('back')], press: { key: 'agents-back', onPress: () => actions.open(null) } });
-    const detail = at(open, inner >= DETAIL_WIDE ? 'detail' : 'detail_narrow');
-    rows.push(...detailRows(Array.isArray(detail) ? detail.filter((t): t is string => typeof t === 'string') : []));
+    const wide = inner >= DETAIL_WIDE;
+    const detail = at(open, wide ? 'detail' : 'detail_narrow');
+    // The narrow header is two rows (the run, then its money), so its column heads are row 2.
+    rows.push(...detailRows(Array.isArray(detail) ? detail.filter((t): t is string => typeof t === 'string') : [], wide ? 1 : 2));
     // The run's agents under its phase table, one row each, as the TUI's detail (spec §4.4).
     for (const a of agents) if (at(a, 'workflow') === model.openRun) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
     return panel(p, rows, columns, fel);

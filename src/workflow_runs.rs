@@ -379,6 +379,7 @@ pub fn verdict(
         let status = match r.status.as_deref()? {
             "completed" => RunState::Completed,
             "killed" => RunState::Killed,
+            "failed" => RunState::Failed,
             _ => return None,
         };
         Some((end, status))
@@ -769,10 +770,20 @@ pub fn detail_lines(g: &crate::agent_ledger::WorkflowGroup, width: usize) -> Vec
     }
     head.push(v.state.word().to_string());
     head.push(elapsed.unwrap_or_else(|| "—".to_string()));
-    head.push(run_usd(g, "$"));
-    head.push(format!("{}×main", overhead_text(v)));
-    head.push(format!("cold {}", pct_text(v.cold_start_pct)));
-    out.push(row(format!(" {}", head.join("  "))));
+    let money = [
+        run_usd(g, "$"),
+        format!("{}×main", overhead_text(v)),
+        format!("cold {}", pct_text(v.cold_start_pct)),
+    ];
+    if wide {
+        head.extend(money);
+        out.push(row(format!(" {}", head.join("  "))));
+    } else {
+        // The narrow layout has no ✗$ or waste column, so the run's money
+        // and ratios get a row of their own rather than fall off the edge.
+        out.push(row(format!(" {}", head.join("  "))));
+        out.push(row(format!(" {}", money.join("  "))));
+    }
 
     let cols =
         |title: &str, start: &str, res: &str, f: &str, fusd: &str, waste: &str, cause: &str| {
@@ -837,6 +848,14 @@ fn call_name(c: crate::workflow_script::Call) -> &'static str {
 /// a start and its figures and top cause, then the run's dollars and
 /// overhead, the name last.
 pub fn strip_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
+    let (head, mark, tail, _) = strip_parts(g);
+    format!("{head}{mark}{tail}")
+}
+
+/// [`strip_text`] in three pieces — the phase and its counts, ` ✗n`, the
+/// rest — so the strip can tone `✗n` on its own; the shown phase's
+/// failures come back beside them.
+fn strip_parts(g: &crate::agent_ledger::WorkflowGroup) -> (String, String, String, usize) {
     let v = &g.verdict;
     let phase = v.phases.iter().rev().find(|p| p.started > 0);
     let (title, results, started, failed, cause) = match phase {
@@ -852,11 +871,16 @@ pub fn strip_text(g: &crate::agent_ledger::WorkflowGroup) -> String {
         ),
         None => ("—".to_string(), 0, 0, 0, String::new()),
     };
-    format!(
-        "▸ {title:<10} {results}/{started} ✗{failed} {cause:<8} {} {}×main  {}",
-        run_usd(g, "$"),
-        overhead_text(v),
-        g.name.as_deref().unwrap_or(&g.run)
+    (
+        format!("▸ {title:<10} {results}/{started}"),
+        format!(" ✗{failed}"),
+        format!(
+            " {cause:<8} {} {}×main  {}",
+            run_usd(g, "$"),
+            overhead_text(v),
+            g.name.as_deref().unwrap_or(&g.run)
+        ),
+        failed,
     )
 }
 
@@ -888,21 +912,21 @@ pub fn strip_line(
         .iter()
         .copied()
         .max_by_key(|g| g.verdict.last_activity_ms)?;
-    let failed = shown
-        .verdict
-        .phases
-        .iter()
-        .rev()
-        .find(|p| p.started > 0)
-        .map_or(0, |p| p.failed);
-    let tone = if failed > 0 {
-        Tone::Crit
-    } else if shown.verdict.state == RunState::Stalled {
+    // `✗n` keeps its `Crit` tone; the rest greys when the run has stalled.
+    let (head, mark, tail, failed) = strip_parts(shown);
+    let tone = if shown.verdict.state == RunState::Stalled {
         Tone::Dim
     } else {
         Tone::Fg
     };
-    let mut line = vec![dim(" wf     "), seg(strip_text(shown), tone)];
+    let mut line = vec![dim(" wf     ")];
+    if failed > 0 {
+        line.push(seg(head, tone));
+        line.push(seg(mark, Tone::Crit));
+        line.push(seg(tail, tone));
+    } else {
+        line.push(seg(format!("{head}{mark}{tail}"), tone));
+    }
     if live.len() > 1 {
         line.push(dim(format!(" +{} live", live.len() - 1)));
     }
@@ -1236,6 +1260,31 @@ mod tests {
     }
 
     #[test]
+    fn a_prose_error_is_not_a_token_and_the_fix_line_names_the_status() {
+        let t = "2026-01-01T00:01:00Z";
+        let p = agent(
+            "p",
+            "wf_t",
+            &[err(t, 500, "Internal server error. Try again")],
+        );
+        assert_eq!(cause(Some(&p), false, false), Cause::Unknown);
+        assert_eq!(unknown_label(Some(&p)), "500");
+        assert!(
+            !format!("{p:?}").contains("Internal"),
+            "the prose is not kept"
+        );
+        let u = agent("u", "wf_t", &[err(t, 401, "authentication_failed")]);
+        assert_eq!(unknown_label(Some(&u)), "authentication_failed");
+    }
+
+    #[test]
+    fn a_record_that_failed_ends_the_run_failed() {
+        let mut s = state_with_run();
+        s.workflow_records[0].status = Some("failed".into());
+        assert_eq!(v(&s).state, RunState::Failed);
+    }
+
+    #[test]
     fn an_agent_cut_off_by_a_kill_is_killed_not_schema() {
         // Review Focus 7: x is open (no result, no failed entry) in a schema phase when the run is killed.
         let t = "2026-01-01T00:01:00Z";
@@ -1533,13 +1582,34 @@ mod tests {
         };
         let line = strip_line(&s, &groups(&s)).unwrap();
         assert!(
-            line[1].text.ends_with("wf_t"),
+            line[3].text.ends_with("wf_t"),
             "the latest activity is shown"
         );
-        assert_eq!(line[2].text, " +1 live");
+        assert_eq!(line[4].text, " +1 live");
         // Half an hour on, both runs have stalled past the drop.
         s.now_ms += STALLED_DROP_MS;
         assert_eq!(strip_line(&s, &groups(&s)), None);
+    }
+
+    #[test]
+    fn a_stalled_run_greys_on_the_strip_but_keeps_its_failures_crit() {
+        use crate::dashboard::Tone;
+        let mut s = state_with_run();
+        s.workflow_records.clear();
+        s.workflow_journals[0].mtime_ms = Some(s.now_ms - 120_000);
+        assert_eq!(v(&s).state, RunState::Stalled);
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let groups = crate::agent_ledger::workflow_groups(&s, &rows);
+        let line = strip_line(&s, &groups).unwrap();
+        let tones: Vec<(&str, Tone)> = line.iter().map(|g| (g.text.as_str(), g.tone)).collect();
+        assert_eq!(tones[0], (" wf     ", Tone::Dim));
+        assert_eq!(tones[2], (" ✗1", Tone::Crit));
+        assert_eq!(tones[1].1, Tone::Dim, "{tones:?}");
+        assert_eq!(tones[3].1, Tone::Dim, "{tones:?}");
+        assert_eq!(
+            crate::dashboard::text_of(&line[1..].to_vec()),
+            strip_text(&groups[0])
+        );
     }
 
     #[test]
@@ -1599,18 +1669,52 @@ mod tests {
     }
 
     #[test]
+    fn the_narrow_detail_keeps_the_runs_money_on_a_second_header_row() {
+        let s = state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let mut g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        g.run = "wf_0aa065ff".into();
+        g.name = Some("cctop-research-sweep".into()); // 20 chars
+        let narrow = detail_lines(&g, DETAIL_NARROW);
+        assert!(
+            narrow[0].starts_with(" wf_0aa065ff  cctop-research-sweep  completed  5:00"),
+            "{narrow:#?}"
+        );
+        assert!(!narrow[0].contains("×main"), "{narrow:#?}");
+        assert!(
+            narrow[1].starts_with(" ") && narrow[1].contains("×main  cold "),
+            "{narrow:#?}"
+        );
+        assert!(narrow[2].starts_with(" phase "), "{narrow:#?}");
+        for r in &narrow[..2] {
+            assert!(
+                r.chars().count() <= DETAIL_NARROW && !r.ends_with(' '),
+                "{r:?}"
+            );
+        }
+        // The wide layout keeps its one header row.
+        let wide = detail_lines(&g, DETAIL_WIDE);
+        assert!(wide[0].contains("×main  cold "), "{wide:#?}");
+        assert!(wide[1].starts_with(" phase "), "{wide:#?}");
+    }
+
+    #[test]
     fn the_empty_result_count_sits_beside_the_phase_table() {
         let s = state_with_run();
         let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
         let mut g = crate::agent_ledger::workflow_groups(&s, &rows).remove(0);
+        // The column heads: row 1 wide, row 2 under the narrow two-row header.
+        let heads = |g: &crate::agent_ledger::WorkflowGroup, w: usize| {
+            detail_lines(g, w)[if w == DETAIL_WIDE { 1 } else { 2 }].clone()
+        };
         for w in [DETAIL_WIDE, DETAIL_NARROW] {
-            assert!(!detail_lines(&g, w)[1].contains("empty"));
+            assert!(!heads(&g, w).contains("empty"));
         }
         g.empty_result = Some(0);
-        assert!(!detail_lines(&g, DETAIL_WIDE)[1].contains("empty"));
+        assert!(!heads(&g, DETAIL_WIDE).contains("empty"));
         g.empty_result = Some(3);
         for w in [DETAIL_WIDE, DETAIL_NARROW] {
-            let head = &detail_lines(&g, w)[1];
+            let head = &heads(&g, w);
             assert!(head.ends_with("cause  empty 3"), "{head}");
             assert!(head.chars().count() <= w, "{head}");
         }

@@ -547,7 +547,7 @@ hooks are off or before its module is accepted.
 
 33. **The workflow strip appears while a run is live** (the workflows PRD
     §4.5, FR-7). A second header row, ` wf     ▸ <phase> <res>/<started>
-    ✗<failed> <cause> $<run$> <ratio>×main  <name>`, sits under the header
+    ✗<failed> <cause>×<n> $<run$> <ratio>×main  <name>`, sits under the header
     and above the six cells while a run is `Live` or `Stalled`.
     Setup: as item 28, cctop and the plugin from `workflows-prd`; a small
     workflow ready to start (two phases, a handful of agents); `cctop run`

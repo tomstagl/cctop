@@ -527,6 +527,8 @@ fn render_detail(
     let cut = |s: String| fmt::clip(&s, inner.width as usize);
     let mut lines = Vec::new();
     let mut fixes = false;
+    // The column heads follow the header: one row wide, two narrow.
+    let heads = if width == DETAIL_WIDE { 1 } else { 2 };
     for (i, row) in detail_lines(g, width).into_iter().enumerate() {
         let style = if row == " ───" {
             fixes = true;
@@ -535,7 +537,7 @@ fn render_detail(
             dim
         } else if fixes {
             state.theme.warn()
-        } else if i == 1 {
+        } else if i == heads {
             dim
         } else {
             Style::default()

@@ -2634,7 +2634,8 @@
         " 2 agents failed (no transcript) — cctop has no fix for this yet"
       ],
       "detail_narrow": [
-        " wf_0aa065ff-0a0  sweep-2  live  1h 25m  $24.89  75…",
+        " wf_0aa065ff-0a0  sweep-2  live  1h 25m",
+        " $24.89  75.5×main  cold 15 %",
         " phase        start   res    ✗  cause",
         " Sweep            6     6    0",
         " Candidates       4     4    0",

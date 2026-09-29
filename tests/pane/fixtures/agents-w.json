@@ -9493,7 +9493,8 @@
         "   → sweep-4.js:144 parallel() · script changed since"
       ],
       "detail_narrow": [
-        " wf_0aa065ff-0a0  sweep-4  completed  17h 16m  $48.…",
+        " wf_0aa065ff-0a0  sweep-4  completed  17h 16m",
+        " $48.59  0.6×main  cold 18 %",
         " phase        start   res    ✗  cause",
         " Sweep            6     6    0",
         " Candidates       4     4    0",
