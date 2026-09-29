@@ -635,6 +635,7 @@ mod tests {
             results: 6,
             failed: 2,
             failed_ids: vec![id(17), id(18)],
+            ..Default::default()
         });
         // Notifications: two failed (2, 3), one killed (5), one empty (6),
         // the rest completed with a result; 4 stays silent (idle), the

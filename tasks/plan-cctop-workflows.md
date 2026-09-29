@@ -161,6 +161,8 @@ git add src/agents.rs src/ui/agents_view.rs
 git commit -m "Workflows: the journal keeps its phases, their agents and its mtime"
 ```
 
+> Implementation note: the crate has no `tempfile` dev-dependency, so the test builds its run under `std::env::temp_dir()` like the existing `workflow_agents_journals_and_teammates_are_found` (and removes it) rather than adding one. A `result` line's id lands in `result_ids` only when its `started` entry was seen (same rule as the phase's `results` count).
+
 ---
 
 ### Task 2: An agent's API error, completed calls and structured output

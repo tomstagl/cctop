@@ -421,7 +421,7 @@ pub fn agent_files(dir: &Path) -> Vec<(PathBuf, String, Option<String>)> {
 }
 
 /// A workflow run's journal (`journal.jsonl`): how many agents it launched,
-/// finished and failed.
+/// finished and failed, per phase and in all.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorkflowJournal {
     pub run: String,
@@ -431,6 +431,42 @@ pub struct WorkflowJournal {
     pub failed: usize,
     /// The `agentId` of each `failed` entry.
     pub failed_ids: Vec<String>,
+    /// The run's phases in first-seen order; a start without a `phase` goes
+    /// to the phase titled `""`.
+    pub phases: Vec<JournalPhase>,
+    /// The journal file's modification time, epoch ms.
+    pub mtime_ms: Option<i64>,
+}
+
+/// One phase of a workflow run, as its journal's `started` entries name it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct JournalPhase {
+    pub title: String,
+    pub started: usize,
+    pub results: usize,
+    pub failed: usize,
+    /// The `agentId` of each `started` entry, in journal order.
+    pub agent_ids: Vec<String>,
+    /// The `agentId` of each `result` entry.
+    pub result_ids: Vec<String>,
+    /// The distinct text before the first `:` of each start's `label`: a
+    /// match key for the script's call sites only, never serialised or drawn.
+    pub label_prefixes: Vec<String>,
+}
+
+/// One `journal.jsonl` line, as far as cctop reads it.
+///
+/// Deliberately not read: a `result` entry's `value` (the agent's returned
+/// prose) and a `label` beyond its prefix — the struct has no field for the
+/// value, and the label is cut to its prefix before it is kept.
+#[derive(Deserialize)]
+struct JournalLine {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    #[serde(rename = "agentId")]
+    agent_id: Option<String>,
+    phase: Option<String>,
+    label: Option<String>,
 }
 
 /// Read every `workflows/<run>/journal.jsonl` under `subagents`.
@@ -440,7 +476,8 @@ pub fn workflow_journals(subagents: &Path) -> Vec<WorkflowJournal> {
         return out;
     };
     for run in runs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
-        let Ok(text) = std::fs::read_to_string(run.join("journal.jsonl")) else {
+        let path = run.join("journal.jsonl");
+        let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
         let mut j = WorkflowJournal {
@@ -448,20 +485,62 @@ pub fn workflow_journals(subagents: &Path) -> Vec<WorkflowJournal> {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
+            mtime_ms: std::fs::metadata(&path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64),
             ..Default::default()
         };
+        // agent id → index into `j.phases`.
+        let mut phase_of: HashMap<String, usize> = HashMap::new();
         for line in text.lines() {
-            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            let Ok(l) = serde_json::from_str::<JournalLine>(line) else {
                 continue;
             };
-            match v.get("type").and_then(|t| t.as_str()) {
+            match l.kind.as_deref() {
                 Some("launched") => j.launched += 1,
-                Some("started") => j.started += 1,
-                Some("result") => j.results += 1,
+                Some("started") => {
+                    j.started += 1;
+                    let title = l.phase.unwrap_or_default();
+                    let i = match j.phases.iter().position(|p| p.title == title) {
+                        Some(i) => i,
+                        None => {
+                            j.phases.push(JournalPhase {
+                                title,
+                                ..Default::default()
+                            });
+                            j.phases.len() - 1
+                        }
+                    };
+                    let p = &mut j.phases[i];
+                    p.started += 1;
+                    if let Some(id) = l.agent_id {
+                        phase_of.insert(id.clone(), i);
+                        p.agent_ids.push(id);
+                    }
+                    if let Some((pre, _)) = l.label.as_deref().and_then(|l| l.split_once(':')) {
+                        if !p.label_prefixes.iter().any(|x| x == pre) {
+                            p.label_prefixes.push(pre.to_string());
+                        }
+                    }
+                }
+                Some("result") => {
+                    j.results += 1;
+                    if let Some(id) = l.agent_id {
+                        if let Some(&i) = phase_of.get(&id) {
+                            j.phases[i].results += 1;
+                            j.phases[i].result_ids.push(id);
+                        }
+                    }
+                }
                 Some("failed") => {
                     j.failed += 1;
-                    if let Some(id) = v.get("agentId").and_then(|a| a.as_str()) {
-                        j.failed_ids.push(id.to_string());
+                    if let Some(id) = l.agent_id {
+                        if let Some(&i) = phase_of.get(&id) {
+                            j.phases[i].failed += 1;
+                        }
+                        j.failed_ids.push(id);
                     }
                 }
                 _ => {}
@@ -674,6 +753,48 @@ mod workflow_tests {
     use super::*;
 
     #[test]
+    fn journal_keeps_phases_in_order_and_skips_a_torn_line() {
+        let dir = std::env::temp_dir().join(format!("cctop-wf-phases-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let run = dir.join("workflows").join("wf_t");
+        std::fs::create_dir_all(&run).unwrap();
+        std::fs::write(
+            run.join("journal.jsonl"),
+            concat!(
+                r#"{"type":"launched"}"#,
+                "\n",
+                r#"{"type":"started","key":"k1","agentId":"a1","label":"sweep:x","phase":"Sweep"}"#,
+                "\n",
+                r#"{"type":"started","key":"k2","agentId":"a2","label":"verify:C1","phase":"Verify"}"#,
+                "\n",
+                r#"{"type":"started","key":"k3","agentId":"a3","label":"verify:C2","phase":"Verify"}"#,
+                "\n",
+                r#"{"type":"result","agentId":"a1","value":"prose that must not be kept"}"#,
+                "\n",
+                r#"{"type":"failed","key":"k2","agentId":"a2"}"#,
+                "\n",
+                r#"{"type":"started","key":"k4","agentId":"a4","lab"#,
+            ),
+        )
+        .unwrap();
+        let journals = workflow_journals(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+        let j = &journals[0];
+        assert_eq!(j.started, 3);
+        let t: Vec<_> = j
+            .phases
+            .iter()
+            .map(|p| (p.title.as_str(), p.started, p.results, p.failed))
+            .collect();
+        assert_eq!(t, vec![("Sweep", 1, 1, 0), ("Verify", 2, 0, 1)]);
+        assert_eq!(j.phases[1].agent_ids, vec!["a2", "a3"]);
+        assert_eq!(j.phases[0].result_ids, vec!["a1"]);
+        assert_eq!(j.phases[1].label_prefixes, vec!["verify"]);
+        assert!(j.mtime_ms.is_some());
+        assert!(!format!("{j:?}").contains("prose"));
+    }
+
+    #[test]
     fn workflow_agents_journals_and_teammates_are_found() {
         let dir = std::env::temp_dir().join(format!("cctop-wf-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -699,17 +820,28 @@ mod workflow_tests {
         assert_eq!(agents["deep1"].workflow.as_deref(), Some("wf_abc-123"));
         assert!(agents["top1"].workflow.is_none());
         let j = workflow_journals(&sub);
+        assert_eq!(j.len(), 1);
         assert_eq!(
-            j,
-            vec![WorkflowJournal {
-                run: "wf_abc-123".into(),
-                launched: 1,
-                started: 1,
-                results: 1,
-                failed: 1,
-                failed_ids: vec!["deep1".into()],
-            }]
+            (
+                j[0].run.as_str(),
+                j[0].launched,
+                j[0].started,
+                j[0].results,
+                j[0].failed
+            ),
+            ("wf_abc-123", 1, 1, 1, 1)
         );
+        assert_eq!(j[0].failed_ids, vec!["deep1"]);
+        assert_eq!(
+            j[0].phases,
+            vec![JournalPhase {
+                title: String::new(),
+                started: 1,
+                ..Default::default()
+            }],
+            "a start without a phase or agent id counts under the untitled phase"
+        );
+        assert!(j[0].mtime_ms.is_some());
         let teams = dir.join("teams");
         std::fs::create_dir_all(teams.join("session-deadbeef")).unwrap();
         std::fs::write(
