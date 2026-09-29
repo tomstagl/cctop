@@ -413,7 +413,7 @@ git commit -m "Workflows: read the run record — name, status, times and each p
       pub failed: usize, pub failed_usd: f64, pub waste_pct: Option<f64>, pub overhead: Option<f64>,
       pub cold_start_pct: Option<f64>, pub started_ms: Option<i64>, pub ended_ms: Option<i64>, pub fixes: Vec<Fix> }
   pub fn cause(a: Option<&crate::agents::Agent>, phase_used_schema: bool, killed: bool) -> Cause;
-  pub fn fix_text(cause: Cause, n: usize, token: Option<&str>) -> String;   // `None` for Killed callers never reach; Unknown's token or `no error`
+  pub fn fix_text(cause: Cause, n: usize, token: Option<&str>) -> String;   // `token`: Unknown's error token; never called for Killed
   pub fn verdict(state: &crate::ui::State, rows: &[crate::agent_ledger::AgentRow], run: &str) -> RunVerdict;
   pub const LIVE_MS: i64 = 60_000;
   pub const RESUME_SLACK_MS: i64 = 10_000;   // the journal's last write may land just after the notification
