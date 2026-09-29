@@ -18,7 +18,7 @@ expression: "render_to_string(&app, 56, 20)"
 │   type     model    time   tok    ≈$   ret  waste    │
 │ ✗          haiku   1m 00   21k  0.03     —   0.03 fa…│
 │ ✓          haiku      0s   21k  0.03     —   0.00    │
-│ ✗                  9m 00     0     —     —      — fa…│
-│ ✗                  9m 00     0     —     —      — fa…│
+│ ✗                     0s     0     —     —      — fa…│
+│ ✗                     0s     0     —     —      — fa…│
 └──────────────────────────────────────────────────────┘
  Esc back  a ask  c coach  t theme  L sessions  q

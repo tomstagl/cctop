@@ -257,8 +257,66 @@ pub struct Totals {
     pub returned_ratio: Option<f64>,
 }
 
+/// What a run's journal says of its agents, gathered once per pass: an id
+/// with a `result` entry returned, one with a `failed` entry failed.
+#[derive(Debug, Default)]
+pub struct JournalWord<'a> {
+    returned: std::collections::HashSet<&'a str>,
+    failed: std::collections::HashSet<&'a str>,
+}
+
+impl<'a> JournalWord<'a> {
+    pub fn of_state(state: &'a State) -> Self {
+        let mut w = JournalWord::default();
+        for j in &state.workflow_journals {
+            w.failed.extend(j.failed_ids.iter().map(String::as_str));
+            for p in &j.phases {
+                w.returned.extend(p.result_ids.iter().map(String::as_str));
+            }
+        }
+        w
+    }
+
+    /// `Failed` for a `failed` entry (the journal's last word on a retried
+    /// key is its own line; a failed id never also returned), `Done` for a
+    /// `result` entry, else nothing.
+    pub fn of(&self, id: &str) -> Option<AgentState> {
+        if self.failed.contains(id) {
+            Some(AgentState::Failed)
+        } else if self.returned.contains(id) {
+            Some(AgentState::Done)
+        } else {
+            None
+        }
+    }
+}
+
+/// An agent's state as every surface reads it: what its run's journal says
+/// (a `result` entry → done: the transcript may end on the
+/// `StructuredOutput` call and its result, with no closing line; a `failed`
+/// entry → failed), else the transcript's own reading
+/// ([`Agent::state`]). The ledger lets a task notification speak first.
+pub fn effective_state(journal: &JournalWord, a: &Agent, now_ms: i64) -> AgentState {
+    journal.of(&a.id).unwrap_or_else(|| a.state(now_ms))
+}
+
+/// How many of `state`'s agents are in `want`, through [`effective_state`].
+pub fn count_in(state: &State, want: AgentState) -> usize {
+    let journal = JournalWord::of_state(state);
+    let now = state.clock_ms();
+    state
+        .agents
+        .values()
+        .filter(|a| effective_state(&journal, a, now) == want)
+        .count()
+}
+
 /// One agent's row.
 pub fn row(state: &State, a: &Agent) -> AgentRow {
+    row_with(state, &JournalWord::of_state(state), a)
+}
+
+fn row_with(state: &State, journal: &JournalWord, a: &Agent) -> AgentRow {
     let now = state.clock_ms();
     let pricing = state.cost.pricing();
     let cost = match pricing.estimate(&a.usage, &a.model) {
@@ -270,32 +328,15 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
         },
     };
     let status = a.notified.as_ref().map(|n| n.status.clone());
-    // The journal's `failed` entry counts while Claude Code has not said
-    // otherwise: a notification that says `completed` is the later word.
-    let journal_failed = status.is_none()
-        && state
-            .workflow_journals
-            .iter()
-            .any(|j| j.failed_ids.contains(&a.id));
-    // A `result` entry is the run's word that the agent returned: its
-    // transcript may end on the `StructuredOutput` call and its tool result,
-    // with no closing assistant line, which the heuristic reads as running.
-    let journal_returned = status.is_none()
-        && !journal_failed
-        && state.workflow_journals.iter().any(|j| {
-            j.phases
-                .iter()
-                .any(|p| p.result_ids.iter().any(|id| *id == a.id))
-        });
-    let heuristic = if journal_returned {
-        AgentState::Done
-    } else {
-        a.state(now)
-    };
+    // Claude Code's notification is the later word; without one, the
+    // journal's (see [`effective_state`]).
+    let said = status.is_none().then(|| journal.of(&a.id)).flatten();
+    let journal_failed = said == Some(AgentState::Failed);
+    let journal_said = said.is_some();
+    let heuristic = said.unwrap_or_else(|| a.state(now));
     let agent_state = match &status {
         Some(TaskStatus::Completed) => AgentState::Done,
         Some(TaskStatus::Failed) | Some(TaskStatus::Killed) => AgentState::Failed,
-        _ if journal_failed => AgentState::Failed,
         _ => heuristic,
     };
     let result_chars = a
@@ -312,7 +353,7 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
                 .zip(a.last_line_at)
                 .map(|(s, l)| (l - s).max(0))
         }),
-        None if journal_returned => a
+        None if journal_said => a
             .started_at
             .zip(a.last_line_at)
             .map(|(s, l)| (l - s).max(0)),
@@ -391,7 +432,12 @@ pub fn row(state: &State, a: &Agent) -> AgentRow {
 
 /// Every agent's row, in `sort` order (descending unless `ascending`).
 pub fn rows(state: &State, sort: Sort, ascending: bool) -> Vec<AgentRow> {
-    let mut out: Vec<AgentRow> = state.agents.values().map(|a| row(state, a)).collect();
+    let journal = JournalWord::of_state(state);
+    let mut out: Vec<AgentRow> = state
+        .agents
+        .values()
+        .map(|a| row_with(state, &journal, a))
+        .collect();
     let key = |r: &AgentRow| -> (f64, f64, i64) {
         match sort {
             Sort::Spend => (r.cost.usd, r.waste.map_or(0.0, |w| w.usd), 0),

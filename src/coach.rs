@@ -464,12 +464,7 @@ impl Light {
 
 /// `agents 3 run · 86%` while agents run or their share ≥ 25 %.
 fn agents_cell(state: &State) -> Option<String> {
-    let now = state.clock_ms();
-    let running = state
-        .agents
-        .values()
-        .filter(|a| a.state(now) == crate::agents::State::Running)
-        .count();
+    let running = crate::agent_ledger::count_in(state, crate::agents::State::Running);
     let share = state.agents_cost().map(|(_, s)| s).unwrap_or(0.0);
     if running == 0 && share < 0.25 {
         return None;
@@ -509,10 +504,7 @@ fn clean_stop(state: &State) -> bool {
         && t.last_stop_reason.as_deref() == Some("end_turn")
         && state.session.background_tasks.is_empty()
         && t.pending_background_agents.unwrap_or(0) == 0
-        && !state
-            .agents
-            .values()
-            .any(|a| a.state(state.clock_ms()) == crate::agents::State::Running)
+        && crate::agent_ledger::count_in(state, crate::agents::State::Running) == 0
 }
 
 pub fn context_light(state: &State) -> Light {
@@ -806,11 +798,7 @@ pub fn limits_light(state: &State) -> Light {
         None => "no exhaustion fit yet".into(),
     });
     let ran = state.agents.len();
-    let failed = state
-        .agents
-        .values()
-        .filter(|a| a.state(now) == crate::agents::State::Failed)
-        .count();
+    let failed = crate::agent_ledger::count_in(state, crate::agents::State::Failed);
     lines.push(match state.agents_cost() {
         Some((usd, _)) => format!("agents ≈{} · {ran} ran · {failed} failed", usd_short(usd)),
         None => format!("agents {ran} ran · {failed} failed"),
@@ -1204,6 +1192,57 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_coach_and_panel_6_count_agents_as_the_ledger_does() {
+        // A workflow run: one agent the journal says returned (its
+        // transcript ends on the StructuredOutput call and its result), one
+        // it says failed (a first-call 429), one still open. The transcript
+        // alone reads the first two as running.
+        use crate::agent_ledger::{rows, totals, Sort};
+        use crate::transcript::Line;
+        use crate::ui::panel::Panel;
+        use crate::workflow_runs::test_support::{agent, err, journal, state};
+        let t = "2026-01-01T00:09:30Z";
+        let call = Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"{t}","message":{{"id":"m1","model":"claude-haiku-4-5-20251001","content":[{{"type":"tool_use","id":"tum1","name":"StructuredOutput","input":{{}}}}],"stop_reason":"tool_use","usage":{{"input_tokens":1000,"output_tokens":200}}}}}}"#
+        ))
+        .unwrap();
+        let result = Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"{t}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tum1","content":"ok"}}]}}}}"#
+        ))
+        .unwrap();
+        let open = Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"{t}","message":{{"id":"m2","model":"claude-haiku-4-5-20251001","content":[{{"type":"tool_use","id":"tum2","name":"Read","input":{{}}}}],"stop_reason":"tool_use","usage":{{"input_tokens":1000,"output_tokens":200}}}}}}"#
+        ))
+        .unwrap();
+        let agents = vec![
+            agent("r1", "wf_t", &[call, result]),
+            agent("f1", "wf_t", &[err(t, 429, "rate_limit")]),
+            agent("o1", "wf_t", &[open]),
+        ];
+        for a in &agents {
+            assert_eq!(a.state(i64::MAX), crate::agents::State::Running, "{}", a.id);
+        }
+        let s = state(
+            agents,
+            vec![journal(
+                "wf_t",
+                &[("Verify", &[("r1", "ok"), ("f1", "failed"), ("o1", "open")])],
+                t,
+            )],
+        );
+        let t = totals(&rows(&s, Sort::Spend, false));
+        assert_eq!(t.running, 1);
+        let cell = agents_cell(&s).unwrap();
+        assert!(cell.starts_with("agents 1 run"), "{cell}");
+        let panel = crate::ui::panels::agents::Agents.summary(&s).unwrap();
+        assert!(panel.starts_with("1/3 agents"), "{panel}");
+        assert_eq!(
+            crate::agent_ledger::count_in(&s, crate::agents::State::Failed),
+            1
+        );
+    }
     use crate::advisor::tests_support::state_with_turns;
     use crate::metrics::Pricing;
     use crate::transcript::Line;

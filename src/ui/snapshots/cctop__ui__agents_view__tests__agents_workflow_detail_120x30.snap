@@ -14,9 +14,9 @@ expression: "render_to_string(&app, 120, 30)"
 │   type     model    time   tok    ≈$   ret  waste                                                                    │
 │ ✗          haiku   1m 00   21k  0.03     —   0.03 failed                                                             │
 │ ✓          haiku      0s   21k  0.03     —   0.00                                                                    │
-│ ✗                  9m 00     0     —     —      — failed                                                             │
-│ ✗                  9m 00     0     —     —      — failed                                                             │
-│ ✗                  9m 00     0     —     —      — failed                                                             │
+│ ✗                     0s     0     —     —      — failed                                                             │
+│ ✗                     0s     0     —     —      — failed                                                             │
+│ ✗                     0s     0     —     —      — failed                                                             │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
