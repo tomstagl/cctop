@@ -259,6 +259,48 @@ test('agents on fixture C: the columns of the TUI agents view, waste with its re
   has(narrow, /^✗ Explore\s+1:21\s+355k\s+0\.18\s+0\.18 killed$/);
 });
 
+test('agents-w: the run detail is the query rows, row for row', () => {
+  const data = fixture<Record<string, unknown>>('agents-w');
+  const wf = (data.workflows as Array<Record<string, unknown>>)[0];
+  const model = reduce(build({ query: { agents: data } }), { type: 'agents.run', run: wf.run as string });
+  const text = rows('agents', model, 120);
+  const at = text.indexOf((wf.detail as string[])[0]);
+  assert.ok(at >= 0, 'detail drawn');
+  assert.deepEqual(text.slice(at, at + (wf.detail as string[]).length), wf.detail);
+  const narrow = rows('agents', model, 56);
+  const n = narrow.indexOf((wf.detail_narrow as string[])[0]);
+  assert.deepEqual(narrow.slice(n, n + (wf.detail_narrow as string[]).length), wf.detail_narrow);
+});
+
+test('agents-w: the run is one row of the list, a Button that opens it; back returns to the list', () => {
+  const data = fixture<Record<string, unknown>>('agents-w');
+  const wf = (data.workflows as Array<Record<string, unknown>>)[0];
+  const model = build({ query: { agents: data } });
+  // Without actions: the query's row verbatim, the run's agents not listed one by one.
+  const list = rows('agents', model, 80);
+  assert.ok(list.includes(wf.row as string), JSON.stringify(list));
+  assert.ok(!list.some((r) => r.includes((wf.detail as string[])[0])), 'no detail in the list');
+  assert.ok(list.length < 20, `${list.length} rows`);
+  // With actions: the row presses `agents.run` with the run id, the detail's back presses null.
+  const presses = new Map<string, () => void>();
+  const opened: (string | null)[] = [];
+  const bel = fakeElements(presses);
+  const actions = { el: bel, open: (run: string | null) => opened.push(run) };
+  const withButtons = body(renderToText(renderAgents({ ...model, view: 'agents' }, bel, 80, NOW, actions), 80));
+  assert.ok(withButtons.includes(wf.row as string), JSON.stringify(withButtons));
+  presses.get(wf.run as string)?.();
+  assert.deepEqual(opened, [wf.run]);
+  const detail = reduce(model, { type: 'agents.run', run: wf.run as string });
+  const drawn = body(renderToText(renderAgents({ ...detail, view: 'agents' }, bel, 80, NOW, actions), 80));
+  assert.equal(drawn[0], 'back');
+  assert.equal(drawn[1], (wf.detail_narrow as string[])[0]);
+  presses.get('agents-back')?.();
+  assert.deepEqual(opened, [wf.run, null]);
+  // A run no longer in the data: the list again.
+  const gone = reduce(model, { type: 'agents.run', run: 'wf_gone' });
+  assert.deepEqual(rows('agents', gone, 80), list);
+});
+
 test('agents on fixture D: the team group under the subagents, its members in the TUI columns', () => {
   // `cctop query agents` on fixture D (tests/pane/fixtures/agents-d.json):
   // no subagents; a team of three — the real teammate (ended, Claude

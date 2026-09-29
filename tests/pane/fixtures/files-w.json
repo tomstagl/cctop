@@ -1,0 +1,212 @@
+[
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/91f244.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 3,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/fecf13.md",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 4
+    },
+    "writes": 1
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/22c707.md",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 1
+    },
+    "writes": 1
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/2c528b.md",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/02ccdd.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/a3adb6.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/61ffd6.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/52c615.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/69da10.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  },
+  {
+    "edits": 0,
+    "lines_added": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "lines_removed": {
+      "hint": "not a git repo or no diff",
+      "source": "missing"
+    },
+    "path": "/home/user/project/src/b68ef4.txt",
+    "reads": 0,
+    "reread_warning": false,
+    "touches": {
+      "approx": false,
+      "metric_id": "file_touches",
+      "unit": "count",
+      "value": 0
+    },
+    "writes": 0
+  }
+]

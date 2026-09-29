@@ -6,6 +6,13 @@
 #
 #   scripts/pane-fixtures.sh                      # fixture A → tests/pane/fixtures/<verb>.json
 #   scripts/pane-fixtures.sh fixtures/session-b.jsonl b   # → <verb>-b.json
+#   scripts/pane-fixtures.sh fixtures/session-w.jsonl w   # → <verb>-w.json (a completed workflow run)
+#   CCTOP_FAKE_NOW=$(cat fixtures/session-w-live.now) \
+#     scripts/pane-fixtures.sh fixtures/session-w-live.jsonl wlive   # → <verb>-wlive.json
+#
+# Fixture W's live cut is read at its own clock (`session-w-live.now`, the
+# one the TUI's fixture-W snapshots use), so its dashboard carries the
+# header's workflow strip; every verb inherits CCTOP_FAKE_NOW.
 #
 # The coach object is also emitted at fixture B's six moments
 # (`coach-<moment>.json`): a prefix of the transcript (`--lines`) and, for the

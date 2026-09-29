@@ -5,7 +5,7 @@ expression: out
  cctop  claude-fable-5-1 · turn 1…  ● EXPLORING 1h 25m
  wf     ▸ Verify     0/64 ✗56 429×54   $24.89 75.5×ma…
  1: ctx 38%                2: 5h —
- 3: cache cold             4: spend ≈$0.48
+ 3: cache cold             4: spend ≈$25.4
  5: ✓ none                 6: 2 calls
  · silent 1h24
 ─── events ──────────────────── 0: home  ·  ? keys ───

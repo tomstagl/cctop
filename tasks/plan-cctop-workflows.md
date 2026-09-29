@@ -944,6 +944,8 @@ test('fixture W live: the header strip renders row-identical on both surfaces at
 - [ ] **Step 4: Implement** in `agents.tsx`, `overview.tsx`, `model.ts` and `pane.tsx`; `npm run typecheck && npm test` — PASS; `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin` — passes (no new `$` use outside `pane.tsx`).
 - [ ] **Step 5: Commit** — `git add plugin/hooks tests/pane scripts/pane-fixtures.sh && git commit -m "Workflows: the pane draws the header strip and the run detail from the query"`
 
+> Implementation note: ruling R1 — the strip reaches the pane through `header.workflow` (not `bodies[].rows`): `overview.tsx` reads it into `Dashboard.workflow` and pushes it right after the header row. The strip row, the run rows and the detail's first row are keyed `workflow_failed` (the strip's crit figure), not `workflow_strip`, since every keyed pane row must be a docs/metrics.md id. The list drops agents whose `workflow` is set from the per-agent rows, as the TUI's `entries_of` does (fixture W's 210 agents would otherwise fill `MAX_ROWS` and hide the run row). `back` is the frame's first row, drawn only with actions. A frame row may carry `press` (frame.tsx/table.tsx): with a `Button` it is drawn as one plain dim Button between the borders. Ruling R16 — `tokens_include_agents` is a TUI toggle (off by default in `App`, on in the query); the fixture-W TUI snapshots set it on (the pane reads the query) and were re-accepted, so the spend cell reads `≈$25.4` on both surfaces. The TUI-default vs query difference itself is left as it was.
+
 ---
 
 ### Task 11: Verification record and full check

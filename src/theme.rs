@@ -794,6 +794,8 @@ mod fixture_w_snapshots {
             .parse()
             .unwrap();
         app.state.clock_override = true;
+        // The pane reads the query, which counts the agents in the spend.
+        app.state.tokens_include_agents = true;
         app
     }
 

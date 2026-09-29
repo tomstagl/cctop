@@ -1,0 +1,2727 @@
+{
+  "act": {
+    "acting": false,
+    "blocked": false,
+    "key": "a",
+    "line": [
+      {
+        "text": "quiet · nothing to act on",
+        "tone": "dim"
+      }
+    ],
+    "opens": "advisor",
+    "short": [
+      {
+        "text": "quiet · nothing to act on",
+        "tone": "dim"
+      }
+    ],
+    "tag": ""
+  },
+  "bodies": [
+    {
+      "id": "context",
+      "key": "1",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  757k",
+            "tone": "bold"
+          },
+          {
+            "text": " of ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.00M est",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact ",
+            "tone": "dim"
+          },
+          {
+            "text": "967k",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "209k",
+            "tone": "warn"
+          },
+          {
+            "text": " left",
+            "tone": "dim"
+          },
+          {
+            "text": "   +18k/turn",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "prefix",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈377k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s0"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "harness",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈0",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈15k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "inputs",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈7.0k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "results",
+            "tone": "fg"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.8k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  since session start · 41 calls",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other results",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.8k",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "prompts",
+            "tone": "fg"
+          },
+          {
+            "text": "           ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈19k",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "2%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other",
+            "tone": "fg"
+          },
+          {
+            "text": "            ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈281k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "37%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  prefix ≈ the first call's cached part — run /context once to calibrate it",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  compactions ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   re-reads ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   stale ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "   autocompact in ",
+            "tone": "dim"
+          },
+          {
+            "text": "~12 turns",
+            "tone": "fg"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  next 5c ≈$1.1 · fresh ≈$.28",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  threshold 967k · 209k left · prefix 377k (50 %)",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "prefix",
+          "step": 0,
+          "tokens": 377114
+        },
+        {
+          "label": "harness",
+          "step": 0,
+          "tokens": 0
+        },
+        {
+          "label": "thinking",
+          "step": 1,
+          "tokens": 15891
+        },
+        {
+          "label": "inputs",
+          "step": 2,
+          "tokens": 7043
+        },
+        {
+          "label": "results",
+          "step": 2,
+          "tokens": 1776
+        }
+      ],
+      "title": "context"
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  no status line — ",
+            "tone": "dim"
+          },
+          {
+            "text": "cctop install",
+            "tone": "fg"
+          },
+          {
+            "text": " adds the exact 5-hour and 7-day figures",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  weight   ",
+            "tone": "dim"
+          },
+          {
+            "text": "×10",
+            "tone": "warn"
+          },
+          {
+            "text": " fable — why the bar moves faster than the dollars",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  long ctx ",
+            "tone": "dim"
+          },
+          {
+            "text": "58 %",
+            "tone": "warn"
+          },
+          {
+            "text": " of usage was above 150k context",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  account-wide: other sessions draw from the same pool",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  58% of your usage was at >150k context",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  install the status line shim for the limits",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "limits"
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  warm ",
+            "tone": "ok"
+          },
+          {
+            "text": "13m",
+            "tone": "ok"
+          },
+          {
+            "text": " ≈ left of a ",
+            "tone": "dim"
+          },
+          {
+            "text": "1h",
+            "tone": "fg"
+          },
+          {
+            "text": " entry",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  misses      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "ok"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  hit ratio   ",
+            "tone": "dim"
+          },
+          {
+            "text": "85 %",
+            "tone": "ok"
+          }
+        ],
+        [
+          {
+            "text": "  re-write    ",
+            "tone": "dim"
+          },
+          {
+            "text": "757k",
+            "tone": "warn"
+          },
+          {
+            "text": " if it goes cold before the next call",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  hit ratio 85 % · misses 0",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  TTL 1h (observed)",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  re-write if cold 757k ≈$9.5",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  reply before the countdown ends, or the next call pays the re-write",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "cache"
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ≈$128",
+            "tone": "bold"
+          },
+          {
+            "text": "   API-equivalent list price — a subscription is not billed per token",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache read",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇",
+            "tone": "s2"
+          },
+          {
+            "text": "",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "21.86M",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache write",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇▇▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "3.97M",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "output",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s2"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "78k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "└ thinking",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s1"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "15k",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "fresh input",
+            "tone": "fg"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "▇",
+            "tone": "s0"
+          },
+          {
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.1k",
+            "tone": "bold"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  cache hit ",
+            "tone": "dim"
+          },
+          {
+            "text": "85 %",
+            "tone": "ok"
+          },
+          {
+            "text": "   misses ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "ok"
+          },
+          {
+            "text": "   $/call ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$.22",
+            "tone": "fg"
+          },
+          {
+            "text": "   next 30c ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$6.6",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "since ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$128",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "agents ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$48.6 (38 %)",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  spent by ",
+            "tone": "dim"
+          },
+          {
+            "text": "idle 34 %",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "agents 31 %",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [
+        {
+          "label": "cache read",
+          "step": 2,
+          "tokens": 21857851
+        },
+        {
+          "label": "cache write",
+          "step": 1,
+          "tokens": 3971550
+        },
+        {
+          "label": "output",
+          "step": 2,
+          "tokens": 78651
+        },
+        {
+          "label": "└ thinking",
+          "step": 1,
+          "tokens": 15945
+        },
+        {
+          "label": "fresh input",
+          "step": 0,
+          "tokens": 1104
+        }
+      ],
+      "title": "cost"
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ✓ ",
+            "tone": "dim"
+          },
+          {
+            "text": "no check yet this session",
+            "tone": "bold"
+          },
+          {
+            "text": "  ·  9 unchecked edits",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  rework   ",
+            "tone": "dim"
+          },
+          {
+            "text": "9 unchecked",
+            "tone": "warn"
+          },
+          {
+            "text": "   edits 9 ✓ none 15h36",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "           no failed calls",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  files    ",
+            "tone": "dim"
+          },
+          {
+            "text": "10 touched",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  git      ",
+            "tone": "dim"
+          },
+          {
+            "text": "+0/−0",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  turn     ",
+            "tone": "dim"
+          },
+          {
+            "text": "0 api calls · 0 tool calls",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "work"
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "TOOL / CLASS",
+            "tone": "dim"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "CALLS",
+            "tone": "dim"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "ERR",
+            "tone": "dim"
+          },
+          {
+            "text": "       ",
+            "tone": "dim"
+          },
+          {
+            "text": "p50",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "→CTX",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "LAST",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash·explore",
+            "tone": "fg"
+          },
+          {
+            "text": "           ",
+            "tone": "dim"
+          },
+          {
+            "text": "16",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "—",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "46m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read",
+            "tone": "fg"
+          },
+          {
+            "text": "                   ",
+            "tone": "dim"
+          },
+          {
+            "text": "12",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "—",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "46m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow",
+            "tone": "fg"
+          },
+          {
+            "text": "                ",
+            "tone": "dim"
+          },
+          {
+            "text": "6",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.9s",
+            "tone": "fg"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "1.8k",
+            "tone": "warn"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "47m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash·implement",
+            "tone": "fg"
+          },
+          {
+            "text": "          ",
+            "tone": "dim"
+          },
+          {
+            "text": "4",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "—",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "46m",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Edit",
+            "tone": "fg"
+          },
+          {
+            "text": "                    ",
+            "tone": "dim"
+          },
+          {
+            "text": "3",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "—",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "15h35",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Write",
+            "tone": "fg"
+          },
+          {
+            "text": "                   ",
+            "tone": "dim"
+          },
+          {
+            "text": "2",
+            "tone": "bold"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "dim"
+          },
+          {
+            "text": "         ",
+            "tone": "dim"
+          },
+          {
+            "text": "—",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "0",
+            "tone": "fg"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "15h35",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  47 calls",
+            "tone": "bold"
+          },
+          {
+            "text": "   0 errors",
+            "tone": "dim"
+          },
+          {
+            "text": "   0 denied",
+            "tone": "dim"
+          },
+          {
+            "text": "   ▸ running ",
+            "tone": "accent"
+          },
+          {
+            "text": "Read /home/user/project/src/…",
+            "tone": "fg"
+          },
+          {
+            "text": "  46:44",
+            "tone": "bold"
+          }
+        ],
+        [
+          {
+            "text": "  top ctx  ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow /home/user/project/src/b66b20…",
+            "tone": "fg"
+          },
+          {
+            "text": "  296",
+            "tone": "warn"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  agents   ",
+            "tone": "dim"
+          },
+          {
+            "text": "210 (0 running)",
+            "tone": "bold"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈$48.6 (38 %)",
+            "tone": "fg"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "204 failed",
+            "tone": "crit"
+          },
+          {
+            "text": " · ",
+            "tone": "dim"
+          },
+          {
+            "text": "wasted ≈$7.97",
+            "tone": "warn"
+          }
+        ],
+        [
+          {
+            "text": "           workflow-su… 7:27 1.59M failed",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "           workflow-su… 3:03 323k failed",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "           workflow-su… 1:45 218k failed",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "tools"
+    },
+    {
+      "id": "advisor",
+      "key": "a",
+      "keys": "Enter coach",
+      "rows": [
+        [
+          {
+            "text": "  ▸ ",
+            "tone": "ok"
+          },
+          {
+            "text": "nothing to act on",
+            "tone": "bold"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  next     —",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  snoozed  —",
+            "tone": "dim"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "advisor"
+    },
+    {
+      "id": "events",
+      "key": "0",
+      "keys": "Enter panel",
+      "rows": [
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Read /home/user/project/src/91f244… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash jq -r lorem_ipsum_d | lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_s… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow ✓ 296",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 695k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 695k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "08:19",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 695k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:44",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "API error: rate_limit 429",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow ✓ 296",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolo && python3 - lorem_i lorem_ipsum_dolor_sit_amet_consecte.read lorem_ipsum_dolor_ lorem_ips… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 685k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 685k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "06:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 685k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:40",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "API error: rate_limit 429 · five hour · resets 06:20",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:23",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow ✓ 296",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:23",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow lorem ipsum dolor sit amet co… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash jq -c lorem_ipsum_d.value lo lorem_ips lorem_ip lorem_ipsum_dolor_si lorem_ipsum_ lorem_ipsum_dolor_sit_am lorem_ips lorem lorem lorem_ipsum_dolor_sit_amet_consectetur_ad lorem_ipsum_dolor_si lorem_i… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash jq -c lor lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magn | wc -c; jq -c lorem_ipsum_d.value lo lorem_ips lorem_ip lorem_ipsum_dolor_s… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cat lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magn | jq -c lorem_ip ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolo && python3 - lorem_i lorem_ipsum_dolor_sit_amet_consecte.read lorem_ipsum_dolor_ lorem_ips… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 659k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 659k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "01:22",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 659k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:33",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "API error: rate_limit 429 · five hour · resets 01:20 · low-priority retry 20 s",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow ✓ 296",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 649k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow lorem ipsum dol ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 649k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cold write 649k",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "20:21",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "cost",
+            "tone": "warn"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "cache TTL now 1h (was 5m)",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:43",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "api",
+            "tone": "crit"
+          },
+          {
+            "text": "     ",
+            "tone": "dim"
+          },
+          {
+            "text": "API error: rate_limit 429 · five hour · resets 20:20 · low-priority retry 20 s",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:34",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && echo lorem_ips $(jq -c lorem_ipsum_dolor_sit_ame lorem_i.jsonl | wc -… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:34",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Bash sleep lor cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && echo lorem_ips $(jq -c lorem_ipsum_dolor_sit_ame lorem_i.js… ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:33",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow ✓ 296",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:33",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Workflow lorem ipsum dol ▶",
+            "tone": "fg"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "17:33",
+            "tone": "dim"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "tool",
+            "tone": "accent"
+          },
+          {
+            "text": "    ",
+            "tone": "dim"
+          },
+          {
+            "text": "Agent lorem ipsum dolor sit amet ▶",
+            "tone": "fg"
+          }
+        ]
+      ],
+      "slices": [],
+      "title": "events"
+    }
+  ],
+  "cells": [
+    {
+      "id": "context",
+      "key": "1",
+      "label": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "76%",
+          "tone": "warn"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "209k left",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "76%",
+          "tone": "warn"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "209k left",
+          "tone": "fg"
+        }
+      ],
+      "opens": "context",
+      "short": [
+        {
+          "text": "ctx ",
+          "tone": "fg"
+        },
+        {
+          "text": "76%",
+          "tone": "warn"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "key": "2",
+      "label": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "mid": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "no status line",
+          "tone": "dim"
+        }
+      ],
+      "opens": "limits",
+      "short": [
+        {
+          "text": "5h ",
+          "tone": "fg"
+        },
+        {
+          "text": "—",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "id": "cache",
+      "key": "3",
+      "label": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "13m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "13m≈",
+          "tone": "ok"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "1h TTL",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cache",
+      "short": [
+        {
+          "text": "cache ",
+          "tone": "fg"
+        },
+        {
+          "text": "13m≈",
+          "tone": "ok"
+        }
+      ]
+    },
+    {
+      "id": "cost",
+      "key": "4",
+      "label": [
+        {
+          "text": "spend ≈$128",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "spend ≈$128",
+          "tone": "fg"
+        }
+      ],
+      "opens": "cost",
+      "short": [
+        {
+          "text": "spend ≈$128",
+          "tone": "fg"
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "key": "5",
+      "label": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        },
+        {
+          "text": " · ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "9 unchecked",
+          "tone": "warn"
+        }
+      ],
+      "mid": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        },
+        {
+          "text": " ",
+          "tone": "dim"
+        },
+        {
+          "text": "rework ",
+          "tone": "fg"
+        },
+        {
+          "text": "9 unchecked",
+          "tone": "warn"
+        }
+      ],
+      "opens": "work",
+      "short": [
+        {
+          "text": "✓ ",
+          "tone": "fg"
+        },
+        {
+          "text": "none",
+          "tone": "dim"
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "key": "6",
+      "label": [
+        {
+          "text": "47 calls",
+          "tone": "fg"
+        }
+      ],
+      "mid": [
+        {
+          "text": "47 calls",
+          "tone": "fg"
+        }
+      ],
+      "opens": "tools",
+      "short": [
+        {
+          "text": "47 calls",
+          "tone": "fg"
+        }
+      ]
+    }
+  ],
+  "cost_combined": {
+    "approx": true,
+    "metric_id": "cost_combined",
+    "source": "priced",
+    "unit": "USD",
+    "value": 128.20562225
+  },
+  "exposed": true,
+  "header": {
+    "cwd": "/home/user/project",
+    "elapsed": "17h 16m",
+    "line": "cctop  claude-fable-5-1 · turn 1 · 17h 16m · ENDED 09:06 · /home/user/project · v2.1.269",
+    "model": "claude-fable-5-1",
+    "phase": {
+      "elapsed": "0:00",
+      "glyph": "●",
+      "tokens": [],
+      "word": "EXPLORING"
+    },
+    "pr": null,
+    "session": "session-w",
+    "turn": 1,
+    "version": "2.1.269"
+  },
+  "lines": {
+    "l0": "◐757k ≈$.22 · ○cache 13m · ○5h — · ◐edits 9",
+    "l1": "◐76% ○— ○13m ◐9 unchecked",
+    "l2": "◐○○◐"
+  },
+  "schema": 2,
+  "session_mode": "machine"
+}

@@ -5,14 +5,14 @@ import type { RenderElement } from 'claude-code';
 import type { Model, Placement } from '../model';
 import { renderAdvisor } from './advisor';
 import { renderCoach, type CoachActions, type CoachElements } from './coach';
-import { renderAgents } from './agents';
+import { renderAgents, type AgentsActions } from './agents';
 import { renderEvents } from './events';
 import { renderFiles } from './files';
 import { renderOverview, type OverviewActions, type ViewElements } from './overview';
 import { renderTools } from './tools';
 
 /** What the pane hands the views that press: the Button element and the closures over `$`. */
-export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions };
+export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions; agents: Pick<AgentsActions, 'open'> };
 
 export function renderView(
   model: Model,
@@ -29,7 +29,7 @@ export function renderView(
     case 'tools':
       return renderTools(model, el, columns, now);
     case 'agents':
-      return renderAgents(model, el, columns, now);
+      return renderAgents(model, el, columns, now, actions === undefined ? undefined : { el: actions.el, open: actions.agents.open });
     case 'files':
       return renderFiles(model, el, columns);
     case 'events':

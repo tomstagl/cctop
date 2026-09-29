@@ -1,0 +1,117 @@
+{
+  "bash_by_class": [
+    {
+      "calls": 1,
+      "class": "explore",
+      "errors": 0
+    }
+  ],
+  "errors_by_class": [],
+  "input_to_ctx": [
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 360
+      },
+      "tool": "Bash"
+    },
+    {
+      "tokens": {
+        "approx": true,
+        "metric_id": "input_tokens",
+        "unit": "tokens",
+        "value": 8
+      },
+      "tool": "Workflow"
+    }
+  ],
+  "tool_search_loads": {},
+  "tools": [
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789228183433,
+      "p50": null,
+      "p95": null,
+      "running": 1,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 0
+      },
+      "tool": "Bash"
+    },
+    {
+      "calls": {
+        "approx": false,
+        "metric_id": "tool_calls",
+        "unit": "count",
+        "value": 1
+      },
+      "errors": {
+        "approx": false,
+        "metric_id": "tool_errors",
+        "unit": "count",
+        "value": 0
+      },
+      "last_call_at_ms": 1789228163567,
+      "p50": {
+        "approx": true,
+        "metric_id": "tool_p50",
+        "unit": "ms",
+        "value": 1454
+      },
+      "p95": {
+        "approx": true,
+        "metric_id": "tool_p95",
+        "unit": "ms",
+        "value": 1454
+      },
+      "running": 0,
+      "tokens_to_ctx": {
+        "approx": true,
+        "metric_id": "tokens_to_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow"
+    }
+  ],
+  "top_ctx": [
+    {
+      "input": "/home/user/project/src/b66b20…",
+      "persisted_bytes": null,
+      "reread_tax": {
+        "rereads": 2,
+        "usd": {
+          "approx": true,
+          "metric_id": "reread_tax",
+          "unit": "USD",
+          "value": 0.000148
+        }
+      },
+      "tokens": {
+        "approx": true,
+        "metric_id": "top_ctx",
+        "unit": "tokens",
+        "value": 296
+      },
+      "tool": "Workflow",
+      "truncated": false,
+      "turn": 1
+    }
+  ]
+}

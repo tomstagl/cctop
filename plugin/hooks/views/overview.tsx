@@ -103,6 +103,8 @@ export type Body = { key: string; id: string; title: string; keys: string; rows:
 export type Dashboard = {
   schema: number;
   headerLine: string;
+  /** The header's second row, the workflow strip, while a run is live (`header.workflow`); null otherwise. */
+  workflow: Seg[] | null;
   phase: { glyph: string; word: string; elapsed: string; tokens: string[] };
   cells: Cell[];
   act: Act;
@@ -162,6 +164,7 @@ export function dashboardOf(query: unknown): Dashboard | null {
   return {
     schema: SCHEMA,
     headerLine: stringAt(query, 'header', 'line') ?? '',
+    workflow: Array.isArray(at(query, 'header', 'workflow')) ? segsOf(at(query, 'header', 'workflow')) : null,
     phase: {
       glyph: stringAt(phase, 'glyph') ?? '○',
       word: stringAt(phase, 'word') ?? '',
@@ -468,6 +471,8 @@ export function renderOverview(
   const actions = buttons?.actions;
   const open = model.body;
   body.push(textRow(headerLine(d, columns), el, 'session_status'));
+  // The workflow strip, verbatim, above the cells while a run is live (the TUI's row 2).
+  if (d.workflow !== null) body.push(textRow(fit(d.workflow, columns), el, 'workflow_failed'));
   body.push(...cellRows(d, open, columns, bel, actions));
   body.push(...actRows(d, open, columns, bel, actions));
   const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];

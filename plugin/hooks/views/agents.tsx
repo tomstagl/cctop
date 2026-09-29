@@ -4,11 +4,16 @@
 // group (glyph, name, model, elapsed, context, tokens, its own cost with
 // its mark, human/machine turns, the status word — team PRD §4.3), MCP
 // servers (name, RSS, calls, restarts) and background tasks, one row each,
-// from `cctop query agents`.
-import type { RenderElement } from 'claude-code';
+// from `cctop query agents`. A workflow run is one row — the query's `row`,
+// verbatim, after the agents outside any run, as the TUI lists it — a Button
+// when the pane has one to draw with; pressed, the view is that run's
+// `detail` (or `detail_narrow` below 116 body columns), verbatim, under a
+// `back` Button (workflows PRD §4.4).
+import type { ElementTable, RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { DASH, at, formatBytes, formatDuration, formatUsd, isMissing, measured, stringAt, tokensOf } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
+import { THEME, seg, type Line } from './frame';
 import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
 const W = { glyph: 10, model: 6, prefix: 3, kind: 6, elapsed: 6, tokens: 6, cost: 5, ret: 5, rss: 7, calls: 9, restarts: 4, status: 16, ctx: 5, teamCost: 6, turns: 5 };
@@ -166,13 +171,68 @@ function agentsSummary(data: unknown): string | undefined {
   return parts.length === 0 ? undefined : parts.join(' · ');
 }
 
-export function renderAgents(model: Model, el: ViewElements, columns: number, now: number): RenderElement {
+/** Body columns from which a run's detail is the wide layout (the query's `detail`), as the TUI's DETAIL_WIDE. */
+export const DETAIL_WIDE = 116;
+
+/** The elements the agents view presses with, and what a press does; built in pane.tsx over `$`. */
+export type AgentsElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
+export type AgentsActions = { el: AgentsElements; open(run: string | null): void };
+
+/** The run's row as the TUI's group line: dim, its `✗N` red when agents failed. */
+function runLine(w: unknown): Line {
+  const text = stringAt(w, 'row') ?? '';
+  const failed = at(w, 'failed');
+  const mark = ` ✗${typeof failed === 'number' ? failed : 0}`;
+  const i = typeof failed === 'number' && failed > 0 ? text.indexOf(mark) : -1;
+  if (i < 0) return [seg(text, { dim: true })];
+  const end = i + mark.length;
+  return [seg(text.slice(0, i + 1), { dim: true }), seg(text.slice(i + 1, end), { color: THEME.red }), seg(text.slice(end), { dim: true })];
+}
+
+/** A run's detail rows, styled as the TUI's: the fixes after ` ───` warn, their pointer lines and the run line dim. */
+function detailRows(rows: string[]): FrameRow[] {
+  let fixes = false;
+  return rows.map((text, i) => {
+    if (text === ' ───') fixes = true;
+    const style =
+      fixes && text !== ' ───' && (text.startsWith('   →') || text.startsWith('     '))
+        ? { dim: true }
+        : fixes
+          ? { color: THEME.yellow }
+          : i === 1
+            ? { dim: true }
+            : {};
+    return { line: [seg(text, style)], key: i === 0 ? 'workflow_failed' : undefined };
+  });
+}
+
+export function renderAgents(model: Model, el: ViewElements, columns: number, now: number, actions?: AgentsActions): RenderElement {
   const data = model.query.agents;
   const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
+  const fel = actions?.el ?? el;
+  const workflows = listAt(data, 'workflows');
+  const open = model.openRun === null ? undefined : workflows.find((w) => stringAt(w, 'run') === model.openRun);
+  if (open !== undefined) {
+    const rows: FrameRow[] = [];
+    if (actions !== undefined) rows.push({ line: [seg('back')], press: { key: 'agents-back', onPress: () => actions.open(null) } });
+    const detail = at(open, inner >= DETAIL_WIDE ? 'detail' : 'detail_narrow');
+    rows.push(...detailRows(Array.isArray(detail) ? detail.filter((t): t is string => typeof t === 'string') : []));
+    return panel(p, rows, columns, fel);
+  }
   const rows: FrameRow[] = [];
-  for (const a of listAt(data, 'agents')) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+  // A run's agents are its row, not a row each (the TUI's list).
+  for (const a of listAt(data, 'agents')) {
+    const run = at(a, 'workflow');
+    if (run === null || run === undefined) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+  }
+  for (const w of workflows) {
+    const run = stringAt(w, 'run') ?? '';
+    const r: FrameRow = { line: runLine(w), key: 'workflow_failed' };
+    if (actions !== undefined) r.press = { key: run, onPress: () => actions.open(run) };
+    rows.push(r);
+  }
   // The team under the subagents: the group row, then a row per member
   // (the query's `teammates[]` are the rows only when `team` is present).
   const team = at(data, 'team');
@@ -185,5 +245,5 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   for (const m of listAt(data, 'mcp')) rows.push(row(mcpCells(m), inner, 'mcp_rss'));
   for (const t of listAt(data, 'tasks')) rows.push(row(taskCells(t, now), inner));
   if (rows.length === 0) rows.push(line('no subagents, MCP servers or background tasks'));
-  return panel(p, rows, columns, el);
+  return panel(p, rows, columns, fel);
 }

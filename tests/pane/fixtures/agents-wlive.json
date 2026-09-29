@@ -1,0 +1,2788 @@
+{
+  "agents": [
+    {
+      "cold_start": true,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 12.78964525
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 2506361
+      },
+      "fork_context_messages": null,
+      "id": "a798b1ddfb2958176",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "claude-fable-5-1",
+      "returned_tokens": null,
+      "state": "done",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 2692677
+      },
+      "type": "workflow-subagent",
+      "waste": null,
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": true,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 6.374547
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 479334
+      },
+      "fork_context_messages": null,
+      "id": "afd1eb9d37a875483",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "claude-fable-5-1",
+      "returned_tokens": null,
+      "state": "done",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 1281420
+      },
+      "type": "workflow-subagent",
+      "waste": null,
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 5.7276265
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 830044
+      },
+      "fork_context_messages": null,
+      "id": "a37a3a99fd6e5f29f",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "claude-fable-5-1",
+      "returned_tokens": null,
+      "state": "done",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 1638932
+      },
+      "type": "workflow-subagent",
+      "waste": null,
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 547
+      },
+      "fork_context_messages": null,
+      "id": "a028a027ec2caecb9",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 569
+      },
+      "fork_context_messages": null,
+      "id": "a0ca1007113aa2d80",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 381
+      },
+      "fork_context_messages": null,
+      "id": "a1d9b6ae1a11aa679",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 654
+      },
+      "fork_context_messages": null,
+      "id": "a1e62a15e9af10dfd",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 730
+      },
+      "fork_context_messages": null,
+      "id": "a1e85d3dec759517c",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 392
+      },
+      "fork_context_messages": null,
+      "id": "a24cea5c0c2f21402",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 576
+      },
+      "fork_context_messages": null,
+      "id": "a26cb78f69bc9bd80",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 650
+      },
+      "fork_context_messages": null,
+      "id": "a2d007b2403fd7e23",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 629
+      },
+      "fork_context_messages": null,
+      "id": "a2e6a39dd5da02cbb",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 436
+      },
+      "fork_context_messages": null,
+      "id": "a317d33cc2d6b0a24",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 543
+      },
+      "fork_context_messages": null,
+      "id": "a36bb849e32c7450f",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 575
+      },
+      "fork_context_messages": null,
+      "id": "a398ace625f5dbd5c",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 548
+      },
+      "fork_context_messages": null,
+      "id": "a3aac707446501317",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 745
+      },
+      "fork_context_messages": null,
+      "id": "a3f832549ef79ec72",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 529
+      },
+      "fork_context_messages": null,
+      "id": "a43c7cf69da81f8d3",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 573
+      },
+      "fork_context_messages": null,
+      "id": "a453cca136dc38845",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 633
+      },
+      "fork_context_messages": null,
+      "id": "a50f76c6eb9afcb3b",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 453
+      },
+      "fork_context_messages": null,
+      "id": "a5467029de5d284f4",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 440
+      },
+      "fork_context_messages": null,
+      "id": "a5b9fea6a58d3a654",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 587
+      },
+      "fork_context_messages": null,
+      "id": "a63c12d96fa8c7a92",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 620
+      },
+      "fork_context_messages": null,
+      "id": "a64a2fda195978060",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 676
+      },
+      "fork_context_messages": null,
+      "id": "a64cef4d7c775c118",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 703
+      },
+      "fork_context_messages": null,
+      "id": "a667c691074c92190",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 621
+      },
+      "fork_context_messages": null,
+      "id": "a6bf9d66f001f3f7d",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 519
+      },
+      "fork_context_messages": null,
+      "id": "a6cecb7ee297bcc82",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 618
+      },
+      "fork_context_messages": null,
+      "id": "a6f9d4294fc4305ee",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 633
+      },
+      "fork_context_messages": null,
+      "id": "a6fcfed1409bb6f98",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 554
+      },
+      "fork_context_messages": null,
+      "id": "a70668fe3080aaff9",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 450
+      },
+      "fork_context_messages": null,
+      "id": "a78dc33bd1b8c2565",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 433
+      },
+      "fork_context_messages": null,
+      "id": "a835db83a7365e1ee",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 587
+      },
+      "fork_context_messages": null,
+      "id": "a848a80f9c0ec5006",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 606
+      },
+      "fork_context_messages": null,
+      "id": "a8d8cba903f98044c",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 651
+      },
+      "fork_context_messages": null,
+      "id": "a95f257bfb9e7aaaf",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 854
+      },
+      "fork_context_messages": null,
+      "id": "a9a088a505604a244",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 560
+      },
+      "fork_context_messages": null,
+      "id": "a9e5c2950581235d9",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 622
+      },
+      "fork_context_messages": null,
+      "id": "aa33db4598dcd854b",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 656
+      },
+      "fork_context_messages": null,
+      "id": "aa63e44a2fad360a4",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 670
+      },
+      "fork_context_messages": null,
+      "id": "aa90afea96eb2832e",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 420
+      },
+      "fork_context_messages": null,
+      "id": "aa930a850d0520946",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 668
+      },
+      "fork_context_messages": null,
+      "id": "aae0dca55bc8bd8ae",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 381
+      },
+      "fork_context_messages": null,
+      "id": "ab57d3ca2ccf8b691",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 563
+      },
+      "fork_context_messages": null,
+      "id": "abb1afa25c6da0ccd",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 589
+      },
+      "fork_context_messages": null,
+      "id": "abbf53df8a9230a9d",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 694
+      },
+      "fork_context_messages": null,
+      "id": "abe7631c6976ff7b1",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 640
+      },
+      "fork_context_messages": null,
+      "id": "ac0ec51f86e38574b",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 407
+      },
+      "fork_context_messages": null,
+      "id": "ac13c41dd0b44a9f1",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 642
+      },
+      "fork_context_messages": null,
+      "id": "ac3ba8961c92531a0",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 586
+      },
+      "fork_context_messages": null,
+      "id": "aca6d2e98835218cd",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 599
+      },
+      "fork_context_messages": null,
+      "id": "ad1194392144bc973",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 690
+      },
+      "fork_context_messages": null,
+      "id": "adaf062015faddd3d",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 542
+      },
+      "fork_context_messages": null,
+      "id": "add474852c0517e17",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 761
+      },
+      "fork_context_messages": null,
+      "id": "adef57574c641b158",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 557
+      },
+      "fork_context_messages": null,
+      "id": "ae7d0a31de4bce777",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    },
+    {
+      "cold_start": false,
+      "cost": {
+        "approx": true,
+        "metric_id": "agent_cost",
+        "source": "unpriced",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "depth": 0,
+      "description": "",
+      "elapsed": {
+        "approx": false,
+        "metric_id": "agent_state",
+        "unit": "ms",
+        "value": 557
+      },
+      "fork_context_messages": null,
+      "id": "aeac34c4a95d342d5",
+      "inherited_context": null,
+      "launched_turn": null,
+      "model": "",
+      "returned_tokens": null,
+      "state": "failed",
+      "status": null,
+      "tokens": {
+        "approx": false,
+        "metric_id": "agent_tokens",
+        "unit": "tokens",
+        "value": 0
+      },
+      "type": "workflow-subagent",
+      "waste": {
+        "idle_ms": null,
+        "reason": "failed",
+        "usd": {
+          "approx": true,
+          "metric_id": "agent_waste",
+          "source": "unpriced",
+          "unit": "USD",
+          "value": 0.0
+        }
+      },
+      "workflow": "wf_0aa065ff-0a0"
+    }
+  ],
+  "depth": 0,
+  "mcp": {
+    "hint": "no live process (fixture)",
+    "source": "missing"
+  },
+  "mcp_failed": [],
+  "mcp_needs_auth": [],
+  "tasks": [],
+  "teammates": [],
+  "tool_search_loads": {},
+  "totals": {
+    "classified": 54,
+    "cold_start_usd": {
+      "approx": true,
+      "metric_id": "agents_cold_starts",
+      "unit": "USD",
+      "value": 3.7703375
+    },
+    "cold_starts": {
+      "approx": false,
+      "metric_id": "agents_cold_starts",
+      "unit": "count",
+      "value": 2
+    },
+    "cost": {
+      "approx": true,
+      "metric_id": "agents_cost",
+      "source": "priced",
+      "unit": "USD",
+      "value": 24.89181875
+    },
+    "returned_ratio": {
+      "approx": true,
+      "metric_id": "agents_return_ratio",
+      "unit": "ratio",
+      "value": 0.0
+    },
+    "waste": {
+      "approx": true,
+      "metric_id": "agents_waste",
+      "unit": "USD",
+      "value": 0.0
+    },
+    "waste_by_reason": {
+      "failed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "idle": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "killed": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "no_ret": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      }
+    }
+  },
+  "workflows": [
+    {
+      "agents": 57,
+      "cold_start_pct": {
+        "approx": true,
+        "metric_id": "workflow_cold_start_pct",
+        "unit": "%",
+        "value": 15.146894398787152
+      },
+      "cost": {
+        "approx": true,
+        "metric_id": "agents_cost",
+        "source": "priced",
+        "unit": "USD",
+        "value": 24.89181875
+      },
+      "detail": [
+        " wf_0aa065ff-0a0  sweep-2  live  1h 25m  $24.89  75.5×main  cold 15 %",
+        " phase        start   res    ✗      ✗$  waste  cause",
+        " Sweep            6     6    0    0.00    0 %",
+        " Candidates       4     4    0    0.00    0 %",
+        " Merge            1     1    0    0.00    0 %",
+        " Verify          64     0   56    0.00      —  429×54 ?×2",
+        " ───",
+        " 54 agents hit the rate limit on their first call — batch this phase's items, or lower its effort/model",
+        " 2 agents failed (no transcript) — cctop has no fix for this yet"
+      ],
+      "detail_narrow": [
+        " wf_0aa065ff-0a0  sweep-2  live  1h 25m  $24.89  75…",
+        " phase        start   res    ✗  cause",
+        " Sweep            6     6    0",
+        " Candidates       4     4    0",
+        " Merge            1     1    0",
+        " Verify          64     0   56  429×54 ?×2",
+        " ───",
+        " 54 agents hit the rate limit on their first call —",
+        "   batch this phase's items, or lower its",
+        "   effort/model",
+        " 2 agents failed (no transcript) — cctop has no fix",
+        "   for this yet"
+      ],
+      "done": 11,
+      "empty_result": null,
+      "failed": 56,
+      "failed_usd": {
+        "approx": true,
+        "metric_id": "workflow_failed_usd",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "fixes": [
+        {
+          "agents": 54,
+          "cause": "rate_limit_first",
+          "phase": "Verify",
+          "pointer": null,
+          "pointer_stale": false,
+          "script_path": null,
+          "text": "54 agents hit the rate limit on their first call — batch this phase's items, or lower its effort/model"
+        },
+        {
+          "agents": 2,
+          "cause": "unknown",
+          "phase": "Verify",
+          "pointer": null,
+          "pointer_stale": false,
+          "script_path": null,
+          "text": "2 agents failed (no transcript) — cctop has no fix for this yet"
+        }
+      ],
+      "launched": 1,
+      "name": "sweep-2",
+      "overhead": {
+        "approx": true,
+        "metric_id": "workflow_overhead",
+        "unit": "ratio",
+        "value": 75.54708069350127
+      },
+      "phases": [
+        {
+          "causes": {},
+          "failed": 0,
+          "failed_usd": {
+            "approx": true,
+            "metric_id": "workflow_failed_usd",
+            "unit": "USD",
+            "value": 0.0
+          },
+          "pointer": null,
+          "pointer_stale": false,
+          "results": 6,
+          "started": 6,
+          "title": "Sweep",
+          "waste_pct": {
+            "approx": true,
+            "metric_id": "workflow_waste_pct",
+            "unit": "%",
+            "value": 0.0
+          }
+        },
+        {
+          "causes": {},
+          "failed": 0,
+          "failed_usd": {
+            "approx": true,
+            "metric_id": "workflow_failed_usd",
+            "unit": "USD",
+            "value": 0.0
+          },
+          "pointer": null,
+          "pointer_stale": false,
+          "results": 4,
+          "started": 4,
+          "title": "Candidates",
+          "waste_pct": {
+            "approx": true,
+            "metric_id": "workflow_waste_pct",
+            "unit": "%",
+            "value": 0.0
+          }
+        },
+        {
+          "causes": {},
+          "failed": 0,
+          "failed_usd": {
+            "approx": true,
+            "metric_id": "workflow_failed_usd",
+            "unit": "USD",
+            "value": 0.0
+          },
+          "pointer": null,
+          "pointer_stale": false,
+          "results": 1,
+          "started": 1,
+          "title": "Merge",
+          "waste_pct": {
+            "approx": true,
+            "metric_id": "workflow_waste_pct",
+            "unit": "%",
+            "value": 0.0
+          }
+        },
+        {
+          "causes": {
+            "rate_limit_first": 54,
+            "unknown": 2
+          },
+          "failed": 56,
+          "failed_usd": {
+            "approx": true,
+            "metric_id": "workflow_failed_usd",
+            "unit": "USD",
+            "value": 0.0
+          },
+          "pointer": null,
+          "pointer_stale": false,
+          "results": 0,
+          "started": 64,
+          "title": "Verify",
+          "waste_pct": null
+        }
+      ],
+      "row": " ▶ wf_0aa065f… sweep-2      ✗56  ≈$24.89  1 launched · 11 d…",
+      "run": "wf_0aa065ff-0a0",
+      "state": "live",
+      "waste": {
+        "approx": true,
+        "metric_id": "agents_waste",
+        "unit": "USD",
+        "value": 0.0
+      },
+      "waste_pct": {
+        "approx": true,
+        "metric_id": "workflow_waste_pct",
+        "unit": "%",
+        "value": 0.0
+      }
+    }
+  ]
+}
