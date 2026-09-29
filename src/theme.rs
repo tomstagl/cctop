@@ -769,3 +769,66 @@ mod fixture_b_snapshots {
         }
     }
 }
+
+#[cfg(test)]
+mod fixture_w_snapshots {
+    //! Fixture W's live cut (fixtures/README.md): a real workflow run
+    //! mid-Verify, after its first 429s, without a run record, clocked by
+    //! `session-w-live.now` — the clock `scripts/pane-fixtures.sh` reads
+    //! too, so the pane test draws the same strip.
+    use crate::app::{render_to_string, App};
+    use crate::ui::state::{SessionInfo, State};
+    use std::path::Path;
+
+    fn app() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-w-live.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.caps = crate::theme::Caps::full();
+        crate::attach::attach_headless(&mut app, &path, SessionInfo::from_fixture(&path));
+        app.set_theme("default-dark");
+        app.state.now_ms = include_str!("../fixtures/session-w-live.now")
+            .trim()
+            .parse()
+            .unwrap();
+        app.state.clock_override = true;
+        app
+    }
+
+    #[test]
+    fn live_cut_is_live_and_its_strip_is_under_the_header() {
+        let app = app();
+        let strip: String = app
+            .dashboard()
+            .header
+            .workflow
+            .expect("a live run has a strip")
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
+        assert!(strip.starts_with(" wf     ▸ Verify"), "{strip:?}");
+        assert!(strip.contains('✗'), "{strip:?}");
+        let rows = crate::agent_ledger::rows(&app.state, crate::agent_ledger::Sort::Spend, false);
+        let g = crate::agent_ledger::workflow_groups(&app.state, &rows).remove(0);
+        assert_eq!(g.verdict.state, crate::workflow_runs::RunState::Live);
+    }
+
+    /// The home (events) body open: the strip is row 2, above the cells.
+    #[test]
+    fn live_cut_dashboard() {
+        let app = app();
+        assert_eq!(app.state.console_body, None, "home");
+        for w in [54, 85] {
+            let out = render_to_string(&app, w, 24);
+            assert!(
+                out.lines()
+                    .nth(1)
+                    .is_some_and(|l| l.starts_with(" wf     ▸ Verify")),
+                "{out}"
+            );
+            insta::assert_snapshot!(format!("fixture_w_live_dashboard_{w}x24"), out);
+        }
+    }
+}

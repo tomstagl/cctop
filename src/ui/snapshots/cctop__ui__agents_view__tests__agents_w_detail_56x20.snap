@@ -1,0 +1,24 @@
+---
+source: src/ui/agents_view.rs
+expression: "render_to_string(&app, 56, 20)"
+---
+┌ Agents ─ 210 · 0 running · ≈$48.6 · wasted ≈$7.97 (16┐
+│ wf_0aa065ff-0a0  sweep-4  completed  17h 16m  $48.…  │
+│ phase        start   res    ✗  cause                 │
+│ Sweep            6     6    0                        │
+│ Candidates       4     4    0                        │
+│ Merge            1     1    0                        │
+│ Verify         246    44  173  429×171 ?×2           │
+│ Design          38     9   29  429×29                │
+│ Critic           5     1    4  429×4                 │
+│ ───                                                  │
+│ 198 agents hit the rate limit on their first call —  │
+│   batch this phase's items, or lower its             │
+│   effort/model                                       │
+│   → sweep-4.js:144 parallel() · script changed       │
+│     since                                            │
+│ 6 agents hit the rate limit mid-task — batch this    │
+│   phase, then resume the run after the window        │
+│   resets                                             │
+└──────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

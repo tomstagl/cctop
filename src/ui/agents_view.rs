@@ -1042,6 +1042,37 @@ mod tests {
         app
     }
 
+    /// Fixture W (a real workflow run, fixtures/README.md) with its
+    /// journal, agents and run record, the agents view open.
+    fn fixture_app_w() -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-w.jsonl");
+        let mut app = fixture_app("session-w");
+        let dir = path.with_extension("");
+        app.state.workflow_journals = crate::agents::workflow_journals(&dir.join("subagents"));
+        app.state.workflow_records =
+            crate::workflow_runs::read_records(&dir, &app.state.workflow_journals, &[]);
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.state.overlay, Some(OWNER));
+        app
+    }
+
+    #[test]
+    fn the_run_on_fixture_w() {
+        let mut app = fixture_app_w();
+        insta::assert_snapshot!("agents_w_120x30", render_to_string(&app, 120, 30));
+        app.state.agents_ui.selected = entries(&app.state, &app.state.agents_ui)
+            .iter()
+            .position(|e| matches!(e, Entry::Group(_)))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.state.agents_ui.detail.is_some());
+        insta::assert_snapshot!("agents_w_detail_120x30", render_to_string(&app, 120, 30));
+        insta::assert_snapshot!("agents_w_detail_56x20", render_to_string(&app, 56, 20));
+        let out = render_to_string(&app, 120, 30);
+        assert!(out.contains("→ sweep-4.js:144 parallel()"), "{out}");
+    }
+
     #[test]
     fn the_run_detail_draws_the_shared_rows_then_its_members() {
         let app = workflow_app();

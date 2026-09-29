@@ -886,6 +886,8 @@ Script behaviour (`compose-workflow-fixture.py <session.jsonl> <run> <out-stem> 
   `cargo test` — PASS.
 - [ ] **Step 6: Commit** — `git add scripts/compose-workflow-fixture.py fixtures/session-w* fixtures/README.md src && git commit -m "Workflows: fixture W and its live cut, composed from a real run and anonymised"`
 
+> Implementation note: `attach(…, live = false)` returns before it registers the tick that reads the journals and run records, so a headless attach (these snapshots, and `cctop run --once`) had no workflow run; `attach_headless_prefix` now reads both once after `merge_agents`, as `load::state_from` does (sessions without a run are unchanged). The agents-view snapshots load fixture W like fixture C (`Pricing::bundled`, fed lines) plus the journals and records. The composer also fills the agents' `StructuredOutput` payloads (`input`, its `wireToolInputs` entry, the `structured_output` attachment's `data`) and renames object keys / blanks the words `cctop`/`research` before the anonymiser runs: the anonymiser keeps enum keys such as `id`, `kind`, `trigger`, `action`, `name` anywhere in a line, and the run's schema used them for prose fields; it keeps `cctop` as a Bash command word. The live cut is `2026-09-12T17:14:30.000Z` (first invocation, Verify, after its first-call 429s).
+
 ---
 
 ### Task 10: The pane

@@ -1,0 +1,13 @@
+---
+source: src/theme.rs
+expression: out
+---
+ cctop  claude-fable-5-1 · turn 1 · 1h 25m · ENDED 15:49 · /home…  ● EXPLORING 1h 25m
+ wf     ▸ Verify     0/64 ✗56 429×54   $24.89 75.5×main  sweep-2
+ 1: ctx 38% · 586k left     2: 5h — · no status line   3: cache cold · 5m TTL
+ 4: spend ≈$0.48            5: ✓ none · rework ok      6: 2 calls
+ · silent 1h24                                                            a: advisor
+─── events ─────────────────────────────────────────────────── 0: home  ·  ? keys ───
+  15:49  tool    Bash echo lore status lore lorem_ipsum_ lorem lorem_ip ---"; lorem_…
+  15:49  tool    Workflow ✓ 296
+  15:49  tool    Workflow /home/user/project/src/b66b20… ▶

@@ -1165,6 +1165,59 @@ mod tests {
     }
 
     #[test]
+    fn workflows_on_fixture_w() {
+        // A real run, composed by `scripts/compose-workflow-fixture.py`
+        // (fixtures/README.md): six invocations, every first-call 429
+        // agent, a sample of the others, two failed ids kept without a
+        // transcript. Verify failed under an earlier script; the record's
+        // script (the last invocation's) had already batched it.
+        use crate::workflow_runs::{verdict, Cause, RunState};
+        use crate::workflow_script::{Call, Pointer};
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-w.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let mut s = crate::load::state_from(&path, info);
+        let run = "wf_0aa065ff-0a0";
+        let rs = rows(&s, Sort::Waste, false);
+        let v = verdict(&s, &rs, run);
+        assert_eq!(v.state, RunState::Completed);
+        assert_eq!(v.name.as_deref(), Some("sweep-4"));
+
+        let verify = v.phases.iter().find(|p| p.title == "Verify").unwrap();
+        let top = verify.causes.iter().max_by_key(|(_, n)| **n).unwrap();
+        assert_eq!(*top.0, Cause::RateLimitFirst);
+        assert_eq!(verify.causes.get(&Cause::RateLimitFirst), Some(&166));
+        assert_eq!(verify.causes.get(&Cause::RateLimitMid), Some(&5));
+        assert_eq!(
+            verify.causes.get(&Cause::Unknown),
+            Some(&2),
+            "the two transcript-less ids, and nothing else"
+        );
+        assert_eq!(
+            verify.pointer,
+            Some(Pointer {
+                line: 144,
+                call: Call::Parallel
+            })
+        );
+        assert!(verify.pointer_stale, "Verify failed under script v2");
+        assert_eq!(v.fixes[0].cause, Cause::RateLimitFirst);
+        assert_eq!(v.fixes[0].phase, "Verify");
+
+        // The fixture files' mtimes are checkout times: the journal's
+        // cannot move a run that has ended.
+        for m in [
+            Some(s.clock_ms()),
+            Some(crate::app::now_ms()),
+            Some(0),
+            None,
+        ] {
+            s.workflow_journals[0].mtime_ms = m;
+            assert_eq!(verdict(&s, &rs, run).state, RunState::Completed, "{m:?}");
+        }
+    }
+
+    #[test]
     fn fixture_a_fork() {
         let path =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
