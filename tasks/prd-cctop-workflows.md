@@ -1,6 +1,6 @@
 # PRD: workflow runs — live while they run, a verdict when they end
 
-**Status:** v1.1 · 2026-09-28 — draft, not implemented; review fixes folded in (resume-aware state and window, cause order, `prompt_too_long`, wrapped fix lines, fixture W counts, pane open button). Where this spec and the plan name a type or field, the plan's spelling is the one to implement. Written from `main` at 7aa5dd8 and the two workflow runs on the user's machine (Claude Code 2.1.2xx, session `28c68a61`).
+**Status:** v1.1 — implemented on workflows-prd, live checks pending. Where this spec and the plan name a type or field, the plan's spelling is the one to implement. Written from `main` at 7aa5dd8 and the two workflow runs on the user's machine (Claude Code 2.1.2xx, session `28c68a61`).
 **Target:** cctop after v0.8.0; TUI, `cctop query agents`, the MCP tool and the pane in one change.
 **Depends on:** `tasks/prd-cctop-agent-costs.md` (the agent ledger, priced cost per agent, fork skip, `WorkflowNotification`, the agents view and its workflow group row).
 **Plan:** `tasks/plan-cctop-workflows.md`.
