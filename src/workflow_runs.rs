@@ -636,7 +636,7 @@ fn short_causes(p: &PhaseRow) -> Vec<(&'static str, usize)> {
             None => by.push((c.short(), *n)),
         }
     }
-    by.sort_by(|a, b| b.1.cmp(&a.1));
+    by.sort_by_key(|a| std::cmp::Reverse(a.1));
     by
 }
 
