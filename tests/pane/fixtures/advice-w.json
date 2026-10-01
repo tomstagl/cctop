@@ -1,0 +1,23 @@
+{
+  "items": [],
+  "next": null,
+  "primary": null,
+  "recent": [],
+  "schema": 2,
+  "session_mode": "machine",
+  "snoozed": [],
+  "suppressed": [
+    {
+      "rule": "A10",
+      "why": "machine turn"
+    },
+    {
+      "rule": "A17",
+      "why": "machine turn"
+    },
+    {
+      "rule": "A23",
+      "why": "machine turn"
+    }
+  ]
+}

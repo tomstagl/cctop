@@ -129,7 +129,7 @@ test('the status line follows the width, the fill button exists for prompt-class
 
 // The pane end to end: the Coach tab, the status line, the toast, the presses.
 const SESSION = 'fake-session';
-const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '' });
+const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false });
 const HELP = `Commands:\n${['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events'].map((v) => `  ${v}  x`).join('\n')}\n\nOptions:\n`;
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 

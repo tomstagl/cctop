@@ -14,7 +14,21 @@ use crate::ui::state::{FileSort, State};
 pub struct FilesPanel;
 
 impl FilesPanel {
-    fn rows(state: &State) -> Vec<&FileStats> {
+    /// What each file's reads and edits occupy in the window now, by path
+    /// (the residency model's per-file rows).
+    fn tokens_by_path(state: &State) -> std::collections::HashMap<String, u64> {
+        state
+            .residency()
+            .files
+            .into_iter()
+            .map(|f| (f.path, f.tokens + f.written))
+            .collect()
+    }
+
+    fn rows<'a>(
+        state: &'a State,
+        tokens: &std::collections::HashMap<String, u64>,
+    ) -> Vec<&'a FileStats> {
         let mut v: Vec<&FileStats> = state.files.files.values().collect();
         match state.files_sort {
             FileSort::LastTouch => v.sort_by_key(|f| std::cmp::Reverse(f.last_touch_ms)),
@@ -23,28 +37,32 @@ impl FilesPanel {
                 std::cmp::Reverse(f.lines_added.unwrap_or(0) + f.lines_removed.unwrap_or(0))
             }),
             FileSort::Name => v.sort_by(|a, b| a.path.cmp(&b.path)),
+            FileSort::Tokens => {
+                v.sort_by_key(|f| std::cmp::Reverse(tokens.get(&f.path).copied().unwrap_or(0)))
+            }
         }
         v
     }
+}
 
-    fn short(path: &str, cwd: &std::path::Path, width: usize) -> String {
-        let rel = std::path::Path::new(path)
-            .strip_prefix(cwd)
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| fmt::shorten_home(std::path::Path::new(path)));
-        if rel.chars().count() <= width {
-            rel
-        } else {
-            let tail: String = rel
-                .chars()
-                .rev()
-                .take(width - 1)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            format!("…{tail}")
-        }
+/// `path` relative to `cwd` (or with `~`), cut from the left to `width`.
+pub(crate) fn short_path(path: &str, cwd: &std::path::Path, width: usize) -> String {
+    let rel = std::path::Path::new(path)
+        .strip_prefix(cwd)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| fmt::shorten_home(std::path::Path::new(path)));
+    if rel.chars().count() <= width {
+        rel
+    } else {
+        let tail: String = rel
+            .chars()
+            .rev()
+            .take(width - 1)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        format!("…{tail}")
     }
 }
 
@@ -64,6 +82,7 @@ impl Panel for FilesPanel {
             FileSort::Touches => " · ↕touches",
             FileSort::Lines => " · ↕lines",
             FileSort::Name => " · ↕name",
+            FileSort::Tokens => " · ↕tokens",
         };
         Some(if git {
             format!("{n} touched · +{a} −{d}{sort}")
@@ -82,7 +101,8 @@ impl Panel for FilesPanel {
 
     fn render(&self, frame: &mut Frame, inner: Rect, state: &State) {
         let dim = state.theme.dim();
-        let rows = Self::rows(state);
+        let tokens = Self::tokens_by_path(state);
+        let rows = Self::rows(state, &tokens);
         if rows.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(" no files touched yet", dim))),
@@ -90,7 +110,7 @@ impl Panel for FilesPanel {
             );
             return;
         }
-        let name_w = (inner.width as usize).saturating_sub(36).clamp(8, 40);
+        let name_w = (inner.width as usize).saturating_sub(44).clamp(8, 40);
         // The commit line: what is not committed, and how long ago the last
         // commit was.
         let mut status: Vec<Span> = Vec::new();
@@ -141,9 +161,16 @@ impl Panel for FilesPanel {
             .map(|f| {
                 let mut spans = vec![Span::raw(format!(
                     " {:<w$} ",
-                    Self::short(&f.path, &state.session.cwd, name_w),
+                    short_path(&f.path, &state.session.cwd, name_w),
                     w = name_w
                 ))];
+                // What the file occupies in the window now (reads + edits
+                // written), from the residency model; `—` when nothing of it
+                // is resident (read before the last boundary, or never read).
+                match tokens.get(&f.path).copied().filter(|t| *t > 0) {
+                    Some(t) => spans.push(Span::raw(format!("≈{:<6} ", fmt::tokens(t)))),
+                    None => spans.push(Span::styled("—       ", dim)),
+                }
                 let mut counts = String::new();
                 if f.reads > 0 {
                     counts.push_str(&format!("R×{} ", f.reads));
@@ -276,5 +303,20 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
         assert_eq!(app.state.files_sort, FileSort::Touches);
         assert!(render_to_string(&app, 64, 70).contains("↕touches"));
+        for _ in 0..3 {
+            app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        }
+        assert_eq!(app.state.files_sort, FileSort::Tokens);
+        let out = render_to_string(&app, 64, 70);
+        assert!(out.contains("↕tokens"), "{out}");
+        // The fixture's own reads are in the window: a figure on some row.
+        // (The three synthetic reads above carry no usage, so no API call
+        // follows them — they are trailing, not resident, and show a dash.)
+        assert!(
+            out.lines().any(|l| l.contains(".rs") && l.contains('≈')),
+            "{out}"
+        );
+        let row = out.lines().find(|l| l.contains("src/render.rs")).unwrap();
+        assert!(row.contains('—'), "{row}");
     }
 }

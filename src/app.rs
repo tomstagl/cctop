@@ -71,6 +71,62 @@ pub const BINDINGS: &[Binding] = &[
     },
 ];
 
+/// A short form one of the surfaces draws, for the help overlay. Every entry
+/// is something a person sees without being told what it means: the Console
+/// cells cut their labels to fit a narrow dock, and the panels count with a
+/// letter. Add one whenever a surface introduces another.
+pub struct Short {
+    pub form: &'static str,
+    pub means: &'static str,
+}
+
+pub const GLOSSARY: &[Short] = &[
+    Short {
+        form: "ctx 42%",
+        means: "context window used",
+    },
+    Short {
+        form: "5h 23%",
+        means: "the five-hour rate-limit window",
+    },
+    Short {
+        form: "↻ 2h",
+        means: "when that window resets",
+    },
+    Short {
+        form: "159c",
+        means: "tool calls this session (c is calls)",
+    },
+    Short {
+        form: "1 err",
+        means: "tool results that came back an error",
+    },
+    Short {
+        form: "R× E× W×",
+        means: "reads, edits, writes of one file",
+    },
+    Short {
+        form: "+12 −3",
+        means: "lines added and removed",
+    },
+    Short {
+        form: "↕tokens",
+        means: "the column a list is sorted by (s rotates)",
+    },
+    Short {
+        form: "≈",
+        means: "estimated, not read from the transcript",
+    },
+    Short {
+        form: "—",
+        means: "no source for it on this machine",
+    },
+    Short {
+        form: "⚠ re-read",
+        means: "a file read again with no edit between",
+    },
+];
+
 pub struct App {
     pub panels: Vec<Box<dyn Panel>>,
     pub state: State,
@@ -883,8 +939,8 @@ impl App {
     }
 
     fn draw_help(&self, frame: &mut Frame, area: Rect) {
-        let w = area.width.min(56);
-        let h = (BINDINGS.len() as u16 + 4).min(area.height);
+        let w = area.width.min(64);
+        let h = (BINDINGS.len() as u16 + GLOSSARY.len() as u16 + 6).min(area.height);
         let rect = Rect::new(
             area.x + (area.width - w) / 2,
             area.y + (area.height - h) / 2,
@@ -902,11 +958,25 @@ impl App {
                 Span::raw(b.action),
             ]));
         }
+        lines.push(TLine::from(""));
         lines.push(TLine::from(Span::styled(
-            "  any key to close",
+            "  what the short forms mean",
             self.state.theme.dim(),
         )));
-        let block = Block::default().borders(Borders::ALL).title(" cctop keys ");
+        for g in GLOSSARY {
+            lines.push(TLine::from(vec![
+                Span::styled(
+                    format!("  {:<16}", g.form),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(g.means),
+            ]));
+        }
+        // The hint rides in the title: the overlay is taller than a short
+        // terminal, and a clipped last line would take it with it.
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" cctop keys & short forms — any key closes ");
         frame.render_widget(Paragraph::new(lines).block(block), rect);
     }
 }
@@ -1322,11 +1392,24 @@ mod tests {
         a.handle_key(key('c'));
         assert_eq!(a.state.view, crate::ui::state::View::Coach);
         a.handle_key(key('?'));
-        let out = render_to_string(&a, 60, 20);
+        // Tall enough for both lists: the overlay is the keys and the
+        // glossary, and it clips to the terminal.
+        let out = render_to_string(&a, 80, 32);
         assert!(out.contains("cctop keys"));
         for b in BINDINGS {
             assert!(out.contains(b.action), "missing {}", b.action);
         }
+        // Every short form a surface draws is named, `159c` among them.
+        assert!(out.contains("what the short forms mean"), "{out}");
+        for g in GLOSSARY {
+            assert!(out.contains(g.form), "missing short form {}", g.form);
+            assert!(out.contains(g.means), "missing gloss {}", g.means);
+        }
+        assert!(
+            out.contains("c is calls"),
+            "the one that prompted this: {out}"
+        );
+        insta::assert_snapshot!("help_keys_and_short_forms_80x32", out);
         a.handle_key(key('x'));
         assert!(!a.help);
     }

@@ -13,4 +13,5 @@ pub mod ledger_view;
 pub mod panels;
 pub mod picker;
 pub mod prefix_view;
+pub mod sources_view;
 pub mod widgets;

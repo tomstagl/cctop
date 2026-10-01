@@ -3,7 +3,7 @@
 
 use crate::harness_facts::{autocompact, first_seen};
 
-use super::usage::Aggregate;
+use super::usage::{Aggregate, DropMark};
 
 /// Default context window per model family when the status line is absent.
 pub fn default_window(model: Option<&str>) -> u64 {
@@ -15,8 +15,32 @@ pub fn default_window(model: Option<&str>) -> u64 {
     }
 }
 
-/// A drop of at least this share between consecutive turns is taken as a
-/// compaction on transcripts too old to carry `compact_boundary`.
+/// The last resort of [`inferred_compactions`] on transcripts before
+/// 2.1.263 (no `compact_boundary`): an unmarked drop of at least this share
+/// between two API calls of the same model, with no `/model` between them,
+/// is a compaction. Also the discontinuity filter of the velocity EMA.
+///
+/// Re-derived 2026-09-20 against this machine's corpus — 168 transcripts,
+/// 2.1.247 – 2.1.278; the §3.2 I sweep of
+/// `tasks/prd-cctop-context-residency.md` (PR #10) redone per API call,
+/// with the lines between each pair of calls classified — and left at
+/// 0.30. The compactions its markers confirm dropped 73 % (fixture B) and
+/// 91 % (twice, 1M windows). The unmarked drops that are not compactions
+/// were nine of ≤ 10 %, two on model switches (21 %, 36 %) and, on the same
+/// model, one of 27.3 % — the PRD's #104, "content left the window
+/// unmarked": a session handed over to another machine
+/// (`remote_session_change`), with no summary after it. Once the switches
+/// are excluded, any value in (0.28, 0.73) fits that corpus; and the ratio
+/// cannot go much higher, because on a 200 k window a compaction leaves the
+/// prefix (47–62 k on a plugin-heavy setup), the summary (~30 k, the
+/// corpus's `postTokens`) and the files it re-injects behind, against a
+/// 167 k threshold — a real drop of 20–35 %, which is what the summary mark
+/// exists to catch. The drops a ratio alone cannot separate from a
+/// compaction are excluded by their own evidence instead: the model
+/// changed (fixture B's switch re-measured the window 30 % smaller), or a
+/// `/model` ran (fixture D's kept the model id and re-measured it 47 %
+/// smaller). The corpus holds no compaction before 2.1.263 to test the
+/// fallback on; the marks are the mechanism, this ratio the net.
 pub const COMPACTION_DROP_RATIO: f64 = 0.30;
 const EMA_ALPHA: f64 = 1.0 / 5.0;
 
@@ -47,8 +71,9 @@ pub struct ContextView {
     /// not `+0/turn` (PRD dashboard-v2 FR-11).
     pub velocity: Option<f64>,
     pub compactions: Vec<Compaction>,
-    /// The compactions come from the ≥ 30 % drop heuristic (transcripts
-    /// before 2.1.263), not from `compact_boundary` lines.
+    /// The compactions were inferred from the drops between API calls
+    /// ([`inferred_compactions`]; transcripts before 2.1.263), not read
+    /// from `compact_boundary` lines.
     pub compactions_heuristic: bool,
     /// Autocompact threshold in tokens: effective window − 13 000, or the
     /// size observed just before a compaction when one was seen.
@@ -102,11 +127,11 @@ pub fn view(
         .filter(|t| t.api_calls > 0)
         .map(|t| t.number)
         .collect();
-    // Exact records when the transcript can carry them; the drop heuristic
-    // only on older transcripts (and never on API-error lines, which have no
-    // usage and no turn entry here).
+    // Exact records when the transcript can carry them; inferred from the
+    // drops between API calls only on older transcripts (and never from
+    // API-error lines, which have no usage and are not calls).
     let exact = first_seen::COMPACT_BOUNDARY.at_most(agg.version.as_deref());
-    let mut compactions: Vec<Compaction> = if exact {
+    let compactions: Vec<Compaction> = if exact {
         agg.compactions
             .iter()
             .map(|c| Compaction {
@@ -118,22 +143,18 @@ pub fn view(
             })
             .collect()
     } else {
-        Vec::new()
+        inferred_compactions(agg)
     };
     let mut velocity: Option<f64> = None;
     for i in 1..history.len() {
         let (prev, cur) = (history[i - 1], history[i]);
-        let dropped = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
-        if dropped {
-            if !exact {
-                compactions.push(Compaction {
-                    turn: turn_numbers[i],
-                    before: prev,
-                    after: cur,
-                    trigger: String::new(),
-                    duration_ms: None,
-                });
-            }
+        // A step that shrank past the ratio is a discontinuity of some kind
+        // (a compaction, a model switch, a handover), and a step whose turn
+        // holds a compaction is one however small it looks per turn: neither
+        // is velocity.
+        let discontinuity = prev > 0 && (cur as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO);
+        let compacted = compactions.iter().any(|c| c.turn == turn_numbers[i]);
+        if discontinuity || compacted {
             continue;
         }
         let delta = cur as f64 - prev as f64;
@@ -164,9 +185,51 @@ pub fn view(
     }
 }
 
+/// Compactions read from the drops between consecutive API calls, for
+/// transcripts too old to carry `compact_boundary` (before 2.1.263).
+///
+/// A drop is a compaction when the summary Claude Code writes after one,
+/// or a `/compact`, sits between the two calls — at any size — and
+/// otherwise when the same model made both calls, no `/model` sits between
+/// them, and the drop is at least [`COMPACTION_DROP_RATIO`] (whose comment
+/// has the evidence). `before` and `after` are the two calls' contexts, so
+/// a compaction that fired inside a turn is measured at the call it fired
+/// after, not at the previous turn's last call. Slash commands are `user`
+/// lines on the transcripts this runs on.
+pub fn inferred_compactions(agg: &Aggregate) -> Vec<Compaction> {
+    let calls = &agg.calls;
+    let mut out = Vec::new();
+    for i in 1..calls.len() {
+        let (before, after) = (calls[i - 1].context(), calls[i].context());
+        if before == 0 || after >= before {
+            continue;
+        }
+        let mut marked = false;
+        let mut remeasured = calls[i - 1].model != calls[i].model;
+        for (_, mark) in agg.drop_marks.iter().filter(|(n, _)| *n == i) {
+            match mark {
+                DropMark::CompactSummary | DropMark::CompactCommand => marked = true,
+                DropMark::ModelCommand => remeasured = true,
+            }
+        }
+        let past_ratio = (after as f64) < before as f64 * (1.0 - COMPACTION_DROP_RATIO);
+        if marked || (!remeasured && past_ratio) {
+            out.push(Compaction {
+                turn: calls[i].turn,
+                before,
+                after,
+                trigger: String::new(),
+                duration_ms: None,
+            });
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::harness_facts::compaction;
     use crate::transcript::{parse_file, Line};
     use std::path::Path;
 
@@ -232,8 +295,8 @@ mod tests {
         assert_eq!(c.trigger, "auto");
         assert_eq!(c.duration_ms, Some(80_690));
         assert_eq!(v.threshold, 567_672, "learned from the observed compaction");
-        // The two API-error lines carry zero usage; they are not in the
-        // history, so no ≥ 30 % drop is invented from them.
+        // The two API-error lines carry zero usage; they are not calls, so
+        // no drop is invented from them.
         assert!(v.history.iter().all(|&h| h > 0));
     }
 
@@ -297,6 +360,131 @@ mod tests {
         let v = view(&b, None, None, None);
         assert!(!v.compactions_heuristic);
         assert!(v.compactions.is_empty());
+    }
+
+    /// A `user` line and an API response on a 2.1.247 transcript (before
+    /// `compact_boundary`), for the fallback's cases.
+    fn old_user(text: &str) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"user","timestamp":"2026-01-01T00:00:00Z","version":"2.1.247","message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(text).unwrap()
+        ))
+        .unwrap()
+    }
+    fn old_call(id: &str, model: &str, ctx: u64) -> Line {
+        Line::parse(&format!(
+            r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{{"id":"{id}","model":"{model}","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":{ctx},"output_tokens":1}}}}}}"#
+        ))
+        .unwrap()
+    }
+    fn old_summary() -> Line {
+        old_user(&format!(
+            "{} The conversation is summarized below:",
+            compaction::SUMMARY_PREAMBLE
+        ))
+    }
+
+    #[test]
+    fn small_drop_with_a_summary_counts_and_a_model_switch_does_not() {
+        let mut a = Aggregate::default();
+        let lines = [
+            old_user("go"),
+            old_call("c1", "claude-opus-5", 100_000),
+            old_user("more"),
+            old_call("c2", "claude-opus-5", 150_000),
+            // Autocompact fired inside turn 2: the summary, then a call 27 %
+            // smaller — under the ratio, a compaction all the same.
+            old_summary(),
+            old_call("c3", "claude-opus-5", 109_500),
+            // /model: another model measured the same conversation 13 %
+            // smaller. Not a compaction.
+            old_user("<command-name>/model</command-name>"),
+            old_user("on"),
+            old_call("c4", "claude-sonnet-5", 95_000),
+            old_user("grow"),
+            old_call("c5", "claude-sonnet-5", 130_000),
+            // An unmarked 40 % drop on the same model: inferred.
+            old_user("x"),
+            old_call("c6", "claude-sonnet-5", 78_000),
+            // An unmarked 27 % drop: a handover or a re-measure, not one.
+            old_user("y"),
+            old_call("c7", "claude-sonnet-5", 57_000),
+            // /compact by hand: the drop after it is one, at 12 %.
+            old_user("<command-name>/compact</command-name>"),
+            old_user("z"),
+            old_call("c8", "claude-sonnet-5", 50_000),
+        ];
+        for l in &lines {
+            a.push(l);
+        }
+        let v = view(&a, None, None, None);
+        assert!(v.compactions_heuristic);
+        let steps: Vec<(usize, u64, u64)> = v
+            .compactions
+            .iter()
+            .map(|c| (c.turn, c.before, c.after))
+            .collect();
+        assert_eq!(
+            steps,
+            vec![
+                (2, 150_000, 109_500),
+                (5, 130_000, 78_000),
+                (7, 57_000, 50_000)
+            ]
+        );
+        assert!(v
+            .compactions
+            .iter()
+            .all(|c| c.trigger.is_empty() && c.duration_ms.is_none()));
+        assert_eq!(v.threshold, 150_000, "the largest size seen before one");
+        assert!(v.threshold_learned);
+    }
+
+    #[test]
+    fn velocity_skips_the_turn_a_marked_compaction_landed_in() {
+        // Per turn, turn 2 is a 9.5 % shrink; the EMA must not read it.
+        let mut a = Aggregate::default();
+        for l in [
+            old_user("go"),
+            old_call("c1", "claude-opus-5", 100_000),
+            old_user("more"),
+            old_call("c2", "claude-opus-5", 150_000),
+            old_summary(),
+            old_call("c3", "claude-opus-5", 109_500),
+            old_user("next"),
+            old_call("c4", "claude-opus-5", 120_000),
+        ] {
+            a.push(&l);
+        }
+        let v = view(&a, None, None, None);
+        assert_eq!(v.compactions.len(), 1);
+        assert_eq!(v.velocity, Some(10_500.0), "the one clean step, turn 2 → 3");
+    }
+
+    #[test]
+    fn the_fallback_read_on_the_fixtures() {
+        let pairs = |cs: &[Compaction]| cs.iter().map(|c| (c.before, c.after)).collect::<Vec<_>>();
+        // B (2.1.270, exact): the fallback agrees with the record — the 73 %
+        // drop after the summary is the compaction; the opus → sonnet switch
+        // one call later, which re-measured the window 30 % smaller, is not.
+        assert_eq!(
+            pairs(&inferred_compactions(&agg("session-b"))),
+            vec![(720_842, 193_094)]
+        );
+        // D (2.1.269): a /model that kept the model id re-measured
+        // 266 718 → 140 778 (−47 %). Not a compaction.
+        assert!(inferred_compactions(&agg("session-d")).is_empty());
+        // A (2.1.247) only grows.
+        assert!(inferred_compactions(&agg("session-a")).is_empty());
+        // C (2.1.258, so the fallback is what the view shows): the seam where
+        // the composer spliced another session's segment — 171 488 → 60 070
+        // inside one turn, same model, nothing between — reads as an
+        // inferred compaction; a transcript of that version cannot say
+        // otherwise, and neither could the person.
+        let c = view(&agg("session-c"), None, None, None);
+        assert!(c.compactions_heuristic);
+        assert_eq!(pairs(&c.compactions), vec![(171_488, 60_070)]);
+        assert_eq!(c.threshold, 171_488);
     }
 
     #[test]
@@ -483,20 +671,23 @@ impl Bands {
 // -------------------------------------------------------------- anatomy
 
 /// What the context is made of since the last boundary, in tokens: the
-/// slices of the stacked bar.
+/// slices of the stacked bar. Derived from [`Residency`], which does the
+/// per-call arithmetic; kept as a plain struct because the bar, the pane's
+/// `Body.slices` and `docs/metrics.md` name these seven slices.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Anatomy {
     /// The fixed prefix (system prompt, tools, skills, CLAUDE.md).
     pub prefix: u64,
-    /// What the model wrote into tool inputs (chars / 4).
+    /// What the model wrote into tool inputs (chars / 4, capped per call at
+    /// that call's real output less its thinking).
     pub tool_inputs: u64,
-    /// Tool results still in context.
+    /// Tool results still in context, reconciled step by step.
     pub tool_results: u64,
-    /// Thinking retained from earlier calls.
+    /// Thinking retained from earlier calls (exact).
     pub thinking: u64,
     /// Harness reminders and injected files (attachments).
     pub harness: u64,
-    /// The model's prose (text blocks, chars / 4).
+    /// The model's prose: `output − thinking − inputs` per call (exact).
     pub prose: u64,
     /// Prompts and everything the estimate cannot place.
     pub unattributed: u64,
@@ -520,57 +711,554 @@ impl Anatomy {
     }
 }
 
-/// Attribute `size` tokens of context. `since_turn` is the first turn after
-/// the last boundary (1 when there was none).
-pub fn anatomy(
+impl From<&Residency> for Anatomy {
+    fn from(r: &Residency) -> Anatomy {
+        Anatomy {
+            prefix: r.prefix,
+            tool_inputs: r.tool_inputs,
+            tool_results: r.results(),
+            thinking: r.thinking,
+            harness: r.source(Source::Harness),
+            prose: r.prose,
+            unattributed: r.other + r.source(Source::Prompts),
+            approx: r.approx,
+        }
+    }
+}
+
+/// Why the current window starts where it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    /// `/clear` (or `continued-in`).
+    Clear,
+    /// `system/compact_boundary`.
+    Compact,
+    Microcompact,
+    Resume,
+    Fork,
+    /// A ≥ 30 % drop with no marker (transcripts before 2.1.263).
+    Heuristic,
+    /// A smaller drop with no marker: content left the window (the corpus
+    /// has a 27 % one — PRD context-residency §3.2 I).
+    Shrink,
+    /// The model changed and the same conversation re-measured smaller.
+    ModelSwitch,
+}
+
+impl RefKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            RefKind::Clear => "/clear",
+            RefKind::Compact => "compaction",
+            RefKind::Microcompact => "microcompact",
+            RefKind::Resume => "resume",
+            RefKind::Fork => "fork",
+            RefKind::Heuristic => "compaction (inferred)",
+            RefKind::Shrink => "window shrank",
+            RefKind::ModelSwitch => "model switch",
+        }
+    }
+
+    fn from_boundary(k: &super::usage::BoundaryKind) -> RefKind {
+        use super::usage::BoundaryKind as B;
+        match k {
+            B::Clear => RefKind::Clear,
+            B::Compact => RefKind::Compact,
+            B::Microcompact => RefKind::Microcompact,
+            B::Resume => RefKind::Resume,
+            B::Fork => RefKind::Fork,
+        }
+    }
+}
+
+/// Where the window's accounting starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reference {
+    SessionStart,
+    /// The index of the window's first call among the calls that carried a
+    /// context (API-error lines excluded), and the Δcontext that opened it.
+    Boundary {
+        kind: RefKind,
+        call: usize,
+        delta: i64,
+    },
+}
+
+/// A kind of injected content, in display order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// Whole-file reads: `Read`, and a Bash `cat` / `sed -n` / `head` /
+    /// `tail` of exactly one path.
+    Files,
+    /// Bash output not tied to one file (builds, tests, greps, multi-file cats).
+    BashOutput,
+    McpResults,
+    AgentReturns,
+    Web,
+    /// Grep, Glob, ToolSearch, an Edit's "file updated", everything else.
+    OtherResults,
+    /// What the person typed (and pasted images).
+    Prompts,
+    /// Reminders, listings and injected files (attachments).
+    Harness,
+}
+
+impl Source {
+    pub const ALL: [Source; 8] = [
+        Source::Files,
+        Source::BashOutput,
+        Source::McpResults,
+        Source::AgentReturns,
+        Source::Web,
+        Source::OtherResults,
+        Source::Prompts,
+        Source::Harness,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Source::Files => "files",
+            Source::BashOutput => "bash output",
+            Source::McpResults => "mcp results",
+            Source::AgentReturns => "agent returns",
+            Source::Web => "web",
+            Source::OtherResults => "other results",
+            Source::Prompts => "prompts",
+            Source::Harness => "harness",
+        }
+    }
+
+    fn idx(self) -> usize {
+        Source::ALL.iter().position(|s| *s == self).unwrap_or(0)
+    }
+}
+
+/// One file's share of the window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileRow {
+    pub path: String,
+    /// Read results in the window (the `files` source), reconciled.
+    pub tokens: u64,
+    /// Edit / Write input bytes the model wrote for this file (in `inputs`).
+    pub written: u64,
+    pub reads: usize,
+}
+
+/// Whether the prefix comes from the first call or from a `/context` table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mode {
+    Estimated,
+    /// Calibrated against the `/context` the person ran in this turn.
+    Calibrated {
+        turn: usize,
+    },
+}
+
+/// What is in the window right now and what put it there — the per-call
+/// model behind [`Anatomy`] (PRD context-residency §4).
+///
+/// Every estimate is reconciled per step against the exact growth that step
+/// could have cost (`Δcontext − previous output_tokens`, FR-16), so the parts
+/// never exceed the whole; `overflow_raw` says by how much they would have.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Residency {
+    pub size: u64,
+    /// The first call's cached part, lowered to the context right after any
+    /// boundary that lands below it (FR-20).
+    pub prefix: u64,
+    pub prefix_tightened: bool,
+    pub since: Reference,
+    /// API calls in the window, the in-flight last one included.
+    pub calls_since: usize,
+    /// Exact, from `thinking_tokens`; the in-flight call excluded.
+    pub thinking: u64,
+    /// The transcript's version writes `thinking_tokens` at all.
+    pub thinking_known: bool,
+    /// Tool-use bytes the model wrote (chars / 4), capped per call.
+    pub tool_inputs: u64,
+    /// `output − thinking − inputs` per call: exact.
+    pub prose: u64,
+    sources: [u64; 8],
+    pub files: Vec<FileRow>,
+    /// `size` less everything above: the compaction summary, reminders no
+    /// attachment recorded, cache accounting.
+    pub other: u64,
+    /// What per-step reconciliation removed from the estimates.
+    pub reconciled: u64,
+    /// What the overflow would have been with no reconciliation at all.
+    pub overflow_raw: u64,
+    /// A model switch that did not shrink the window: kept, noted.
+    pub model_switch_kept: Option<(String, String, i64)>,
+    pub approx: bool,
+    pub mode: Mode,
+}
+
+impl Residency {
+    pub fn source(&self, s: Source) -> u64 {
+        self.sources[s.idx()]
+    }
+    /// The six result kinds together.
+    pub fn results(&self) -> u64 {
+        Source::ALL[..6].iter().map(|s| self.source(*s)).sum()
+    }
+    /// Everything injected between calls: results, prompts, harness.
+    pub fn injected(&self) -> u64 {
+        self.sources.iter().sum()
+    }
+    pub fn messages(&self) -> u64 {
+        self.size.saturating_sub(self.prefix)
+    }
+    /// Rows in display order: the eight sources, then thinking, inputs,
+    /// prose, other. `(label, tokens, exact)`.
+    pub fn rows(&self) -> Vec<(&'static str, u64, bool)> {
+        let mut v: Vec<(&'static str, u64, bool)> = Source::ALL
+            .iter()
+            .map(|s| (s.label(), self.source(*s), false))
+            .collect();
+        v.push(("thinking", self.thinking, true));
+        v.push(("tool inputs", self.tool_inputs, false));
+        v.push(("prose", self.prose, true));
+        v.push(("other", self.other, false));
+        v
+    }
+}
+
+fn source_of(c: &crate::tools::Call) -> Source {
+    match c.name.as_str() {
+        "Read" | "NotebookRead" => Source::Files,
+        "Bash" if c.path.is_some() => Source::Files,
+        "Bash" => Source::BashOutput,
+        n if n.starts_with("mcp:") => Source::McpResults,
+        "Agent" | "Task" => Source::AgentReturns,
+        "WebFetch" | "WebSearch" => Source::Web,
+        _ => Source::OtherResults,
+    }
+}
+
+fn writes_file(c: &crate::tools::Call) -> bool {
+    matches!(
+        c.name.as_str(),
+        "Edit" | "Write" | "MultiEdit" | "NotebookEdit"
+    )
+}
+
+/// Attribute `size` tokens of context. `prefix_first` is the first call's
+/// cached part ([`ContextView::prefix`]); `cwd` resolves the relative paths
+/// a Bash reader names; `capture` is the `/context` table the person ran,
+/// with the turn it ran in — its non-`Messages` categories are Claude Code's
+/// own prefix and replace the first-call estimate (+33 % on the one ground
+/// truth, PRD §3.2 G), unless a model switch since re-measured everything.
+pub fn residency(
     agg: &Aggregate,
     tools: &crate::tools::Stats,
+    prefix_first: u64,
     size: u64,
-    prefix: u64,
-    since_turn: usize,
-) -> Anatomy {
-    let turns = agg.turns.iter().filter(|t| t.number >= since_turn);
-    let mut thinking = 0;
-    let mut harness = 0;
-    let mut prose = 0;
-    let mut approx = false;
-    for t in turns {
-        thinking += t.usage.thinking;
-        harness += t.harness_tokens;
-        approx |= t.harness_approx;
-        prose += (t.prose_chars / 4) as u64;
-    }
-    let calls = tools.calls.iter().filter(|c| c.turn >= since_turn);
-    let mut tool_inputs = 0;
-    let mut tool_results = 0;
-    for c in calls {
-        tool_inputs += (c.input_chars / 4) as u64;
-        tool_results += c.result_tokens_est;
-    }
-    let placed = prefix + tool_inputs + tool_results + thinking + harness + prose;
-    let (placed_scaled, unattributed) = if placed > size && size > 0 {
-        // Estimates overshoot the exact size: scale them to fit.
-        approx = true;
-        (size, 0)
-    } else {
-        (placed, size.saturating_sub(placed))
+    cwd: Option<&std::path::Path>,
+    capture: Option<(&crate::transcript::ContextCapture, usize)>,
+) -> Residency {
+    // API-error lines (`<synthetic>`, zero usage) are responses with no
+    // context; a drop to 0 is not a boundary. `Reference::Boundary.call`
+    // indexes this filtered list.
+    let calls: Vec<&super::usage::CallRecord> =
+        agg.calls.iter().filter(|c| c.context() > 0).collect();
+    let mut r = Residency {
+        size,
+        prefix: prefix_first,
+        prefix_tightened: false,
+        since: Reference::SessionStart,
+        calls_since: 0,
+        thinking: 0,
+        thinking_known: first_seen::THINKING_TOKENS.at_most(agg.version.as_deref()),
+        tool_inputs: 0,
+        prose: 0,
+        sources: [0; 8],
+        files: Vec::new(),
+        other: size.saturating_sub(prefix_first),
+        reconciled: 0,
+        overflow_raw: 0,
+        model_switch_kept: None,
+        approx: false,
+        mode: Mode::Estimated,
     };
-    let scale = if placed > 0 {
-        placed_scaled as f64 / placed as f64
-    } else {
-        1.0
-    };
-    let s = |v: u64| (v as f64 * scale) as u64;
-    Anatomy {
-        prefix: s(prefix),
-        tool_inputs: s(tool_inputs),
-        tool_results: s(tool_results),
-        thinking: s(thinking),
-        harness: s(harness),
-        prose: s(prose),
-        unattributed,
-        approx: approx || tool_inputs > 0 || tool_results > 0 || prose > 0,
+    if calls.is_empty() {
+        return r;
     }
+    let n = calls.len();
+    // Calls are chronological, so every "which call carried this" lookup is
+    // a binary search: a call without a timestamp inherits its predecessor's
+    // (the linear scans this replaced made a 6 000-call session's coach
+    // replay thirty times slower).
+    let times: Vec<i64> = {
+        let mut last = i64::MIN;
+        calls
+            .iter()
+            .map(|c| {
+                if let Some(a) = c.at_ms {
+                    last = last.max(a);
+                }
+                last
+            })
+            .collect()
+    };
+    // The first call at or after `ms`.
+    let first_at_or_after = |ms: i64| -> Option<usize> {
+        let k = times.partition_point(|&t| t < ms);
+        (k < n).then_some(k)
+    };
+    // The last call at or before `ms` — never one before the first timestamp.
+    let last_at_or_before = |ms: i64| -> Option<usize> {
+        let k = times.partition_point(|&t| t <= ms).checked_sub(1)?;
+        (times[k] != i64::MIN).then_some(k)
+    };
+    let mut first_call_of_turn: std::collections::HashMap<usize, usize> = Default::default();
+    for (k, c) in calls.iter().enumerate() {
+        first_call_of_turn.entry(c.turn).or_insert(k);
+    }
+
+    // An explicit boundary applies from the first call after its line.
+    let explicit: Vec<(usize, RefKind)> = agg
+        .boundaries
+        .iter()
+        .filter_map(|b| {
+            let k = match b.at.as_deref().and_then(super::cost::parse_ts_ms) {
+                Some(ms) => first_at_or_after(ms),
+                None => (0..n).find(|&k| calls[k].turn >= b.turn),
+            }?;
+            Some((k, RefKind::from_boundary(&b.kind)))
+        })
+        .collect();
+
+    // The reference: the last boundary of any kind (FR-17, FR-18). Within a
+    // session the context never shrinks except by removal or re-measurement,
+    // so any negative step is one.
+    let mut start = 0usize;
+    let mut prefix = prefix_first;
+    if let Some((_, kind)) = explicit.iter().find(|(k, _)| *k == 0) {
+        r.since = Reference::Boundary {
+            kind: *kind,
+            call: 0,
+            delta: 0,
+        };
+    }
+    let mut last_model: Option<&str> = None;
+    for k in 0..n {
+        let ctx = calls[k].context();
+        let mdl = calls[k].model.as_str();
+        let model_changed = last_model.is_some_and(|m| m != mdl);
+        if k > 0 {
+            let prev = calls[k - 1].context();
+            let delta = ctx as i64 - prev as i64;
+            let explicit_here = explicit.iter().find(|(i, _)| *i == k).map(|(_, kd)| *kd);
+            let kind = if ctx < prev {
+                Some(explicit_here.unwrap_or(if model_changed {
+                    RefKind::ModelSwitch
+                } else if (ctx as f64) < prev as f64 * (1.0 - COMPACTION_DROP_RATIO) {
+                    RefKind::Heuristic
+                } else {
+                    RefKind::Shrink
+                }))
+            } else {
+                explicit_here
+            };
+            if let Some(kind) = kind {
+                start = k;
+                r.since = Reference::Boundary {
+                    kind,
+                    call: k,
+                    delta,
+                };
+                r.model_switch_kept = None;
+                if ctx < prefix {
+                    prefix = ctx;
+                    r.prefix_tightened = true;
+                }
+            } else if model_changed {
+                r.model_switch_kept =
+                    Some((last_model.unwrap_or("").to_string(), mdl.to_string(), delta));
+            }
+        }
+        if !mdl.is_empty() && mdl != "<synthetic>" {
+            last_model = Some(mdl);
+        }
+    }
+    // Calibration: the /context table's own prefix, when the person ran one
+    // and no model switch since has re-measured the window (FR-14, decision 4).
+    if let Some((cap, turn)) = capture {
+        let switched_since = matches!(
+            r.since,
+            Reference::Boundary { kind: RefKind::ModelSwitch, call, .. } if calls[call].turn > turn
+        );
+        let cal: u64 = cap
+            .categories
+            .iter()
+            .filter(|(name, _)| !name.eq_ignore_ascii_case("Messages"))
+            .map(|(_, t)| *t)
+            .sum();
+        if cal > 0 && !switched_since {
+            // The running minimum still applies: a boundary below the table's
+            // figure is the tighter bound.
+            let floor = if r.prefix_tightened { prefix } else { u64::MAX };
+            prefix = cal.min(floor);
+            r.mode = Mode::Calibrated { turn };
+        }
+    }
+    r.prefix = prefix;
+    let m = n - start;
+    r.calls_since = m;
+
+    // Every estimate lands on a step: the growth from one call to the next.
+    const NS: usize = 8;
+    let mut inj: Vec<[u64; NS]> = vec![[0; NS]; m];
+    let mut inputs_at: Vec<u64> = vec![0; m];
+    // (step, path, tokens, is a read)
+    let mut file_steps: Vec<(usize, String, u64, bool)> = Vec::new();
+    let resolve = |p: &str| -> String {
+        if std::path::Path::new(p).is_absolute() {
+            p.to_string()
+        } else {
+            cwd.map(|c| c.join(p).to_string_lossy().into_owned())
+                .unwrap_or_else(|| p.to_string())
+        }
+    };
+    // A result finished at `f` is in the context of the first call after it.
+    let result_step = |f: i64| -> Option<usize> {
+        let k = first_at_or_after(f)?;
+        (k >= start).then(|| k - start)
+    };
+    // A tool_use started at `s` was written by the last call at or before it.
+    let issue_step = |s: i64| -> Option<usize> {
+        let k = last_at_or_before(s)?;
+        (k >= start).then(|| k - start)
+    };
+    for c in &tools.calls {
+        if let Some(step) = c.started_at.and_then(issue_step) {
+            let tok = (c.input_chars / 4) as u64;
+            inputs_at[step] += tok;
+            if let (Some(p), true) = (&c.path, writes_file(c)) {
+                file_steps.push((step, resolve(p), tok, false));
+            }
+        }
+        // No result yet, or one that landed after the last call: not resident
+        // (FR-12). A cleared result has `result_tokens_est == 0` already.
+        if let Some(step) = c.finished_at.and_then(result_step) {
+            let source = source_of(c);
+            inj[step][source.idx()] += c.result_tokens_est;
+            if let (Some(p), Source::Files) = (&c.path, source) {
+                file_steps.push((step, resolve(p), c.result_tokens_est, true));
+            }
+        }
+    }
+    // A turn's prompt lands at the turn's first call. A turn that began before
+    // the window lost its prompt to the boundary.
+    let first_step_of_turn = |turn: usize| -> Option<usize> {
+        let k = *first_call_of_turn.get(&turn)?;
+        (k >= start).then(|| k - start)
+    };
+    for t in &agg.turns {
+        if let Some(step) = first_step_of_turn(t.number) {
+            inj[step][Source::Prompts.idx()] +=
+                (t.prompt_chars / 4) as u64 + t.prompt_images as u64 * 1_500;
+        }
+    }
+    // An attachment is in the context of the first call after it, like a tool
+    // result — an attachment with no timestamp falls to its turn's first call.
+    // Attachments before the window's start left with the boundary.
+    for e in &agg.harness_events {
+        let step = match e.at_ms {
+            Some(ms) => result_step(ms),
+            None => first_step_of_turn(e.turn),
+        };
+        if let Some(step) = step {
+            inj[step][Source::Harness.idx()] += e.tokens;
+            r.approx |= e.approx;
+        }
+    }
+    // Reconcile each step against the exact room it had (FR-16). The first
+    // step of the window measures from the prefix: the uncached first prompt
+    // (FR-19), or everything the boundary left behind.
+    let mut raw_injected = 0u64;
+    let mut scale_at: Vec<f64> = vec![1.0; m];
+    for s in 0..m {
+        let k = start + s;
+        let ctx = calls[k].context() as i64;
+        let (d, out_prev) = if s == 0 {
+            (ctx - prefix as i64, 0u64)
+        } else {
+            (
+                ctx - calls[k - 1].context() as i64,
+                calls[k - 1].usage.output,
+            )
+        };
+        let budget = (d - out_prev as i64).max(0) as u64;
+        let est: u64 = inj[s].iter().sum();
+        raw_injected += est;
+        if est > budget && est > 0 {
+            let f = budget as f64 / est as f64;
+            scale_at[s] = f;
+            for v in inj[s].iter_mut() {
+                *v = (*v as f64 * f) as u64;
+            }
+            r.reconciled += est - inj[s].iter().sum::<u64>();
+        }
+    }
+    // The model's own output, exactly; the in-flight last call excluded — its
+    // output is not in any context yet.
+    for k in start..n.saturating_sub(1) {
+        let u = &calls[k].usage;
+        let think = u.thinking.min(u.output);
+        let inputs = inputs_at[k - start].min(u.output - think);
+        r.thinking += think;
+        r.tool_inputs += inputs;
+        r.prose += u.output - think - inputs;
+    }
+    for row in &inj {
+        for (i, v) in row.iter().enumerate() {
+            r.sources[i] += v;
+        }
+    }
+    r.approx |= r.injected() > 0 || r.tool_inputs > 0;
+    let mut files: std::collections::BTreeMap<String, FileRow> = Default::default();
+    for (step, path, tok, is_read) in file_steps {
+        let e = files.entry(path.clone()).or_insert_with(|| FileRow {
+            path,
+            tokens: 0,
+            written: 0,
+            reads: 0,
+        });
+        if is_read {
+            e.tokens += (tok as f64 * scale_at[step]) as u64;
+            e.reads += 1;
+        } else {
+            e.written += tok;
+        }
+    }
+    let mut files: Vec<FileRow> = files.into_values().collect();
+    files.sort_by(|a, b| {
+        (b.tokens + b.written)
+            .cmp(&(a.tokens + a.written))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+    r.files = files;
+    let exact = prefix + r.thinking + r.tool_inputs + r.prose;
+    r.overflow_raw = (exact + raw_injected).saturating_sub(size);
+    let placed = exact + r.injected();
+    if placed > size {
+        // Cannot happen after per-step reconciliation unless `size` is an
+        // override below the last call's context; scale the estimates, never
+        // the exact parts.
+        let room = size.saturating_sub(exact);
+        let inj_total = r.injected();
+        if inj_total > 0 {
+            let f = room as f64 / inj_total as f64;
+            for v in r.sources.iter_mut() {
+                *v = (*v as f64 * f) as u64;
+            }
+        }
+        r.other = 0;
+    } else {
+        r.other = size - placed;
+    }
+    r
 }
 
 #[cfg(test)]
@@ -629,8 +1317,98 @@ mod band_tests {
         assert!(cfg.disabled);
     }
 
+    fn synth(lines: Vec<serde_json::Value>) -> (Aggregate, crate::tools::Stats) {
+        let parsed: Vec<crate::transcript::Line> = lines
+            .into_iter()
+            .map(crate::transcript::Line::from_value)
+            .collect();
+        (
+            Aggregate::from_lines(&parsed),
+            crate::tools::Stats::from_lines(&parsed),
+        )
+    }
+    fn ts(sec: u32) -> String {
+        format!("2026-01-01T00:{:02}:{:02}Z", sec / 60, sec % 60)
+    }
+    fn user(sec: u32, text: &str) -> serde_json::Value {
+        serde_json::json!({"type":"user","timestamp":ts(sec),"message":{"role":"user","content":text}})
+    }
+    /// One API response; `ctx` is `(cache_read, uncached input)`, summed.
+    fn call(
+        sec: u32,
+        id: &str,
+        model: &str,
+        ctx: (u64, u64),
+        out: u64,
+        think: u64,
+        content: serde_json::Value,
+    ) -> serde_json::Value {
+        let (cache_read, input) = ctx;
+        serde_json::json!({"type":"assistant","timestamp":ts(sec),"requestId":id,
+            "message":{"id":id,"model":model,"content":content,
+                "usage":{"input_tokens":input,"cache_read_input_tokens":cache_read,"cache_creation_input_tokens":0,
+                         "output_tokens":out,"output_tokens_details":{"thinking_tokens":think}}}})
+    }
+    fn text() -> serde_json::Value {
+        serde_json::json!([{"type":"text","text":"ok"}])
+    }
+    fn read(id: &str, path: &str) -> serde_json::Value {
+        serde_json::json!([{"type":"tool_use","id":id,"name":"Read","input":{"file_path":path}}])
+    }
+    fn result(sec: u32, id: &str, chars: usize) -> serde_json::Value {
+        serde_json::json!({"type":"user","timestamp":ts(sec),"message":{"role":"user",
+            "content":[{"type":"tool_result","tool_use_id":id,"content":"x".repeat(chars)}]}})
+    }
+    fn placed(r: &Residency) -> u64 {
+        r.prefix + r.thinking + r.tool_inputs + r.prose + r.injected() + r.other
+    }
+
     #[test]
-    fn anatomy_places_every_token_once() {
+    fn residency_places_every_token_once_on_every_fixture() {
+        for name in [
+            "session-a",
+            "session-b",
+            "session-c",
+            "session-d",
+            "session-e",
+        ] {
+            let a = agg(name);
+            let tools = crate::tools::Stats::from_lines(
+                &crate::transcript::parse_file(
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join(format!("fixtures/{name}.jsonl")),
+                )
+                .unwrap(),
+            );
+            let v = view(&a, None, None, None);
+            let r = residency(&a, &tools, v.prefix, v.size, None, None);
+            assert_eq!(placed(&r), v.size, "{name}: {r:?}");
+            let an = Anatomy::from(&r);
+            let sum: u64 = an.slices().iter().map(|(_, v)| v).sum();
+            assert_eq!(sum, v.size, "{name}: the bar's slices are the same tokens");
+            assert!(r.prefix <= v.prefix, "{name}: FR-20 only lowers the prefix");
+            // Whatever would have overflowed was reconciled away (FR-16) —
+            // guaranteed by construction while `other ≥ 0` — and it is small:
+            // the fixtures' strings are capped (PRD §3.2 C), so results
+            // undershoot; only a prompt or attachment estimate can overshoot
+            // a step (fixture E: 664 tokens on 59 k, 1.1 %).
+            assert!(
+                r.reconciled >= r.overflow_raw,
+                "{name}: reconciled {} < overflow_raw {}",
+                r.reconciled,
+                r.overflow_raw
+            );
+            assert!(
+                r.overflow_raw * 50 < v.size,
+                "{name}: overflow_raw {} is over 2 % of {}",
+                r.overflow_raw,
+                v.size
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_b_starts_at_its_compaction() {
         let a = agg("session-b");
         let tools = crate::tools::Stats::from_lines(
             &crate::transcript::parse_file(
@@ -638,17 +1416,216 @@ mod band_tests {
             )
             .unwrap(),
         );
-        let size = a.context_size();
-        let an = anatomy(&a, &tools, size, 60_000, 1);
-        let sum: u64 = an.slices().iter().map(|(_, v)| v).sum();
+        let v = view(&a, None, None, None);
+        let r = residency(&a, &tools, v.prefix, v.size, None, None);
         assert!(
-            sum >= size.saturating_sub(7) && sum <= size,
-            "{an:?} vs {size}"
+            matches!(r.since, Reference::Boundary { .. }),
+            "{:?}",
+            r.since
         );
-        assert!(an.harness > 0 && an.tool_results > 0 && an.tool_inputs > 0 && an.prose > 0);
-        assert!(an.approx);
-        // Since a later boundary, less is placed.
-        let later = anatomy(&a, &tools, size, 60_000, 5);
-        assert!(later.tool_results <= an.tool_results);
+        assert!(r.calls_since < a.calls.len());
+        assert!(r.thinking_known);
+    }
+
+    #[test]
+    fn a_context_table_calibrates_the_prefix() {
+        // Fixture D holds the corpus's one native /context capture: System
+        // prompt 10.2 k + System tools 31.2 k + Skills 4.8 k = 46 200, against a
+        // first-call estimate a third larger (PRD §3.2 G).
+        let lines = crate::transcript::parse_file(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-d.jsonl"),
+        )
+        .unwrap();
+        let a = Aggregate::from_lines(&lines);
+        let tools = crate::tools::Stats::from_lines(&lines);
+        let mut pfx = crate::prefix::Prefix::default();
+        for l in &lines {
+            pfx.push(l);
+        }
+        let cap = pfx
+            .context_capture
+            .as_ref()
+            .expect("fixture D has the table");
+        let turn = a
+            .slash_commands
+            .iter()
+            .rev()
+            .find(|(_, c)| c == "/context")
+            .map(|(t, _)| *t)
+            .unwrap_or(0);
+        let v = view(&a, None, None, None);
+        let r = residency(&a, &tools, v.prefix, v.size, None, Some((cap, turn)));
+        assert_eq!(r.mode, Mode::Calibrated { turn });
+        assert_eq!(r.prefix, 46_200, "{r:?}");
+        assert!(v.prefix > 46_200, "the first call overstated: {}", v.prefix);
+        assert_eq!(placed(&r), v.size);
+        // Without the table the first call's figure stands.
+        let e = residency(&a, &tools, v.prefix, v.size, None, None);
+        assert_eq!(e.mode, Mode::Estimated);
+        assert!(e.prefix >= 46_200);
+    }
+
+    #[test]
+    fn the_first_prompt_is_reconciled_against_the_uncached_first_input() {
+        // FR-19: 4 000 chars typed (≈ 1 000 tokens estimated) but the first
+        // call's uncached input was 200 — the prompt row can claim 200.
+        let (a, t) = synth(vec![
+            user(0, &"p".repeat(4_000)),
+            call(1, "r1", "m", (10_000, 200), 100, 0, text()),
+            call(2, "r2", "m", (10_300, 0), 50, 0, text()),
+        ]);
+        let r = residency(&a, &t, 10_000, 10_300, None, None);
+        assert_eq!(r.source(Source::Prompts), 200, "{r:?}");
+        assert_eq!(r.reconciled, 800);
+        assert_eq!(placed(&r), 10_300);
+    }
+
+    #[test]
+    fn a_drop_under_the_heuristic_is_still_a_boundary_and_tightens_the_prefix() {
+        // Corpus #104: 83 199 → 60 451 was 27.3 %, under the 30 % rule, and
+        // 22 748 tokens left the window with nothing declared (FR-18); a
+        // drop below the first call's cached part lowers the prefix (FR-20).
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m", (60_000, 2_000), 100, 0, text()),
+            call(2, "r2", "m", (80_000, 0), 100, 0, text()),
+            call(3, "r3", "m", (58_400, 0), 100, 0, text()),
+            call(4, "r4", "m", (59_600, 0), 100, 0, text()),
+        ]);
+        let r = residency(&a, &t, 60_000, 59_600, None, None);
+        assert_eq!(
+            r.since,
+            Reference::Boundary {
+                kind: RefKind::Shrink,
+                call: 2,
+                delta: -21_600
+            }
+        );
+        assert_eq!(r.prefix, 58_400);
+        assert!(r.prefix_tightened);
+        assert_eq!(r.calls_since, 2);
+        assert_eq!(placed(&r), 59_600);
+        // A ≥ 30 % drop keeps its old name.
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m", (60_000, 0), 100, 0, text()),
+            call(2, "r2", "m", (80_000, 0), 100, 0, text()),
+            call(3, "r3", "m", (40_000, 0), 100, 0, text()),
+        ]);
+        let r = residency(&a, &t, 60_000, 40_000, None, None);
+        assert!(matches!(
+            r.since,
+            Reference::Boundary {
+                kind: RefKind::Heuristic,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_shrinking_model_switch_resets_and_a_growing_one_is_only_noted() {
+        // Decision 7. Observed: −28 700 on 219 708 at the opus → sonnet switch.
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m1", (10_000, 0), 100, 0, text()),
+            call(2, "r2", "m1", (12_000, 0), 100, 0, text()),
+            call(3, "r3", "m2", (11_000, 0), 100, 0, text()),
+        ]);
+        let r = residency(&a, &t, 10_000, 11_000, None, None);
+        assert!(matches!(
+            r.since,
+            Reference::Boundary {
+                kind: RefKind::ModelSwitch,
+                call: 2,
+                delta: -1_000
+            }
+        ));
+        assert!(r.model_switch_kept.is_none());
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m1", (10_000, 0), 100, 0, text()),
+            call(2, "r2", "m1", (12_000, 0), 100, 0, text()),
+            call(3, "r3", "m2", (13_000, 0), 100, 0, text()),
+        ]);
+        let r = residency(&a, &t, 10_000, 13_000, None, None);
+        assert_eq!(r.since, Reference::SessionStart);
+        assert_eq!(
+            r.model_switch_kept,
+            Some(("m1".to_string(), "m2".to_string(), 1_000))
+        );
+    }
+
+    #[test]
+    fn an_estimate_over_its_step_is_reconciled_on_that_step() {
+        // Corpus #60: a result whose chars / 4 claims more than the exact
+        // room its step had (+42 % on one call). The excess comes off there.
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m", (10_000, 0), 100, 0, read("t1", "/p/a.rs")),
+            result(2, "t1", 40_000), // ≈ 10 000 tokens claimed
+            call(3, "r2", "m", (14_100, 0), 50, 0, text()), // room: 4 100 − 100 = 4 000
+        ]);
+        let r = residency(&a, &t, 10_000, 14_100, None, None);
+        assert_eq!(r.source(Source::Files), 4_000, "{r:?}");
+        assert_eq!(r.reconciled, 6_000);
+        assert_eq!(r.overflow_raw, 6_000, "what it would have been");
+        assert_eq!(r.files.len(), 1);
+        assert_eq!(r.files[0].path, "/p/a.rs");
+        assert_eq!(r.files[0].tokens, 4_000);
+        assert_eq!(r.files[0].reads, 1);
+        assert_eq!(placed(&r), 14_100);
+        assert_eq!(r.other, 0);
+    }
+
+    #[test]
+    fn the_in_flight_call_and_a_trailing_result_are_not_resident() {
+        // FR-12. The last call's output is in no context yet; a result that
+        // landed after it neither.
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m", (10_000, 0), 100, 20, text()),
+            call(2, "r2", "m", (10_100, 0), 800, 500, read("t1", "/p/a.rs")),
+            result(3, "t1", 8_000),
+        ]);
+        let r = residency(&a, &t, 10_000, 10_100, None, None);
+        assert_eq!(r.thinking, 20);
+        assert_eq!(r.source(Source::Files), 0);
+        assert!(r.files.is_empty());
+        assert_eq!(placed(&r), 10_100);
+    }
+
+    #[test]
+    fn prose_is_the_exact_remainder_of_output() {
+        let cmd = "x".repeat(800); // 200 tokens of tool input
+        let bash = serde_json::json!([{"type":"tool_use","id":"t1","name":"Bash","input":{"command":cmd}}]);
+        let (a, t) = synth(vec![
+            user(0, "go"),
+            call(1, "r1", "m", (10_000, 0), 1_000, 300, bash),
+            call(2, "r2", "m", (11_000, 0), 10, 0, text()),
+        ]);
+        let r = residency(&a, &t, 10_000, 11_000, None, None);
+        assert_eq!(r.thinking, 300);
+        assert_eq!(r.tool_inputs, 200);
+        assert_eq!(r.prose, 500);
+    }
+
+    #[test]
+    fn anatomy_slices_are_the_residency_in_bar_order() {
+        let (a, t) = synth(vec![
+            user(0, &"p".repeat(400)),
+            call(1, "r1", "m", (10_000, 100), 100, 30, read("t1", "/p/a.rs")),
+            result(2, "t1", 2_000),
+            call(3, "r2", "m", (10_700, 0), 40, 0, text()),
+        ]);
+        let r = residency(&a, &t, 10_000, 10_700, None, None);
+        let an = Anatomy::from(&r);
+        assert_eq!(an.prefix, 10_000);
+        assert_eq!(an.thinking, 30);
+        assert_eq!(an.tool_results, r.source(Source::Files));
+        assert_eq!(an.unattributed, r.other + r.source(Source::Prompts));
+        assert_eq!(
+            an.slices().map(|(l, _)| l),
+            ["prefix", "inputs", "results", "thinking", "harness", "prose", "other"]
+        );
     }
 }

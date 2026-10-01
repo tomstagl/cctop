@@ -1,0 +1,34 @@
+---
+source: src/ui/sources_view.rs
+expression: out
+---
+┌ Sources — 142k of 1.00M est, since model switch (−58k)  (Esc back) ────────────────────────────────────────────────────────────────────────────────────────────┐
+│ SOURCE             TOKENS SHARE  NOTE                                                                                                                          │
+│ prefix               ≈49k   34%  system + tools + skills + CLAUDE.md · i for the breakdown                                                                     │
+│ ── messages: 93k over 3 calls ──                                                                                                                               │
+│ bash output           ≈48    0%  builds, tests, greps, multi-file cats                                                                                         │
+│ other results         ≈83    0%  Grep, Glob, ToolSearch, edit confirmations                                                                                    │
+│ tool inputs          ≈221    0%  what the model wrote into tool calls                                                                                          │
+│ prose                 277    0%  exact: output − thinking − inputs                                                                                             │
+│ other                ≈92k   64%  the compaction summary, reminders no attachment recorded                                                                      │
+│ prefix ≈ the first call's cached part — run /context once to calibrate it                                                                                      │
+│ results, inputs and prompts ≈ chars / 4, reconciled per step against Δcontext − previous output; thinking and prose exact                                      │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+│                                                                                                                                                                │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

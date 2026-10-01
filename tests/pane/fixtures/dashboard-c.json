@@ -42,7 +42,7 @@
             "tone": "dim"
           },
           {
-            "text": "967k",
+            "text": "171k",
             "tone": "fg"
           },
           {
@@ -50,7 +50,7 @@
             "tone": "dim"
           },
           {
-            "text": "906k",
+            "text": "111k",
             "tone": "fg"
           },
           {
@@ -58,7 +58,7 @@
             "tone": "dim"
           },
           {
-            "text": "   +0/turn",
+            "text": "   +4.1k/turn",
             "tone": "dim"
           }
         ],
@@ -77,7 +77,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈41k",
+            "text": "≈58k",
             "tone": "bold"
           },
           {
@@ -103,11 +103,11 @@
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "   ",
             "tone": "dim"
           },
           {
-            "text": "≈4.9k",
+            "text": "≈316",
             "tone": "bold"
           },
           {
@@ -115,11 +115,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆▆",
+            "text": "",
             "tone": "s0"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -133,11 +133,11 @@
             "tone": "fg"
           },
           {
-            "text": " ",
+            "text": "    ",
             "tone": "dim"
           },
           {
-            "text": "≈5.5k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -145,11 +145,11 @@
             "tone": "dim"
           },
           {
-            "text": "▇▇",
+            "text": "",
             "tone": "s1"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -163,11 +163,11 @@
             "tone": "fg"
           },
           {
-            "text": "   ",
+            "text": "      ",
             "tone": "dim"
           },
           {
-            "text": "≈1.7k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -175,11 +175,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆",
+            "text": "",
             "tone": "s2"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -193,11 +193,11 @@
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "    ",
             "tone": "dim"
           },
           {
-            "text": "≈5.0k",
+            "text": "≈49",
             "tone": "bold"
           },
           {
@@ -205,11 +205,76 @@
             "tone": "dim"
           },
           {
-            "text": "▇▇",
+            "text": "",
             "tone": "s2"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  since compaction (inferred) (−111k) · 1 call",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other results",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈49",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other",
+            "tone": "fg"
+          },
+          {
+            "text": "            ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈1.6k",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "2%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  prefix ≈ the first call's cached part — run /context once to calibrate it",
             "tone": "dim"
           }
         ],
@@ -220,7 +285,7 @@
             "tone": "dim"
           },
           {
-            "text": "0",
+            "text": "1",
             "tone": "fg"
           },
           {
@@ -238,6 +303,14 @@
           {
             "text": "0",
             "tone": "fg"
+          },
+          {
+            "text": "   autocompact in ",
+            "tone": "dim"
+          },
+          {
+            "text": "~28 turns",
+            "tone": "fg"
           }
         ],
         [],
@@ -249,7 +322,7 @@
         ],
         [
           {
-            "text": "  threshold 967k · 906k left · prefix 58k (97 %)",
+            "text": "  threshold 171k · 111k left · prefix 58k (97 %)",
             "tone": "dim"
           }
         ]
@@ -258,27 +331,27 @@
         {
           "label": "prefix",
           "step": 0,
-          "tokens": 41647
+          "tokens": 58130
         },
         {
           "label": "harness",
           "step": 0,
-          "tokens": 4948
+          "tokens": 316
         },
         {
           "label": "thinking",
           "step": 1,
-          "tokens": 5455
+          "tokens": 0
         },
         {
           "label": "inputs",
           "step": 2,
-          "tokens": 1687
+          "tokens": 0
         },
         {
           "label": "results",
           "step": 2,
-          "tokens": 4956
+          "tokens": 49
         }
       ],
       "title": "context"
@@ -2338,7 +2411,7 @@
           "tone": "dim"
         },
         {
-          "text": "906k left",
+          "text": "111k left",
           "tone": "fg"
         }
       ],
@@ -2356,7 +2429,7 @@
           "tone": "dim"
         },
         {
-          "text": "906k left",
+          "text": "111k left",
           "tone": "fg"
         }
       ],

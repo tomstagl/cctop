@@ -26,7 +26,7 @@ test('clock: every/after fire on tick in due order and cancel; now resolves the 
 test('process.run answers from the scripted map and rejects otherwise', async () => {
   const $ = fakeEngine({
     process: {
-      'cctop --version': { exitCode: 0, stdout: 'cctop 0.1.1\n', stderr: '' },
+      'cctop --version': { exitCode: 0, stdout: 'cctop 0.1.1\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
       'cctop boom': new Error('spawn failed'),
     },
   });

@@ -34,6 +34,7 @@ impl Panel for Context {
             return match state.context_view {
                 ContextView::Ledger => crate::ui::ledger_view::handle_key(key, state),
                 ContextView::Prefix => Handled::No,
+                ContextView::Sources => crate::ui::sources_view::handle_key(key, state),
             };
         }
         match key.code {
@@ -45,6 +46,14 @@ impl Panel for Context {
             KeyCode::Char('i') => {
                 state.context_view = ContextView::Prefix;
                 state.overlay = Some(self.id());
+                state.inspector_opens += 1;
+                Handled::Yes
+            }
+            KeyCode::Char('m') => {
+                state.context_view = ContextView::Sources;
+                state.sources_files = false;
+                state.overlay = Some(self.id());
+                state.inspector_opens += 1;
                 Handled::Yes
             }
             _ => Handled::No,
@@ -62,6 +71,9 @@ impl Panel for Context {
             }
             crate::ui::state::ContextView::Prefix => {
                 crate::ui::prefix_view::render(frame, area, state)
+            }
+            crate::ui::state::ContextView::Sources => {
+                crate::ui::sources_view::render(frame, area, state)
             }
         }
     }

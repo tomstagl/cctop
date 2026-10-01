@@ -81,7 +81,7 @@ pub fn compose(state: &State, panel: u8) -> Option<String> {
         6 => format!(
             "cctop: {} subagents ({} running), {} MCP servers, {} background tasks. Are all of them still earning their keep?",
             state.agents.len(),
-            state.agents.values().filter(|a| a.state(state.clock_ms()) == crate::agents::State::Running).count(),
+            crate::agent_ledger::count_in(state, crate::agents::State::Running),
             state.procs.mcp.len(),
             state.tasks.len()
         ),

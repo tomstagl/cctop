@@ -767,6 +767,25 @@ mod tests {
     }
 
     #[test]
+    fn a_point_five_model_has_its_own_row_not_its_prefix() {
+        // "claude-opus-5-5" starts with "claude-opus-5": the longest prefix
+        // wins, so the 5.5 rows must exist or they price as 5.0.
+        let p = Pricing::bundled();
+        let opus = p.price("claude-opus-5-5").unwrap();
+        assert_eq!(
+            (opus.input, opus.output, opus.cache_read()),
+            (4.0, 20.0, 0.20)
+        );
+        let sonnet = p.price("claude-sonnet-5-5").unwrap();
+        assert_eq!(
+            (sonnet.input, sonnet.output, sonnet.cache_read()),
+            (2.0, 10.0, 0.20)
+        );
+        assert_eq!(p.price("claude-opus-5").unwrap().input, 5.0);
+        assert_eq!(p.price("claude-mythos-5-1").unwrap().cache_read(), 0.25);
+    }
+
+    #[test]
     fn user_override_merges_by_model() {
         let mut p = Pricing::bundled();
         p.merge_toml("[models.\"claude-sonnet-5\"]\ninput = 1.0\noutput = 2.0\n[models.\"my-proxy\"]\ninput = 0.5\noutput = 0.5\n");

@@ -343,6 +343,41 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>Σ <code>agent_returned</code> ÷ Σ agent output tokens: the share of what the agents wrote that came back</dd>
 <dt>Measured</dt><dd class="meta">ratio · from the transcript · the subagent's transcript · always an estimate · <a href="../metrics.html#agents_return_ratio">how</a></dd>
 </dl></article>
+<article class="entry" id="workflow_failed">
+<div class="mg">
+<h3>Workflow failed</h3>
+</div><dl>
+<dt>What it means</dt><dd>Agents of a workflow run with a <code>failed</code> journal entry, by phase, each with one cause from its last API-error line (<code>apiErrorStatus</code>, <code>error</code> token) and its call count</dd>
+<dt>Measured</dt><dd class="meta">count · from the subagent's transcript · exact · <a href="../metrics.html#workflow_failed">how</a></dd>
+</dl></article>
+<article class="entry" id="workflow_failed_usd">
+<div class="mg">
+<h3>Workflow failed $</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ <code>agent_cost</code> of the run's failed agents</dd>
+<dt>Measured</dt><dd class="meta">USD · from the subagent's transcript · the price table · always an estimate · <a href="../metrics.html#workflow_failed_usd">how</a></dd>
+</dl></article>
+<article class="entry" id="workflow_waste_pct">
+<div class="mg">
+<h3>Workflow waste</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ <code>agent_waste</code> of the run's agents ÷ the run's priced cost</dd>
+<dt>Measured</dt><dd class="meta">% · from the transcript · the subagent's transcript · hook events (after cctop install) · the price table · always an estimate · <a href="../metrics.html#workflow_waste_pct">how</a></dd>
+</dl></article>
+<article class="entry" id="workflow_overhead">
+<div class="mg">
+<h3>Workflow overhead</h3>
+</div><dl>
+<dt>What it means</dt><dd>The run's priced cost ÷ the main thread's priced responses between the run's start and its end (or now)</dd>
+<dt>Measured</dt><dd class="meta">ratio · from the transcript · the subagent's transcript · the price table · always an estimate · <a href="../metrics.html#workflow_overhead">how</a></dd>
+</dl></article>
+<article class="entry" id="workflow_cold_start_pct">
+<div class="mg">
+<h3>Workflow cold starts</h3>
+</div><dl>
+<dt>What it means</dt><dd>Cache-write $ of the first call of the run's cold-started agents ÷ the run's priced cost</dd>
+<dt>Measured</dt><dd class="meta">% · from the subagent's transcript · the price table · always an estimate · <a href="../metrics.html#workflow_cold_start_pct">how</a></dd>
+</dl></article>
 <article class="entry" id="agent_tokens">
 <div class="mg">
 <h3>Agent tokens</h3>

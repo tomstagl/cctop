@@ -1,0 +1,382 @@
+[
+  {
+    "at_ms": 1789228163567,
+    "kind": "tool",
+    "text": "Workflow /home/user/project/src/b66b20… ▶"
+  },
+  {
+    "at_ms": 1789228165021,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789228183433,
+    "kind": "tool",
+    "text": "Bash echo lore status lore lorem_ipsum_ lorem lorem_ip ---\"; lorem_ -t lorem_ipsum_dolor.json 2>/dev/null | head -1); echo lorem jq -c lorem_ip lorem_ipsum_dolor_si lore lorem_ipsum_dol | lorem_ipsum_dolo… ▶"
+  },
+  {
+    "at_ms": 1789233470443,
+    "kind": "cost",
+    "text": "cold write 350k"
+  },
+  {
+    "at_ms": 1789233470951,
+    "kind": "cost",
+    "text": "cold write 350k"
+  },
+  {
+    "at_ms": 1789233475742,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo 2>/dev/null && echo lorem_ips $(jq -c lorem_ipsum_dolor_sit_ame lorem_i.… ▶"
+  },
+  {
+    "at_ms": 1789233475742,
+    "kind": "cost",
+    "text": "cold write 350k"
+  },
+  {
+    "at_ms": 1789233488407,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && echo lore lorem_ lorem lorem_i ---\" && jq -r lorem_ipsum_dolor_sit_am… ▶"
+  },
+  {
+    "at_ms": 1789233512710,
+    "kind": "tool",
+    "text": "TaskStop lorem ips ▶"
+  },
+  {
+    "at_ms": 1789233521029,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶"
+  },
+  {
+    "at_ms": 1789233528467,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/a3adb6… ▶"
+  },
+  {
+    "at_ms": 1789233529344,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/b68ef4… ▶"
+  },
+  {
+    "at_ms": 1789233530219,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/02ccdd… ▶"
+  },
+  {
+    "at_ms": 1789233531100,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/69da10… ▶"
+  },
+  {
+    "at_ms": 1789233531919,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/52c615… ▶"
+  },
+  {
+    "at_ms": 1789233532783,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/61ffd6… ▶"
+  },
+  {
+    "at_ms": 1789233533521,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2c528b… ▶"
+  },
+  {
+    "at_ms": 1789233541499,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/a3adb6… ▶"
+  },
+  {
+    "at_ms": 1789233542700,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/02ccdd… ▶"
+  },
+  {
+    "at_ms": 1789233543810,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2c528b… ▶"
+  },
+  {
+    "at_ms": 1789233544859,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/2c528b… ▶"
+  },
+  {
+    "at_ms": 1789233588059,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_ && lorem_ipsum_do echo lor lorem_ipsum_dolor_sit_amet_co lorem lore cat $l 2>/dev/null | jq -r lorem_ipsum_dolor_sit_amet lor lorem_ipsum_dolor_sit_amet_ | lorem_ipsum_dolor_sit… ▶"
+  },
+  {
+    "at_ms": 1789233610515,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_ && lorem l find l -maxdepth l -name l.jsonl -print0 | xargs -0 lore }; echo lor lorem_ipsum_dolor_sit_amet_co lorem lore lor | jq -r lorem_ipsum_dolor_sit_amet lor lorem_ipsum_d… ▶"
+  },
+  {
+    "at_ms": 1789234181588,
+    "kind": "tool",
+    "text": "Write /home/user/project/src/fecf13… ▶"
+  },
+  {
+    "at_ms": 1789234208330,
+    "kind": "cost",
+    "text": "cold write 626k"
+  },
+  {
+    "at_ms": 1789234213715,
+    "kind": "tool",
+    "text": "Bash echo lor lorem_ lore lorem_ lorem_i lor lor && awk lorem_ipsum_dolor_sit_ lorem lorem && lorem_ipsu lorem_ipsum_d lorem_ips printf lorem lo lorem lor lorem_ lor lo $l lo lorem_ipsum_dolor_sit_ame ech… ▶"
+  },
+  {
+    "at_ms": 1789234213715,
+    "kind": "cost",
+    "text": "cold write 626k"
+  },
+  {
+    "at_ms": 1789234220020,
+    "kind": "tool",
+    "text": "Write /home/user/project/src/22c707… ▶"
+  },
+  {
+    "at_ms": 1789234220020,
+    "kind": "cost",
+    "text": "cold write 626k"
+  },
+  {
+    "at_ms": 1789234230476,
+    "kind": "tool",
+    "text": "Bash python3 - lorem_i lorem_ lorem_ipsum_do lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_temp lorem_ipsum for lor in lorem_ipsum_dolor_s if lorem_ipsum_dolor lorem_ips lorem_ lor… ▶"
+  },
+  {
+    "at_ms": 1789234232649,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/fecf13… ▶"
+  },
+  {
+    "at_ms": 1789234234675,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_s && l l -f lorem_.md l || l > lorem_ipsu l && grep -q lorem_ipsum_dolor_sit_am lorem_.md || echo \"- lorem_ lor lorem_ip lorem_ipsum_dolor_si… ▶"
+  },
+  {
+    "at_ms": 1789234243629,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/fecf13… ▶"
+  },
+  {
+    "at_ms": 1789234245054,
+    "kind": "tool",
+    "text": "Edit /home/user/project/src/fecf13… ▶"
+  },
+  {
+    "at_ms": 1789234251559,
+    "kind": "tool",
+    "text": "Bash python3 - lorem_i lorem_ lorem_ipsum lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_temp lorem_ipsum_ lorem for lor in lorem_ipsum_dolor_s if lorem_ipsum_dolor lorem_ips lorem_… ▶"
+  },
+  {
+    "at_ms": 1789234409580,
+    "kind": "tool",
+    "text": "Bash lorem ls -t lorem_ipsum_dolor.json | head -1 | xargs jq -c lorem lorem_ipsum_d lorem_i lorem_ipsum_d.ttl ▶"
+  },
+  {
+    "at_ms": 1789234421549,
+    "kind": "tool",
+    "text": "Agent lorem ipsum dolor sit amet ▶"
+  },
+  {
+    "at_ms": 1789234434904,
+    "kind": "tool",
+    "text": "Workflow lorem ipsum dol ▶"
+  },
+  {
+    "at_ms": 1789234436457,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789234442223,
+    "kind": "tool",
+    "text": "Bash sleep lor cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && echo lorem_ips $(jq -c lorem_ipsum_dolor_sit_ame lorem_i.js… ▶"
+  },
+  {
+    "at_ms": 1789234446191,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && echo lorem_ips $(jq -c lorem_ipsum_dolor_sit_ame lorem_i.jsonl | wc -… ▶"
+  },
+  {
+    "at_ms": 1789235024119,
+    "kind": "api",
+    "text": "API error: rate_limit 429 · five hour · resets 20:20 · low-priority retry 20 s"
+  },
+  {
+    "at_ms": 1789244503658,
+    "kind": "cost",
+    "text": "cache TTL now 1h (was 5m)"
+  },
+  {
+    "at_ms": 1789244503658,
+    "kind": "cost",
+    "text": "cold write 649k"
+  },
+  {
+    "at_ms": 1789244505037,
+    "kind": "cost",
+    "text": "cold write 649k"
+  },
+  {
+    "at_ms": 1789244507166,
+    "kind": "tool",
+    "text": "Workflow lorem ipsum dol ▶"
+  },
+  {
+    "at_ms": 1789244507166,
+    "kind": "cost",
+    "text": "cold write 649k"
+  },
+  {
+    "at_ms": 1789244510249,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789245197201,
+    "kind": "api",
+    "text": "API error: rate_limit 429 · five hour · resets 01:20 · low-priority retry 20 s"
+  },
+  {
+    "at_ms": 1789262525603,
+    "kind": "cost",
+    "text": "cold write 659k"
+  },
+  {
+    "at_ms": 1789262526849,
+    "kind": "cost",
+    "text": "cold write 659k"
+  },
+  {
+    "at_ms": 1789262533182,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶"
+  },
+  {
+    "at_ms": 1789262533182,
+    "kind": "cost",
+    "text": "cold write 659k"
+  },
+  {
+    "at_ms": 1789262550347,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolo && python3 - lorem_i lorem_ipsum_dolor_sit_amet_consecte.read lorem_ipsum_dolor_ lorem_ips… ▶"
+  },
+  {
+    "at_ms": 1789262555665,
+    "kind": "tool",
+    "text": "Bash cat lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magn | jq -c lorem_ip ▶"
+  },
+  {
+    "at_ms": 1789262562365,
+    "kind": "tool",
+    "text": "Bash jq -c lor lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magn | wc -c; jq -c lorem_ipsum_d.value lo lorem_ips lorem_ip lorem_ipsum_dolor_s… ▶"
+  },
+  {
+    "at_ms": 1789262574152,
+    "kind": "tool",
+    "text": "Bash jq -c lorem_ipsum_d.value lo lorem_ips lorem_ip lorem_ipsum_dolor_si lorem_ipsum_ lorem_ipsum_dolor_sit_am lorem_ips lorem lorem lorem_ipsum_dolor_sit_amet_consectetur_ad lorem_ipsum_dolor_si lorem_i… ▶"
+  },
+  {
+    "at_ms": 1789262620988,
+    "kind": "tool",
+    "text": "Workflow lorem ipsum dolor sit amet co… ▶"
+  },
+  {
+    "at_ms": 1789262623183,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789263600288,
+    "kind": "api",
+    "text": "API error: rate_limit 429 · five hour · resets 06:20"
+  },
+  {
+    "at_ms": 1789280513593,
+    "kind": "cost",
+    "text": "cold write 685k"
+  },
+  {
+    "at_ms": 1789280514592,
+    "kind": "cost",
+    "text": "cold write 685k"
+  },
+  {
+    "at_ms": 1789280521946,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶"
+  },
+  {
+    "at_ms": 1789280521946,
+    "kind": "cost",
+    "text": "cold write 685k"
+  },
+  {
+    "at_ms": 1789280554101,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolo && python3 - lorem_i lorem_ipsum_dolor_sit_amet_consecte.read lorem_ipsum_dolor_ lorem_ips… ▶"
+  },
+  {
+    "at_ms": 1789280563136,
+    "kind": "tool",
+    "text": "Workflow lorem ipsum dolor sit amet co… ▶"
+  },
+  {
+    "at_ms": 1789280565059,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789281844576,
+    "kind": "api",
+    "text": "API error: rate_limit 429"
+  },
+  {
+    "at_ms": 1789287540245,
+    "kind": "cost",
+    "text": "cold write 695k"
+  },
+  {
+    "at_ms": 1789287541243,
+    "kind": "cost",
+    "text": "cold write 695k"
+  },
+  {
+    "at_ms": 1789287544165,
+    "kind": "tool",
+    "text": "Workflow lorem ipsum dolor sit amet co… ▶"
+  },
+  {
+    "at_ms": 1789287544165,
+    "kind": "cost",
+    "text": "cold write 695k"
+  },
+  {
+    "at_ms": 1789287548318,
+    "kind": "tool",
+    "text": "Workflow ✓ 296"
+  },
+  {
+    "at_ms": 1789287557956,
+    "kind": "tool",
+    "text": "Bash cd lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lo && lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod… ▶"
+  },
+  {
+    "at_ms": 1789287569692,
+    "kind": "tool",
+    "text": "Bash jq -r lorem_ipsum_d | lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_aliqua_lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_s… ▶"
+  },
+  {
+    "at_ms": 1789287572492,
+    "kind": "tool",
+    "text": "Read /home/user/project/src/91f244… ▶"
+  }
+]

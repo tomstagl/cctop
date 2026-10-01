@@ -53,7 +53,9 @@ if [ ! -f "$log" ]; then
   fail "no debug log at $log"
   log=/dev/null
 fi
-load_line=$(grep 'hooks module cctop loaded' "$log" | head -1)
+# Since 2.1.278 the line names the plugin with its source, `cctop@inline`
+# under --plugin-dir; the suffix is where it came from, not its name.
+load_line=$(grep -E 'hooks module cctop(@[A-Za-z0-9_.-]+)? loaded' "$log" | head -1)
 if [ -n "$load_line" ]; then pass "module loaded (${load_line#*loaded }"; else fail "no 'hooks module cctop loaded' line"; fi
 if grep -q '/cctop-pane listed' "$log"; then pass "/cctop-pane listed"; else fail "no '/cctop-pane listed' line"; fi
 self_check=$(grep -o 'cctop: plugin .*' "$log" | head -1)

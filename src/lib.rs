@@ -48,6 +48,8 @@ pub mod theme;
 pub mod tools;
 pub mod transcript;
 pub mod ui;
+pub mod workflow_runs;
+pub mod workflow_script;
 
 /// `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl` for a registry session.
 /// Claude Code derives the slug by replacing every non-alphanumeric byte of

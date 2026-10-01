@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 
 /// The Claude Code version these facts were recovered from.
-pub const READ_FROM: &str = "2.1.274";
+pub const READ_FROM: &str = "2.1.284";
 
 /// A `major.minor.patch` Claude Code version, comparable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -62,12 +62,31 @@ pub mod first_seen {
     pub const PER_TURN_EFFORT: Version = Version(2, 1, 269);
     /// `continued-in` (what `/clear` leaves in the old transcript), `sessionKind`.
     pub const CONTINUED_IN: Version = Version(2, 1, 270);
+    /// `usage.output_tokens_details.thinking_tokens` on every assistant
+    /// line. The oldest transcript on this machine that carries it is
+    /// 2.1.247 (fixture A, 30 922 thinking tokens over the session); the
+    /// version that introduced it is not known, so this is an upper bound.
+    pub const THINKING_TOKENS: Version = Version(2, 1, 247);
     /// `agentName` / `teamName` on every `user`, `assistant`, `system` and
     /// `attachment` line of a teammate's transcript. The oldest teammate
     /// transcript on this machine (2.1.232) has them from line 4; the
     /// version that introduced them is not known, so this is an upper
     /// bound (team PRD §10.3).
     pub const TEAM_NAME: Version = Version(2, 1, 232);
+}
+
+/// The summary Claude Code writes as a `user` line after a compaction:
+/// flagged `isCompactSummary` since 2.1.263 (`first_seen::COMPACT_BOUNDARY`),
+/// before that recognisable only by its text. Only the first sentence is
+/// matched, so a reworded continuation keeps matching: the 2.1.275 – 2.1.278
+/// bundles on this machine carry it, and every `isCompactSummary` line of
+/// this machine's corpus (2.1.263 – 2.1.278) opens with it. A session moved
+/// between machines opens with a different sentence: a handover rebuilt the
+/// context, nothing was compacted, and a drop across it is not a compaction.
+pub mod compaction {
+    pub const SUMMARY_PREAMBLE: &str =
+        "This session is being continued from a previous conversation that ran out of context.";
+    pub const HANDOVER_PREAMBLE: &str = "This session is being continued from another machine.";
 }
 
 /// How Claude Code records an agent team (read on this machine's 19 team
@@ -157,6 +176,32 @@ pub mod task_notification {
     /// `<agent_count>`, `<agents_done>`, `<agents_error>`,
     /// `<agents_skipped>`, `<agents_empty_result>` and `<failures>`.
     pub const AGENT_ID_HEX_LEN: usize = 17;
+}
+
+/// A `Workflow` run as Claude Code writes it (spec §3.2, measured on this
+/// machine 2026-09). Read:
+///
+/// - the journal `<session>/subagents/workflows/<run>/journal.jsonl`: the
+///   `type` of each line (`launched`, `started`, `result`, `failed`), and
+///   `agentId`, `label` (its prefix before `:` only) and `phase` of a start,
+///   `agentId` of a result or failure — never a `result` line's value; its
+///   lines carry no timestamps, so only the file's mtime dates it;
+/// - the run record `<session>/workflows/<run>.json`: `runId`,
+///   `workflowName`, `status` (`completed` / `killed`), `startTime`,
+///   `durationMs`, `scriptPath`, and `script` for the pointer scan only —
+///   never `detail`, `args`, `result`, `logs`, `summary` or `error`. It
+///   describes the run's last invocation only;
+/// - a failed agent's last line: `isApiErrorMessage`, `apiErrorStatus`,
+///   `error` (a machine token).
+pub mod workflow_run {
+    /// The `error` token of an input over the model's window. Claude Code
+    /// writes it on the main session (the coach's A47 `turn-died` rule maps
+    /// it); it has not yet been seen from a workflow agent, so
+    /// `ContextOverflow` ships behind a synthetic test only.
+    pub const PROMPT_TOO_LONG_TOKENS: &[&str] = &["prompt_too_long"];
+    /// The `error` tokens seen on a workflow agent's last line so far
+    /// (429s); every other cause is unobserved.
+    pub const OBSERVED_ERROR_TOKENS: &[&str] = &["rate_limit"];
 }
 
 /// Autocompact arithmetic (recovered from the 2.1.269 binary and the debug
@@ -323,6 +368,7 @@ mod tests {
             "TIERS",
             "TIER_DEFAULT",
             "TOOL_WINDOW_SHARE",
+            "SUMMARY_PREAMBLE",
             "LIVENESS_KEY",
             "NAME_PREFIX",
         ] {

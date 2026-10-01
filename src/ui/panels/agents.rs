@@ -22,12 +22,7 @@ impl Panel for Agents {
         "Agents & MCP".into()
     }
     fn summary(&self, state: &State) -> Option<String> {
-        let now = state.clock_ms();
-        let running = state
-            .agents
-            .values()
-            .filter(|a| a.state(now) == AgentState::Running)
-            .count();
+        let running = crate::agent_ledger::count_in(state, AgentState::Running);
         let mut parts = Vec::new();
         if !state.agents.is_empty() {
             let depth = state.agent_depth();
@@ -120,8 +115,9 @@ impl Panel for Agents {
             .filter(|a| a.workflow.is_none() || state.workflow_journals.is_empty())
             .collect();
         agents.sort_by_key(|a| std::cmp::Reverse(a.started_at));
+        let journal = crate::agent_ledger::JournalWord::of_state(state);
         for a in agents {
-            let (glyph, style) = match a.state(now) {
+            let (glyph, style) = match crate::agent_ledger::effective_state(&journal, a, now) {
                 AgentState::Running => ("◐", accent),
                 AgentState::Done => ("✓", state.theme.ok()),
                 AgentState::Failed => ("✗", state.theme.crit()),

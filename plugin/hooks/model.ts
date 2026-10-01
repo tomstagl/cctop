@@ -15,7 +15,7 @@ export type Visibility = 'unknown' | 'visible' | 'hidden';
 /** The Claude Code version this hooks module's `$` contract was checked
  * against (`plugin/.claude/types/claude-code.d.ts`'s own first line);
  * `scripts/check-plugin-types.sh` catches drift, the header badge shows it. */
-export const TESTED_WITH = '2.1.274';
+export const TESTED_WITH = '2.1.284';
 
 /** The narrowest terminal (whole screen, columns) at which the fullscreen
  * renderer docks a pane beside the transcript; below it the pane is drawn
@@ -117,6 +117,8 @@ export type Model = {
   body: string;
   /** Console's rule line expanded into the key map (`? keys` pressed). */
   keys: boolean;
+  /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
+  openRun: string | null;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -148,7 +150,8 @@ export type Action =
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
   | { type: 'overview.body'; id: string }
-  | { type: 'overview.keys'; keys: boolean };
+  | { type: 'overview.keys'; keys: boolean }
+  | { type: 'agents.run'; run: string | null };
 
 export function initialModel(): Model {
   return {
@@ -192,6 +195,7 @@ export function initialModel(): Model {
     coachStatus: null,
     body: 'events',
     keys: false,
+    openRun: null,
   };
 }
 
@@ -279,6 +283,7 @@ export function reduce(model: Model, action: Action): Model {
         coachToasted: null,
         coachToastTurn: null,
         coachStatus: null,
+        openRun: null,
       };
     case 'verbs':
       return { ...model, verbs: action.verbs };
@@ -311,6 +316,8 @@ export function reduce(model: Model, action: Action): Model {
       return model.body === action.id ? model : { ...model, body: action.id };
     case 'overview.keys':
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
+    case 'agents.run':
+      return model.openRun === action.run ? model : { ...model, openRun: action.run };
   }
 }
 

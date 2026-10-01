@@ -44,7 +44,7 @@ With `-p`, `--debug` writes to a log file, not to stderr. The newest log is
 Grep it:
 
 ```
-grep -c 'hooks module cctop loaded' ~/.claude/debug/latest     # expect 1
+grep -cE 'hooks module cctop(@[A-Za-z0-9_.-]+)? loaded' ~/.claude/debug/latest   # expect 1
 grep -c '/cctop-pane listed' ~/.claude/debug/latest            # expect 1
 grep 'cctop: plugin ' ~/.claude/debug/latest                    # expect one line ending "self-check ok"
 grep -i 'refused' ~/.claude/debug/latest                        # expect no output
@@ -54,7 +54,9 @@ grep 'hook failed' ~/.claude/debug/latest                       # expect no outp
 Expected:
 
 - `claude -p` prints `ok` (or similar) and exits 0.
-- The log holds one line `hooks module cctop loaded (... ); events: session.start,command.run,ui.render`.
+- The log holds one line `hooks module cctop loaded (... ); events: session.start,command.run,ui.render`
+  — since 2.1.278 `hooks module cctop@inline loaded (worker, environment 1, tier user); events: …`:
+  the plugin is named with its source (`@inline` under `--plugin-dir`).
 - The log holds `$.command.register (cctop): /cctop-pane listed`.
 - The log holds one `$.ui.log` line `cctop: plugin <version> (hooks contract
   <TESTED_WITH>) loaded; self-check ok` (plugin 0.8.0+): session.start's
@@ -86,7 +88,7 @@ reserves `/cctop` for the plugin's own skill (`/cctop:cctop`) and refuses
 question 1 of `tasks/prd-cctop-pane.md`: the native command is `cctop-pane`,
 and `/cctop` keeps resolving to the skill, which is the fallback path.
 
-Last automated run: 2026-09-17 (the v0.7.0 release, issue #4), Claude Code 2.1.274 with the contract regenerated against it (`$.agent.register`, `position: "absolute"` on `Box`, a `Markdown` element — additive; `npm run typecheck` names no call site; the first run of `make check-contract` on this machine caught the drift, 32 declarations named), the module released as plugin 0.8.0, by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.8.0"`, `testedWith: "2.1.274"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-16 (the v0.6.0 release, Console — schema 2), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.7.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 12 ms apart. Earlier: 2026-09-16 (the v0.5.0 release), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.6.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 25 ms apart. Earlier: 2026-09-16, Claude Code 2.1.273 with the contract regenerated against it (a `vscode` render surface added, nothing the pane calls changed), the module of plugin 0.5.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 15 ms apart. Earlier: 2026-09-15, Claude Code 2.1.272, plugin 0.4.1 (issue #3), by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, and `~/.cctop/pane/<session>.json` written with `loaded: true`, `open: false` and ISO timestamps (`loadedAt` and `heartbeatAt` 15 ms apart: two clock round trips) for a session whose pane was never opened — the case of issue #3's comment. Earlier: 2026-09-12, Claude Code 2.1.269, the same result.
+Last automated run: 2026-09-29 (the v0.9.1 release: pricing only, the module unchanged), Claude Code 2.1.284, plugin 0.10.0, by the agent through `scripts/check-contract.sh` (no model call): all ten checks ok — load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` or `cctop: … failed` line, marker written, contract surface unchanged, validator and version pins green. Earlier: 2026-09-29 (the daily `contract` job had been red since 2.1.283; PR #19's runs showed the same), Claude Code 2.1.284 with the contract regenerated against it (`$.process.spawn`, `isStdoutTruncated` / `isStderrTruncated` on `$.process.run`'s result, `startedAt` on `SessionUsage`, `$.ui.open` resolving `{ isPlaced }` — additive; `npm run typecheck` named one call site, the poller's engine facade, which took the whole of `$.process` and now takes `run` alone, and the fake engine's results and usage), `TESTED_WITH` and `READ_FROM` 2.1.284, every probed harness fact unchanged (the output-reserve probe's pattern widened: the lookup now takes `e.model`) — released as plugin 0.10.0 / cctop v0.9.0 (release: v0.9.0), by the agent through `scripts/check-contract.sh` (no model call): load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.10.0"`, `testedWith: "2.1.284"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-20 (the daily `contract` job went red when npm's latest reached 2.1.278; PR #10's runs showed the same), Claude Code 2.1.278 with the contract regenerated against it (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next`, four events; `$.fs.read` overloaded for bytes and `$.prompt.fill`'s result widened — additive; `npm run typecheck` named the fake engine's `read` and `fill` and no call site of the pane; the load line now reads `hooks module cctop@inline loaded (worker, environment 1, tier user)`, which the check accepts since this run), `TESTED_WITH` and `READ_FROM` 2.1.278, every probed harness fact unchanged — released as plugin 0.9.0 / cctop v0.8.0 (release: v0.8.0), by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.9.0 (hooks contract 2.1.278) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.9.0"`, `testedWith: "2.1.278"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-17 (the v0.7.0 release, issue #4), Claude Code 2.1.274 with the contract regenerated against it (`$.agent.register`, `position: "absolute"` on `Box`, a `Markdown` element — additive; `npm run typecheck` names no call site; the first run of `make check-contract` on this machine caught the drift, 32 declarations named), the module released as plugin 0.8.0, by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.8.0"`, `testedWith: "2.1.274"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-16 (the v0.6.0 release, Console — schema 2), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.7.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 12 ms apart. Earlier: 2026-09-16 (the v0.5.0 release), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.6.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 25 ms apart. Earlier: 2026-09-16, Claude Code 2.1.273 with the contract regenerated against it (a `vscode` render surface added, nothing the pane calls changed), the module of plugin 0.5.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 15 ms apart. Earlier: 2026-09-15, Claude Code 2.1.272, plugin 0.4.1 (issue #3), by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, and `~/.cctop/pane/<session>.json` written with `loaded: true`, `open: false` and ISO timestamps (`loadedAt` and `heartbeatAt` 15 ms apart: two clock round trips) for a session whose pane was never opened — the case of issue #3's comment. Earlier: 2026-09-12, Claude Code 2.1.269, the same result.
 Claude Code version:
 Result: pending
 
@@ -540,6 +542,99 @@ hooks are off or before its module is accepted.
     `1-6 a 0 body  ·  click a cell, the act line or home  ·  the view bar
     for the other views` and a click on that text collapses it; the rows
     above and below do not move on either surface.
+    Claude Code version:
+    Result: pending
+
+33. **The workflow strip appears while a run is live** (the workflows PRD
+    §4.5, FR-7). A second header row, ` wf     ▸ <phase> <res>/<started>
+    ✗<failed> <cause>×<n> $<run$> <ratio>×main  <name>`, sits under the header
+    and above the six cells while a run is `Live` or `Stalled`.
+    Setup: as item 28, cctop and the plugin from `workflows-prd`; a small
+    workflow ready to start (two phases, a handful of agents); `cctop run`
+    in a second terminal on the same session.
+    Keys: `0` (home, the events body) in the TUI and in the pane; then ask
+    Claude to run the workflow.
+    Expected: within 5 s of the launch the strip appears in both, the same
+    characters at the same width; its phase field names the phase that is
+    running and moves on when the next one starts; the counts are that
+    phase's, the dollars the run's; the body below loses one line and
+    nothing else moves.
+    Claude Code version:
+    Result: pending
+
+34. **The strip goes when the run ends; the detail says `completed`**
+    (the workflows PRD §4.1, §4.5).
+    Setup: as item 33, the run of item 33 left to finish.
+    Keys: none until the completion notification; then `/cctop-pane agents`
+    and press the run's row; in the TUI the agents view, `Enter` on the
+    run's group row.
+    Expected: within 5 s of the notification the strip is gone and the
+    dashboard reads as it did before the launch; the run detail's first row
+    reads `completed` in both, with its duration and dollars.
+    Claude Code version:
+    Result: pending
+
+35. **When the run record is first written** (the workflows PRD §8 Q1).
+    `<session>/workflows/<run>.json` was only ever seen after a run ended;
+    whether it appears at launch, per phase or only at the end decides
+    whether the run's name and the pointer exist while it is live.
+    Setup: as item 33; `ls -lT ~/.claude/projects/<project>/<session>/workflows/`
+    run every few seconds from the launch on (the journal is
+    `<session>/subagents/workflows/<run>/journal.jsonl`).
+    Keys: none.
+    Expected: record here the time the file first appeared against the
+    launch, the phase changes and the completion notification, and whether
+    its `status` was already set when it appeared.
+    First written:
+    Claude Code version:
+    Result: pending
+
+36. **Whether a resume appends a second `launched` line** (the workflows
+    PRD §8 Q2). Both recorded runs show one `launched` line in the journal
+    though one was resumed three times; if a resume writes none, the
+    invocations cannot be told apart from the journal.
+    Setup: the run of item 34, completed; `grep -c '"type":"launched"'
+    <session>/subagents/workflows/<run>/journal.jsonl` before the resume.
+    Keys: ask Claude to resume the run; after it ends, the same `grep -c`.
+    Expected: record the count before and after.
+    Count before / after:
+    Claude Code version:
+    Result: pending
+
+37. **A resumed run is live again, then completed again** (the workflows
+    PRD §4.1, FR-6). A resume keeps the `runId`, so the earlier
+    invocation's notification and run record stay on disk; a later launch
+    of the same run supersedes them.
+    Setup: as item 36, the same resume.
+    Keys: `0` in the TUI and the pane while it runs; the run detail as in
+    item 34 while it runs and after it ends.
+    Expected: within 5 s of the resume the strip is back in both; the run
+    detail's first row reads `live` while it runs, whatever the previous
+    notification said, and `completed` again once it ends, when the strip
+    goes as in item 34.
+    Claude Code version:
+    Result: pending
+
+38. **A run opened with its Button in the pane, a whole fix line read**
+    (the workflows PRD §4.3, §4.5). Below 116 body columns the pane draws
+    the query's `detail_narrow` (the 52-cell layout); fix lines are
+    wrapped, never clipped, with a two-cell hanging indent. The run row
+    and `back` are each a `plain` Button whose label is the row's text
+    padded with spaces to the pane's inner width; the test fake draws the
+    label as given, and how the real engine lays out such a label (one
+    row, or wrapped or truncated at the border, the padding kept or
+    trimmed) is unread.
+    Setup: as item 34, a run with at least one failed agent (a phase that
+    hits the rate limit gives one); the terminal under 120 columns, or any
+    docked pane (every dock is narrower than 116 body columns).
+    Keys: `/cctop-pane agents`; click the run's row; click `back`.
+    Expected: the run row and `back` each draw on one line between the
+    borders, the padding blank and not wrapped onto a second line, and the
+    whole width presses; the click on the run row opens its detail — the
+    phase table and every fix line in full, each continuation line
+    indented two cells, the `→ <file>:<line> <call>()` pointer under it —
+    and the same rows as `cctop query agents --session <id> | jq
+    '.workflows[0].detail_narrow'`; `back` returns to the list.
     Claude Code version:
     Result: pending
 

@@ -120,11 +120,11 @@
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "     ",
             "tone": "dim"
           },
           {
-            "text": "≈7.8k",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -132,11 +132,11 @@
             "tone": "dim"
           },
           {
-            "text": "▆▆",
+            "text": "",
             "tone": "s0"
           },
           {
-            "text": "▁▁▁▁▁▁▁▁▁▁▁▁",
+            "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
             "tone": "dim"
           }
         ],
@@ -150,11 +150,11 @@
             "tone": "fg"
           },
           {
-            "text": "  ",
+            "text": "    ",
             "tone": "dim"
           },
           {
-            "text": "≈355",
+            "text": "≈0",
             "tone": "bold"
           },
           {
@@ -184,7 +184,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈538",
+            "text": "≈221",
             "tone": "bold"
           },
           {
@@ -214,7 +214,7 @@
             "tone": "dim"
           },
           {
-            "text": "≈180",
+            "text": "≈131",
             "tone": "bold"
           },
           {
@@ -227,6 +227,97 @@
           },
           {
             "text": "▁▁▁▁▁▁▁▁▁▁▁▁▁▁",
+            "tone": "dim"
+          }
+        ],
+        [],
+        [
+          {
+            "text": "  since model switch (−58k) · 3 calls",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "bash output",
+            "tone": "fg"
+          },
+          {
+            "text": "        ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈48",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other results",
+            "tone": "fg"
+          },
+          {
+            "text": "      ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈83",
+            "tone": "bold"
+          },
+          {
+            "text": "   ",
+            "tone": "dim"
+          },
+          {
+            "text": "0%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "other",
+            "tone": "fg"
+          },
+          {
+            "text": "             ",
+            "tone": "dim"
+          },
+          {
+            "text": "≈92k",
+            "tone": "bold"
+          },
+          {
+            "text": "  ",
+            "tone": "dim"
+          },
+          {
+            "text": "64%",
+            "tone": "dim"
+          }
+        ],
+        [
+          {
+            "text": "  prefix ≈ the first call's cached part — run /context once to calibrate it",
             "tone": "dim"
           }
         ],
@@ -288,22 +379,22 @@
         {
           "label": "harness",
           "step": 0,
-          "tokens": 7759
+          "tokens": 0
         },
         {
           "label": "thinking",
           "step": 1,
-          "tokens": 355
+          "tokens": 0
         },
         {
           "label": "inputs",
           "step": 2,
-          "tokens": 538
+          "tokens": 221
         },
         {
           "label": "results",
           "step": 2,
-          "tokens": 180
+          "tokens": 131
         }
       ],
       "title": "context"

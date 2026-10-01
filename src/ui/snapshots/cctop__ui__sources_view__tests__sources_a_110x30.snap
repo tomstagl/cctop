@@ -1,0 +1,34 @@
+---
+source: src/ui/sources_view.rs
+expression: out
+---
+┌ Sources — 396k of 1.00M est, since session start  (Esc back) ──────────────────────────────────────────────┐
+│ SOURCE             TOKENS SHARE  NOTE                                                                      │
+│ prefix               ≈60k   15%  system + tools + skills + CLAUDE.md · i for the breakdown                 │
+│ ── messages: 335k over 143 calls ──                                                                        │
+│ files               ≈2.2k    0%  4 files · Enter for the list                                              │
+│ bash output         ≈3.9k    0%  builds, tests, greps, multi-file cats                                     │
+│ mcp results         ≈150k   38%  MCP tool results                                                          │
+│ other results       ≈9.3k    2%  Grep, Glob, ToolSearch, edit confirmations                                │
+│ prompts             ≈1.6k    0%  what you typed and pasted                                                 │
+│ harness             ≈3.0k    0%  reminders, listings, injected files                                       │
+│ thinking              30k    7%  exact, from usage                                                         │
+│ tool inputs         ≈1.4k    0%  what the model wrote into tool calls                                      │
+│ prose                 34k    8%  exact: output − thinking − inputs                                         │
+│ other                ≈98k   24%  reminders no attachment recorded, cache accounting                        │
+│ ≈6.1k of estimated bytes did not fit the exact growth of their steps and were scaled down                  │
+│ prefix ≈ the first call's cached part — run /context once to calibrate it                                  │
+│ results, inputs and prompts ≈ chars / 4, reconciled per step against Δcontext − previous output; thinking …│
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q

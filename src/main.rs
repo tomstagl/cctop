@@ -26,6 +26,10 @@ enum Command {
     Uninstall(InstallArgs),
     /// Hook entry point: record one Claude Code hook event.
     Hook,
+    /// Recompute the 7-day baseline cache; started detached by a one-shot
+    /// reader that found it stale.
+    #[command(hide = true)]
+    BaselineRefresh,
     /// Status-line entry point: tee the status JSON, then run the original command.
     StatuslineShim {
         /// The original status-line command and its arguments (after `--`).
@@ -131,6 +135,8 @@ enum QueryWhat {
     },
     /// What rides on every request.
     Prefix,
+    /// What is in the window right now and what put it there.
+    Sources,
     /// Event log.
     Events {
         /// Only events newer than this (e.g. 10m, 2h).
@@ -354,6 +360,15 @@ fn main() {
             }
         }
         Command::Hook => std::process::exit(cctop::hooks::run_hook()),
+        Command::BaselineRefresh => {
+            if let Some(projects) = cctop::baseline::default_projects_dir() {
+                cctop::baseline::refresh(
+                    &cctop::status::cctop_dir(),
+                    &projects,
+                    cctop::app::now_ms(),
+                );
+            }
+        }
         Command::StatuslineShim { original } => {
             let original: Vec<String> = original.into_iter().skip_while(|a| a == "--").collect();
             std::process::exit(cctop::status::run_shim(&original));
@@ -686,6 +701,7 @@ fn query(q: QueryArgs) {
                         .or_else(|| snooze_session.as_deref().map(|r| (r, true))),
                 ),
                 QueryWhat::Prefix => qy::prefix(&state),
+                QueryWhat::Sources => qy::sources(&state),
                 QueryWhat::Baseline => qy::baseline(state.baseline.as_ref()),
                 QueryWhat::Events { since } => {
                     let since_ms = match since.as_deref() {

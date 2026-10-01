@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::advisor::Engine;
 use crate::coach::{self, Coach, Level};
+use crate::metrics::context::Source;
 use crate::ui::fmt;
 use crate::ui::state::State;
 
@@ -160,6 +161,11 @@ pub struct Header {
     pub phase: PhaseCell,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
     pub line: String,
+    /// The header's second row while a workflow run is live or recently
+    /// stalled (workflows PRD §4.5): ` wf     ▸ Verify    12/246 ✗201 …`.
+    /// Absent otherwise, so a session without one serialises as before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<Line>,
 }
 
 /// One cell of the glance: a whole-area target. The hotkey is the
@@ -363,7 +369,18 @@ fn header(state: &State, c: &Coach) -> Header {
             tokens: c.state.tokens.clone(),
         },
         line: format!("cctop  {}", parts.join(" · ")),
+        workflow: workflow_strip(state),
     }
+}
+
+/// The header's workflow row; the ledger is read only when a run exists.
+fn workflow_strip(state: &State) -> Option<Line> {
+    if state.workflow_journals.is_empty() && state.agents.values().all(|a| a.workflow.is_none()) {
+        return None;
+    }
+    let rows = crate::agent_ledger::rows(state, crate::agent_ledger::Sort::Waste, false);
+    let groups = crate::agent_ledger::workflow_groups(state, &rows);
+    crate::workflow_runs::strip_line(state, &groups)
 }
 
 fn light<'a>(c: &'a Coach, id: &str) -> Option<&'a coach::Light> {
@@ -690,7 +707,10 @@ fn light_lines(rows: &mut Vec<Line>, c: &Coach, id: &str) {
 /// series step each is drawn in, the counters.
 fn body_context(state: &State, c: &Coach) -> Body {
     let v = state.context();
-    let a = state.anatomy();
+    // One residency for the whole body: the slices are derived from it and
+    // the source rows below read it again.
+    let r = state.residency();
+    let a = crate::metrics::context::Anatomy::from(&r);
     let est = if v.window_exact { "" } else { " est" };
     let approx = if a.approx { "≈" } else { "" };
     let mut rows: Vec<Line> = Vec::new();
@@ -762,6 +782,50 @@ fn body_context(state: &State, c: &Coach) -> Body {
         l.push(dim("▁".repeat(BAR - f)));
         rows.push(l);
     }
+    // What the `results` slice is made of, plus what no slice names (the
+    // prompts, the remainder): the `m` inspector's rows, cut to the dock.
+    // The same residency model, so the two surfaces never disagree.
+    let mut src: Vec<(&str, u64)> = Source::ALL[..6]
+        .iter()
+        .map(|s| (s.label(), r.source(*s)))
+        .collect();
+    src.push((Source::Prompts.label(), r.source(Source::Prompts)));
+    src.push(("other", r.other));
+    if src.iter().any(|(_, t)| *t > 0) {
+        rows.push(Vec::new());
+        rows.push(vec![dim(format!(
+            "  since {} · {} call{}",
+            crate::ui::sources_view::since_text(&r),
+            r.calls_since,
+            if r.calls_since == 1 { "" } else { "s" }
+        ))]);
+        for (label, tokens) in src {
+            if tokens == 0 && label != "other" {
+                continue;
+            }
+            let mut l: Line = Vec::new();
+            at(&mut l, 2);
+            l.push(fg(label));
+            // The inspector's own columns, narrowed for the dock: the
+            // longest label ("agent returns") ends at 15, so the figure
+            // still has air at 24.
+            rt(
+                &mut l,
+                24,
+                format!("{approx}{}", fmt::tokens(tokens)),
+                Tone::Bold,
+            );
+            if let Some(pct) = (tokens * 100).checked_div(r.size) {
+                rt(&mut l, 29, format!("{pct}%"), Tone::Dim);
+            }
+            rows.push(l);
+        }
+        rows.push(vec![dim(format!(
+            "  {}",
+            crate::ui::sources_view::mode_text(&r)
+        ))]);
+    }
+
     rows.push(Vec::new());
     let rereads = state
         .files
@@ -1677,6 +1741,58 @@ mod tests {
         d.bodies.iter().find(|b| b.id == id).unwrap()
     }
 
+    /// The text of a body's rows, one string per row.
+    fn body_text(b: &Body) -> Vec<String> {
+        b.rows
+            .iter()
+            .map(|r| r.iter().map(|s| s.text.as_str()).collect::<String>())
+            .collect()
+    }
+
+    /// The context body carries the `m` inspector's breakdown too, so the
+    /// pane answers "what put it there" without a second surface: the six
+    /// result kinds, the prompts, the remainder, the reference and the
+    /// mode — the same `residency()` the TUI reads, never a second model.
+    #[test]
+    fn the_context_body_breaks_the_results_slice_into_its_sources() {
+        let (s, e) = fixture_at("a", usize::MAX);
+        let r = s.residency();
+        let d = snapshot(&s, &e);
+        let text = body_text(body(&d, "context")).join("\n");
+
+        // The reference and the call count name where the window starts.
+        assert!(
+            text.contains(&format!(
+                "since {}",
+                crate::ui::sources_view::since_text(&r)
+            )),
+            "{text}"
+        );
+        assert!(text.contains(&format!("{} calls", r.calls_since)), "{text}");
+        // Fixture A's results are mostly MCP: the slice said `results`, the
+        // rows say which kind.
+        assert!(text.contains("mcp results"), "{text}");
+        assert!(text.contains("files"), "{text}");
+        assert!(text.contains("prompts"), "{text}");
+        assert!(text.contains("other"), "{text}");
+        // The figures are the residency's own, to the token.
+        assert!(
+            text.contains(&fmt::tokens(r.source(Source::McpResults))),
+            "{text}"
+        );
+        // A source with nothing in the window is not a row.
+        assert_eq!(r.source(Source::Web), 0, "fixture A fetched nothing");
+        assert!(
+            !text.contains("web"),
+            "an empty source draws no row: {text}"
+        );
+        // The mode says how the prefix was arrived at.
+        assert!(
+            text.contains(&crate::ui::sources_view::mode_text(&r)),
+            "{text}"
+        );
+    }
+
     /// PRD dashboard-v2 §3.2's second pair (US-101): the header said
     /// `WORKING · silent 1:56` while row 4 said `elapsed 0:00 · 159 api
     /// calls`. Fixture E is that session's first 66 lines: a 205 ms attempt
@@ -1921,5 +2037,34 @@ mod tests {
         assert_eq!(text_of(&bar(1.0, 5, Tone::Ok)), "▇▁▁▁▁");
         assert_eq!(text_of(&bar(99.0, 5, Tone::Ok)), "▇▇▇▇▁");
         assert_eq!(text_of(&bar(100.0, 5, Tone::Ok)), "▇▇▇▇▇");
+    }
+
+    #[test]
+    fn the_header_strip_shows_only_while_a_run_is_live() {
+        use crate::workflow_runs::test_support::*;
+        let strip = |s: &State| {
+            snapshot(s, &crate::advisor::Engine::for_state(s))
+                .header
+                .workflow
+        };
+        let mut s = state_with_run();
+        assert_eq!(strip(&s), None, "completed");
+        s.workflow_records.clear();
+        s.workflow_journals[0].mtime_ms = Some(s.now_ms - 5_000);
+        let row = strip(&s).expect("live");
+        assert_eq!(row[0].text, " wf     ");
+        let text: String = row.iter().map(|g| g.text.as_str()).collect();
+        assert!(
+            text.contains("▸ Design") && text.contains("0/1 ✗1 429×1"),
+            "{text}"
+        );
+        // `✗n` alone is crit; a live run's other text is the foreground.
+        assert_eq!((row[2].text.as_str(), row[2].tone), (" ✗1", Tone::Crit));
+        assert_eq!((row[1].tone, row[3].tone), (Tone::Fg, Tone::Fg));
+        assert_eq!(strip(&state(vec![], vec![])), None, "no run");
+        // Absent means absent from the JSON too (FR-3).
+        assert!(crate::query::dashboard(&state_with_run())["header"]
+            .get("workflow")
+            .is_none());
     }
 }

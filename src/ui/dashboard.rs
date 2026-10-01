@@ -280,6 +280,11 @@ pub fn compose<'a>(
     let h = height as usize;
     let open = open.min(d.bodies.len().saturating_sub(1));
     let mut out: Vec<Line> = vec![header(t, d, w)];
+    // The workflow strip: above the cells, so on screen whichever body is
+    // open; the body gets one row less.
+    if let Some(row) = &d.header.workflow {
+        out.push(Line::from(spans(t, row, w)));
+    }
     out.extend(cell_rows(t, d, width, open));
     out.extend(act_rows(t, d, width, open));
     if let Some(body) = d.bodies.get(open) {

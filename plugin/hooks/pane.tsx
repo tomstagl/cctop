@@ -254,6 +254,11 @@ function overviewActions($: EngineInterface): OverviewActions {
   };
 }
 
+// What the agents view's Buttons do: a run's row opens its detail, `back` the list (view state).
+function agentsActions($: EngineInterface): { open(run: string | null): void } {
+  return { open: (run) => apply($, { type: 'agents.run', run }) };
+}
+
 // What the coach view's Buttons do: `fill` writes a prompt- or slash-class
 // action into the prompt box (never submits it), `snooze` asks the binary
 // (queued for the TUI while it runs) and re-polls, `why` and `light` are
@@ -580,7 +585,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
   return (
     <Box flexDirection="column">
       {viewBar($, el, columns)}
-      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($) })}
+      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($), agents: agentsActions($) })}
       {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
       {model.stale && <Text wrap="truncate">cctop query stale</Text>}
       {unsupportedVerbs(model).map((verb) => (

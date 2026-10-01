@@ -51,7 +51,11 @@ Layout mirrors `~/.claude`:
   synthetic lines in `src/agent_ledger.rs`. The anonymiser keeps the
   notification's element names, ids, statuses and numbers and fills its
   text; agent ids stay as written so the file name, the launch result and
-  the notification agree.
+  the notification agree. The seam where the spliced segment begins is a
+  171 488 → 60 070 drop inside one turn, same model, nothing between: on a
+  2.1.258 transcript that reads as one inferred compaction (`compactions 1
+  ≈`, the threshold learned from it), which is what the unmarked case of
+  `metrics::context::inferred_compactions` is tested on.
 
 - `session-d.jsonl` + `session-d/teammates/` + `session-d.team.json` — the
   team fixture (722 lines, 2.1.269): a lead that spawned a teammate through
@@ -89,6 +93,46 @@ Layout mirrors `~/.claude`:
   `EXPLORING · silent 1:50` while row 4 said `elapsed 0:00`; read at
   `--lines 20` it is the closed attempt, at `--lines 27` the first response
   that reopens the turn.
+
+- `session-w.jsonl` + `session-w/` — the workflow fixture (2.1.269): one
+  real `Workflow` run, `wf_0aa065ff-0a0`, over six invocations (a launch
+  stopped with `TaskStop`, then five resumes, the script edited from v2 to
+  v4 between them), composed by `scripts/compose-workflow-fixture.py`.
+  The main transcript (122 lines) keeps the six `Workflow` calls and their
+  `async_launched` results, the five `<task-notification>` deliveries
+  (enqueue and user line) and every assistant response inside the run's
+  window. `subagents/workflows/<run>/` holds **every** first-call 429
+  agent (198, ten lines each, so Verify keeps its real 166-of-173
+  majority), six mid-task 429 agents and six agents with a result, spread
+  over the phases (the shortest of each first), and a journal (572 lines)
+  with every `launched` / `started` / `result` line, labels reduced to
+  `<prefix>:<n>`, `result` values dropped, and the `failed` lines of the
+  copied agents plus two failed ids kept on purpose without a transcript
+  (they read `Unknown · no transcript`); the other uncopied agents'
+  `failed` lines are dropped. Meta files keep `agentType` / `model`.
+  `session-w/workflows/<run>.json` is the run record (the last
+  invocation's): `runId`, `workflowName` `sweep-4`, `status`, `startTime`,
+  `durationMs`, `scriptPath` `/home/user/project/.claude/workflows/scripts/sweep-4.js`
+  and the script with its literals and comments as same-shape filler
+  except `phase:` values, `phase(` arguments and label prefixes, so the
+  pointer scan finds what it found on the original: Verify at line 144,
+  `parallel()`, stale (Verify failed under v2's `pipeline(`; v4 had
+  batched it). Launch results name the run `sweep-<n>` likewise. Before
+  the anonymiser, the composer fills the agents' `StructuredOutput`
+  payloads (their schema fields share names with keys the anonymiser
+  keeps) and blanks the project's name wherever it appears.
+
+- `session-w-live.jsonl` + `session-w-live/` + `session-w-live.now` — the
+  same run cut mid-flight at `2026-09-12T17:14:30.000Z`, inside the first
+  invocation's Verify phase after its first-call 429s: the main transcript
+  up to the cut (the launch in, no notification), the journal lines of
+  agents started by then (a `result` / `failed` line only when the agent's
+  last line precedes the cut), each copied agent's lines up to the cut
+  (57 agents), and no run record — the pessimistic reading of when Claude
+  Code writes it. `session-w-live.now` holds the cut + 5 s in epoch ms:
+  the clock the TUI snapshots (`src/theme.rs`) and
+  `scripts/pane-fixtures.sh` both read, so the header strip is
+  ` wf     ▸ Verify     0/64 ✗56 429×54 …` on both.
 
 To rebuild `session-b.jsonl` from the same sources:
 
@@ -133,3 +177,15 @@ a `/login` between them is the shape):
 ```
 python3 scripts/anonymise-transcript.py <session> fixtures/session-e.jsonl --max-str 2000 --lines 66
 ```
+
+To rebuild `session-w` and its live cut (the source is the session whose
+`workflows/` holds the run's record; nothing under it is written):
+
+```
+python3 scripts/compose-workflow-fixture.py <session>.jsonl wf_0aa065ff-0a0 fixtures/session-w \
+  --live-cut 2026-09-12T17:14:30.000Z
+```
+
+(`--mid 6 --ok 6 --ghosts 2` are the defaults; `--rename word=replacement`
+adds to the identifiers renamed in the script, which are at least those
+containing `cctop` or `research`.)

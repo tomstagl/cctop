@@ -9,6 +9,7 @@ use crate::ledger;
 use crate::metrics::{cost, registry};
 use crate::ui::fmt;
 use crate::ui::State;
+use crate::workflow_runs;
 
 /// A measured value with provenance.
 pub fn m(value: impl Into<Value>, unit: &str, metric_id: &str, approx: bool) -> Value {
@@ -405,6 +406,7 @@ pub fn agents(state: &State) -> Value {
     let workflows: Vec<Value> = agent_ledger::workflow_groups(state, &rows)
         .iter()
         .map(|g| {
+            let v = &g.verdict;
             json!({
                 "run": g.run,
                 "launched": g.launched,
@@ -414,6 +416,35 @@ pub fn agents(state: &State) -> Value {
                 "agents": g.agents,
                 "cost": CostValue::new(g.cost, "agents_cost"),
                 "waste": m(g.waste_usd, "USD", "agents_waste", true),
+                "name": g.name,
+                "state": v.state,
+                "failed_usd": m(v.failed_usd, "USD", "workflow_failed_usd", true),
+                "waste_pct": v.waste_pct.map(|p| m(p * 100.0, "%", "workflow_waste_pct", true)),
+                "overhead": v.overhead.map(|o| m(o, "ratio", "workflow_overhead", true)),
+                "cold_start_pct": v.cold_start_pct.map(|p| m(p * 100.0, "%", "workflow_cold_start_pct", true)),
+                "phases": v.phases.iter().map(|p| json!({
+                    "title": p.title,
+                    "started": p.started,
+                    "results": p.results,
+                    "failed": p.failed,
+                    "failed_usd": m(p.failed_usd, "USD", "workflow_failed_usd", true),
+                    "waste_pct": p.waste_pct.map(|w| m(w * 100.0, "%", "workflow_waste_pct", true)),
+                    "causes": p.causes,
+                    "pointer": p.pointer,
+                    "pointer_stale": p.pointer_stale,
+                })).collect::<Vec<_>>(),
+                "fixes": v.fixes.iter().map(|f| json!({
+                    "cause": f.cause,
+                    "agents": f.agents,
+                    "text": f.text,
+                    "phase": f.phase,
+                    "pointer": f.pointer,
+                    "pointer_stale": f.pointer_stale,
+                    "script_path": f.script_path,
+                })).collect::<Vec<_>>(),
+                "row": workflow_runs::group_text(g),
+                "detail": workflow_runs::detail_lines(g, workflow_runs::DETAIL_WIDE),
+                "detail_narrow": workflow_runs::detail_lines(g, workflow_runs::DETAIL_NARROW),
             })
         })
         .collect();
@@ -585,6 +616,64 @@ pub fn prefix(state: &State) -> Value {
         .map(|r| json!({"kind": format!("{:?}", r.kind).to_lowercase(), "name": r.name, "bytes": r.bytes, "tokens": m(r.tokens_est, "tokens", "context_prefix", true), "count": r.count}))
         .collect();
     json!({"total": m(ctx.prefix, "tokens", "context_prefix", false), "rows": rows})
+}
+
+/// What is in the window right now and what put it there (registry
+/// `context_sources`): the rows the `m` inspector draws, the per-file list,
+/// the reference and the mode.
+pub fn sources(state: &State) -> Value {
+    use crate::metrics::context::{Mode, Reference};
+    let v = state.context();
+    let r = state.residency();
+    let since = match &r.since {
+        Reference::SessionStart => {
+            json!({"kind": "session-start", "metric_id": "context_reference"})
+        }
+        Reference::Boundary { kind, call, delta } => {
+            json!({"kind": kind.label(), "call": call, "delta": delta, "metric_id": "context_reference"})
+        }
+    };
+    let mode = match r.mode {
+        Mode::Estimated => json!("estimated"),
+        Mode::Calibrated { turn } => json!({"calibrated_at_turn": turn}),
+    };
+    let share = |t: u64| {
+        if r.size > 0 {
+            t as f64 / r.size as f64
+        } else {
+            0.0
+        }
+    };
+    let rows: Vec<Value> = r
+        .rows()
+        .iter()
+        .map(|(label, tokens, exact)| {
+            json!({"source": label, "tokens": m(*tokens, "tokens", "source_tokens", !exact), "share": share(*tokens)})
+        })
+        .collect();
+    let files: Vec<Value> = r
+        .files
+        .iter()
+        .map(|f| {
+            json!({"path": f.path, "read": m(f.tokens, "tokens", "file_tokens", true), "written": m(f.written, "tokens", "file_tokens", true), "reads": f.reads})
+        })
+        .collect();
+    json!({
+        "size": m(r.size, "tokens", "context_size", state.context_size_exact.is_none()),
+        "window": m(v.window, "tokens", "context_window", !v.window_exact),
+        "prefix": m(r.prefix, "tokens", "context_prefix", matches!(r.mode, Mode::Estimated)),
+        "prefix_share": share(r.prefix),
+        "prefix_tightened": r.prefix_tightened,
+        "mode": mode,
+        "since": since,
+        "calls_since": r.calls_since,
+        "rows": rows,
+        "files": files,
+        "thinking_known": r.thinking_known,
+        "reconciled": m(r.reconciled, "tokens", "source_tokens", true),
+        "overflow_raw": m(r.overflow_raw, "tokens", "source_tokens", true),
+        "model_switch_kept": r.model_switch_kept.as_ref().map(|(from, to, delta)| json!({"from": from, "to": to, "delta": delta})),
+    })
 }
 
 pub fn events(state: &State, since_ms: Option<i64>) -> Value {
@@ -782,6 +871,38 @@ mod tests {
     }
 
     #[test]
+    fn sources_rows_sum_to_the_size_and_name_the_reference() {
+        let a = state();
+        let s = sources(&a);
+        let size = s["size"]["value"].as_u64().unwrap();
+        let rows = s["rows"].as_array().unwrap();
+        assert_eq!(
+            rows.len(),
+            12,
+            "eight sources, thinking, inputs, prose, other"
+        );
+        let sum: u64 = rows
+            .iter()
+            .map(|r| r["tokens"]["value"].as_u64().unwrap())
+            .sum();
+        assert_eq!(s["prefix"]["value"].as_u64().unwrap() + sum, size);
+        assert_eq!(s["since"]["kind"], "session-start");
+        assert_eq!(s["mode"], "estimated");
+        assert!(!s["files"].as_array().unwrap().is_empty());
+        assert_eq!(s["files"][0]["read"]["metric_id"], "file_tokens");
+        let exact: Vec<&str> = rows
+            .iter()
+            .filter(|r| r["tokens"]["approx"] == false)
+            .map(|r| r["source"].as_str().unwrap())
+            .collect();
+        assert_eq!(exact, ["thinking", "prose"]);
+        let b = state_b();
+        let s = sources(&b);
+        assert_eq!(s["since"]["kind"], "model switch");
+        assert!(s["since"]["delta"].as_i64().unwrap() < 0);
+    }
+
+    #[test]
     fn fixture_b_dashboard_snapshot() {
         let s = state_b();
         let d = dashboard(&s);
@@ -859,5 +980,61 @@ mod tests {
         assert_eq!(parse_since("2h"), Some(7_200_000));
         assert_eq!(parse_since("4w"), Some(4 * 7 * 86_400_000));
         assert_eq!(parse_since("x"), None);
+    }
+
+    #[test]
+    fn workflows_carry_the_verdict_and_old_keys_keep_their_meaning() {
+        let state = crate::workflow_runs::test_support::state_with_run(); // Task 9 switches this to fixture W
+        let v = agents(&state);
+        let w = &v["workflows"][0];
+        for k in [
+            "run",
+            "launched",
+            "done",
+            "failed",
+            "empty_result",
+            "agents",
+            "cost",
+            "waste",
+        ] {
+            assert!(w.get(k).is_some(), "{k}");
+        }
+        assert_eq!(w["phases"][0]["title"], "Verify");
+        assert_eq!(w["phases"][0]["pointer"]["call"], "pipeline");
+        assert!(w["detail"].as_array().unwrap().len() >= 4);
+        assert!(w["detail_narrow"].as_array().unwrap().len() >= 4);
+        assert!(w["row"].as_str().unwrap().contains("✗4"));
+        assert_eq!(w["state"], "completed");
+        assert_eq!(w["waste_pct"]["unit"], "%");
+        assert_eq!(w["waste_pct"]["metric_id"], "workflow_waste_pct");
+        assert_eq!(w["failed_usd"]["metric_id"], "workflow_failed_usd");
+        assert_eq!(w["fixes"][0]["cause"], "rate_limit_first");
+        assert_eq!(w["phases"][0]["causes"]["rate_limit_first"], 3);
+        for rows in [&w["detail"], &w["detail_narrow"]] {
+            for r in rows.as_array().unwrap() {
+                assert!(!r.as_str().unwrap().ends_with(' '), "{r}");
+            }
+        }
+    }
+
+    #[test]
+    fn fix_lines_wrap_at_56_and_keep_the_advice() {
+        // Review Focus 8
+        let s = crate::workflow_runs::test_support::state_with_run();
+        let rows = crate::agent_ledger::rows(&s, crate::agent_ledger::Sort::Waste, false);
+        let g = &crate::agent_ledger::workflow_groups(&s, &rows)[0];
+        let lines = crate::workflow_runs::detail_lines(g, crate::workflow_runs::DETAIL_NARROW);
+        assert!(
+            lines
+                .iter()
+                .all(|l| l.chars().count() <= 52 && !l.ends_with(' ')),
+            "{lines:#?}"
+        );
+        let flat = lines
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(flat.contains("batch this phase's items, or lower its effort/model"));
     }
 }
