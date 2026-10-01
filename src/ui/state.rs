@@ -184,14 +184,17 @@ impl SessionInfo {
         s.messaging_socket_path.clone().filter(|p| p.exists())
     }
 
-    /// A transcript file with no live process behind it.
+    /// A transcript file with no live process behind it — ended, its clock
+    /// frozen at the last line. `CCTOP_FIXTURE_LIVE=1` treats it as a live
+    /// session on the real clock instead, for a transcript being appended to
+    /// by `scripts/replay-session.py` (a recording, a demo).
     pub fn from_fixture(path: &std::path::Path) -> SessionInfo {
         SessionInfo {
             name: path
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            alive: false,
+            alive: std::env::var_os("CCTOP_FIXTURE_LIVE").is_some_and(|v| v == "1"),
             ..Default::default()
         }
     }

@@ -48,7 +48,7 @@ Release checklist (issue #4 — the contract moves between Claude Code releases;
 3. `TESTED_WITH` in `plugin/hooks/model.ts` to the version of step 1; the plugin manifest version; the "Claude Code versions" table in `plugin/README.md` (the range the release runs on, and a new row when a contract change forced it); `KNOWN_INCOMPATIBLE` in `src/pane.rs` when a pair is known to fail.
 4. `make check && npm test`, the install lines and `make site`, then the release commit and the tag on `main`'s tip after the merge.
 
-Useful for poking at behaviour without a live session: `--session` accepts a fixture path (`cctop query dashboard --session fixtures/session-b.jsonl`), `--lines N` feeds only the first N transcript lines (a point in time), and `CCTOP_FAKE_NOW=<epoch ms>` fixes the clock. Never run `cctop run` or `claude` interactively in the foreground of a tool call; `claude -p … --max-turns 1` is fine for load checks, and its debug log is `~/.claude/debug/latest`.
+Useful for poking at behaviour without a live session: `--session` accepts a fixture path (`cctop query dashboard --session fixtures/session-b.jsonl`), `--lines N` feeds only the first N transcript lines (a point in time), and `CCTOP_FAKE_NOW=<epoch ms>` fixes the clock. For a recording, `scripts/replay-session.py fixtures/session-b.jsonl /tmp/replay.jsonl --from 700 --speed 60` appends the fixture on the real clock and `CCTOP_FIXTURE_LIVE=1 cctop run --session /tmp/replay.jsonl` shows it as a live session (fixture B compacts at line 766: ctx 33 % → 19 %). Never run `cctop run` or `claude` interactively in the foreground of a tool call; `claude -p … --max-turns 1` is fine for load checks, and its debug log is `~/.claude/debug/latest`.
 
 ## Architecture
 
