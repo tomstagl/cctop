@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 8: the real thing in Terminal.app</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1080px; box-sizing: border-box; padding: 24px 40px; background: #0A0E12; display: flex; flex-direction: column; gap: 18px">
+
+  <!-- Terminal.app window -->
+  <div style="align-self: center; border-radius: 10px; overflow: hidden; border: 1px solid #444; box-shadow: 0 24px 60px rgba(0,0,0,0.55); background: #1C1C1C">
+    <div style="height: 28px; background: #323232; display: flex; align-items: center; padding: 0 12px; gap: 8px; position: relative; font-family: Inter, system-ui, sans-serif; border-bottom: 1px solid #111">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+      <span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; color: #B8B8B8; pointer-events: none">cctop — claude — 190×56</span>
+    </div>
+    <div style="padding: 6px 8px; font-family: 'SF Mono', SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 16px; color: #D0D0D0">
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="56">
+        <div style="height: 16px; white-space: pre; display: flex"><sc-for list="{{ r.segs }}" as="s"><span style="display: inline-block; width: {{ s.wch }}; overflow: hidden; color: {{ s.fg }}; background: {{ s.bg }}; font-weight: {{ s.w }}">{{ s.t }}</span></sc-for></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="align-self: center; width: 1500px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; line-height: 1.45; color: #9AA7B6">
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">Terminal.app settings for this look</div><div style="font-family: Menlo, monospace; font-size: 12.5px; color: #C3CDD9; white-space: pre">Settings › Profiles › Text
+Font: SF Mono Regular 13 pt
+Character spacing 1 · Line spacing 1
+Antialias text: on
+Use bright colors for bold text: off</div></div>
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">What draws what</div>Terminal.app can't show pictures, so cctop sends the same six charts as cells (<span style="font-family: Menlo, monospace; color: #5FD7D7">Raster</span>). Each cell is a half block ▀ with two colours, so a chart gets two pixels per row. Text, labels and verdicts are the same as in POC 7.</div>
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">Colours</div>Every colour comes from the 256-colour palette, so the pane looks the same in every Terminal.app version. Shown here in Menlo when this computer has no SF Mono installed; the two have the same cell grid.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const COLS = 190, ROWS = 56;
+    // xterm 256-colour palette entries only
+    const C = { bg: '#1c1c1c', fg: '#d0d0d0', dim: '#808080', faint: '#3a3a3a', acc: '#5fd7d7', green: '#5fd787', amber: '#d7af5f', red: '#d75f5f', purple: '#af87d7', blue: '#87afd7', blue2: '#5f87af', white: '#eeeeee', orange: '#d7875f', panel: '#262626', nudge: '#303030', fc: '#005f5f', reserve: '#5f0000', first: '#4e4e4e', border: '#626262' };
+    const g = [];
+    for (let y = 0; y < ROWS; y++) { const r = []; for (let x = 0; x < COLS; x++) r.push({ c: ' ', fg: C.fg, bg: null, b: false, hb: null }); g.push(r); }
+    const put = (x, y, t, st) => {
+      st = st || {};
+      if (y < 0 || y >= ROWS) return;
+      for (let i = 0; i < t.length; i++) {
+        const xx = x + i; if (xx < 0 || xx >= COLS) continue;
+        const cell = g[y][xx]; cell.c = t[i]; cell.fg = st.fg || C.fg; if (st.bg !== undefined) cell.bg = st.bg; cell.b = !!st.b; cell.hb = null;
+      }
+    };
+    const bgRow = (x, y, w, bg) => { for (let i = 0; i < w; i++) if (x + i < COLS) g[y][x + i].bg = bg; };
+    const rjust = (xEnd, y, t, st) => put(xEnd - t.length + 1, y, t, st);
+    const half = (x, y, top, bot) => { if (y < 0 || y >= ROWS || x < 0 || x >= COLS) return; const cell = g[y][x]; cell.c = ' '; cell.hb = [top, bot]; };
+    const blockCell = (x, y, col) => { if (y < 0 || y >= ROWS || x < 0 || x >= COLS) return; const cell = g[y][x]; cell.c = ' '; cell.bg = col; cell.hb = null; };
+    // raster: w cols x h rows, pixel(px, py) -> colour, two pixels per cell vertically
+    const raster = (x0, y0, w, h, pixel) => { for (let cy = 0; cy < h; cy++) for (let cx = 0; cx < w; cx++) half(x0 + cx, y0 + cy, pixel(cx, cy * 2), pixel(cx, cy * 2 + 1)); };
+    const verdict = (x, y, w, label, col, text, todo) => {
+      put(x, y, label, { fg: col, b: true });
+      const ind = label.length + 2;
+      const words = text.split(' ').map((t) => ({ t, b: false })).concat(todo ? todo.split(' ').map((t) => ({ t, b: true })) : []);
+      let cx = x + ind, cy = y;
+      for (const wd of words) {
+        if (cx + wd.t.length > x + w) { cy++; cx = x + ind; }
+        put(cx, cy, wd.t, { fg: wd.b ? C.white : C.fg, b: wd.b });
+        cx += wd.t.length + 1;
+      }
+    };
+    // ---- charts first, labels after (labels win their cells) ----
+    const ctx = [38, 61, 94, 118, 140, 163, 190, 214, 239, 268, 301, 334, 371, 412];
+    const ctxAt = (t) => {
+      if (t <= 14) { const i = Math.floor(t) - 1; const fr = t - Math.floor(t); const a = ctx[Math.max(0, i)], b = ctx[Math.min(13, i + 1)]; return a + (b - a) * fr; }
+      return 412 + 19 * (t - 14);
+    };
+    raster(91, 10, 98, 8, (c, py) => {
+      const t = 1 + c / 97 * 42; const v = ctxAt(t); const lvl = (15 - py + 0.5) / 16 * 1000;
+      if (lvl <= v) return t <= 14 ? (lvl <= 40 ? C.blue2 : C.acc) : C.fc;
+      if (py === 0 && c % 2 === 0) return C.amber;
+      return C.bg;
+    });
+    const mins = [1, 4, 7, 10, 13, 15, 18, 21, 24, 27, 30, 33, 37, 41];
+    const cum = [0.92, 1.33, 3.18, 3.71, 4.37, 4.84, 5.56, 6.14, 6.75, 7.87, 10.18, 10.87, 12.61, 14.82];
+    const cumAt = (m) => { if (m > 41) return 14.82 + (m - 41) * 0.36; let v = 0; mins.forEach((mm, i) => { if (mm <= m) v = cum[i]; }); return v; };
+    raster(91, 25, 46, 8, (c, py) => {
+      const m = c / 45 * 60; const v = cumAt(m); const lvl = (15 - py + 0.5) / 16 * 20;
+      if (lvl > v) return C.bg;
+      if (m > 41) return C.fc;
+      if (c === 5) return C.purple;
+      if (c === 23) return C.red;
+      return C.acc;
+    });
+    const cost = [0.92, 0.41, 1.85, 0.53, 0.66, 0.47, 0.72, 0.58, 0.61, 1.12, 2.31, 0.69, 1.74, 2.21];
+    cost.forEach((v, i) => {
+      const n = i + 1; const hpx = Math.max(1, Math.round(v / 2.4 * 16)); const col = n === 11 ? C.red : n === 3 ? C.purple : C.acc;
+      raster(144 + 3 * i, 25, 2, 8, (c, py) => ((15 - py) < hpx ? col : C.bg));
+    });
+    // composition bar, row 7
+    let bx = 86;
+    [[2, C.blue2], [1, C.purple], [1, C.amber], [38, C.acc], [58, C.faint], [3, C.reserve]].forEach(([w, col]) => { for (let i = 0; i < w; i++) blockCell(bx + i, 7, col); bx += w; });
+    // cache strip rows 41-42
+    const misses = [4, 9, 11];
+    for (let n = 1; n <= 14; n++) { const col = n === 1 ? C.first : misses.includes(n) ? C.red : C.green; for (let dx = 0; dx < 2; dx++) { blockCell(86 + 3 * (n - 1) + dx, 41, col); blockCell(86 + 3 * (n - 1) + dx, 42, col); } }
+    for (let i = 0; i < 30; i++) blockCell(102 + i, 44, i < 29 ? C.green : C.faint);
+    // heat map rows 41-46
+    const ramp = ['#262626', '#005f5f', '#008787', '#00afaf', '#5fd7d7'];
+    const heatRows = [
+      [6, 4, 2, 5, 3, 4, 3, 2, 4, 3, 2, 3, 3, 2],
+      [1, 2, 0, 3, 2, 2, 4, 1, 3, 2, 3, 2, 3, 3],
+      [0, 0, 0, 2, 3, 1, 2, 2, 1, 3, 0, 2, 2, 0],
+      [4, 3, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 0],
+      [0, 0, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0]
+    ];
+    heatRows.forEach((row, ri) => row.forEach((v, ci) => {
+      const k = v === 0 ? 0 : v === 1 ? 1 : v <= 3 ? 2 : v <= 4 ? 3 : 4;
+      const col = (ri === 1 && ci === 13) ? C.red : ramp[k];
+      half(150 + 2 * ci, 41 + ri, col, C.bg); half(151 + 2 * ci, 41 + ri, col, C.bg);
+    }));
+
+    // ---- transcript ----
+    put(1, 0, '✻ Claude Code', { fg: C.orange, b: true }); put(15, 0, '~/code/cctop · main', { fg: C.dim });
+    put(1, 2, '>', { fg: C.dim }); put(3, 2, 'open the PR for the contract bump and push the branch', { fg: C.white });
+    put(1, 4, '⏺', { fg: C.white }); put(3, 4, "I'll check whether a PR exists first.");
+    put(1, 6, '⏺', { fg: C.green }); put(3, 6, 'Bash', { b: true }); put(7, 6, '(gh pr view 24)');
+    put(3, 7, '⎿  Error: no pull requests found for branch', { fg: C.red }); put(6, 8, '"prds-cc-2-1-332"', { fg: C.red });
+    put(1, 10, '⏺', { fg: C.green }); put(3, 10, 'Bash', { b: true }); put(7, 10, '(gh pr view --json url)');
+    put(3, 11, '⎿  Error: no pull requests found for branch', { fg: C.red }); put(6, 12, '"prds-cc-2-1-332"', { fg: C.red });
+    put(1, 14, '⏺', { fg: C.green }); put(3, 14, 'Bash', { b: true }); put(7, 14, '(git push)');
+    put(3, 15, '⎿  ! [rejected] prds-cc-2-1-332 -> prds-cc-2-1-332', { fg: C.red }); put(6, 16, '(non-fast-forward)', { fg: C.red });
+    put(1, 18, '⏺', { fg: C.white }); put(3, 18, 'The push was rejected. Let me look at the remote first…');
+    put(1, 20, '✻', { fg: C.orange }); put(3, 20, 'Pondering…', { fg: C.orange }); put(14, 20, '(14s · ↓ 1.2k tokens · esc to interrupt)', { fg: C.dim });
+    put(1, 51, '╭' + '─'.repeat(80) + '╮', { fg: C.border }); put(1, 52, '│', { fg: C.border }); put(3, 52, '>', { fg: C.dim });
+    g[52][5].bg = C.fg; put(82, 52, '│', { fg: C.border }); put(1, 53, '╰' + '─'.repeat(80) + '╯', { fg: C.border });
+    put(2, 55, '⏵⏵ auto mode on (shift+tab to cycle)', { fg: C.dim });
+    for (let y = 0; y < ROWS; y++) put(84, y, '│', { fg: C.faint });
+    // ---- pane ----
+    const PX = 86, PW = 103, LX = 86, LW = 51, RX = 138, RW = 51;
+    bgRow(85, 0, 105, C.panel);
+    put(86, 0, 'cctop', { fg: C.acc, b: true });
+    let tx = 93;
+    for (const [t, on] of [['Coach', 0], ['Overview', 1], ['Tools', 0], ['Agents', 0], ['Events', 0]]) {
+      put(tx, 0, ' ' + t + ' ', on ? { fg: C.bg, bg: C.fg, b: true } : { fg: C.dim });
+      tx += t.length + 3;
+    }
+    rjust(188, 0, 'Opus 5.5 · turn 14 · 41m   ×', { fg: C.dim });
+    put(PX, 2, 'Context window', { fg: C.white, b: true }); put(PX + 16, 2, '412k of 1M · 41 %', { fg: C.acc });
+    rjust(188, 2, 'per Claude Code · 12s ago', { fg: C.dim });
+    verdict(PX, 3, PW, 'Good', C.green, 'Plenty of room: about 29 more turns before Claude Code compacts on its own. MCP tools take 10k (1 %), which is fine. Nearly all of it is your conversation.', 'Do: /compact when you finish this task, not mid-way.');
+    put(PX, 8, '■', { fg: C.blue2 }); put(PX + 2, 8, 'system + tools 23k', { fg: C.dim });
+    put(PX + 22, 8, '■', { fg: C.purple }); put(PX + 24, 8, 'MCP 10k', { fg: C.dim });
+    put(PX + 33, 8, '■', { fg: C.amber }); put(PX + 35, 8, 'memory + skills 8k', { fg: C.dim });
+    put(PX + 55, 8, '■', { fg: C.acc }); put(PX + 57, 8, 'conversation 372k', { fg: C.dim });
+    put(PX + 76, 8, 'free 555k', { fg: C.dim });
+    put(PX + 87, 8, '■', { fg: C.red }); put(PX + 89, 8, 'reserve 33k', { fg: C.dim });
+    put(PX, 10, '1M', { fg: C.dim }); put(PX, 14, '500k', { fg: C.dim }); put(PX, 17, '0', { fg: C.dim });
+    rjust(188, 10, 'auto-compact 967k', { fg: C.amber });
+    put(91, 18, 'turn 1', { fg: C.dim }); put(119, 18, '14 · now · 412k, +19k a turn', { fg: C.white });
+    rjust(188, 18, '43 · forecast', { fg: C.dim });
+    put(PX, 19, '─'.repeat(PW), { fg: C.faint });
+    for (let y = 20; y <= 34; y++) put(137, y, '│', { fg: C.faint });
+    put(LX, 20, 'Spend', { fg: C.white, b: true }); rjust(136, 20, '$14.82 · ≈ $21.70 at 1h', { fg: C.dim });
+    verdict(LX, 21, LW - 1, 'Watch', C.amber, '$0.36 a minute. Two jumps: the helper agent in turn 3 was worth it; the cache rebuild in turn 11 was not.', '');
+    put(LX, 25, '$20', { fg: C.dim }); put(LX, 29, '$10', { fg: C.dim }); put(LX, 32, '$0', { fg: C.dim });
+    put(91, 33, '0 min', { fg: C.dim }); put(120, 33, 'now', { fg: C.white }); rjust(136, 33, '60 min', { fg: C.dim });
+    put(LX, 34, '●', { fg: C.purple }); put(LX + 2, 34, 'turn 3 helper agent $1.85', { fg: C.dim });
+    put(LX + 29, 34, '●', { fg: C.red }); put(LX + 31, 34, 'turn 11 rebuild $2.31', { fg: C.dim });
+    put(RX, 20, 'Cost per turn', { fg: C.white, b: true }); rjust(188, 20, '≈ $0.60 typical', { fg: C.dim });
+    verdict(RX, 21, RW, 'Watch', C.amber, 'The last two turns cost $1.74 and $2.21: every turn now re-sends 412k.', 'Do: /compact at the next break.');
+    put(RX, 25, '$2.40', { fg: C.dim }); put(RX, 32, '$0', { fg: C.dim });
+    for (let n = 1; n <= 14; n++) put(144 + 3 * (n - 1), 33, String(n), { fg: n === 14 ? C.white : C.dim });
+    put(RX, 34, 'Turn 14 (now) · $2.21 · includes the 3 failed calls', { fg: C.fg });
+    put(PX, 35, '─'.repeat(PW), { fg: C.faint });
+    for (let y = 36; y <= 52; y++) put(137, y, '│', { fg: C.faint });
+    put(LX, 36, 'Prompt cache', { fg: C.white, b: true }); rjust(136, 36, 'reused 94 %', { fg: C.green });
+    verdict(LX, 37, LW - 1, 'Good', C.green, 'All 3 rebuilds (364k, about $2.30) were avoidable. How, below.', '');
+    for (let n = 1; n <= 14; n++) put(86 + 3 * (n - 1), 43, String(n), { fg: C.dim });
+    put(LX, 44, 'stays warm', { fg: C.dim }); put(LX + 11, 44, '59m', { fg: C.white, b: true });
+    put(LX, 46, 'How to avoid each rebuild', { fg: C.dim, b: true });
+    const tips = [
+      ['turn 4', 'an earlier message was edited · 64k', "Send a new message; don't edit an old one."],
+      ['turn 9', 'effort changed high → max · 188k', 'Set effort at the start, or after /clear.'],
+      ['turn 11', 'a new MCP tool loaded · 112k', 'Connect MCP servers before you start.']
+    ];
+    tips.forEach(([t, cause, fix], i) => { put(LX, 47 + 2 * i, t, { fg: C.red }); put(LX + 8, 47 + 2 * i, cause, { fg: C.dim }); put(LX + 8, 48 + 2 * i, fix, { fg: C.white }); });
+    put(RX, 36, 'Tool calls per turn', { fg: C.white, b: true }); rjust(188, 36, '124 calls', { fg: C.dim });
+    verdict(RX, 37, RW, 'Watch', C.amber, '46 reads for 18 edits; state.rs was read whole 3 times (41k).', 'Do: ask Claude to grep before reading whole files.');
+    const tools = ['Read', 'Bash', 'Edit', 'Grep', 'Agent', 'MCP linear'];
+    const totals = ['46', '31', '18', '22', '3', '4'];
+    tools.forEach((t, i) => { rjust(148, 41 + i, t, { fg: C.dim }); put(180, 41 + i, totals[i], { fg: C.dim }); });
+    put(150, 47, '1', { fg: C.dim }); put(158, 47, '5', { fg: C.dim }); put(168, 47, '10', { fg: C.dim }); put(176, 47, '14', { fg: C.dim });
+    put(RX, 48, 'turn →   brighter = more calls   ', { fg: C.dim }); put(RX + 33, 48, '■', { fg: C.red }); put(RX + 35, 48, 'failed', { fg: C.dim });
+    bgRow(85, 54, 105, C.nudge);
+    put(86, 54, ' NOW ', { fg: C.bg, bg: C.red, b: true });
+    put(92, 54, 'Claude is stuck retrying: 3 fails in a row', { fg: C.white });
+    rjust(188, 54, '[ c  open in Coach ]', { fg: C.acc, b: true });
+    put(86, 55, 'spent so far $14.82 at API prices · ↓ scroll for agents and files', { fg: C.dim });
+
+    const rows = g.map((r) => {
+      const segs = []; let cur = null;
+      for (const cell of r) {
+        if (cell.hb) {
+          segs.push({ t: ' ', fg: C.fg, bg: `linear-gradient(180deg, ${cell.hb[0]} 0 50%, ${cell.hb[1]} 50% 100%)`, w: '400', n: 1 });
+          cur = null; continue;
+        }
+        const key = cell.fg + '|' + cell.bg + '|' + cell.b;
+        if (cur && cur.key === key) { cur.t += cell.c; cur.n++; }
+        else { cur = { key, t: cell.c, fg: cell.fg, bg: cell.bg || 'transparent', w: cell.b ? '700' : '400', n: 1 }; segs.push(cur); }
+      }
+      return { segs: segs.map((s) => ({ t: s.t, fg: s.fg, bg: s.bg, w: s.w, wch: s.n + 'ch' })) };
+    });
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

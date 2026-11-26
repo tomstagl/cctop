@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 6: the overview, clean layout, smooth charts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+a{color:#4CC2C2;text-decoration:none}a:hover{color:#8FE3E3}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1320px; box-sizing: border-box; padding: 20px; background: #0A0E12; display: flex; flex-direction: column; gap: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 19px; color: #D6DEE8">
+
+  <div style="height: 1216px; display: flex; border: 1px solid #2A3644; border-radius: 10px; background: #0E1318; overflow: hidden">
+    <div style="flex: 1 1 0; min-width: 0; padding: 18px 22px; display: flex; flex-direction: column; white-space: pre-wrap; color: #9AA7B6">
+      <div><span style="color: #8696A8">&gt; </span><span style="color: #EEF3F8">open the PR for the contract bump and push</span></div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(gh pr view 24)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found…</div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(gh pr view --json url)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found…</div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(git push)</div>
+      <div style="color: #E5605E">  ⎿  Error: ! [rejected]</div>
+      <div style="flex-grow: 1"></div>
+      <div style="border: 1px solid #4A5A6C; border-radius: 6px; padding: 6px 10px; color: #8696A8">&gt; </div>
+      <div style="padding: 4px 4px 0; color: #8696A8">  ⏵⏵ auto mode</div>
+    </div>
+
+    <div style="width: 900px; flex: 0 0 900px; border-left: 1px solid #2A3644; display: flex; flex-direction: column; background: #0C1116">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid #2A3644">
+        <span style="color: #4CC2C2; font-weight: 700">cctop</span>
+        <span style="color: #8696A8">Coach</span>
+        <span style="background: #D6DEE8; color: #0C1116; padding: 0 6px">Overview</span>
+        <span style="color: #8696A8">Tools</span><span style="color: #8696A8">Agents</span><span style="color: #8696A8">Events</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #5D6B7D">Opus 5.5 · turn 14 · 41m · scrolls</span>
+      </div>
+
+      <!-- context window -->
+      <div style="padding: 14px 18px; border-bottom: 1px solid #1C2630; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700; font-family: Inter, sans-serif; font-size: 14px">Context window</span><span style="color: #4CC2C2">412k of 1M · 41 %</span><span style="flex-grow: 1"></span><span style="color: #8696A8">per Claude Code, 12s ago</span></div>
+        <div style="display: flex; gap: 8px; align-items: flex-start; background: #0F1B14; border-radius: 6px; padding: 7px 10px; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+          <span style="color: #5FC77E; font-weight: 700">Good</span>
+          <span style="color: #D6DEE8">Plenty of room: about 29 more turns before Claude Code compacts on its own. MCP tools take 10k (1 %), which is fine. Nearly all of it is your conversation. <span style="color: #EEF3F8; font-weight: 600">Do: /compact when you finish this task, not mid-way.</span></span>
+        </div>
+        <svg width="864" height="34" viewBox="0 0 864 34" role="img" aria-label="Context composition">
+          <rect x="0" y="4" width="864" height="24" rx="5" fill="#141D26"></rect>
+          <rect x="0" y="4" width="20" height="24" rx="5" fill="#7FA8C9"></rect>
+          <rect x="20" y="4" width="8" height="24" fill="#B48CE0"></rect>
+          <rect x="28" y="4" width="7" height="24" fill="#E2B04A"></rect>
+          <rect x="35" y="4" width="321" height="24" fill="#4CC2C2"></rect>
+          <rect x="835" y="4" width="29" height="24" rx="5" fill="#3A2A2E"></rect>
+          <line x1="835" y1="0" x2="835" y2="32" stroke="#E2B04A" stroke-width="1.5" stroke-dasharray="3 3"></line>
+        </svg>
+        <div style="display: flex; gap: 16px; color: #8696A8; flex-wrap: wrap; font-size: 12px"><span><span style="color: #7FA8C9">■</span> system + tools 23k</span><span><span style="color: #B48CE0">■</span> MCP 10k</span><span><span style="color: #E2B04A">■</span> memory + skills 8k</span><span><span style="color: #4CC2C2">■</span> your conversation 372k</span><span>free 555k</span><span><span style="color: #E5605E">■</span> compaction reserve 33k</span></div>
+        <svg width="864" height="180" viewBox="0 0 864 180" role="img" aria-label="Context over turns with a forecast to auto-compact at turn 43">
+          <defs><linearGradient id="msg6" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4CC2C2" stop-opacity="0.55"></stop><stop offset="1" stop-color="#4CC2C2" stop-opacity="0.06"></stop></linearGradient></defs>
+          <line x1="44" x2="850" y1="160" y2="160" stroke="#1C2630"></line>
+          <line x1="44" x2="850" y1="90" y2="90" stroke="#1C2630"></line>
+          <line x1="44" x2="850" y1="20" y2="20" stroke="#1C2630"></line>
+          <text x="38" y="164" fill="#5D6B7D" font-size="11" text-anchor="end" font-family="JetBrains Mono">0</text>
+          <text x="38" y="94" fill="#5D6B7D" font-size="11" text-anchor="end" font-family="JetBrains Mono">500k</text>
+          <text x="38" y="24" fill="#5D6B7D" font-size="11" text-anchor="end" font-family="JetBrains Mono">1M</text>
+          <polygon points="{{ cone }}" fill="#4CC2C2" fill-opacity="0.08"></polygon>
+          <path d="{{ areaPath }}" fill="url(#msg6)"></path>
+          <path d="{{ linePath }}" fill="none" stroke="#4CC2C2" stroke-width="2.2"></path>
+          <path d="{{ forecastPath }}" fill="none" stroke="#4CC2C2" stroke-width="1.6" stroke-dasharray="5 4"></path>
+          <line x1="44" x2="850" y1="{{ thresholdY }}" y2="{{ thresholdY }}" stroke="#E2B04A" stroke-width="1.2" stroke-dasharray="4 4"></line>
+          <text x="848" y="{{ thresholdTy }}" fill="#E2B04A" font-size="11" text-anchor="end" font-family="JetBrains Mono">auto-compact at 967k</text>
+          <circle cx="{{ nowX }}" cy="{{ nowY }}" r="4" fill="#EEF3F8"></circle>
+          <text x="{{ nowLx }}" y="{{ nowLy }}" fill="#EEF3F8" font-size="11" font-family="JetBrains Mono">now · 412k · +19k a turn</text>
+          <text x="44" y="176" fill="#5D6B7D" font-size="11" font-family="JetBrains Mono">turn 1</text>
+          <text x="{{ nowX }}" y="176" fill="#5D6B7D" font-size="11" text-anchor="middle" font-family="JetBrains Mono">14</text>
+          <text x="850" y="176" fill="#5D6B7D" font-size="11" text-anchor="end" font-family="JetBrains Mono">43 (forecast)</text>
+        </svg>
+      </div>
+
+      <!-- spend + cost per turn -->
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #1C2630">
+        <div style="padding: 14px 18px; border-right: 1px solid #1C2630; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700; font-family: Inter, sans-serif; font-size: 14px">Spend</span><span style="flex-grow: 1"></span><span style="color: #8696A8">$14.82 · ≈ $21.70 at 1h</span></div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; background: #1A1710; border-radius: 6px; padding: 7px 10px; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+            <span style="color: #E2B04A; font-weight: 700">Watch</span>
+            <span style="color: #D6DEE8">$0.36 a minute. Two jumps: the helper agent in turn 3 was worth it; the cache rebuild in turn 11 was not.</span>
+          </div>
+          <svg width="400" height="180" viewBox="0 0 400 180" role="img" aria-label="Cumulative spend with forecast band">
+            <line x1="36" x2="392" y1="155" y2="155" stroke="#1C2630"></line>
+            <line x1="36" x2="392" y1="87.5" y2="87.5" stroke="#1C2630"></line>
+            <line x1="36" x2="392" y1="20" y2="20" stroke="#1C2630"></line>
+            <text x="30" y="159" fill="#5D6B7D" font-size="10" text-anchor="end" font-family="JetBrains Mono">$0</text>
+            <text x="30" y="91" fill="#5D6B7D" font-size="10" text-anchor="end" font-family="JetBrains Mono">$10</text>
+            <text x="30" y="24" fill="#5D6B7D" font-size="10" text-anchor="end" font-family="JetBrains Mono">$20</text>
+            <polygon points="{{ spendBand }}" fill="#4CC2C2" fill-opacity="0.1"></polygon>
+            <path d="{{ spendPath }}" fill="none" stroke="#4CC2C2" stroke-width="2"></path>
+            <path d="{{ spendForecast }}" fill="none" stroke="#4CC2C2" stroke-width="1.4" stroke-dasharray="4 4"></path>
+            <circle cx="{{ m0.x }}" cy="{{ m0.y }}" r="4" fill="#B48CE0"></circle>
+            <text x="{{ m0.tx }}" y="{{ m0.ty }}" fill="#B48CE0" font-size="10.5" font-family="JetBrains Mono">turn 3 · helper agent $1.85</text>
+            <circle cx="{{ m1.x }}" cy="{{ m1.y }}" r="4" fill="#E5605E"></circle>
+            <text x="{{ m1.tx }}" y="{{ m1.ty }}" fill="#E5605E" font-size="10.5" font-family="JetBrains Mono">turn 11 · cache rebuilt $2.31</text>
+            <text x="36" y="172" fill="#5D6B7D" font-size="10" font-family="JetBrains Mono">0 min</text>
+            <text x="279" y="172" fill="#5D6B7D" font-size="10" text-anchor="middle" font-family="JetBrains Mono">now</text>
+            <text x="392" y="172" fill="#5D6B7D" font-size="10" text-anchor="end" font-family="JetBrains Mono">60 min</text>
+          </svg>
+        </div>
+
+        <div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700; font-family: Inter, sans-serif; font-size: 14px">Cost per turn</span><span style="flex-grow: 1"></span><span style="color: #8696A8">≈ $0.60 typical</span></div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; background: #1A1710; border-radius: 6px; padding: 7px 10px; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+            <span style="color: #E2B04A; font-weight: 700">Watch</span>
+            <span style="color: #D6DEE8">The last two turns cost $1.74 and $2.21: every turn now re-sends 412k. <span style="color: #EEF3F8; font-weight: 600">Do: /compact at the next break.</span></span>
+          </div>
+          <div style="color: #C3CDD9; min-height: 19px; white-space: normal; font-size: 12.5px">{{ costReadout }}</div>
+          <div style="display: flex; gap: 8px">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 130px; color: #5D6B7D; font-size: 11px; text-align: right; width: 34px"><span>$2.40</span><span>$0</span></div>
+            <div style="height: 130px; flex-grow: 1; border-bottom: 1px solid #22303D; display: flex; gap: 6px; align-items: flex-end">
+              <sc-for list="{{ costCols }}" as="col" hint-placeholder-count="14">
+                <div onMouseEnter="{{ col.hover }}" style="flex: 1 1 0; height: {{ col.h }}; border-radius: 4px 4px 1px 1px; background: {{ col.fill }}; opacity: {{ col.op }}"></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; margin-left: 42px; color: #5D6B7D; font-size: 11px">
+            <sc-for list="{{ costCols }}" as="col" hint-placeholder-count="14"><span style="flex: 1 1 0; text-align: center; color: {{ col.tick }}">{{ col.n }}</span></sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- cache + tool calls -->
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-grow: 1">
+        <div style="padding: 14px 18px; border-right: 1px solid #1C2630; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700; font-family: Inter, sans-serif; font-size: 14px">Prompt cache</span><span style="flex-grow: 1"></span><span style="color: #5FC77E">reused 94 %</span></div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; background: #0F1B14; border-radius: 6px; padding: 7px 10px; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+            <span style="color: #5FC77E; font-weight: 700">Good</span>
+            <span style="color: #D6DEE8">But all 3 rebuilds (364k tokens, about $2.30) were avoidable. How, below.</span>
+          </div>
+          <div style="display: flex; gap: 14px; align-items: center">
+            <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="Cache stays warm for 59 more minutes">
+              <circle cx="46" cy="46" r="37" fill="none" stroke="#18222C" stroke-width="9"></circle>
+              <circle cx="46" cy="46" r="37" fill="none" stroke="#5FC77E" stroke-width="9" stroke-linecap="round" stroke-dasharray="229 233" transform="rotate(-90 46 46)"></circle>
+              <text x="46" y="46" fill="#EEF3F8" font-size="17" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">59m</text>
+              <text x="46" y="61" fill="#8696A8" font-size="9.5" text-anchor="middle" font-family="Inter">stays warm</text>
+            </svg>
+            <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+              <div style="display: flex; gap: 4px">
+                <sc-for list="{{ cacheTurns }}" as="t" hint-placeholder-count="14">
+                  <div onMouseEnter="{{ t.hover }}" style="flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 3px">
+                    <span style="width: 100%; height: 20px; border-radius: 10px; background: {{ t.c }}; box-shadow: {{ t.ring }}"></span>
+                    <span style="font-size: 10.5px; color: #5D6B7D">{{ t.n }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="color: #C3CDD9; white-space: normal; font-size: 12.5px; min-height: 36px">{{ cacheReadout }}</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="color: #8696A8; font-family: Inter, sans-serif; font-size: 12.5px; font-weight: 600">How to avoid each rebuild</div>
+            <sc-for list="{{ prevent }}" as="p" hint-placeholder-count="3">
+              <div style="display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; background: {{ p.bg }}; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+                <span style="color: #E5605E; font-family: 'JetBrains Mono', monospace; white-space: nowrap">turn {{ p.turn }}</span>
+                <span style="display: flex; flex-direction: column; gap: 2px"><span style="color: #8696A8">{{ p.cause }} · {{ p.tokens }}</span><span style="color: #EEF3F8">{{ p.fix }}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700; font-family: Inter, sans-serif; font-size: 14px">Tool calls per turn</span><span style="flex-grow: 1"></span><span style="color: #8696A8">124 calls</span></div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; background: #1A1710; border-radius: 6px; padding: 7px 10px; font-family: Inter, sans-serif; font-size: 13px; line-height: 18px">
+            <span style="color: #E2B04A; font-weight: 700">Watch</span>
+            <span style="color: #D6DEE8">46 reads for 18 edits; state.rs was read whole 3 times (41k). <span style="color: #EEF3F8; font-weight: 600">Do: ask Claude to search (grep) before reading whole files.</span></span>
+          </div>
+          <div style="display: flex; gap: 10px">
+            <div style="display: flex; flex-direction: column; color: #8696A8; text-align: right; width: 82px; font-size: 12px">
+              <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6"><div style="height: 18px; line-height: 18px; margin-bottom: 4px">{{ r.name }}</div></sc-for>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+              <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6">
+                <div style="display: flex; gap: 3px"><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="14"><span style="flex: 1 1 0; height: 18px; border-radius: 5px; background: {{ c }}"></span></sc-for></div>
+              </sc-for>
+              <div style="display: flex; gap: 3px; color: #5D6B7D; font-size: 10.5px"><sc-for list="{{ turnNums }}" as="n" hint-placeholder-count="14"><span style="flex: 1 1 0; text-align: center">{{ n }}</span></sc-for></div>
+            </div>
+            <div style="display: flex; flex-direction: column; color: #8696A8; width: 24px; font-size: 12px">
+              <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6"><div style="height: 18px; line-height: 18px; margin-bottom: 4px">{{ r.total }}</div></sc-for>
+            </div>
+          </div>
+          <div style="margin-left: 92px; color: #8696A8; font-size: 12px">turn →   brighter = more calls   <span style="color: #E5605E">●</span> failed</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid #2A3644; background: #1A1012">
+        <span style="background: #E5605E; color: #0C1116; font-weight: 700; padding: 0 6px">NOW</span>
+        <span style="flex-grow: 1; color: #EEF3F8">Claude is stuck retrying: 3 fails in a row</span>
+        <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 1px 10px; font-weight: 700">c  open in Coach</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 13.5px">
+    <sc-for list="{{ legend }}" as="g" hint-placeholder-count="4">
+      <div style="border: 1px solid #22303D; border-radius: 8px; padding: 8px 12px; color: #9AA7B6"><span style="font-family: 'JetBrains Mono', monospace; color: #4CC2C2">{{ g.el }}</span>  {{ g.what }}</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { costTurn: 14, cacheTurn: 11 };
+  }
+  renderVals() {
+    const s = this.state;
+    const f = (n) => n.toFixed(1);
+    // context over turns, 864 x 180 box
+    const X = (t) => 44 + (t - 1) / 42 * 806;
+    const Y = (v) => 160 - v / 1000 * 140;
+    const ctx = [38, 61, 94, 118, 140, 163, 190, 214, 239, 268, 301, 334, 371, 412];
+    const line = ctx.map((v, i) => (i ? 'L' : 'M') + f(X(i + 1)) + ' ' + f(Y(v))).join(' ');
+    const areaPath = line + ` L${f(X(14))} ${f(Y(0))} L${f(X(1))} ${f(Y(0))} Z`;
+    const forecastPath = `M${f(X(14))} ${f(Y(412))} L${f(X(43))} ${f(Y(412 + 19 * 29))}`;
+    const cone = `${f(X(14))},${f(Y(412))} ${f(X(43))},${f(Y(Math.min(1000, 412 + 24 * 29)))} ${f(X(43))},${f(Y(412 + 14 * 29))}`;
+    // spend, 400 x 180 box
+    const mins = [1, 4, 7, 10, 13, 15, 18, 21, 24, 27, 30, 33, 37, 41];
+    const cum = [0.92, 1.33, 3.18, 3.71, 4.37, 4.84, 5.56, 6.14, 6.75, 7.87, 10.18, 10.87, 12.61, 14.82];
+    const SX = (m) => 36 + m / 60 * 356;
+    const SY = (d) => 155 - d / 20 * 135;
+    let sp = `M${f(SX(0))} ${f(SY(0))}`;
+    mins.forEach((m, i) => { sp += ` L${f(SX(m))} ${f(SY(cum[i]))}`; });
+    // cost per turn
+    const cost = [0.92, 0.41, 1.85, 0.53, 0.66, 0.47, 0.72, 0.58, 0.61, 1.12, 2.31, 0.69, 1.74, 2.21];
+    const notes = {
+      3: 'Claude started a helper agent to explore the code. Worth it.',
+      11: 'The cache had to be rebuilt after a new MCP tool loaded. Avoidable.',
+      13: 'A long answer, and 371k of context re-sent.',
+      14: 'This turn so far, including the 3 failed calls.'
+    };
+    const grad = (top, bottom) => `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`;
+    const costCols = cost.map((v, i) => {
+      const n = i + 1;
+      const fill = n === 11 ? grad('#FF7A77', '#B8403F') : n === 3 ? grad('#CDA8F2', '#7E5BB0') : grad('#6FE0DF', '#2A8C8C');
+      const on = s.costTurn === n;
+      return { n: String(n), h: Math.round(v / 2.4 * 130) + 'px', fill, op: on ? '1' : '0.8', tick: on ? '#EEF3F8' : '#5D6B7D', hover: () => this.setState({ costTurn: n }) };
+    });
+    const ct = s.costTurn;
+    const costReadout = `Turn ${ct}${ct === 14 ? ' (now)' : ''} · $${cost[ct - 1].toFixed(2)}. ${notes[ct] || 'A normal turn.'}`;
+    // cache
+    const misses = {
+      4: { cause: 'an earlier message was edited', tokens: '64k rebuilt', fix: 'Steer forward with a new message instead of editing or rewinding an old one.' },
+      9: { cause: 'effort changed from high to max', tokens: '188k rebuilt', fix: 'Pick the effort level at the start, or change it right after /clear.' },
+      11: { cause: 'a new MCP tool loaded (linear search)', tokens: '112k rebuilt', fix: 'Connect the MCP servers you need before your first prompt.' }
+    };
+    const cacheTurns = Array.from({ length: 14 }, (_, i) => {
+      const n = i + 1;
+      return {
+        n: String(n),
+        c: n === 1 ? '#3A4654' : misses[n] ? grad('#FF7A77', '#B8403F') : grad('#7FE39B', '#3E9E5E'),
+        ring: s.cacheTurn === n ? '0 0 0 2px #EEF3F8' : 'none',
+        hover: () => this.setState({ cacheTurn: n })
+      };
+    });
+    const k = s.cacheTurn;
+    const cacheReadout = `Turn ${k}: ` + (k === 1 ? 'the first turn writes the cache.' : misses[k] ? `rebuilt because ${misses[k].cause}.` : 'the cache was reused.');
+    const prevent = [4, 9, 11].map((n) => ({ turn: String(n), ...misses[n], bg: s.cacheTurn === n ? '#1E1416' : '#121A21' }));
+    // tool calls
+    const ramp = (n) => {
+      if (n === 0) return '#121B23';
+      const t = Math.min(1, n / 6);
+      const a = [0x17, 0x3A, 0x42], b = [0x6F, 0xE0, 0xDF];
+      const c = a.map((x, j) => Math.round(x + (b[j] - x) * t));
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    };
+    const heatRows = [
+      ['Read', [6, 4, 2, 5, 3, 4, 3, 2, 4, 3, 2, 3, 3, 2]],
+      ['Bash', [1, 2, 0, 3, 2, 2, 4, 1, 3, 2, 3, 2, 3, 3]],
+      ['Edit', [0, 0, 0, 2, 3, 1, 2, 2, 1, 3, 0, 2, 2, 0]],
+      ['Grep', [4, 3, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 0]],
+      ['Agent', [0, 0, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]],
+      ['MCP linear', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0]]
+    ];
+    const heat = heatRows.map(([name, v]) => ({
+      name,
+      total: String(v.reduce((a, b) => a + b, 0)),
+      cells: v.map((n, i) => (name === 'Bash' && i === 13) ? grad('#FF7A77', '#B8403F') : ramp(n))
+    }));
+    return {
+      areaPath, linePath: line, forecastPath, cone,
+      thresholdY: f(Y(967)), thresholdTy: f(Y(967) - 5),
+      nowX: f(X(14)), nowY: f(Y(412)), nowLx: f(X(14) + 10), nowLy: f(Y(412) + 16),
+      spendPath: sp,
+      spendForecast: `M${f(SX(41))} ${f(SY(14.82))} L${f(SX(60))} ${f(SY(21.7))}`,
+      spendBand: `${f(SX(41))},${f(SY(14.82))} ${f(SX(60))},${f(SY(23.2))} ${f(SX(60))},${f(SY(20.2))}`,
+      m0: { x: f(SX(7)), y: f(SY(3.18)), tx: f(SX(7) + 8), ty: f(SY(3.18) - 8) },
+      m1: { x: f(SX(30)), y: f(SY(10.18)), tx: f(SX(30) - 178), ty: f(SY(10.18) - 12) },
+      costCols, costReadout, cacheTurns, cacheReadout, prevent, heat,
+      turnNums: Array.from({ length: 14 }, (_, i) => String(i + 1)),
+      legend: [
+        { el: 'the overview', what: 'context, spend, cost per turn, cache, tool calls: one scrolling pane' },
+        { el: 'Image', what: 'smooth charts where the terminal draws pictures; text elsewhere' },
+        { el: 'verdict', what: 'every chart: Good, Watch or Act, one sentence, one Do or Don’t' },
+        { el: 'prevention', what: 'each cache rebuild comes with the habit that avoids it' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

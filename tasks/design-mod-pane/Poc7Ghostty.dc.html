@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 7: the real thing in Ghostty</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1080px; box-sizing: border-box; padding: 24px 40px; background: #0A0E12; display: flex; flex-direction: column; gap: 18px">
+
+  <!-- macOS window -->
+  <div style="align-self: center; border-radius: 10px; overflow: hidden; border: 1px solid #3A3F46; box-shadow: 0 24px 60px rgba(0,0,0,0.55); background: #17191C">
+    <div style="height: 28px; background: #26292E; display: flex; align-items: center; padding: 0 12px; gap: 8px; position: relative; font-family: Inter, system-ui, sans-serif">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+      <span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; color: #A9AFB8; pointer-events: none">claude · ~/code/cctop · 190×56</span>
+    </div>
+    <!-- the cell grid -->
+    <div style="position: relative; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 16px; color: #D4D7DC">
+      <div style="position: relative">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="56">
+          <div style="height: 16px; white-space: pre; display: flex"><sc-for list="{{ r.segs }}" as="s"><span style="display: inline-block; width: {{ s.wch }}; overflow: hidden; color: {{ s.fg }}; background: {{ s.bg }}; font-weight: {{ s.w }}">{{ s.t }}</span></sc-for></div>
+        </sc-for>
+
+        <!-- Images: PNGs cctop renders, placed on whole cells -->
+        <svg style="position: absolute; left: 86ch; top: 112px; width: 103ch; height: 16px" viewBox="0 0 803 16" preserveAspectRatio="none" role="img" aria-label="Context composition">
+          <rect x="0" y="3" width="803" height="10" rx="5" fill="#252A31"></rect>
+          <rect x="0" y="3" width="19" height="10" rx="5" fill="#7FA8C9"></rect>
+          <rect x="17" y="3" width="8" height="10" fill="#B48CE0"></rect>
+          <rect x="25" y="3" width="6" height="10" fill="#E2B04A"></rect>
+          <rect x="31" y="3" width="299" height="10" fill="#4CC2C2"></rect>
+          <rect x="777" y="3" width="26" height="10" rx="5" fill="#4A2E31"></rect>
+        </svg>
+
+        <svg style="position: absolute; left: 91ch; top: 160px; width: 98ch; height: 128px" viewBox="0 0 764 128" preserveAspectRatio="none" role="img" aria-label="Context over turns with forecast to auto-compact">
+          <defs><linearGradient id="g7ctx" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4CC2C2" stop-opacity="0.6"></stop><stop offset="1" stop-color="#4CC2C2" stop-opacity="0.06"></stop></linearGradient></defs>
+          <line x1="0" x2="764" y1="64" y2="64" stroke="#262B32" stroke-width="1"></line>
+          <polygon points="{{ ctxCone }}" fill="#4CC2C2" fill-opacity="0.09"></polygon>
+          <path d="{{ ctxArea }}" fill="url(#g7ctx)"></path>
+          <path d="{{ ctxPrefix }}" fill="#7FA8C9" fill-opacity="0.75"></path>
+          <path d="{{ ctxLine }}" fill="none" stroke="#4CC2C2" stroke-width="2.2"></path>
+          <path d="{{ ctxForecast }}" fill="none" stroke="#4CC2C2" stroke-width="1.6" stroke-dasharray="5 4"></path>
+          <line x1="0" x2="764" y1="{{ ctxThreshold }}" y2="{{ ctxThreshold }}" stroke="#E2B04A" stroke-width="1.3" stroke-dasharray="4 4"></line>
+          <circle cx="{{ ctxNowX }}" cy="{{ ctxNowY }}" r="4" fill="#F1F3F5"></circle>
+        </svg>
+
+        <svg style="position: absolute; left: 91ch; top: 400px; width: 46ch; height: 128px" viewBox="0 0 359 128" preserveAspectRatio="none" role="img" aria-label="Cumulative spend with forecast">
+          <line x1="0" x2="359" y1="64" y2="64" stroke="#262B32"></line>
+          <polygon points="{{ spBand }}" fill="#4CC2C2" fill-opacity="0.11"></polygon>
+          <path d="{{ spArea }}" fill="#4CC2C2" fill-opacity="0.14"></path>
+          <path d="{{ spLine }}" fill="none" stroke="#4CC2C2" stroke-width="2.2"></path>
+          <path d="{{ spForecast }}" fill="none" stroke="#4CC2C2" stroke-width="1.5" stroke-dasharray="4 4"></path>
+          <circle cx="{{ sp3x }}" cy="{{ sp3y }}" r="4.5" fill="#B48CE0"></circle>
+          <circle cx="{{ sp11x }}" cy="{{ sp11y }}" r="4.5" fill="#E5605E"></circle>
+        </svg>
+
+        <svg style="position: absolute; left: 144ch; top: 400px; width: 42ch; height: 128px" viewBox="0 0 328 128" preserveAspectRatio="none" role="img" aria-label="Cost per turn, 14 bars">
+          <defs>
+            <linearGradient id="g7b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6FE0DF"></stop><stop offset="1" stop-color="#2A8C8C"></stop></linearGradient>
+            <linearGradient id="g7r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF7A77"></stop><stop offset="1" stop-color="#B8403F"></stop></linearGradient>
+            <linearGradient id="g7p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CDA8F2"></stop><stop offset="1" stop-color="#7E5BB0"></stop></linearGradient>
+          </defs>
+          <line x1="0" x2="328" y1="127" y2="127" stroke="#323840"></line>
+          <path d="{{ barsB }}" fill="url(#g7b)"></path>
+          <path d="{{ barsP }}" fill="url(#g7p)"></path>
+          <path d="{{ barsR }}" fill="url(#g7r)"></path>
+        </svg>
+
+        <svg style="position: absolute; left: 86ch; top: 656px; width: 42ch; height: 32px" viewBox="0 0 328 32" preserveAspectRatio="none" role="img" aria-label="Cache per turn: reused or rebuilt">
+          <path d="{{ pillsG }}" fill="#4FB872"></path>
+          <path d="{{ pillsR }}" fill="#E5605E"></path>
+          <path d="{{ pillsN }}" fill="#3A4250"></path>
+        </svg>
+
+        <svg style="position: absolute; left: 102ch; top: 704px; width: 30ch; height: 16px" viewBox="0 0 234 16" preserveAspectRatio="none" role="img" aria-label="Warm for 59 more minutes">
+          <rect x="0" y="4" width="234" height="8" rx="4" fill="#252A31"></rect>
+          <rect x="0" y="4" width="230" height="8" rx="4" fill="#5FC77E"></rect>
+        </svg>
+
+        <svg style="position: absolute; left: 150ch; top: 656px; width: 28ch; height: 96px" viewBox="0 0 218 96" preserveAspectRatio="none" role="img" aria-label="Tool calls per turn heat map">
+          <path d="{{ heat0 }}" fill="#1D272F"></path>
+          <path d="{{ heat1 }}" fill="#1F4F55"></path>
+          <path d="{{ heat2 }}" fill="#2A7C7E"></path>
+          <path d="{{ heat3 }}" fill="#3FA9A9"></path>
+          <path d="{{ heat4 }}" fill="#6FE0DF"></path>
+          <path d="{{ heatF }}" fill="#E5605E"></path>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="align-self: center; width: 1500px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; line-height: 1.45; color: #9AA7B6">
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">Ghostty settings for this look</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #C3CDD9; white-space: pre">font-family = JetBrains Mono
+font-size = 13
+adjust-cell-height = 23%</div></div>
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">What draws what</div>Every letter, number and verdict is terminal text in your font. The six charts are PNGs the cctop binary renders and the pane shows with <span style="font-family: 'JetBrains Mono', monospace; color: #4CC2C2">Image</span>, placed on whole cells, with no text inside them.</div>
+    <div style="border: 1px solid #22303D; border-radius: 8px; padding: 10px 14px"><div style="color: #EEF3F8; font-weight: 600; margin-bottom: 4px">Where this looks like this</div>Ghostty and kitty, iTerm2 3.5+ in fullscreen. tmux only with passthrough on. Everywhere else the same pane falls back to cell charts: POC 8.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const COLS = 190, ROWS = 56;
+    const C = { fg: '#D4D7DC', dim: '#7C8693', faint: '#343A42', acc: '#4CC2C2', green: '#5FC77E', amber: '#E2B04A', red: '#E5605E', purple: '#B48CE0', blue: '#7FA8C9', white: '#F1F3F5', orange: '#D97757', panel: '#20242A', bg: '#17191C', nudge: '#3A1F22' };
+    const g = [];
+    for (let y = 0; y < ROWS; y++) { const r = []; for (let x = 0; x < COLS; x++) r.push({ c: ' ', fg: C.fg, bg: null, b: false }); g.push(r); }
+    const put = (x, y, t, st) => {
+      st = st || {};
+      if (y < 0 || y >= ROWS) return;
+      for (let i = 0; i < t.length; i++) {
+        const xx = x + i; if (xx < 0 || xx >= COLS) continue;
+        const cell = g[y][xx]; cell.c = t[i]; cell.fg = st.fg || C.fg; if (st.bg !== undefined) cell.bg = st.bg; cell.b = !!st.b;
+      }
+    };
+    const bgRow = (x, y, w, bg) => { for (let i = 0; i < w; i++) if (x + i < COLS) g[y][x + i].bg = bg; };
+    const rjust = (xEnd, y, t, st) => put(xEnd - t.length + 1, y, t, st);
+    const verdict = (x, y, w, label, col, text, todo) => {
+      put(x, y, label, { fg: col, b: true });
+      const ind = label.length + 2;
+      const words = text.split(' ').map((t) => ({ t, b: false })).concat(todo ? todo.split(' ').map((t) => ({ t, b: true })) : []);
+      let cx = x + ind, cy = y;
+      for (const wd of words) {
+        if (cx + wd.t.length > x + w) { cy++; cx = x + ind; }
+        put(cx, cy, wd.t, { fg: wd.b ? C.white : C.fg, b: wd.b });
+        cx += wd.t.length + 1;
+      }
+    };
+    // transcript
+    put(1, 0, '✻ Claude Code', { fg: C.orange, b: true }); put(15, 0, '~/code/cctop · main', { fg: C.dim });
+    put(1, 2, '>', { fg: C.dim }); put(3, 2, 'open the PR for the contract bump and push the branch', { fg: C.white });
+    put(1, 4, '⏺', { fg: C.white }); put(3, 4, "I'll check whether a PR exists first.");
+    put(1, 6, '⏺', { fg: C.green }); put(3, 6, 'Bash', { b: true }); put(7, 6, '(gh pr view 24)');
+    put(3, 7, '⎿  Error: no pull requests found for branch', { fg: C.red }); put(6, 8, '"prds-cc-2-1-332"', { fg: C.red });
+    put(1, 10, '⏺', { fg: C.green }); put(3, 10, 'Bash', { b: true }); put(7, 10, '(gh pr view --json url)');
+    put(3, 11, '⎿  Error: no pull requests found for branch', { fg: C.red }); put(6, 12, '"prds-cc-2-1-332"', { fg: C.red });
+    put(1, 14, '⏺', { fg: C.green }); put(3, 14, 'Bash', { b: true }); put(7, 14, '(git push)');
+    put(3, 15, '⎿  ! [rejected] prds-cc-2-1-332 -> prds-cc-2-1-332', { fg: C.red }); put(6, 16, '(non-fast-forward)', { fg: C.red });
+    put(1, 18, '⏺', { fg: C.white }); put(3, 18, 'The push was rejected. Let me look at the remote first…');
+    put(1, 20, '✻', { fg: C.orange }); put(3, 20, 'Pondering…', { fg: C.orange }); put(14, 20, '(14s · ↓ 1.2k tokens · esc to interrupt)', { fg: C.dim });
+    put(1, 51, '╭' + '─'.repeat(80) + '╮', { fg: '#5A616B' }); put(1, 52, '│', { fg: '#5A616B' }); put(3, 52, '>', { fg: C.dim });
+    g[52][5].bg = C.fg; put(82, 52, '│', { fg: '#5A616B' }); put(1, 53, '╰' + '─'.repeat(80) + '╯', { fg: '#5A616B' });
+    put(2, 55, '⏵⏵ auto mode on (shift+tab to cycle)', { fg: C.dim });
+    for (let y = 0; y < ROWS; y++) put(84, y, '│', { fg: C.faint });
+    // pane chrome
+    const PX = 86, PW = 103, LX = 86, LW = 51, RX = 138, RW = 51;
+    bgRow(85, 0, 105, C.panel);
+    put(86, 0, 'cctop', { fg: C.acc, b: true });
+    let tx = 93;
+    for (const [t, on] of [['Coach', 0], ['Overview', 1], ['Tools', 0], ['Agents', 0], ['Events', 0]]) {
+      put(tx, 0, ' ' + t + ' ', on ? { fg: C.bg, bg: C.fg, b: true } : { fg: C.dim });
+      tx += t.length + 3;
+    }
+    rjust(188, 0, 'Opus 5.5 · turn 14 · 41m   ×', { fg: C.dim });
+    // context
+    put(PX, 2, 'Context window', { fg: C.white, b: true }); put(PX + 16, 2, '412k of 1M · 41 %', { fg: C.acc });
+    rjust(188, 2, 'per Claude Code · 12s ago', { fg: C.dim });
+    verdict(PX, 3, PW, 'Good', C.green, 'Plenty of room: about 29 more turns before Claude Code compacts on its own. MCP tools take 10k (1 %), which is fine. Nearly all of it is your conversation.', 'Do: /compact when you finish this task, not mid-way.');
+    // row 7 = composition image
+    put(PX, 8, '■', { fg: C.blue }); put(PX + 2, 8, 'system + tools 23k', { fg: C.dim });
+    put(PX + 22, 8, '■', { fg: C.purple }); put(PX + 24, 8, 'MCP 10k', { fg: C.dim });
+    put(PX + 33, 8, '■', { fg: C.amber }); put(PX + 35, 8, 'memory + skills 8k', { fg: C.dim });
+    put(PX + 55, 8, '■', { fg: C.acc }); put(PX + 57, 8, 'conversation 372k', { fg: C.dim });
+    put(PX + 76, 8, 'free 555k', { fg: C.dim });
+    put(PX + 87, 8, '■', { fg: C.red }); put(PX + 89, 8, 'reserve 33k', { fg: C.dim });
+    put(PX, 10, '1M', { fg: C.dim }); put(PX, 14, '500k', { fg: C.dim }); put(PX, 17, '0', { fg: C.dim });
+    rjust(188, 10, 'auto-compact 967k', { fg: C.amber });
+    put(91, 18, 'turn 1', { fg: C.dim }); put(119, 18, '14 · now · 412k, +19k a turn', { fg: C.white });
+    rjust(188, 18, '43 · forecast', { fg: C.dim });
+    put(PX, 19, '─'.repeat(PW), { fg: C.faint });
+    // spend + cost
+    for (let y = 20; y <= 34; y++) put(137, y, '│', { fg: C.faint });
+    put(LX, 20, 'Spend', { fg: C.white, b: true }); rjust(136, 20, '$14.82 · ≈ $21.70 at 1h', { fg: C.dim });
+    verdict(LX, 21, LW - 1, 'Watch', C.amber, '$0.36 a minute. Two jumps: the helper agent in turn 3 was worth it; the cache rebuild in turn 11 was not.', '');
+    put(LX, 25, '$20', { fg: C.dim }); put(LX, 29, '$10', { fg: C.dim }); put(LX, 32, '$0', { fg: C.dim });
+    put(91, 33, '0 min', { fg: C.dim }); put(120, 33, 'now', { fg: C.white }); rjust(136, 33, '60 min', { fg: C.dim });
+    put(LX, 34, '●', { fg: C.purple }); put(LX + 2, 34, 'turn 3 helper agent $1.85', { fg: C.dim });
+    put(LX + 29, 34, '●', { fg: C.red }); put(LX + 31, 34, 'turn 11 rebuild $2.31', { fg: C.dim });
+    put(RX, 20, 'Cost per turn', { fg: C.white, b: true }); rjust(188, 20, '≈ $0.60 typical', { fg: C.dim });
+    verdict(RX, 21, RW, 'Watch', C.amber, 'The last two turns cost $1.74 and $2.21: every turn now re-sends 412k.', 'Do: /compact at the next break.');
+    put(RX, 25, '$2.40', { fg: C.dim }); put(RX, 32, '$0', { fg: C.dim });
+    for (let n = 1; n <= 14; n++) put(144 + 3 * (n - 1), 33, String(n), { fg: n === 14 ? C.white : C.dim });
+    put(RX, 34, 'Turn 14 (now) · $2.21 · includes the 3 failed calls', { fg: C.fg });
+    put(PX, 35, '─'.repeat(PW), { fg: C.faint });
+    // cache + tools
+    for (let y = 36; y <= 52; y++) put(137, y, '│', { fg: C.faint });
+    put(LX, 36, 'Prompt cache', { fg: C.white, b: true }); rjust(136, 36, 'reused 94 %', { fg: C.green });
+    verdict(LX, 37, LW - 1, 'Good', C.green, 'All 3 rebuilds (364k, about $2.30) were avoidable. How, below.', '');
+    for (let n = 1; n <= 14; n++) put(86 + 3 * (n - 1), 43, String(n), { fg: C.dim });
+    put(LX, 44, 'stays warm', { fg: C.dim }); put(LX + 11, 44, '59m', { fg: C.white, b: true });
+    put(LX, 46, 'How to avoid each rebuild', { fg: C.dim, b: true });
+    const tips = [
+      ['turn 4', 'an earlier message was edited · 64k', "Send a new message; don't edit an old one."],
+      ['turn 9', 'effort changed high → max · 188k', 'Set effort at the start, or after /clear.'],
+      ['turn 11', 'a new MCP tool loaded · 112k', 'Connect MCP servers before you start.']
+    ];
+    tips.forEach(([t, cause, fix], i) => { put(LX, 47 + 2 * i, t, { fg: C.red }); put(LX + 8, 47 + 2 * i, cause, { fg: C.dim }); put(LX + 8, 48 + 2 * i, fix, { fg: C.white }); });
+    put(RX, 36, 'Tool calls per turn', { fg: C.white, b: true }); rjust(188, 36, '124 calls', { fg: C.dim });
+    verdict(RX, 37, RW, 'Watch', C.amber, '46 reads for 18 edits; state.rs was read whole 3 times (41k).', 'Do: ask Claude to grep before reading whole files.');
+    const tools = ['Read', 'Bash', 'Edit', 'Grep', 'Agent', 'MCP linear'];
+    const totals = ['46', '31', '18', '22', '3', '4'];
+    tools.forEach((t, i) => { rjust(148, 41 + i, t, { fg: C.dim }); put(180, 41 + i, totals[i], { fg: C.dim }); });
+    put(150, 47, '1', { fg: C.dim }); put(158, 47, '5', { fg: C.dim }); put(168, 47, '10', { fg: C.dim }); put(176, 47, '14', { fg: C.dim });
+    put(RX, 48, 'turn →   brighter = more calls   ', { fg: C.dim }); put(RX + 33, 48, '■', { fg: C.red }); put(RX + 35, 48, 'failed', { fg: C.dim });
+    // nudge + footer
+    bgRow(85, 54, 105, C.nudge);
+    put(86, 54, ' NOW ', { fg: C.bg, bg: C.red, b: true });
+    put(92, 54, 'Claude is stuck retrying: 3 fails in a row', { fg: C.white });
+    rjust(188, 54, '[ c  open in Coach ]', { fg: C.acc, b: true });
+    put(86, 55, 'spent so far $14.82 at API prices · ↓ scroll for agents and files', { fg: C.dim });
+
+    const rows = g.map((r) => {
+      const segs = []; let cur = null;
+      for (const cell of r) {
+        const key = cell.fg + '|' + cell.bg + '|' + cell.b;
+        if (cur && cur.key === key) { cur.t += cell.c; cur.n++; }
+        else { cur = { key, t: cell.c, fg: cell.fg, bg: cell.bg || 'transparent', w: cell.b ? '700' : '400', n: 1 }; segs.push(cur); }
+      }
+      return { segs: segs.map((s) => ({ t: s.t, fg: s.fg, bg: s.bg, w: s.w, wch: s.n + 'ch' })) };
+    });
+
+    // chart geometry (viewBox units)
+    const f = (n) => n.toFixed(1);
+    const ctx = [38, 61, 94, 118, 140, 163, 190, 214, 239, 268, 301, 334, 371, 412];
+    const CX = (t) => (t - 1) / 42 * 764;
+    const CY = (v) => 126 - v / 1000 * 124;
+    const ctxLine = ctx.map((v, i) => (i ? 'L' : 'M') + f(CX(i + 1)) + ' ' + f(CY(v))).join(' ');
+    const ctxArea = ctxLine + ` L${f(CX(14))} 128 L0 128 Z`;
+    const ctxPrefix = ctx.map((v, i) => (i ? 'L' : 'M') + f(CX(i + 1)) + ' ' + f(CY(Math.min(v, i >= 10 ? 40 : 36)))).join(' ') + ` L${f(CX(14))} 128 L0 128 Z`;
+    const ctxForecast = `M${f(CX(14))} ${f(CY(412))} L764 ${f(CY(412 + 19 * 29))}`;
+    const ctxCone = `${f(CX(14))},${f(CY(412))} 764,${f(CY(Math.min(1000, 412 + 24 * 29)))} 764,${f(CY(412 + 14 * 29))}`;
+    const mins = [1, 4, 7, 10, 13, 15, 18, 21, 24, 27, 30, 33, 37, 41];
+    const cum = [0.92, 1.33, 3.18, 3.71, 4.37, 4.84, 5.56, 6.14, 6.75, 7.87, 10.18, 10.87, 12.61, 14.82];
+    const SX = (m) => m / 60 * 359;
+    const SY = (d) => 126 - d / 20 * 124;
+    let spLine = `M0 ${f(SY(0))}`;
+    mins.forEach((m, i) => { spLine += ` L${f(SX(m))} ${f(SY(cum[i]))}`; });
+    const spArea = spLine + ` L${f(SX(41))} 128 L0 128 Z`;
+    const cost = [0.92, 0.41, 1.85, 0.53, 0.66, 0.47, 0.72, 0.58, 0.61, 1.12, 2.31, 0.69, 1.74, 2.21];
+    const bar = (n) => { const v = cost[n - 1]; const h = v / 2.4 * 124; const x = (n - 1) * 23.4, w = 15.6, y = 127 - h, r = 3; return `M${f(x)} 127 L${f(x)} ${f(y + r)} Q${f(x)} ${f(y)} ${f(x + r)} ${f(y)} L${f(x + w - r)} ${f(y)} Q${f(x + w)} ${f(y)} ${f(x + w)} ${f(y + r)} L${f(x + w)} 127 Z`; };
+    const nums = Array.from({ length: 14 }, (_, i) => i + 1);
+    const pill = (n) => { const x = (n - 1) * 23.4, w = 15.6, y = 4, h = 24, r = 7; return `M${f(x + r)} ${y} L${f(x + w - r)} ${y} Q${f(x + w)} ${y} ${f(x + w)} ${y + r} L${f(x + w)} ${y + h - r} Q${f(x + w)} ${y + h} ${f(x + w - r)} ${y + h} L${f(x + r)} ${y + h} Q${f(x)} ${y + h} ${f(x)} ${y + h - r} L${f(x)} ${y + r} Q${f(x)} ${y} ${f(x + r)} ${y} Z`; };
+    const misses = [4, 9, 11];
+    const heatRows = [
+      [6, 4, 2, 5, 3, 4, 3, 2, 4, 3, 2, 3, 3, 2],
+      [1, 2, 0, 3, 2, 2, 4, 1, 3, 2, 3, 2, 3, 3],
+      [0, 0, 0, 2, 3, 1, 2, 2, 1, 3, 0, 2, 2, 0],
+      [4, 3, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 0],
+      [0, 0, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0]
+    ];
+    const heatPaths = { 0: '', 1: '', 2: '', 3: '', 4: '', F: '' };
+    heatRows.forEach((row, ri) => row.forEach((v, ci) => {
+      const x = ci * 15.6 + 1, y = ri * 16 + 2, w = 13.6, h = 12, r = 3;
+      const p = `M${f(x + r)} ${y} L${f(x + w - r)} ${y} Q${f(x + w)} ${y} ${f(x + w)} ${y + r} L${f(x + w)} ${y + h - r} Q${f(x + w)} ${y + h} ${f(x + w - r)} ${y + h} L${f(x + r)} ${y + h} Q${f(x)} ${y + h} ${f(x)} ${y + h - r} L${f(x)} ${y + r} Q${f(x)} ${y} ${f(x + r)} ${y} Z `;
+      const k = (ri === 1 && ci === 13) ? 'F' : v === 0 ? 0 : v === 1 ? 1 : v <= 3 ? 2 : v <= 4 ? 3 : 4;
+      heatPaths[k] += p;
+    }));
+    return {
+      rows,
+      ctxLine, ctxArea, ctxPrefix, ctxForecast, ctxCone,
+      ctxThreshold: f(CY(967)), ctxNowX: f(CX(14)), ctxNowY: f(CY(412)),
+      spLine, spArea,
+      spForecast: `M${f(SX(41))} ${f(SY(14.82))} L359 ${f(SY(21.7))}`,
+      spBand: `${f(SX(41))},${f(SY(14.82))} 359,${f(SY(23.2))} 359,${f(SY(20.2))}`,
+      sp3x: f(SX(7)), sp3y: f(SY(3.18)), sp11x: f(SX(30)), sp11y: f(SY(10.18)),
+      barsB: nums.filter((n) => n !== 3 && n !== 11).map(bar).join(' '), barsP: bar(3), barsR: bar(11),
+      pillsG: nums.filter((n) => n !== 1 && !misses.includes(n)).map(pill).join(' '),
+      pillsR: misses.map(pill).join(' '), pillsN: pill(1),
+      heat0: heatPaths[0], heat1: heatPaths[1], heat2: heatPaths[2], heat3: heatPaths[3], heat4: heatPaths[4], heatF: heatPaths.F
+    };
+  }
+}
+</script>
+</body>
+</html>

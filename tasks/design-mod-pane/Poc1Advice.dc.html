@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 1: advice first</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+a{color:#4CC2C2;text-decoration:none}a:hover{color:#8FE3E3;text-decoration:underline}
+button:hover{filter:brightness(1.15)}
+</style>
+</helmet>
+<div style="width: 1440px; height: 960px; box-sizing: border-box; padding: 20px; background: #0A0E12; display: flex; flex-direction: column; gap: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 19px; color: #D6DEE8">
+
+  <div style="height: 856px; display: flex; border: 1px solid #2A3644; border-radius: 10px; background: #0E1318; overflow: hidden">
+    <!-- transcript -->
+    <div style="flex: 1 1 0; min-width: 0; padding: 18px 22px; display: flex; flex-direction: column; white-space: pre-wrap">
+      <div style="color: #8696A8">  …turn 13 above</div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #8696A8">&gt; </span><span style="color: #EEF3F8">open the PR for the contract bump and push the branch</span></div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #EEF3F8">⏺</span> I'll check whether a PR exists first.</div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #5FC77E">⏺</span> <span style="font-weight: 700">Bash</span>(gh pr view 24)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found for branch "prds-cc-2-1-332"</div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #5FC77E">⏺</span> <span style="font-weight: 700">Bash</span>(gh pr view --json url)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found for branch "prds-cc-2-1-332"</div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #5FC77E">⏺</span> <span style="font-weight: 700">Bash</span>(git push)</div>
+      <div style="color: #E5605E">  ⎿  Error: ! [rejected] prds-cc-2-1-332 -&gt; prds-cc-2-1-332</div>
+      <div style="color: #E5605E">     (non-fast-forward)</div>
+      <div style="height: 19px"></div>
+      <sc-if value="{{ running }}" hint-placeholder-val="{{ true }}">
+        <div><span style="color: #EEF3F8">⏺</span> The push was rejected. Let me look at the remote first…</div>
+        <div style="height: 19px"></div>
+        <div style="color: #D97757">✻ Pondering… <span style="color: #8696A8">(14s · ↓ 1.2k tokens · esc to interrupt)</span></div>
+      </sc-if>
+      <sc-if value="{{ stopped }}" hint-placeholder-val="{{ false }}">
+        <div style="color: #8696A8">  ⎿  Interrupted · What should Claude do instead?</div>
+      </sc-if>
+      <div style="flex-grow: 1"></div>
+      <div style="border: 1px solid {{ promptBorder }}; border-radius: 6px; padding: 6px 10px; color: #EEF3F8; white-space: normal"><span style="color: #8696A8">&gt; </span>{{ promptText }}<span style="background: #D6DEE8; color: #0E1318"> </span></div>
+      <div style="padding: 4px 4px 0; color: #8696A8">  ⏵⏵ auto mode · Opus 5.5 · ctx 41 %</div>
+    </div>
+
+    <!-- docked pane -->
+    <div style="width: 640px; flex: 0 0 640px; border-left: 1px solid #2A3644; display: flex; flex-direction: column; background: #0C1116">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid #2A3644">
+        <span style="color: #4CC2C2; font-weight: 700">cctop</span>
+        <span style="background: #D6DEE8; color: #0C1116; padding: 0 6px">Coach</span>
+        <span style="color: #8696A8">Overview</span><span style="color: #8696A8">Tools</span><span style="color: #8696A8">Agents</span><span style="color: #8696A8">Events</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #8696A8">×</span>
+      </div>
+
+      <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column">
+        <!-- the nudge -->
+        <div style="padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #2A3644">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span style="background: #E5605E; color: #0C1116; font-weight: 700; padding: 0 6px">NOW</span>
+            <span style="color: #EEF3F8">Claude is stuck retrying</span>
+            <span style="flex-grow: 1"></span>
+            <span style="color: #5D6B7D; font-size: 11.5px">42s ago · rule A38</span>
+          </div>
+          <div style="font-size: 16px; line-height: 23px; font-weight: 700; color: #EEF3F8">3 fails in a row: gh pr view ×2, git push</div>
+          <div style="color: #C3CDD9; white-space: normal">Claude keeps trying without a fact it can't find out by itself: there is no PR for this branch yet, and the remote has commits you don't. Each retry re-sends the whole 412k-token context, about <span style="color: #EEF3F8">$0.60 a call</span>.</div>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{ evidence }}" as="e" hint-placeholder-count="3">
+              <div style="display: flex; gap: 8px"><span style="color: #E5605E">✕</span><span style="flex-grow: 1">{{ e.call }} <span style="color: #8696A8">· {{ e.why }}</span></span><a href="#">{{ e.link }}</a></div>
+            </sc-for>
+          </div>
+
+          <!-- the fix, as a clickable prompt -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="color: #8696A8; font-weight: 700">Fix it with this prompt · click to put it in your prompt box</div>
+            <button onClick="{{ fillFix }}" style="font: inherit; text-align: left; cursor: pointer; background: {{ fixBg }}; border: 1px solid {{ fixBorder }}; border-radius: 6px; padding: 10px 12px; color: #EEF3F8; display: flex; gap: 10px; align-items: flex-start">
+              <span style="color: #4CC2C2">↵</span>
+              <span style="white-space: normal; flex-grow: 1">{{ fixText }}</span>
+            </button>
+            <sc-if value="{{ filled }}" hint-placeholder-val="{{ false }}">
+              <div style="color: #5FC77E; white-space: normal">✓ It's in your prompt box. Nothing has been sent: read it, change it if you like, then press Enter.</div>
+            </sc-if>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+            <button onClick="{{ stopTurn }}" style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 3px 10px; font-weight: 700; cursor: pointer">1  Stop the turn (Esc)</button>
+            <button onClick="{{ fillFix }}" style="font: inherit; background: transparent; color: #4CC2C2; border: 1px solid #4CC2C2; padding: 2px 10px; cursor: pointer">2  Put the prompt in the box</button>
+            <button onClick="{{ snoozeNow }}" style="font: inherit; background: transparent; color: #C3CDD9; border: 1px solid #4A5A6C; padding: 2px 10px; cursor: pointer">3  Snooze 15m</button>
+          </div>
+        </div>
+
+        <!-- the queue -->
+        <div style="padding: 10px 18px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #2A3644">
+          <div style="color: #8696A8; font-weight: 700; margin-bottom: 4px">Up next · click a row to open it</div>
+          <sc-for list="{{ queue }}" as="q" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column">
+              <button onClick="{{ q.toggle }}" style="font: inherit; text-align: left; background: {{ q.bg }}; border: 0; color: #D6DEE8; padding: 4px 6px; display: flex; gap: 10px; cursor: pointer">
+                <span style="color: {{ q.color }}; font-weight: 700; width: 40px">{{ q.cls }}</span>
+                <span style="color: #8696A8; width: 96px">{{ q.topic }}</span>
+                <span style="flex-grow: 1; white-space: normal">{{ q.headline }}</span>
+                <span style="color: #8696A8">{{ q.chevron }}</span>
+              </button>
+              <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
+                <div style="margin: 2px 0 8px 56px; padding: 8px 10px; border-left: 2px solid {{ q.color }}; display: flex; flex-direction: column; gap: 8px; background: #10171E">
+                  <div style="white-space: normal; color: #C3CDD9">{{ q.body }}</div>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <sc-for list="{{ q.actions }}" as="a" hint-placeholder-count="2">
+                      <button onClick="{{ a.run }}" style="font: inherit; cursor: pointer; padding: 2px 10px; background: {{ a.bg }}; color: {{ a.fg }}; border: 1px solid {{ a.bd }}; font-weight: {{ a.weight }}">{{ a.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="color: #5D6B7D; font-size: 11.5px">{{ q.foot }}</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- the lights -->
+        <div style="padding: 10px 18px; display: flex; flex-direction: column; gap: 2px">
+          <div style="color: #8696A8; font-weight: 700; margin-bottom: 4px">Session · click a row for the detail</div>
+          <sc-for list="{{ lights }}" as="l" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column">
+              <button onClick="{{ l.toggle }}" style="font: inherit; text-align: left; background: {{ l.bg }}; border: 0; color: #D6DEE8; padding: 3px 6px; display: flex; gap: 10px; cursor: pointer; white-space: pre">
+                <span style="width: 64px; color: #8696A8">{{ l.name }}</span>
+                <span style="color: {{ l.color }}">{{ l.bar }}</span>
+                <span style="flex-grow: 1">{{ l.figure }}</span>
+                <span style="color: #8696A8">{{ l.chevron }}</span>
+              </button>
+              <sc-if value="{{ l.open }}" hint-placeholder-val="{{ false }}">
+                <div style="margin: 2px 0 8px 6px; padding: 8px 10px; background: #10171E; display: flex; flex-direction: column; gap: 6px">
+                  <sc-if value="{{ l.isContext }}" hint-placeholder-val="{{ false }}">
+                    <div style="color: #8696A8">what fills the 1M window · per Claude Code, 12s ago</div>
+                    <div style="display: flex; height: 14px; width: 560px; background: #141D26">
+                      <span style="width: 13px; background: #7FA8C9"></span><span style="width: 6px; background: #B48CE0"></span><span style="width: 4px; background: #E2B04A"></span><span style="width: 208px; background: #4CC2C2"></span><span style="flex-grow: 1"></span><span style="width: 18px; background: #3A2A2E"></span>
+                    </div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #8696A8"><span><span style="color: #7FA8C9">■</span> system+tools 23k</span><span><span style="color: #B48CE0">■</span> MCP 10k</span><span><span style="color: #E2B04A">■</span> memory+skills 8k</span><span><span style="color: #4CC2C2">■</span> conversation 372k</span><span>free 555k</span><span><span style="color: #E5605E">■</span> reserve 33k</span></div>
+                    <div style="color: #8696A8; margin-top: 4px">inside the conversation</div>
+                    <sc-for list="{{ residency }}" as="r" hint-placeholder-count="4">
+                      <div style="display: flex; gap: 10px; white-space: pre"><span style="width: 150px">{{ r.name }}</span><span style="color: #4CC2C2">{{ r.bar }}</span><span style="width: 48px; text-align: right">{{ r.k }}</span><span style="color: #8696A8">{{ r.note }}</span></div>
+                    </sc-for>
+                    <div style="white-space: normal; color: #C3CDD9; margin-top: 4px">Growing <span style="color: #EEF3F8">+19k per turn</span>; auto-compact in about 29 turns. Biggest lever: <span style="color: #EEF3F8">src/ui/state.rs</span> was read 3 times (41k). Ask Claude to grep it instead of reading it whole.</div>
+                  </sc-if>
+                  <sc-if value="{{ l.isOther }}" hint-placeholder-val="{{ false }}">
+                    <sc-for list="{{ l.lines }}" as="ln" hint-placeholder-count="2"><div style="white-space: normal; color: #C3CDD9">{{ ln }}</div></sc-for>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 6px 18px; background: #12202A; color: #8FE3E3; white-space: normal">{{ toast }}</div>
+      </sc-if>
+      <div style="padding: 8px 18px; border-top: 1px solid #2A3644; color: #8696A8; white-space: normal">spent so far <span style="color: #EEF3F8">$14.82</span> · what this session would cost at API prices, 1 agent included · turn 14 · 41m</div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 13.5px">
+    <sc-for list="{{ legend }}" as="g" hint-placeholder-count="5">
+      <div style="border: 1px solid #22303D; border-radius: 8px; padding: 8px 12px; color: #9AA7B6"><span style="font-family: 'JetBrains Mono', monospace; color: #4CC2C2">{{ g.el }}</span>  {{ g.what }}</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { openQ: null, openL: 'context', prompt: '', filled: false, stopped: false, toast: '' };
+  }
+  renderVals() {
+    const s = this.state;
+    const bar = (pct, w) => { const n = Math.round(pct / 100 * w); return '█'.repeat(n) + '░'.repeat(w - n); };
+    const FIX = "There's no PR for this branch yet, and the remote has commits I don't have. Stop retrying: run git pull --rebase, push, then open the PR with gh pr create --fill.";
+    const fill = (text, toast) => this.setState({ prompt: text, toast });
+    const primary = (label, run) => ({ label, run, bg: '#4CC2C2', fg: '#0C1116', bd: '#4CC2C2', weight: 700 });
+    const plain = (label, run) => ({ label, run, bg: 'transparent', fg: '#C3CDD9', bd: '#4A5A6C', weight: 400 });
+    const queueData = [
+      {
+        key: 'limit', cls: 'NEXT', color: '#E2B04A', topic: 'usage limit',
+        headline: '5h limit full in 1h50, before its reset at 2h10',
+        body: "At this pace you use up the 5-hour limit 20 minutes before it resets, and the session stalls. Sonnet roughly doubles the time left; /effort medium shortens answers on top. Switching model re-writes the cache once (about $0.62).",
+        actions: [
+          primary('Put /model sonnet in the box', () => fill('/model sonnet', 'In your prompt box: /model sonnet. Press Enter to switch.')),
+          plain('Put /effort medium in the box', () => fill('/effort medium', 'In your prompt box: /effort medium. Press Enter to apply.')),
+          plain('Snooze 1h', () => this.setState({ toast: 'Snoozed for 1 hour.', openQ: null }))
+        ],
+        foot: 'goes away when the pace drops below the reset'
+      },
+      {
+        key: 'perm', cls: 'NEXT', color: '#E2B04A', topic: 'permissions',
+        headline: "You've approved gh pr view 7 times (1 waiting)",
+        body: 'Claude stopped and waited for you 7 times on gh pr view, 84 seconds in all. Allow it once in your settings and it stops asking. The rule: Bash(gh pr view:*)',
+        actions: [
+          primary('Copy the rule', () => this.setState({ toast: 'Copied Bash(gh pr view:*). Paste it under permissions.allow in ~/.claude/settings.json.' })),
+          plain('Open settings.json', () => this.setState({ toast: 'Opened ~/.claude/settings.json in your editor. cctop never edits it.' })),
+          plain('Put /permissions in the box', () => fill('/permissions', 'In your prompt box: /permissions. Press Enter to open it.'))
+        ],
+        foot: 'goes away when the rule appears in permissions.allow'
+      },
+      {
+        key: 'cache', cls: 'LATER', color: '#8696A8', topic: 'cache',
+        headline: 'cache miss: a new MCP tool · 112k re-written · $0.70',
+        body: 'At turn 11 Claude loaded a new tool (mcp__linear__search). That changed the tool list, so 112k cached tokens were written again. Next time, connect the tools you need early in the session.',
+        actions: [
+          primary('Got it', () => this.setState({ toast: 'Noted. cctop will not repeat this one this session.', openQ: null }))
+        ],
+        foot: 'a tip: nothing to type'
+      }
+    ];
+    const queue = queueData.map((q) => ({
+      ...q,
+      open: s.openQ === q.key,
+      chevron: s.openQ === q.key ? '▾' : '›',
+      bg: s.openQ === q.key ? '#141D26' : 'transparent',
+      toggle: () => this.setState({ openQ: s.openQ === q.key ? null : q.key })
+    }));
+    const lightData = [
+      { key: 'context', name: 'context', color: '#4CC2C2', bar: bar(41, 22), figure: ' 41 %  412k / 1M' },
+      { key: 'cache', name: 'cache', color: '#5FC77E', bar: bar(98, 22), figure: ' warm  59m left', lines: ['Hit 94 % of the time. Misses at turns 4, 9 and 11; the last one came from a new MCP tool.', 'Reply within 59 minutes to keep it warm; after that the next message re-writes 412k (about $0.60).'] },
+      { key: 'limit', name: '5h', color: '#E2B04A', bar: bar(62, 22), figure: ' 62 %  resets 2h10' },
+      { key: 'rework', name: 'rework', color: '#E5605E', bar: '✕✕✕' + '░'.repeat(19), figure: ' 3 fails this turn', lines: ['gh pr view failed twice and git push once, all in this turn. The fix prompt above answers all three.'] }
+    ];
+    lightData[2].lines = ['62 % of the 5-hour allowance used. At this pace it is full in 1h50, but it resets in 2h10: a 20-minute stall.', 'The 7-day allowance is at 31 %.'];
+    const lights = lightData.map((l) => ({
+      ...l,
+      open: s.openL === l.key,
+      isContext: l.key === 'context',
+      isOther: l.key !== 'context',
+      chevron: s.openL === l.key ? '▾' : '›',
+      bg: s.openL === l.key ? '#141D26' : 'transparent',
+      toggle: () => this.setState({ openL: s.openL === l.key ? null : l.key })
+    }));
+    const res = [['tool results: Read', 131, '46 files'], ['tool results: Bash', 58, '31 calls'], ['agent returns', 25, '1 agent'], ['your prompts + replies', 158, '']];
+    const residency = res.map(([name, k, note]) => ({ name, k: k + 'k', note, bar: bar(k / 160 * 100, 18) }));
+    return {
+      evidence: [
+        { call: 'Bash(gh pr view 24)', why: 'no pull requests found', link: 'turn 14 · call 3 ↗' },
+        { call: 'Bash(gh pr view --json url)', why: 'same error', link: 'turn 14 · call 4 ↗' },
+        { call: 'Bash(git push)', why: 'rejected: the remote is ahead', link: 'turn 14 · call 5 ↗' }
+      ],
+      fixText: FIX,
+      filled: s.prompt === FIX,
+      fixBg: s.prompt === FIX ? '#10241A' : '#101A22',
+      fixBorder: s.prompt === FIX ? '#5FC77E' : '#4CC2C2',
+      fillFix: () => this.setState({ prompt: FIX, toast: '' }),
+      stopTurn: () => this.setState({ stopped: true, toast: 'Turn stopped (same as Esc). Claude waits for your next message.' }),
+      snoozeNow: () => this.setState({ toast: 'Snoozed for 15 minutes. It comes back if the failures continue.' }),
+      running: !s.stopped,
+      stopped: s.stopped,
+      promptText: s.prompt,
+      promptBorder: s.prompt ? '#4CC2C2' : '#4A5A6C',
+      queue, lights, residency,
+      hasToast: s.toast !== '',
+      toast: s.toast,
+      legend: [
+        { el: 'Markdown', what: 'the advice in full, wrapped, in plain words' },
+        { el: 'Button (prompt card)', what: 'the fix as a ready prompt; a click puts it in the prompt box' },
+        { el: 'Button rows', what: 'every queue row and light opens in place' },
+        { el: 'Progress + breakdown', what: 'context split by source (PRD 3 + residency)' },
+        { el: 'prompt.fill', what: 'nothing is ever sent: you press Enter' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
