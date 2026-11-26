@@ -1,6 +1,6 @@
 # PRD 7: OTel traces — who decided each permission, retries, hook overhead
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #31.
 **Target:** cctop after v0.9.1; Rust (`otel.rs`, `ui/state.rs`, TUI). Like today's OTel data, it is live in `cctop run --otlp` only.
 **Depends on:** nothing. Independent of PRD 0.
 **Source:** the span writers in the Claude Code 2.1.332 binary (span names, start/end attributes, the enablement gate). No trace was captured live yet (§8).

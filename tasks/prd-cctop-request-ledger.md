@@ -1,6 +1,6 @@
 # PRD 1: the request ledger — which part of the prompt changed when the cache missed
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #25.
 **Target:** cctop after v0.9.1; Rust only (TUI, `cctop query`, MCP). The pane draws whatever `cctop query` returns, so it needs no change.
 **Depends on:** nothing. Independent of PRD 0.
 **Source:** 40 recent transcripts on the maintainer's machine (Claude Code 2.1.302 – 2.1.332), read for keys, counts and hashes only.

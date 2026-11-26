@@ -1,6 +1,6 @@
 # PRD 0: contract 2.1.332 — the d.ts without `/plugin-types`, CI green again
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #24.
 **Target:** cctop v0.10.0 (plugin 0.11.0), contract Claude Code 2.1.332.
 **Depends on:** nothing. **Blocks:** `prd-cctop-context-breakdown.md` (PRD 3) and `prd-cctop-pane-apis.md` (PRD 6), which call `$` nouns the 2.1.284 d.ts does not declare.
 **Source:** the 2026-11-26 scan of the installed Claude Code 2.1.332 (build `f2426755`, 2026-11-24), measured on the maintainer's machine. Every claim in §1 was reproduced that day.

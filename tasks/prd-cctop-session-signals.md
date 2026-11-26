@@ -1,6 +1,6 @@
 # PRD 4: three transcript signals — dropped thinking, the USD budget, session lineage
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #28.
 **Target:** cctop after v0.9.1; Rust only (TUI, `cctop query`, MCP). The pane draws the dashboard object.
 **Depends on:** nothing. Pairs well with PRD 1: `thinking_drop.clientChange` is a second witness for the request ledger's located cause.
 **Source:** the newest 400 transcripts on the maintainer's machine (keys and machine tokens only), and the writers in the Claude Code 2.1.332 binary.

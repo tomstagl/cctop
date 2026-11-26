@@ -1,6 +1,6 @@
 # PRD 5: seven more hook events — MCP prompts, settings changes, folders, teammates, skill commands
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #29.
 **Target:** cctop after v0.9.1; Rust (`hooks.rs`, `install.rs`, `ui/state.rs`, surfaces).
 **Depends on:** nothing. Independent of PRD 0.
 **Source:** the hook-event table in the Claude Code 2.1.332 binary: each event's `summary`, `description` (input fields, exit-code semantics) and `matcherMetadata`.

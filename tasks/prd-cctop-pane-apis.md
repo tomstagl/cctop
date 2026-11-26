@@ -1,8 +1,8 @@
 # PRD 6: the pane on the 2.1.332 API — session facts, agent limits, jump to an agent, notifications, Stop
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #30.
 **Target:** plugin 0.11.x (TypeScript), with small Rust reads.
-**Depends on:** PRD 0 (`prd-cctop-contract-2-1-332.md`): every call here is declared only in the 2.1.332 d.ts.
+**Depends on:** PRD 0, #24 (`prd-cctop-contract-2-1-332.md`): every call here is declared only in the 2.1.332 d.ts.
 **Source:** the 2.1.332 d.ts. Nouns new since 2.1.284: `$.session.info/identity/machine/append/redact`, `$.agent.limits/call`, `$.ui.notify/cancelNotify/place/view/selection`, `$.vcs.*`, `$.theme.*`, `$.prompt.compose/media/paint`, `$.process.hookEnv`, `$.wasm.compile`. Events new since 2.1.284: `agent.report`, `session.stop`, `session.append`, `tool.judge/run/offer`, `ui.fault/offer/pointer/tip`, `prompt.autocomplete/change/compose/mention`, `vcs.*`.
 
 > Decisions taken with the user on 2026-11-26:

@@ -1,8 +1,8 @@
 # PRD 3: `/context`'s breakdown on every turn, from the pane
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #27.
 **Target:** cctop v0.10.x / plugin 0.11.x; the pane (TypeScript) writes, Rust reads, both surfaces draw.
-**Depends on:** PRD 0 (`prd-cctop-contract-2-1-332.md`), which needs the 2.1.332 d.ts in place. The call exists in 2.1.284 too, but the pane's types must match the engine it runs on.
+**Depends on:** PRD 0, #24 (`prd-cctop-contract-2-1-332.md`), which needs the 2.1.332 d.ts in place. The call exists in 2.1.284 too, but the pane's types must match the engine it runs on.
 **Source:** the 2.1.332 d.ts (`SessionUsageArgs`, `SessionContextBreakdown`, `ContextCategory`, `ContextCategoryKind`, `ContextBreakdownDetail`) and `tasks/prd-cctop-context-residency.md`.
 
 > Decisions taken with the user on 2026-11-26:

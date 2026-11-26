@@ -1,6 +1,6 @@
 # PRD 2: the status-line fields cctop drops
 
-**Status:** v1.0 · 2026-11-26 — ready for implementation.
+**Status:** v1.0 · 2026-11-26 — ready for implementation. **Issue:** #26.
 **Target:** cctop after v0.9.1; Rust (status collector, TUI, `cctop query`, MCP) plus the pane's existing renderers.
 **Depends on:** nothing. Independent of PRD 0.
 **Source:** the status-line payload builder in the Claude Code 2.1.332 binary (`w9r` / `v9r`), and the live tee at `~/.cctop/status/<session>.json` on the maintainer's machine (keys and types only).
