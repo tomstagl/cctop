@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
@@ -248,8 +249,26 @@ pub fn ingest_logs(store: &mut Store, v: &Value) {
     }
 }
 
+/// Write one raw request body to `<dir>/<unix-ms>-<path-tail>.json`
+/// (`cctop run --dump-otel`). Best effort: a failed write never fails the
+/// request. Bodies are kept as received, whatever the path or content type.
+fn dump_body(dir: &Path, path: &str, body: &[u8]) {
+    let tail: String = path
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::write(dir.join(format!("{ms}-{tail}.json")), body);
+}
+
 /// Handle one HTTP/1.1 request on `stream`.
-fn handle(mut stream: TcpStream, store: &Shared) {
+fn handle(mut stream: TcpStream, store: &Shared, dump: Option<&Path>) {
     let mut reader = BufReader::new(stream.try_clone().expect("clone"));
     let mut line = String::new();
     if reader.read_line(&mut line).is_err() {
@@ -274,6 +293,9 @@ fn handle(mut stream: TcpStream, store: &Shared) {
     }
     let mut body = vec![0u8; len.min(64 << 20)];
     let _ = reader.read_exact(&mut body);
+    if let Some(dir) = dump {
+        dump_body(dir, &path, &body);
+    }
     let respond = |stream: &mut TcpStream, status: &str, body: &str| {
         let _ = write!(
             stream,
@@ -313,8 +335,9 @@ fn handle(mut stream: TcpStream, store: &Shared) {
 }
 
 /// Bind `addr` (loopback only) and serve on a background thread.
-/// Returns the shared store and the bound address.
-pub fn serve(addr: &str) -> std::io::Result<(Shared, std::net::SocketAddr)> {
+/// Returns the shared store and the bound address. With `dump` set, every
+/// request body is also written there raw (see [`dump_body`]).
+pub fn serve(addr: &str, dump: Option<PathBuf>) -> std::io::Result<(Shared, std::net::SocketAddr)> {
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
     if !local.ip().is_loopback() {
@@ -329,7 +352,7 @@ pub fn serve(addr: &str) -> std::io::Result<(Shared, std::net::SocketAddr)> {
         .spawn(move || {
             for stream in listener.incoming().flatten() {
                 let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
-                handle(stream, &s2);
+                handle(stream, &s2, dump.as_deref());
             }
         })?;
     Ok((store, local))
@@ -385,8 +408,26 @@ mod tests {
     }
 
     #[test]
+    fn dump_dir_receives_each_raw_body() {
+        let dir = std::env::temp_dir().join(format!("cctop-dump-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (_store, addr) = serve("127.0.0.1:0", Some(dir.clone())).unwrap();
+        let body = r#"{"resourceSpans":[]}"#;
+        assert!(post(addr, "/v1/traces", "application/json", body).starts_with("HTTP/1.1"));
+        let files: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        assert_eq!(files.len(), 1);
+        let name = files[0].file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.ends_with("-traces.json"), "{name}");
+        assert_eq!(std::fs::read_to_string(&files[0]).unwrap(), body);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn receiver_ingests_metrics_and_logs_over_http() {
-        let (store, addr) = serve("127.0.0.1:0").unwrap();
+        let (store, addr) = serve("127.0.0.1:0", None).unwrap();
         assert!(post(addr, "/v1/metrics", "application/json", METRICS).starts_with("HTTP/1.1 200"));
         assert!(post(addr, "/v1/logs", "application/json", LOGS).starts_with("HTTP/1.1 200"));
         assert!(
@@ -406,7 +447,7 @@ mod tests {
         assert_eq!(s.api_errors, 1);
         assert_eq!(s.tool_results.len(), 2);
         assert_eq!(s.durations_by_tool()["Bash"], vec![640]);
-        assert!(serve("0.0.0.0:0").is_err(), "non-loopback refused");
+        assert!(serve("0.0.0.0:0", None).is_err(), "non-loopback refused");
         assert!(env_block(DEFAULT_ADDR).contains("http/json"));
     }
 }
@@ -419,7 +460,7 @@ mod state_tests {
 
     #[test]
     fn otel_data_reaches_summary_ttft_and_clears_approx() {
-        let (store, addr) = serve("127.0.0.1:0").unwrap();
+        let (store, addr) = serve("127.0.0.1:0", None).unwrap();
         for (path, body) in [("/v1/metrics", METRICS), ("/v1/logs", LOGS)] {
             let mut s = TcpStream::connect(addr).unwrap();
             write!(s, "POST {path} HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();

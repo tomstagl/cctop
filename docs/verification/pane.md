@@ -726,6 +726,35 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+46. **A session with traces on: span names, `blocked_on_user` `source`
+    values, and whether `mcp.rpc` / `bash.subprocess` appear** (the OTel
+    traces PRD, §8).
+    Setup: the env from `cctop install --otel` (after the traces task adds
+    `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` and `OTEL_TRACES_EXPORTER=otlp`
+    to it) in the environment Claude Code starts in, and `cctop run --otlp
+    --dump-otel /tmp/otel` for that session in a real terminal; accept one
+    permission prompt, call one MCP tool, run one Bash command.
+    Expected: `blocked_on_user` spans with `source` `user` for the prompt
+    you accepted; note every other `source` value, and whether
+    `claude_code.mcp.rpc` and `claude_code.bash.subprocess` spans appear in
+    `/tmp/otel/*-traces.json`.
+    Headless capture (Claude Code 2.1.332, `claude -p --max-turns 2`, one
+    `ls`, OTLP/JSON to a throwaway receiver; keys and enum values only):
+    spans `claude_code.interaction` (`parent.source` `none`),
+    `claude_code.llm_request` (two, `llm_request.context` `interaction`,
+    one `gen_ai.request.attempt` event each), `claude_code.tool` (`Bash`),
+    `claude_code.tool.blocked_on_user` (`decision` `accept`, `source`
+    `config`: a rule allowed it, no prompt), `claude_code.tool.execution`.
+    No `hook`, `compaction`, `mcp.rpc` or `bash.subprocess` span appeared
+    (no hooks configured, no MCP call, no compaction). Every span carried
+    `session.id` and account attributes (`user.email`, `user.id`,
+    `organization.id`), and `interaction` carried `user_prompt` and
+    `user_prompt_length`: the PRD's allowlist must drop those. `llm_request`
+    carries `query_source_safe` (not `query_source`), `tool` carries
+    `tool_name_safe`, `bash_argv0` and `bash_command_class`.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window
