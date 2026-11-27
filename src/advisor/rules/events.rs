@@ -489,14 +489,15 @@ impl Rule for HookOverhead {
         if total == 0 || (hook as f64) / (total as f64) <= 0.10 {
             return None;
         }
-        // The slowest hook by name, cctop's own spool hook excluded.
+        // The slowest hook, cctop's own spool hook excluded, named by its
+        // command's shape (argv0, one subcommand), never its arguments.
         let slowest = state
             .agg
             .hook_ms_by_command
             .iter()
             .filter(|(cmd, _)| !cmd.contains("cctop hook"))
             .max_by_key(|(_, ms)| **ms)
-            .map(|(cmd, ms)| (fmt::clip(cmd, 30), *ms))?;
+            .map(|(cmd, ms)| (crate::tools::command_shape(cmd), *ms))?;
         let per_turn = hook / turns.len() as u64;
         let mut a = Advice::new("A16", "hook-overhead", Urgency::Later);
         a.headline = format!(
@@ -719,6 +720,18 @@ mod tests {
         own.apply(&Line::parse(r#"{"type":"system","subtype":"stop_hook_summary","timestamp":"2026-01-01T00:00:02Z","hookInfos":[{"command":"cctop hook","durationMs":1400}],"hookErrors":[]}"#).unwrap());
         own.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:00:02Z","durationMs":8000}"#).unwrap());
         assert!(HookOverhead.evaluate(&own).is_none());
+        // A hook command is named by its shape: no assignment, no argument.
+        let mut args = State::new(Pricing::bundled());
+        args.apply(&prompt("2026-01-01T00:00:00Z"));
+        args.apply(&response("h", "2026-01-01T00:00:01Z", 10, 0, 100));
+        args.apply(&Line::parse(r#"{"type":"system","subtype":"stop_hook_summary","timestamp":"2026-01-01T00:00:02Z","hookInfos":[{"command":"TOKEN=s3cr3t /opt/hooks/lint.sh --key hunter2","durationMs":1400}],"hookErrors":[]}"#).unwrap());
+        args.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:00:02Z","durationMs":8000}"#).unwrap());
+        let a = HookOverhead.evaluate(&args).expect("fires");
+        let text = format!("{} {} {:?}", a.evidence, a.action, a.holes);
+        assert!(text.contains("`lint.sh`"), "{text}");
+        for secret in ["s3cr3t", "hunter2", "--key", "/opt/hooks"] {
+            assert!(!text.contains(secret), "{secret} in {text}");
+        }
     }
 
     #[test]

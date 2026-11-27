@@ -424,6 +424,13 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd>One row per cache miss, with the located cause: the request's <code>api-request</code> line compared with the request sent just before it — idle past the TTL first (a lost cache entry explains the miss whatever else changed), then params (model, effort, betas, max tokens) › tool list (<code>api-request-shape</code>: names added, removed, resized) › system block sizes › messages re-sent (<code>keep</code> shrank). A miss is a response named by <code>diagnostics.cache_miss_reason</code> (not <code>unavailable</code>), or whose cached prefix shrank by ≥ 20 000 tokens</dd>
 <dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#cache_miss_located">how</a></dd>
 </dl></article>
+<article class="entry" id="cache_miss_cost">
+<div class="mg">
+<h3>Re-write cost of a located miss</h3>
+</div><dl>
+<dt>What it means</dt><dd>The located miss's <code>cache_write</code> tokens × the cache-write price of the model that wrote them (the price A01 and the overview use)</dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · Claude Code's own cost record · always · <a href="../metrics.html#cache_miss_cost">how</a></dd>
+</dl></article>
 <article class="entry" id="cost">
 <div class="mg">
 <h3>Cost</h3>

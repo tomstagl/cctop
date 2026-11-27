@@ -666,7 +666,7 @@ impl<'a> PerTurn<'a> {
 }
 
 /// A located cause in words (PRD 1).
-fn cause_words(c: &LocatedCause) -> String {
+pub(crate) fn cause_words(c: &LocatedCause) -> String {
     match c {
         LocatedCause::ToolsChanged { added, removed, .. } => {
             // An MCP tool is named first: it is the change a habit avoids.
