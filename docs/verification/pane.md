@@ -638,6 +638,13 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+39. **An interactive session rewrites
+    `plugin/.claude-plugin/types/claude-code/index.d.ts`** (PRD 0 §8).
+    Setup: `claude --plugin-dir ./plugin` in a real terminal, then quit.
+    Expected: the file exists and line 1 names the running version.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

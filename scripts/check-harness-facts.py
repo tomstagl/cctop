@@ -328,7 +328,7 @@ def probe_teams(facts: str, r: Report) -> None:
     prefix = re.search(r'pub const NAME_PREFIX: &str = "([^"]+)"', facts)
     chars = re.search(r"pub const LEAD_ID_CHARS: usize = (\d+)", facts)
     liveness = re.search(r'pub const LIVENESS_KEY: &str = "([^"]+)"', facts)
-    r.add("teams config keys", "createdAt, leadAgentId, leadSessionId, members, name", ", ".join(sorted(doc)), team)
+    r.add("teams config keys", "createdAt, leadAgentId, leadProcess, leadSessionId, members, name", ", ".join(sorted(doc)), team)
     lead_id = str(doc.get("leadSessionId", ""))
     r.add(
         "teams::NAME_PREFIX + LEAD_ID_CHARS",

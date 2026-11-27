@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 
 /// The Claude Code version these facts were recovered from.
-pub const READ_FROM: &str = "2.1.284";
+pub const READ_FROM: &str = "2.1.332";
 
 /// A `major.minor.patch` Claude Code version, comparable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -273,13 +273,16 @@ pub mod context_suggestions {
     pub const CONTEXT_SHARE: f64 = 0.80;
 }
 
-/// `effort_cost_index` per model in Claude Code's catalog (2.1.273; the
-/// same in 2.1.270): what a level costs relative to `high`, as
+/// `effort_cost_index` per model in Claude Code's catalog (2.1.332; the
+/// 5.0 rows as read from 2.1.273): what a level costs relative to `high`, as
 /// `[low, medium, high, xhigh, max]`. Models without an entry there (Haiku
 /// 4.5, Sonnet ≤ 4.6, Opus ≤ 4.7, Mythos 5) have none here either. Matched
 /// by the longest id contained in the model name, so `claude-fable-5-1`
 /// does not read as Fable 5.
 pub const EFFORT_COST_INDEX: &[(&str, [f64; 5])] = &[
+    ("claude-haiku-5-5", [0.38, 0.52, 1.0, 2.03, 4.34]),
+    ("claude-opus-5-5", [0.48, 0.66, 1.0, 1.66, 3.44]),
+    ("claude-sonnet-5-5", [0.49, 0.54, 1.0, 1.87, 5.5]),
     ("claude-sonnet-5", [0.47, 0.74, 1.0, 2.41, 5.59]),
     ("claude-opus-4-8", [0.72, 0.9, 1.0, 1.65, 1.88]),
     ("claude-opus-5", [0.67, 0.76, 1.0, 1.6, 1.7]),
@@ -351,6 +354,9 @@ mod tests {
         assert_eq!(effort_cost_index("claude-opus-4-8", "max"), Some(1.88));
         assert_eq!(effort_cost_index("claude-haiku-4-5-20251001", "high"), None);
         assert_eq!(effort_cost_index("claude-opus-5", "turbo"), None);
+        assert_eq!(effort_cost_index("claude-opus-5-5", "max"), Some(3.44));
+        assert_eq!(effort_cost_index("claude-sonnet-5-5", "xhigh"), Some(1.87));
+        assert_eq!(effort_cost_index("claude-haiku-5-5", "low"), Some(0.38));
     }
 
     #[test]
