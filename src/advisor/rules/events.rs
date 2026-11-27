@@ -582,6 +582,8 @@ mod tests {
         let mut s = witness::a09();
         let a = PermissionWaits.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "You've approved gh api 3 times (0:45 waiting)");
+        // No traces (PRD 7 absent): no "who decided" row on the card.
+        assert!(a.evidence_rows.iter().all(|r| !r.contains("who decided")));
         assert_eq!(
             a.action_text, "Bash(gh api:*)",
             "Claude Code's own suggestion, verbatim"

@@ -391,6 +391,30 @@ test('PRD 2, 4, 7: the spend limit, the budget and the hook overhead reach the s
   assert.ok(!plain.lines.some((l) => l.includes('spend limit') || l.includes('budget') || l.includes('Hooks add')));
 });
 
+test('PRD 2, 4, 5, 7: the markers\' legend rows and readout sentences are drawn when the object has them, and gone when it does not', async () => {
+  const raw = JSON.parse(JSON.stringify(fixture('overview-b'))) as { charts: { id: string; legend: unknown[]; readouts: { x: number; text: string }[] }[] };
+  const chart = (id: string) => raw.charts.find((c) => c.id === id)!;
+  const readout = (id: string, x: number, text: string) => (chart(id).readouts.find((r) => r.x === x)!.text = text);
+  chart('cache').legend.push({ role: 'warn', text: 'thinking dropped' });
+  readout('cache', 4, 'Turn 4: the cache was reused. Thinking dropped: 3 blocks.');
+  chart('cost_per_turn').legend.push({ role: 'warn', text: 'past 200k' });
+  readout('cost_per_turn', 4, 'Turn 4 · $1.20. 2 retries, +3.0 s. 220k of context, past 200k.');
+  chart('tool_calls').legend.push({ role: 's1', text: 'skill shell commands' });
+  readout('tool_calls', 4, 'Turn 4: 3 calls, 2 skill shell.');
+  const o = overviewOf(raw)!;
+  const { tree, lines } = await draw(o, 105);
+  const reveal = (id: string): string => textOf(all(tree, 'Box').find((b) => (b.props?.hover as { scope?: string })?.scope === turnScope(id, 4) && b.props?.display === 'none')?.children).replace(/\s+/g, ' ');
+  for (const l of ['■ thinking dropped', '■ past 200k', '■ skill shell commands']) assert.ok(lines.some((x) => x.includes(l)), `${l}\n${JSON.stringify(lines)}`);
+  assert.ok(reveal('cache').includes('Thinking dropped: 3 blocks.'), reveal('cache'));
+  assert.ok(reveal('cost_per_turn').includes('2 retries, +3.0 s.') && reveal('cost_per_turn').includes('past 200k'));
+  assert.ok(reveal('tool_calls').includes('2 skill shell'));
+  const plain = await draw(B(), 105);
+  for (const l of ['thinking dropped', 'past 200k', 'skill shell']) assert.ok(!plain.lines.some((x) => x.includes(l)), l);
+  const ptree = plain.tree;
+  const preveal = all(ptree, 'Box').filter((b) => b.props?.display === 'none').map((b) => textOf(b.children)).join('\n');
+  for (const t of ['Thinking dropped', 'retries', 'past 200k', 'skill shell']) assert.ok(!preveal.includes(t), t);
+});
+
 test('every keyed text row of the overview is a metric id from docs/metrics.md', async () => {
   const doc = readFileSync(join(repo, 'docs', 'metrics.md'), 'utf8');
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));

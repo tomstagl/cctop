@@ -716,4 +716,95 @@ mod tests {
         assert_eq!(axis_label("USD", 123.4), "$123");
         assert_eq!(axis_label("USD", 1234.5), "$1.2k");
     }
+
+    // -- PRD 1–7 contributions, present and absent (US-011) -----------------
+
+    fn shown(app: &App) -> String {
+        text(&rows(&app.state.theme, &build(&app.state, 190), 190))
+    }
+
+    /// Each fact is drawn when the state has it and gone when it does not;
+    /// the same objects the pane draws (tests/pane/overview-charts.test.ts).
+    #[test]
+    fn prd_contributions_are_drawn_when_present_and_gone_when_absent() {
+        use crate::ui::state::tests_support::llm_span;
+        let mut app = load("session-b.jsonl");
+        let base = shown(&app);
+        for needle in [
+            "thinking dropped",
+            "budget $25.00",
+            "past 200k",
+            "spend limit",
+            "retries",
+            "Hooks add",
+            "How to avoid each rebuild",
+            "per /context",
+        ] {
+            let expect = needle == "per /context";
+            assert_eq!(base.contains(needle), expect, "{needle}\n{base}");
+        }
+        let st = &mut app.state;
+        let turn = st.agg.turns.last().unwrap().clone();
+        st.agg.turns.last_mut().unwrap().thinking_dropped_blocks = 2;
+        st.budget_usd = Some((10.0, 25.0, 15.0));
+        st.status_facts.exceeds_200k_tokens = true;
+        st.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        st.status_facts.spend_limit_period = Some("monthly".into());
+        let start_ns = (crate::metrics::cost::parse_ts_ms(turn.started_at.as_deref().unwrap())
+            .unwrap() as u64
+            + 1_000)
+            * 1_000_000;
+        st.apply_otel(&crate::otel::SessionData {
+            spans: vec![
+                llm_span(&turn.request_ids[0], 3, 16),
+                crate::otel::Span::Hook {
+                    ids: crate::otel::SpanIds {
+                        trace_id: "tr".into(),
+                        span_id: "h".into(),
+                        parent_span_id: None,
+                        start_ns,
+                        end_ns: start_ns + 900_000_000,
+                    },
+                    hook_event: Some("Stop".into()),
+                    hook_name: None,
+                    num_hooks: Some(1),
+                    duration_ms: Some(900),
+                    num_blocking: None,
+                },
+            ]
+            .into(),
+            ..Default::default()
+        });
+        let with = shown(&app);
+        for needle in [
+            "thinking dropped",
+            "budget $25.00",
+            "past 200k",
+            "spend limit",
+            "Hooks add",
+            "per /context",
+        ] {
+            assert!(with.contains(needle), "{needle}\n{with}");
+        }
+        // Located rebuilds: fixture R has them, B does not.
+        let r = shown(&load("session-r.jsonl"));
+        assert!(r.contains("How to avoid each rebuild"), "{r}");
+        // A session with no capture draws no composition.
+        assert!(!shown(&load("session-a.jsonl")).contains("per /context"));
+        // Skill shell: its own heat-map row.
+        let mut app = load("session-b.jsonl");
+        let at = crate::metrics::cost::parse_ts_ms(
+            app.state.agg.turns[0].started_at.as_deref().unwrap(),
+        )
+        .unwrap();
+        app.state.apply_hook(&crate::hooks::HookEvent {
+            at: at + 5_000,
+            event: "PreSkillShellCommand".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"command_name": "review", "tool_input": {"command": "git diff"}}),
+        });
+        assert!(shown(&app).contains("skill shell commands"));
+    }
 }
