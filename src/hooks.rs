@@ -803,6 +803,19 @@ mod state_tests {
     }
 
     #[test]
+    fn teammate_idle_with_an_agent_id_still_reaches_the_arm() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply_hook(&with(
+            "TeammateIdle",
+            4_000,
+            "",
+            serde_json::json!({"teammate_name": "t", "agent_id": "t@x", "agent_type": "w"}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "t idle"));
+        assert!(s.agents.is_empty(), "not taken for a subagent's event");
+    }
+
+    #[test]
     fn mcp_prompts_wait_fifo_per_server_and_are_counted_by_action() {
         use crate::ui::state::WaitingKind;
         let mut s = State::new(Pricing::bundled());

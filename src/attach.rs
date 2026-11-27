@@ -247,9 +247,15 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         crate::baseline::default_projects_dir(),
         app.state.cost.pricing().clone(),
     );
+    let idle_spool_dir = crate::hooks::spool_dir(&crate::status::cctop_dir());
+    let mut idle_seen = std::collections::HashMap::new();
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         let now = state.clock_ms();
         team.poll(&mut state.team, &state.tools.agent_spawns, now);
+        // `TeammateIdle` is spooled under the teammate's own session id.
+        if let Some(t) = state.team.as_mut() {
+            t.note_idle_from_spools(&idle_spool_dir, &mut idle_seen);
+        }
         state.sync_teammate_idle();
     }));
     // The transcript itself.
@@ -317,6 +323,12 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
     app.state.team = crate::load::load_team(transcript, &app.state);
+    if let Some(t) = app.state.team.as_mut() {
+        t.note_idle_from_spools(
+            &crate::hooks::spool_dir(&crate::status::cctop_dir()),
+            &mut std::collections::HashMap::new(),
+        );
+    }
     app.state.sync_teammate_idle();
     app.tick();
 }

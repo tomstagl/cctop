@@ -139,6 +139,12 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
         state.session.ended_at_ms = state.last_line_at_ms;
     }
     state.team = load_team(transcript, &state);
+    if let Some(t) = state.team.as_mut() {
+        t.note_idle_from_spools(
+            &crate::hooks::spool_dir(&crate::status::cctop_dir()),
+            &mut std::collections::HashMap::new(),
+        );
+    }
     state.sync_teammate_idle();
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let cwd = state.session.cwd.clone();

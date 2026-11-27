@@ -803,7 +803,10 @@ impl State {
         }
         // A subagent's event is the agent's, not the session's.
         if let Some(agent_id) = pstr("agent_id").filter(|a| !a.is_empty()) {
-            if !matches!(ev.event.as_str(), "SubagentStart" | "SubagentStop") {
+            if !matches!(
+                ev.event.as_str(),
+                "SubagentStart" | "SubagentStop" | "TeammateIdle"
+            ) {
                 let agent = self.agents.entry(agent_id.clone()).or_insert_with(|| {
                     crate::agents::Agent::new(
                         &agent_id,

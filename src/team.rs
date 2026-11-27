@@ -339,6 +339,31 @@ impl Teammate {
     }
 }
 
+/// How much of the end of a member's spool is searched for a `TeammateIdle`.
+const IDLE_SPOOL_TAIL_BYTES: u64 = 64 * 1024;
+
+/// The `at` of the newest `TeammateIdle` in the last `IDLE_SPOOL_TAIL_BYTES`
+/// of a spool file of `len` bytes.
+fn last_teammate_idle(path: &Path, len: u64) -> Option<i64> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let start = len.saturating_sub(IDLE_SPOOL_TAIL_BYTES);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::new();
+    f.take(IDLE_SPOOL_TAIL_BYTES).read_to_end(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    let mut lines = text.lines();
+    if start > 0 {
+        // The first line is probably cut.
+        lines.next();
+    }
+    lines
+        .filter_map(|l| serde_json::from_str::<crate::hooks::HookEvent>(l).ok())
+        .filter(|e| e.event == "TeammateIdle")
+        .map(|e| e.at)
+        .max()
+}
+
 /// `~/.claude/teams/<team>/config.json` — the keys cctop reads.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -405,6 +430,31 @@ impl Team {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Claude Code builds `TeammateIdle` from the teammate's own session, so
+    /// the hook lands in that member's spool, not the lead's. Read each
+    /// member's spool (its tail only) for the newest one and apply it. A file
+    /// whose length is the one in `seen` is not read again.
+    pub fn note_idle_from_spools(&mut self, spool_dir: &Path, seen: &mut HashMap<PathBuf, u64>) {
+        for m in self.members.values_mut() {
+            let Some(id) = m.session_id.as_deref().filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            let path = spool_dir.join(format!("{id}.jsonl"));
+            let Ok(len) = std::fs::metadata(&path).map(|md| md.len()) else {
+                continue;
+            };
+            if seen.get(&path) == Some(&len) {
+                continue;
+            }
+            seen.insert(path.clone(), len);
+            if let Some(at) = last_teammate_idle(&path, len) {
+                if m.hook_idle_at.is_none_or(|h| at > h) {
+                    m.hook_idle_at = Some(at);
+                }
+            }
         }
     }
 
@@ -1200,6 +1250,59 @@ mod tests {
             Some(&dir.join("teams")),
         );
         assert!(load(&lead, &layout, &[], None, &Pricing::bundled(), 0).is_none());
+    }
+
+    #[test]
+    fn a_teammates_own_spool_marks_it_idle_on_the_lead() {
+        let dir = std::env::temp_dir().join(format!("cctop-idle-spool-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ev = |event: &str, at: i64| {
+            format!(
+                r#"{{"at":{at},"event":"{event}","session_id":"mate-1","payload":{{"teammate_name":"t"}}}}"#
+            )
+        };
+        std::fs::write(
+            dir.join("mate-1.jsonl"),
+            format!(
+                "{}\n{}\n{}\n",
+                ev("Stop", 1_000),
+                ev("TeammateIdle", 5_000),
+                ev("Stop", 6_000)
+            ),
+        )
+        .unwrap();
+        let mut team = Team {
+            name: "session-x".into(),
+            source: Source::Transcripts,
+            members: BTreeMap::new(),
+            looked_in: vec![],
+            dir_seen: false,
+        };
+        let mut t = Teammate::new("t", Pricing::bundled());
+        t.session_id = Some("mate-1".into());
+        team.members.insert("t".into(), t);
+        // A member with no spool file, and one with no session id, are skipped.
+        team.members
+            .insert("u".into(), Teammate::new("u", Pricing::bundled()));
+        let mut seen = HashMap::new();
+        team.note_idle_from_spools(&dir, &mut seen);
+        assert_eq!(team.members["t"].hook_idle_at, Some(5_000));
+        assert!(!team.members["u"].is_hook_idle());
+        // Unchanged file: not read again (a cleared mark stays cleared).
+        team.members.get_mut("t").unwrap().hook_idle_at = None;
+        team.note_idle_from_spools(&dir, &mut seen);
+        assert!(!team.members["t"].is_hook_idle());
+        // A later event on a longer file is picked up.
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("mate-1.jsonl"))
+            .unwrap();
+        writeln!(f, "{}", ev("TeammateIdle", 9_000)).unwrap();
+        team.note_idle_from_spools(&dir, &mut seen);
+        assert_eq!(team.members["t"].hook_idle_at, Some(9_000));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

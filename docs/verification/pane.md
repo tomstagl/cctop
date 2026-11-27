@@ -678,7 +678,23 @@ hooks are off or before its module is accepted.
     (`cctop install`, so `Elicitation` and `ElicitationResult` have a
     `cctop hook` entry).
     Expected: the prompt appears and works as it does without cctop;
-    cctop shows `waiting on you · MCP <server> asks` until it is answered.
+    cctop shows it until it is answered: the TUI's turn panel reads
+    `waiting on you · MCP <server> asks`, the dashboard and the pane read
+    `◆ WAITING … — MCP <server> asks`.
+    Claude Code version:
+    Result: pending
+
+43. **A teammate going idle shows `idle` on the lead's team view at once
+    (`TeammateIdle`)** (hook events PRD, §6).
+    Setup: a lead session running a team of two or more teammates, cctop's
+    hooks installed (`cctop install`) and the Agents view open (or
+    `cctop query agents --session <lead id>`); let one teammate finish its
+    turn and wait for work.
+    Expected: that teammate's row shows `idle <age>` within a few seconds
+    of the turn ending, not after the five-minute inference window, and
+    `~/.cctop/events/<teammate session id>.jsonl` holds the `TeammateIdle`
+    event (it is in the teammate's own spool, not the lead's). Its money
+    counts as idle waste only after five minutes.
     Claude Code version:
     Result: pending
 
