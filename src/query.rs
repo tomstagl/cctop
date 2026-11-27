@@ -246,7 +246,7 @@ fn located_misses(state: &State) -> Value {
                     "turn": l.turn,
                     "at": l.at,
                     "message_id": l.message_id,
-                    "tokens": m(l.tokens, "tokens", "cache_miss_located", false),
+                    "tokens": m(l.tokens, "tokens", "cache_write", false),
                     "api_reason": l.api_reason,
                     "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
                 })
@@ -784,14 +784,14 @@ mod tests {
             .iter()
             .map(|x| x["located"]["kind"].as_str().unwrap())
             .collect();
-        assert_eq!(kinds, ["tools_changed", "params_changed", "expired"]);
+        assert_eq!(kinds, ["tools_changed", "expired", "expired"]);
         let first = &v["located_misses"][0];
         assert!(first["located"]["detail"]
             .as_str()
             .unwrap()
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
-        assert_eq!(first["tokens"]["metric_id"], "cache_miss_located");
+        assert_eq!(first["tokens"]["metric_id"], "cache_write");
     }
 
     #[test]

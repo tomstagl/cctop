@@ -99,8 +99,14 @@ impl Rule for CacheMiss {
                     LocatedCause::SystemChanged { .. } => {
                         action = "the system prompt changed — a settings, CLAUDE.md or output-style edit mid-session re-writes the cache; make such changes between sessions".to_string();
                     }
-                    LocatedCause::ParamsChanged { .. } => {
-                        action = "a switch re-writes all context — pick the model early, or switch right after /clear".to_string();
+                    LocatedCause::ParamsChanged { field, .. } => {
+                        action = match field {
+                            "model" => "a switch re-writes all context — pick the model early, or switch right after /clear",
+                            "effort" => "an effort change re-writes the cache — set effort at the start of a session",
+                            "betas" => "a Claude Code update or a feature toggle changed the request betas — update between sessions",
+                            _ => "a request setting changed mid-session — keep settings fixed within a session",
+                        }
+                        .to_string();
                     }
                     _ => {}
                 }
@@ -1185,6 +1191,34 @@ mod tests {
             "{}",
             a.action
         );
+    }
+
+    #[test]
+    fn a01_action_for_a_params_change_follows_the_field() {
+        // The effort differs between the two requests; same shape.
+        let req = |effort: &str, ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"s1","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"{effort}"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}},"diagnostics":{{"cache_miss_reason":{{"type":"model_changed","cache_missed_input_tokens":30000}}}}}}}}"#
+            )
+        };
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        for l in [
+            req("high", "2026-01-01T00:00:01Z"),
+            reply("a", 0, 40_000, "2026-01-01T00:00:02Z"),
+            req("max", "2026-01-01T00:00:10Z"),
+            reply("b", 5_000, 30_000, "2026-01-01T00:00:10Z"),
+        ] {
+            s.apply(&Line::parse(&l).unwrap());
+        }
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.evidence.contains("effort high→max"), "{}", a.evidence);
+        assert!(a.action.starts_with("an effort change"), "{}", a.action);
     }
 
     /// Like `miss_state`, but the second request's first system block grew.

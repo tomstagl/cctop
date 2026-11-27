@@ -48,10 +48,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
                 format!("{} tool schemas · exact, not in the total", r.count)
             }
             Kind::Tools | Kind::Mcp if r.count > 0 && r.exact => {
-                format!("{} tool schemas · exact (request shape)", r.count)
+                format!("{} tools · exact sizes · tokens ≈ bytes/4", r.count)
             }
             Kind::Tools | Kind::Mcp if r.count > 0 => format!("{} tool schemas", r.count),
-            Kind::SystemPrompt if r.exact => "exact (request shape)".into(),
+            Kind::SystemPrompt if r.exact => {
+                "exact sizes (request shape) · tokens ≈ bytes/4".into()
+            }
             Kind::Skills => format!("{} skills", r.count),
             Kind::Agents => format!("{} agent types", r.count),
             Kind::Other => "first call minus the rows above".into(),
@@ -186,7 +188,10 @@ mod tests {
         app.state.open = Some(1);
         app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
         let out = render_to_string(&app, 120, 24);
-        assert!(out.contains("exact (request shape)"), "{out}");
+        assert!(
+            out.contains("exact sizes (request shape) · tokens ≈ bytes/4"),
+            "{out}"
+        );
         insta::assert_snapshot!("prefix_r_120x24", out);
     }
 }

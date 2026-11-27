@@ -680,7 +680,7 @@ pub fn cache_light(state: &State) -> Light {
                 .requests
                 .miss_for(&m.message_id)
                 .filter(|l| l.cause.kind() != "unlocated")
-                .map(|l| l.cause.short())
+                .map(|l| l.cause.compact())
                 .unwrap_or_else(|| m.kind.clone())
         })
         .or_else(|| state.cache.last_miss_cause.clone());

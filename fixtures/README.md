@@ -99,15 +99,20 @@ Layout mirrors `~/.claude`:
   three real cache misses, located by `requests.rs` (prefix shrank by 20 k or
   more, previous request = the last paired main-thread request): a
   `shapeHash` change at about line 118 (a tool added or removed:
-  `tools_changed`), a params change at about line 519 (`params_changed`), and
-  one with no changed setting, shape or prefix at about line 565 (`expired`:
-  the gap passed the TTL). `PrefixRewritten` is covered by a synthetic unit
-  test only. The anonymiser fills the
+  `tools_changed`), a betas change after a 6-day gap at about line 519
+  (`expired`: the gap passed the TTL, which is checked before the params),
+  and one with no changed setting, shape or prefix at about line 565
+  (`expired`). `ParamsChanged` and `PrefixRewritten` are covered by synthetic
+  unit tests only. The anonymiser fills the
   shapes' `system[].text`, tool `description` and `input_schema` strings and
   the blobs' content with same-length filler (uncapped, because the lines are
   read for their sizes; `--max-str` still caps the rest of the transcript),
-  keeps built-in tool names (`mcp__` names become `mcp__server<N>__tool<M>`),
-  keeps `params`, `cacheControl` and `querySource` (Claude Code's own words),
+  keeps Claude Code's built-in tool names (an allowlist in the script;
+  `mcp__` names become `mcp__server<N>__tool<M>`, any other tool `tool<N>`
+  with its parameter names `p<N>`), built-in agent types and bundled skill
+  names (others become `agent<N>` / `skill<N>`), keeps `cacheControl` and
+  `querySource` and, of `params`, only `model`, `betas`, `max_tokens`,
+  `thinking`, `context_management` and `output_config` (Claude Code's own words),
   and rewrites `shapeHash`, `hash`, `tail[]`, `requestDigest` with one keyed
   SHA-256 so equalities survive, and request ids (`id`, `base`, an assistant
   line's `requestRef`) with the UUID hash so the links agree.

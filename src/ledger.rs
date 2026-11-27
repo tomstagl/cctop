@@ -78,6 +78,31 @@ impl Sort {
     }
 }
 
+/// Does the API's own reason name the same thing as the located cause?
+fn reason_agrees(api: &str, kind: &str) -> bool {
+    match api {
+        "tools_changed" => kind == "tools_changed",
+        "model_changed" => kind == "params_changed",
+        "system_changed" => kind == "system_changed",
+        "messages_changed" | "previous_message_not_found" => {
+            matches!(kind, "prefix_rewritten" | "expired")
+        }
+        r if r.starts_with("ttl_expired") => kind == "expired",
+        _ => false,
+    }
+}
+
+/// The compact located cause; when the API named a different reason, that
+/// reason follows in parentheses (`unavailable` names nothing).
+fn miss_label(m: &crate::requests::LocatedMiss) -> String {
+    match m.api_reason.as_deref() {
+        Some(r) if r != "unavailable" && !reason_agrees(r, m.cause.kind()) => {
+            format!("{} (API: {r})", m.cause.compact())
+        }
+        _ => m.cause.compact(),
+    }
+}
+
 /// Build the rows from the state, in turn order.
 pub fn rows(state: &State) -> Vec<Row> {
     let compacted: Vec<usize> = state.context().compactions.iter().map(|c| c.turn).collect();
@@ -92,7 +117,7 @@ pub fn rows(state: &State) -> Vec<Row> {
     for m in state.requests.misses() {
         let Some(turn) = m.turn else { continue };
         if m.cause.kind() != "unlocated" && located.insert(turn) {
-            misses.insert(turn, m.cause.short());
+            misses.insert(turn, miss_label(m));
         }
     }
     let price = state
@@ -233,13 +258,54 @@ mod tests {
         let row = r.iter().find(|x| Some(x.turn) == first.turn).unwrap();
         assert_eq!(
             row.miss_cause.as_deref(),
-            Some(first.cause.short().as_str())
+            Some(first.cause.compact().as_str())
         );
-        assert!(row
-            .miss_cause
-            .as_deref()
-            .unwrap()
-            .starts_with("tools changed"));
+        assert!(row.miss_cause.as_deref().unwrap().starts_with('+'));
+    }
+
+    fn located(
+        cause: crate::requests::LocatedCause,
+        api: Option<&str>,
+    ) -> crate::requests::LocatedMiss {
+        crate::requests::LocatedMiss {
+            message_id: "m".into(),
+            turn: Some(1),
+            at: None,
+            tokens: 30_000,
+            cause,
+            api_reason: api.map(String::from),
+        }
+    }
+
+    #[test]
+    fn miss_label_adds_the_api_reason_only_when_it_disagrees() {
+        use crate::requests::LocatedCause::*;
+        let tools = || ToolsChanged {
+            added: vec!["x".into()],
+            removed: vec![],
+            resized: vec![],
+        };
+        let expired = || Expired {
+            gap_ms: 400_000,
+            ttl_ms: 300_000,
+        };
+        // Agree: the compact cause alone.
+        assert_eq!(miss_label(&located(tools(), Some("tools_changed"))), "+x");
+        assert_eq!(
+            miss_label(&located(expired(), Some("ttl_expired_5m"))),
+            "cache expired"
+        );
+        assert_eq!(miss_label(&located(tools(), None)), "+x");
+        assert_eq!(miss_label(&located(tools(), Some("unavailable"))), "+x");
+        // Disagree: the API's reason follows.
+        assert_eq!(
+            miss_label(&located(expired(), Some("tools_changed"))),
+            "cache expired (API: tools_changed)"
+        );
+        assert_eq!(
+            miss_label(&located(tools(), Some("messages_changed"))),
+            "+x (API: messages_changed)"
+        );
     }
 
     #[test]

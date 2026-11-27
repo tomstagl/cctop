@@ -188,19 +188,71 @@ def fill_all(v):
     return fill(len(v)) if isinstance(v, str) else v
 
 
+# Claude Code's own tool names (the d.ts "inputs of the built-in tools" table,
+# plugin/.claude/types/claude-code.d.ts, 2.1.332) plus the server-side ones a
+# request lists. `ReportFindings` is in that table but is a harness-supplied
+# tool of one environment, so it is renamed like any other plugin tool.
+BUILTIN_TOOLS = {
+    "Agent", "AppifactRepl", "Artifact", "ArtifactCheck", "ArtifactComments", "ArtifactData",
+    "AskUserQuestion", "Bash", "ClaudeDesign", "CronCreate", "CronDelete", "CronList",
+    "DesignSync", "Edit", "EndConversation", "EnterPlanMode", "EnterWorktree", "ExitPlanMode",
+    "ExitWorktree", "FetchInboxMessage", "Glob", "GetGoal", "GetTask", "Grep", "ListAgents",
+    "ListConnectors", "ListMcpResourcesTool", "ListPlugins", "ListSkills", "LSP",
+    "McpTaskCheck", "McpTaskResumePolling", "McpTaskShowQuestion", "memory_list",
+    "memory_read", "memory_write", "Monitor", "NotebookEdit", "OfferChromeSetup", "PauseGoal",
+    "Poll", "Projects", "propose_skills", "PublishPlugin", "PushNotification", "Read",
+    "ReadMcpResourceDirTool", "ReadMcpResourceTool", "ReadNotifications", "ReadWidgetContext",
+    "RemoteTrigger", "request_computer", "ScheduleWakeup", "SearchMcpRegistry",
+    "SearchPlugins", "SearchSkills", "SendFeedback", "SendFile", "SendMessage", "SendToProject",
+    "SendToProjectContext", "SendUserFile", "SendUserMessage", "SetGoal",
+    "ShareOnboardingGuide", "ShowOnboardingRolePicker", "Skill", "SuggestConnectors",
+    "SuggestPluginInstall", "SuggestSkills", "TaskCreate", "TaskGet", "TaskList", "TaskOutput",
+    "TaskStop", "TaskUpdate", "TodoWrite", "ToolSearch", "WaitForMcpServers", "WebFetch",
+    "WebSearch", "Workflow", "WrapUp", "Write", "Yield",
+    "advisor", "DeferredToolPlaceholder",
+}
+BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup", "claude-code-guide", "fork"}
+# Bundled skills and built-in slash commands; every other skill name is renamed.
+BUNDLED_SKILLS = {
+    "update-config", "keybindings-help", "simplify", "loop", "schedule", "claude-api", "init",
+    "review", "security-review", "code-review", "run", "plugin-authoring",
+    "fewer-permission-prompts", "claude-approvals", "ship", "steward", "verify", "debug",
+    "batch", "compact", "clear", "context", "model", "effort", "resume", "rewind", "usage",
+    "cost", "help", "config", "status", "memory", "agents", "mcp", "plugin", "login", "logout",
+}
+SAFE_NAMES = BUILTIN_TOOLS | BUILTIN_AGENTS | {"origin"}
+ALIASES = {}  # (kind, original) -> `<kind><N>`, stable across every line
+
+
+def alias(kind, v):
+    m = ALIASES.setdefault(kind, {})
+    return m.setdefault(v, "%s%d" % (kind, len(m) + 1))
+
+
+def agent_type(v):
+    return v if v in BUILTIN_AGENTS else alias("agent", v)
+
+
+def skill_name(v):
+    return v if v.lstrip("/") in BUNDLED_SKILLS else alias("skill", v)
+
+
 def tool_name(n):
-    """Built-in names stay; `mcp__<server>__<tool>` -> `mcp__server<N>__tool<M>`."""
-    if not n.startswith("mcp__"):
+    """Built-in names stay; `mcp__<server>__<tool>` -> `mcp__server<N>__tool<M>`;
+    any other name -> `tool<M>`."""
+    if n in SAFE_NAMES:
         return n
+    if not n.startswith("mcp__"):
+        return MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
     server = MCP_NAMES.setdefault(("s", n.split("__")[1]), "server%d" % (sum(k[0] == "s" for k in MCP_NAMES) + 1))
     tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
     return f"mcp__{server}__{tool}"
 
 
 def prop_name(tool, p):
-    """An MCP tool's parameter names are renamed `p1`, `p2`, ... per tool;
-    a built-in tool's keep theirs."""
-    if not tool.startswith("mcp__"):
+    """A non-built-in tool's parameter names are renamed `p1`, `p2`, ... per
+    tool; a built-in tool's keep theirs."""
+    if tool in BUILTIN_TOOLS:
         return p
     m = MCP_PROPS.setdefault(tool, {})
     return m.setdefault(p, "p%d" % (len(m) + 1))
@@ -277,6 +329,19 @@ def anon_message(m):
     return out
 
 
+PARAM_KEYS = ("model", "betas", "max_tokens", "thinking", "context_management", "output_config")
+
+
+def anon_params(p):
+    """Only the settings the ledger reads stay; anything else is dropped.
+    `output_config` keeps `effort`, its other keys become filler."""
+    out = {k: v for k, v in p.items() if k in PARAM_KEYS}
+    oc = out.get("output_config")
+    if isinstance(oc, dict):
+        out["output_config"] = {k: (v if k == "effort" else fill_all(v)) for k, v in oc.items()}
+    return out
+
+
 def anon_request(o):
     """`api-request`, `-shape` and `-blob` lines. Settings (`params`,
     `cacheControl`, `querySource`) are Claude Code's own words and stay; the
@@ -284,7 +349,9 @@ def anon_request(o):
     rewritten consistently."""
     out = {}
     for k, v in o.items():
-        if k in ("params", "cacheControl", "querySource", "type", "timestamp", "version", "keep"):
+        if k == "params" and isinstance(v, dict):
+            out[k] = anon_params(v)
+        elif k in ("cacheControl", "querySource", "type", "timestamp", "version", "keep"):
             out[k] = v
         elif k in ("shapeHash", "hash", "requestDigest") and isinstance(v, str):
             out[k] = h64(v)
@@ -437,6 +504,10 @@ def anon(v, key=None, parent=None):
             # `error: "rate_limit"` on an API-error line is an enum; a longer
             # error is free text.
             return v if len(v) <= 40 and " " not in v else fill(min(len(v), MAX_STR))
+        if key in ("subagent_type", "agent_type", "attributionAgent"):
+            return agent_type(v)
+        if key in ("skill", "attributionSkill", "commandName"):
+            return skill_name(v)
         if key in KEEP_KEYS:
             return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:

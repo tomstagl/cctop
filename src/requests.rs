@@ -259,6 +259,24 @@ pub fn locate(
     default_ttl_ms: u64,
 ) -> LocatedCause {
     let (p, c) = (&prev.request, &cur.request);
+    // Departs from PRD §3.2's order: a lost cache entry explains the miss
+    // whatever else changed (ruled 2026-11-27 after fixture R showed a 6-day
+    // gap labelled "betas changed" while a betas change elsewhere held the
+    // cache), so Expired is checked first when the gap exceeds the TTL.
+    let started = prev.at.as_deref().or(p.timestamp.as_deref());
+    if let (Some(a), Some(b)) = (
+        started.and_then(parse_ts_ms),
+        c.timestamp.as_deref().and_then(parse_ts_ms),
+    ) {
+        let ttl = ttl_ms(c, default_ttl_ms);
+        let gap = (b - a).max(0) as u64;
+        if gap > ttl {
+            return LocatedCause::Expired {
+                gap_ms: gap,
+                ttl_ms: ttl,
+            };
+        }
+    }
     if let Some(cause) = params_changed(p, c) {
         return cause;
     }
@@ -278,20 +296,6 @@ pub fn locate(
             from: c.keep,
             of: prev_total,
         };
-    }
-    let started = prev.at.as_deref().or(p.timestamp.as_deref());
-    if let (Some(a), Some(b)) = (
-        started.and_then(parse_ts_ms),
-        c.timestamp.as_deref().and_then(parse_ts_ms),
-    ) {
-        let ttl = ttl_ms(c, default_ttl_ms);
-        let gap = (b - a).max(0) as u64;
-        if gap > ttl {
-            return LocatedCause::Expired {
-                gap_ms: gap,
-                ttl_ms: ttl,
-            };
-        }
     }
     LocatedCause::Unlocated
 }
@@ -334,6 +338,14 @@ impl RequestChain {
                 if a.is_api_error_message {
                     return;
                 }
+                // A straggler line of the response just closed.
+                if self
+                    .prev
+                    .as_ref()
+                    .is_some_and(|p| p.message_id == a.message.id)
+                {
+                    return;
+                }
                 let Some(request) = self.pending.take() else {
                     return;
                 };
@@ -350,7 +362,10 @@ impl RequestChain {
                 let shrank = self.prev.as_ref().is_some_and(|p| {
                     (p.cache_read + p.cache_creation).saturating_sub(cur.cache_read) >= MISS_TOKENS
                 });
-                if reason.is_some() || shrank {
+                // `unavailable` says the API could not tell: a miss only if
+                // the prefix also shrank.
+                let named = reason.as_deref().is_some_and(|r| r != "unavailable");
+                if named || shrank {
                     let cause = match &self.prev {
                         Some(p) => locate(p, &cur, &self.shapes, default_ttl_ms),
                         None => LocatedCause::Unlocated,
@@ -604,6 +619,53 @@ mod tests {
     }
 
     #[test]
+    fn long_gap_beats_params() {
+        let lines = [
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 12, 1, "max", T7),
+            reply("b", 5_000, 30_000, T7, None),
+        ];
+        let c = run(&lines);
+        assert_eq!(c.misses()[0].cause.kind(), "expired");
+    }
+
+    #[test]
+    fn unavailable_reason_needs_a_shrunk_prefix() {
+        let held = [
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 12, 1, "high", T1),
+            reply("b", 40_000, 100, T1, Some("unavailable")),
+        ];
+        assert!(run(&held).misses().is_empty());
+        let shrank = [
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 12, 1, "high", T1),
+            reply("b", 5_000, 30_000, T1, Some("unavailable")),
+        ];
+        let c = run(&shrank);
+        assert_eq!(c.misses().len(), 1);
+        assert_eq!(c.misses()[0].api_reason.as_deref(), Some("unavailable"));
+    }
+
+    #[test]
+    fn straggler_of_the_closed_response_is_ignored() {
+        let lines = [
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 12, 1, "high", T1),
+            reply("a", 5_000, 30_000, T1, None), // second block of "a"
+            reply("b", 5_000, 30_000, T1, None),
+        ];
+        let c = run(&lines);
+        // The straggler did not close the pending request; "b" did.
+        assert_eq!(c.misses().len(), 1);
+        assert_eq!(c.misses()[0].message_id, "b");
+    }
+
+    #[test]
     fn unlocated() {
         let c = miss_pair(req("s1", 12, 1, "high", T1), vec![]);
         assert_eq!(c.misses()[0].cause, LocatedCause::Unlocated);
@@ -747,7 +809,7 @@ mod fixture_tests {
             ids,
             [
                 ("msg_011CgMcApk8Wt1XX5BxnZmun", "tools_changed"),
-                ("msg_011CgYPRTTRGbJ4Rrtfi1Prt", "params_changed"),
+                ("msg_011CgYPRTTRGbJ4Rrtfi1Prt", "expired"),
                 ("msg_011CgYRZof3gtWbRy45bcbgt", "expired"),
             ]
         );
