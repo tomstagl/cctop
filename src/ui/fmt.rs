@@ -64,7 +64,7 @@ pub fn added_s(ms: u64) -> String {
     if ms < 10_000 {
         format!("{:.1} s", ms as f64 / 1000.0)
     } else {
-        format!("{} s", (ms + 500) / 1000)
+        format!("{} s", ms.saturating_add(500) / 1000)
     }
 }
 

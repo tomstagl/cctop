@@ -953,6 +953,11 @@ impl State {
                         decision: None,
                         source: None,
                     });
+                    // A record landing after the last batch joins now.
+                    if let Some(o) = self.otel.take() {
+                        self.join_permission_spans(&o);
+                        self.otel = Some(o);
+                    }
                     self.events.push(crate::events::Event {
                         at,
                         kind: Kind::Perm,
@@ -1509,7 +1514,10 @@ impl State {
             let ev = hook_event.clone().unwrap_or_else(|| "other".into());
             match out.iter_mut().find(|(n, _, _)| n == number) {
                 Some((_, m, e)) => {
-                    *m.entry(ev).or_default() += ms;
+                    {
+                        let e = m.entry(ev).or_default();
+                        *e = e.saturating_add(ms);
+                    }
                     *e = (*e).max(end_ms);
                 }
                 None => out.push((*number, [(ev, ms)].into(), end_ms)),
@@ -1549,11 +1557,13 @@ impl State {
             {
                 any = true;
                 let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
-                *by.entry(hook_event.clone().unwrap_or_else(|| "other".into()))
-                    .or_default() += ms;
+                let e = by
+                    .entry(hook_event.clone().unwrap_or_else(|| "other".into()))
+                    .or_default();
+                *e = e.saturating_add(ms);
             }
         }
-        any.then(|| (by.values().sum(), by))
+        any.then(|| (by.values().fold(0, |a: u64, b| a.saturating_add(*b)), by))
     }
 
     /// One `hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s` row per turn whose
@@ -1561,7 +1571,7 @@ impl State {
     /// hook time arrives for the same turn.
     fn sync_hook_rows(&mut self) {
         for (number, by, end_ms) in self.hook_ms_by_turn() {
-            let total: u64 = by.values().sum();
+            let total: u64 = by.values().fold(0, |a: u64, b| a.saturating_add(*b));
             if total <= HOOK_ROW_MS {
                 continue;
             }
@@ -1627,7 +1637,9 @@ impl State {
 
     /// Retries in a turn, from `llm_request` spans joined to the turn's
     /// responses by `requestId` (= `gen_ai.response.id`): the extra attempts
-    /// and the time they added (request end − its last attempt event).
+    /// and the time they added (its last attempt event − the request's start:
+    /// Claude Code stamps `gen_ai.request.attempt` when an attempt begins, so the
+    /// final attempt's own duration is not time the retries cost).
     /// `None` without traces or when nothing was retried.
     pub fn turn_retries(&self, turn: &crate::metrics::usage::Turn) -> Option<(u32, u64)> {
         let o = self.otel.as_ref()?;
@@ -1644,7 +1656,7 @@ impl State {
                 if *attempts > 1 && turn.request_ids.iter().any(|q| q == r) {
                     n += attempts - 1;
                     if let Some(last) = attempt_times_ns.last() {
-                        ns += ids.end_ns.saturating_sub(*last);
+                        ns = ns.saturating_add(last.saturating_sub(ids.start_ns));
                     }
                 }
             }
@@ -1677,7 +1689,7 @@ impl State {
                     } => {
                         let src = source.as_deref().unwrap_or("");
                         let dur = duration_ms
-                            .map(|d| d * 1_000_000)
+                            .map(|d| d.saturating_mul(1_000_000))
                             .unwrap_or(ids.end_ns.saturating_sub(ids.start_ns));
                         (src == "user" || dur > 0).then_some(src)
                     }
@@ -3477,37 +3489,94 @@ mod tests {
         assert_eq!(turn.request_ids, ["req_1", "req_2"]);
         assert_eq!(s.turn_retries(&turn), None, "no traces: nothing");
         let spans = vec![
-            llm_span("req_1", 3, 20), // 2 retries; last attempt at 3 s → +17 s
-            llm_span("req_2", 2, 12), // 1 retry; last attempt at 2 s → +10 s
+            llm_span("req_1", 3, 16), // 2 retries; last attempt starts at 3 s → +3 s
+            llm_span("req_2", 2, 12), // 1 retry; last attempt starts at 2 s → +2 s
             llm_span("req_9", 4, 99), // another turn's request: ignored
         ];
         s.apply_otel(&crate::otel::SessionData {
             spans: spans.into(),
             ..Default::default()
         });
-        assert_eq!(s.turn_retries(&turn), Some((3, 27_000)));
+        assert_eq!(s.turn_retries(&turn), Some((3, 5_000)));
     }
 
     #[test]
     fn a_request_with_zero_attempt_events_is_one_attempt_and_no_retry() {
-        use super::tests_support::llm_span;
+        use crate::otel::{ingest_traces, Store};
+        use serde_json::json;
         let mut s = two_responses();
         let turn = s.agg.current_turn().unwrap().clone();
-        let mut zero = llm_span("req_1", 1, 5);
-        if let crate::otel::Span::LlmRequest {
-            attempts,
-            attempt_times_ns,
-            ..
-        } = &mut zero
-        {
-            *attempts = 1;
-            attempt_times_ns.clear();
-        }
+        // Built through ingest: a span with no attempt events at all.
+        let spans: Vec<_> = ["req_1", "req_2"]
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                json!({
+                    "traceId": "tr", "spanId": format!("s{i}"), "name": "claude_code.llm_request",
+                    "startTimeUnixNano": "0", "endTimeUnixNano": "5000000000",
+                    "attributes": [{"key": "gen_ai.response.id", "value": {"stringValue": r}}],
+                    "events": []
+                })
+            })
+            .collect();
+        let body = json!({"resourceSpans": [{
+            "resource": {"attributes": [{"key": "session.id", "value": {"stringValue": "a"}}]},
+            "scopeSpans": [{"spans": spans}]
+        }]});
+        let mut st = Store::default();
+        ingest_traces(&mut st, &body);
+        let d = st.sessions["a"].clone();
+        assert!(matches!(
+            &d.spans[0],
+            crate::otel::Span::LlmRequest { attempts: 1, .. }
+        ));
+        s.apply_otel(&d);
+        assert_eq!(s.turn_retries(&turn), None);
+    }
+
+    #[test]
+    fn a_permission_record_after_the_last_batch_joins_without_waiting() {
+        use super::tests_support::trace_spans;
+        let mut s = State::new(Pricing::bundled());
         s.apply_otel(&crate::otel::SessionData {
-            spans: vec![zero, llm_span("req_2", 1, 5)].into(),
+            spans: trace_spans(&["user"]).into(),
             ..Default::default()
         });
-        assert_eq!(s.turn_retries(&turn), None);
+        for (ev, at) in [("PermissionRequest", 1_000), ("PostToolUse", 6_000)] {
+            let p = serde_json::json!({"hook_event_name": ev, "tool_name": "Bash",
+                "tool_use_id": "t0", "tool_input": {"command": "gh api x"}});
+            s.apply_hook(&crate::hooks::HookEvent::from_stdin(at, p).unwrap());
+        }
+        assert_eq!(
+            s.session.permission_records[0].source.as_deref(),
+            Some("user")
+        );
+    }
+
+    #[test]
+    fn huge_wire_durations_saturate_instead_of_overflowing() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, u64::MAX),
+                hook_span("Stop", 6, u64::MAX),
+                hook_span("Notification", 7, 10),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!((total, by["Stop"]), (u64::MAX, u64::MAX));
+        assert_eq!(s.hook_ms_by_turn()[0].1["Stop"], u64::MAX);
+        // A permission span with a huge duration_ms.
+        let mut p = super::tests_support::trace_spans(&["user"]);
+        if let crate::otel::Span::Permission { duration_ms, .. } = &mut p[1] {
+            *duration_ms = Some(u64::MAX);
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: p.into_iter().collect(),
+            ..Default::default()
+        });
+        assert!(s.permission_split().is_some());
     }
 
     /// Two turns starting at 10:00:00 and 10:10:00 (2026-08-27 UTC), and a
@@ -3533,7 +3602,7 @@ mod tests {
                 span_id: format!("h-{event}-{at_s}"),
                 parent_span_id: None,
                 start_ns,
-                end_ns: start_ns + ms * 1_000_000,
+                end_ns: start_ns.saturating_add(ms.saturating_mul(1_000_000)),
             },
             hook_event: Some(event.into()),
             hook_name: None,

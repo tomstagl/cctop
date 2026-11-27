@@ -473,9 +473,9 @@ mod tests {
             ..Default::default()
         });
         let out = render_to_string(&app, 130, 60);
-        assert!(out.contains("retries 2 (+13 s)"), "{out}");
+        assert!(out.contains("retries 2 (+3.0 s)"), "{out}");
         assert!(
-            out.contains("retries 2 (+13 s) · session retries 0:02"),
+            out.contains("retries 2 (+3.0 s) · session retries 0:02"),
             "{out}"
         );
     }

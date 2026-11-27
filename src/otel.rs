@@ -392,7 +392,7 @@ pub fn ingest_traces(store: &mut Store, v: &Value) {
                             query_source: str_attr(&a, "query_source_safe")
                                 .or_else(|| str_attr(&a, "query_source")),
                             response_id: str_attr(&a, "gen_ai.response.id"),
-                            attempts: attempt_times_ns.len() as u32,
+                            attempts: (attempt_times_ns.len() as u32).max(1),
                             attempt_times_ns,
                             ttft_ms: u64_attr(&a, "ttft_ms"),
                             first_content_ms: u64_attr(&a, "first_content_ms"),
@@ -446,6 +446,27 @@ pub fn ingest_traces(store: &mut Store, v: &Value) {
             }
         }
     }
+}
+
+/// Refuse an existing `--dump-otel` directory that group or others can
+/// reach (Unix), so the "kept private" promise holds; a new one is created
+/// 0700 by `dump_body`.
+fn check_dump_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(m) = std::fs::metadata(dir) {
+            if m.is_dir() && m.permissions().mode() & 0o077 != 0 {
+                return Err(std::io::Error::other(format!(
+                    "--dump-otel {} is accessible to other users (mode {:o}); the dumped bodies hold account identifiers and prompt text: chmod 700 it or choose a new directory",
+                    dir.display(),
+                    m.permissions().mode() & 0o777
+                )));
+            }
+        }
+    }
+    let _ = dir;
+    Ok(())
 }
 
 /// Write one raw request body to `<dir>/<unix-ms>-<path-tail>.json`
@@ -585,6 +606,9 @@ fn handle(mut stream: TcpStream, store: &Shared, dump: Option<&Path>) {
 /// Returns the shared store and the bound address. With `dump` set, every
 /// request body is also written there raw (see [`dump_body`]).
 pub fn serve(addr: &str, dump: Option<PathBuf>) -> std::io::Result<(Shared, std::net::SocketAddr)> {
+    if let Some(d) = &dump {
+        check_dump_dir(d)?;
+    }
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
     if !local.ip().is_loopback() {
@@ -858,6 +882,24 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn dump_dir_that_others_can_reach_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = std::env::temp_dir().join(format!("cctop-dump-test-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let e = serve("127.0.0.1:0", Some(d.clone()))
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("accessible to other users"), "{e}");
+        std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(serve("127.0.0.1:0", Some(d.clone())).is_ok());
+        let _ = std::fs::remove_dir_all(&d);
+        // A directory that does not exist yet is fine (created 0700).
+        assert!(check_dump_dir(&d).is_ok());
+    }
+
+    #[test]
     fn llm_request_accepts_either_query_source_key() {
         let mut st = Store::default();
         let sp = span(
@@ -868,7 +910,7 @@ mod tests {
         );
         ingest_traces(&mut st, &traces(Some("a"), &[sp]));
         assert!(
-            matches!(&st.sessions["a"].spans[0], Span::LlmRequest { query_source: Some(q), attempts: 0, .. } if q == "sdk")
+            matches!(&st.sessions["a"].spans[0], Span::LlmRequest { query_source: Some(q), attempts: 1, .. } if q == "sdk")
         );
     }
 

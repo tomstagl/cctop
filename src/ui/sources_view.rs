@@ -414,7 +414,35 @@ mod tests {
         d.spans = crate::ui::state::tests_support::trace_spans(&["user"]).into();
         app.state.apply_otel(&d);
         assert_eq!(app.state.otel_signals(), Some((true, true, true)));
-        insta::assert_snapshot!("sources_otel_all_110x30", render_to_string(&app, 110, 30));
+        // The text is the same as above; the difference is the style.
+        let styles = |st: &State| -> Vec<(String, ratatui::style::Style)> {
+            super::otel_line(st)
+                .unwrap()
+                .spans
+                .iter()
+                .filter(|sp| ["metrics", "logs", "traces"].contains(&sp.content.as_ref()))
+                .map(|sp| (sp.content.to_string(), sp.style))
+                .collect()
+        };
+        let (lit, dim) = (app.state.theme.accent(), app.state.theme.dim());
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), lit)
+            ]
+        );
+        d.spans.clear();
+        app.state.apply_otel(&d);
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), dim)
+            ]
+        );
     }
 
     #[test]

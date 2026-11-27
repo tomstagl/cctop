@@ -318,7 +318,7 @@ tr:target td{background:var(--spot-soft)}
 <div class="mg">
 <h3>API retries</h3>
 </div><dl>
-<dt>What it means</dt><dd>Per turn, <code>gen_ai.request.attempt</code> events beyond the first on each <code>llm_request</code> span joined to the turn's responses by <code>gen_ai.response.id</code> = <code>requestId</code>; the added time is span end − its last attempt event</dd>
+<dt>What it means</dt><dd>Per turn, <code>gen_ai.request.attempt</code> events beyond the first on each <code>llm_request</code> span joined to the turn's responses by <code>gen_ai.response.id</code> = <code>requestId</code>; the added time is its last attempt event − the span's start (attempt events are stamped when an attempt begins, so the final attempt's own duration is not counted)</dd>
 <dt>Measured</dt><dd class="meta">count · from OpenTelemetry · the transcript · exact · <a href="../metrics.html#api_retries">how</a></dd>
 </dl></article>
 <article class="entry" id="hook_overhead">

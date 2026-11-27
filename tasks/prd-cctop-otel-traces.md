@@ -61,7 +61,7 @@ cctop's permission waits today come from hooks: `PermissionRequest` → next `Po
 
 **Acceptance criteria:**
 - [ ] Each `LlmRequestSpan` keeps `attempts` (the count of `gen_ai.request.attempt` events), `ttft_ms`, `first_content_ms`, `status_code`, `success`. It joins to the transcript's assistant message via `gen_ai.response.id` = `requestId`.
-- [ ] The turn panel shows `retries 2 (+14 s)` for a turn whose requests had attempts > 1; the added time is the sum over retried requests of (end − the last attempt event's time).
+- [ ] The turn panel shows `retries 2 (+14 s)` for a turn whose requests had attempts > 1; the added time is the sum over retried requests of (the last attempt event's time − the span's start). *Ruling 2026-11-27: the original wording (end − last attempt) measured the final attempt's duration, because Claude Code stamps `gen_ai.request.attempt` when an attempt begins, not when it fails; the time the retries cost is everything before the last attempt began.*
 - [ ] `metrics/registry.rs`: `api_retries`; docs regenerated.
 
 ### US-004: Hook overhead
