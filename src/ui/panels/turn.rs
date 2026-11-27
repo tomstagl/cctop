@@ -200,7 +200,19 @@ impl Panel for TurnPanel {
             _ => l3.push(Span::styled("hooks —", dim)),
         }
         l3.push(Span::styled("   ", dim));
-        if state.session.hooks_installed {
+        if let Some((waits, groups)) = state.permission_split() {
+            use std::fmt::Write as _;
+            let split = groups.iter().fold(String::new(), |mut acc, (g, n)| {
+                let _ = write!(acc, " · {g} {n}");
+                acc
+            });
+            let dur = if state.session.hooks_installed {
+                format!(" · {}", fmt::duration_ms(state.session.permission_wait_ms))
+            } else {
+                String::new()
+            };
+            l3.push(Span::raw(format!("permission waits {waits}{split}{dur}")));
+        } else if state.session.hooks_installed {
             l3.push(Span::raw(format!(
                 "permission waits {} · {}",
                 state.session.permission_waits,
@@ -395,6 +407,16 @@ mod tests {
         let out = render_to_string(&app, 64, 60);
         assert!(out.contains("◆ waiting for permission for 0:05"), "{out}");
         assert!(out.contains("permission waits 1 · 0:12"), "{out}");
+        // With traces, the split joins in; without, the line is as before.
+        let data = crate::otel::SessionData {
+            spans: crate::ui::state::tests_support::trace_spans(&["user"]).into(),
+            ..Default::default()
+        };
+        app.state.session.permission_records = vec![Default::default()];
+        app.state.session.permission_records[0].tool_use_id = "t0".into();
+        app.state.apply_otel(&data);
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("permission waits 1 · you 1 · 0:12"), "{out}");
         // Queued prompt.
         app.feed(Line::parse(r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-08-27T10:20:10Z"}"#).unwrap());
         assert!(render_to_string(&app, 64, 60).contains("queued 1"));

@@ -110,12 +110,38 @@ impl Rule for PermissionWaits {
     }
     fn evaluate(&self, state: &State) -> Option<Advice> {
         let s = &state.session;
-        let (key, ask) = s
-            .permission_asks
+        // With traces, only the person's own decisions count: a wait the
+        // classifier, a hook or a rule decided is not one the person made.
+        let traced = s.permission_records.iter().any(|r| r.source.is_some());
+        let mut own = s.permission_asks.clone();
+        let mut wait_ms = s.permission_wait_ms;
+        let mut waits = s.permission_waits;
+        if traced {
+            for a in own.values_mut() {
+                a.count = 0;
+            }
+            wait_ms = 0;
+            waits = 0;
+            for r in s
+                .permission_records
+                .iter()
+                .filter(|r| r.source.as_deref() == Some("user"))
+            {
+                if let Some(a) = own.get_mut(&r.key) {
+                    a.count += 1;
+                }
+                wait_ms += r.wait_ms;
+                waits += 1;
+            }
+        }
+        let (key, ask) = own
             .iter()
             .filter(|(k, _)| k.as_str() != "Bash" && k.as_str() != "tool")
             .max_by_key(|(_, a)| a.count)?;
-        if ask.count < 3 && s.permission_wait_ms <= 120_000 {
+        if ask.count < 3 && wait_ms <= 120_000 {
+            return None;
+        }
+        if traced && ask.count == 0 {
             return None;
         }
         let rule = ask
@@ -132,17 +158,17 @@ impl Rule for PermissionWaits {
         if state.allow_rules.iter().any(|r| r == &rule) {
             return None;
         }
-        let per_turn_s = s.permission_wait_ms as u64 / 1000 / state.agg.human_turns().max(1) as u64;
+        let per_turn_s = wait_ms as u64 / 1000 / state.agg.human_turns().max(1) as u64;
         let mut a = Advice::new("A09", "permission-wait", Urgency::Next);
         a.headline = format!(
             "You've approved {} {} times ({} waiting)",
             key.trim_start_matches("Bash(").trim_end_matches(')'),
             ask.count,
-            fmt::duration_ms(s.permission_wait_ms)
+            fmt::duration_ms(wait_ms)
         );
         a.evidence = format!(
             "{} permission prompts this session; the model idles while it waits",
-            s.permission_waits
+            waits
         );
         a.action = format!(
             "allow {rule} (permissions.allow in settings), or approve it once with 'always'"
@@ -562,5 +588,26 @@ mod tests {
         own.apply(&Line::parse(r#"{"type":"system","subtype":"stop_hook_summary","timestamp":"2026-01-01T00:00:02Z","hookInfos":[{"command":"cctop hook","durationMs":1400}],"hookErrors":[]}"#).unwrap());
         own.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:00:02Z","durationMs":8000}"#).unwrap());
         assert!(HookOverhead.evaluate(&own).is_none());
+    }
+
+    #[test]
+    fn classifier_waits_do_not_nudge() {
+        use crate::ui::state::tests_support::{state_with_waits, trace_spans};
+        let mut s = state_with_waits(3);
+        assert!(
+            PermissionWaits.evaluate(&s).is_some(),
+            "without traces: as today"
+        );
+        let mut data = crate::otel::SessionData {
+            spans: trace_spans(&["classifier", "classifier", "classifier"]).into(),
+            ..Default::default()
+        };
+        s.apply_otel(&data);
+        assert!(PermissionWaits.evaluate(&s).is_none());
+        // The person's own approvals still count.
+        data.spans = trace_spans(&["user", "user", "user"]).into();
+        s.apply_otel(&data);
+        let a = PermissionWaits.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("3 times"), "{}", a.headline);
     }
 }
