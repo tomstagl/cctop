@@ -9,6 +9,7 @@ use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
 use crate::harness_facts::context_suggestions as ctx_rules;
 use crate::metrics::context::Mode;
 use crate::phase::ToolClass;
+use crate::requests::LocatedCause;
 use crate::ui::fmt;
 use crate::ui::State;
 
@@ -61,7 +62,11 @@ impl Rule for CacheMiss {
             .find(|m| m.tokens >= MISS_TOKENS && human_turns_since(state, m.turn) < 3)?;
         let model = model_short(state);
         let price = usd_label(state, miss.tokens, PriceKind::CacheWrite);
-        let (what, action, action_text) = match miss.kind.as_str() {
+        let located = state
+            .requests
+            .miss_for(&miss.message_id)
+            .filter(|m| !matches!(m.cause, LocatedCause::Unlocated));
+        let (kind_what, mut action, action_text) = match miss.kind.as_str() {
             "model_changed" => (
                 format!("model → {model}"),
                 "a switch re-writes all context — pick the model early, or switch right after /clear".to_string(),
@@ -86,16 +91,37 @@ impl Rule for CacheMiss {
                 String::new(),
             ),
         };
+        let what = match located {
+            Some(l) => {
+                match l.cause {
+                    LocatedCause::PrefixRewritten { .. } => {
+                        action = "a rewind or an edited turn re-writes from that point — steer forward instead of rewriting".to_string();
+                    }
+                    LocatedCause::Expired { .. } => {
+                        action = "the cache expired between turns — keep turns closer than the TTL, or accept the rebuild".to_string();
+                    }
+                    LocatedCause::ParamsChanged { .. } => {
+                        action = "a switch re-writes all context — pick the model early, or switch right after /clear".to_string();
+                    }
+                    _ => {}
+                }
+                l.cause.short()
+            }
+            None => kind_what,
+        };
         let mut a = Advice::new("A01", "cache-miss", Urgency::Later);
         a.headline = format!(
             "cache miss: {what} · {} re-written{price}",
             fmt::tokens(miss.tokens)
         );
         a.evidence = format!(
-            "{} · turn {} · {} named misses this session",
+            "{} · turn {} · {} named misses this session{}",
             miss.kind,
             miss.turn,
-            state.agg.cache_misses.len()
+            state.agg.cache_misses.len(),
+            located
+                .map(|l| format!(" · located: {}", l.cause.kind()))
+                .unwrap_or_default()
         );
         a.action = action;
         a.action_text = action_text;
@@ -1035,6 +1061,97 @@ mod tests {
             "cache writes alone never fire A01 now"
         );
         assert!(CacheMiss.evaluate(&fixture_state()).is_none());
+    }
+
+    /// A state whose second request missed with a named `kind`, 30 k re-written,
+    /// the tool list going from `old` to `new` between the two requests.
+    fn miss_state(kind: &str, old: &[&str], new: &[&str], gap_ts: &str) -> State {
+        let tools = |names: &[&str]| {
+            names
+                .iter()
+                .map(|n| format!(r#"{{"name":"{n}","description":"d","input_schema":{{}}}}"#))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let req = |shape: &str, ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"{shape}","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"high"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let shape = |h: &str, names: &[&str]| {
+            format!(
+                r#"{{"type":"api-request-shape","shapeHash":"{h}","shape":{{"system":[{{"type":"text","text":"xx"}}],"tools":[{}]}},"timestamp":"2026-01-01T00:00:00Z"}}"#,
+                tools(names)
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str, reason: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}}{reason}}}}}"#
+            )
+        };
+        let named = format!(
+            r#","diagnostics":{{"cache_miss_reason":{{"type":"{kind}","cache_missed_input_tokens":30000}}}}"#
+        );
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        for l in [
+            shape("s1", old),
+            shape("s2", new),
+            req("s1", "2026-01-01T00:00:01Z"),
+            reply("a", 0, 40_000, "2026-01-01T00:00:02Z", ""),
+            req("s2", gap_ts),
+            reply("b", 5_000, 30_000, gap_ts, &named),
+        ] {
+            s.apply(&Line::parse(&l).unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn a01_names_the_located_tool() {
+        let s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__search"],
+            "2026-01-01T00:00:10Z",
+        );
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(
+            a.headline.contains("tools changed: +mcp__x__search −0"),
+            "{}",
+            a.headline
+        );
+        assert!(
+            a.evidence.ends_with("· located: tools_changed"),
+            "{}",
+            a.evidence
+        );
+    }
+
+    #[test]
+    fn a01_falls_back_when_unlocated() {
+        // A transcript before 2.1.302: no request lines, so nothing is located.
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"c","model":"claude-opus-5","content":[],"usage":{"input_tokens":2,"cache_creation_input_tokens":30000},"diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}}}"#).unwrap());
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        assert!(!a.evidence.contains("located:"), "{}", a.evidence);
+    }
+
+    #[test]
+    fn a01_cuts_long_names() {
+        let long = "mcp__a_very_long_server_name__a_very_long_tool_name_indeed";
+        let s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", long],
+            "2026-01-01T00:00:10Z",
+        );
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains(long) || a.headline.contains("tools changed"));
+        let line1 = crate::coach::cut(&format!("▸ {}", a.headline));
+        assert!(line1.chars().count() <= crate::coach::WIDTH, "{line1}");
     }
 
     /// What `/context` printed, as Claude Code records it: a `local_command`

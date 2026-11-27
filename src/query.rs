@@ -213,7 +213,7 @@ pub fn cache_object(state: &State) -> Value {
         3_600_000 => "1h",
         _ => "5m",
     };
-    json!({
+    let mut v = json!({
         "source": if c.from_shim { "status_line" } else { "transcript" },
         "warm": state.cache_warm().map(|(w, a)| m(w, "bool", "cache_warm", a)),
         "ttl": m(ttl, "enum", "cache_ttl", !c.from_shim),
@@ -224,7 +224,35 @@ pub fn cache_object(state: &State) -> Value {
         "last_miss_cause": c.last_miss_cause,
         "miss_causes": c.miss_causes,
         "hit_ratio": c.hit_ratio.or_else(|| state.agg.total.cache_hit_ratio()).map(|r| m(r, "ratio", "cache_hit_ratio", approx)),
-    })
+    });
+    // Absent on transcripts before 2.1.302 (no request lines), so their output is unchanged.
+    let located = located_misses(state);
+    if located.as_array().is_some_and(|a| !a.is_empty()) {
+        v["located_misses"] = located;
+    }
+    v
+}
+
+/// Every cache miss the request chain could pair with its response, with
+/// what changed (`located.kind` / `located.detail`).
+fn located_misses(state: &State) -> Value {
+    Value::Array(
+        state
+            .requests
+            .misses()
+            .iter()
+            .map(|l| {
+                json!({
+                    "turn": l.turn,
+                    "at": l.at,
+                    "message_id": l.message_id,
+                    "tokens": m(l.tokens, "tokens", "cache_miss_located", false),
+                    "api_reason": l.api_reason,
+                    "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
+                })
+            })
+            .collect(),
+    )
 }
 
 pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
@@ -742,6 +770,28 @@ mod tests {
                 .as_path(),
         );
         s
+    }
+
+    #[test]
+    fn located_misses_on_fixture_r() {
+        let path = std::path::Path::new("fixtures/session-r.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(path);
+        let s = crate::load::state_from(path, info);
+        let v = cache_object(&s);
+        let kinds: Vec<&str> = v["located_misses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["located"]["kind"].as_str().unwrap())
+            .collect();
+        assert_eq!(kinds, ["tools_changed", "params_changed", "expired"]);
+        let first = &v["located_misses"][0];
+        assert!(first["located"]["detail"]
+            .as_str()
+            .unwrap()
+            .starts_with("tools changed"));
+        assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
+        assert!(first["tokens"]["id"] == "cache_miss_located" || first["tokens"].is_object());
     }
 
     #[test]

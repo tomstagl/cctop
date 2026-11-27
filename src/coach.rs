@@ -675,7 +675,14 @@ pub fn cache_light(state: &State) -> Light {
         .agg
         .cache_misses
         .last()
-        .map(|m| m.kind.clone())
+        .map(|m| {
+            state
+                .requests
+                .miss_for(&m.message_id)
+                .filter(|l| l.cause.kind() != "unlocated")
+                .map(|l| l.cause.short())
+                .unwrap_or_else(|| m.kind.clone())
+        })
         .or_else(|| state.cache.last_miss_cause.clone());
     lines.push(match last {
         Some(k) if misses > 0 => format!("{hit} · misses {misses} (last {k})"),

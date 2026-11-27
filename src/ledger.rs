@@ -86,6 +86,15 @@ pub fn rows(state: &State) -> Vec<Row> {
     for (turn, cause) in &state.agg.miss_causes_by_turn {
         misses.entry(*turn).or_insert_with(|| cause.clone());
     }
+    // A located cause (api-request lines, 2.1.302+) names what changed;
+    // the first one of a turn replaces the API's own label.
+    let mut located: std::collections::HashSet<usize> = Default::default();
+    for m in state.requests.misses() {
+        let Some(turn) = m.turn else { continue };
+        if m.cause.kind() != "unlocated" && located.insert(turn) {
+            misses.insert(turn, m.cause.short());
+        }
+    }
     let price = state
         .model()
         .and_then(|m| state.cost.pricing().price(m).copied());
@@ -212,6 +221,25 @@ mod tests {
             s.apply(&l);
         }
         s
+    }
+
+    #[test]
+    fn miss_turn_carries_the_located_short_form() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-r.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let s = crate::load::state_from(&path, info);
+        let r = rows(&s);
+        let first = &s.requests.misses()[0];
+        let row = r.iter().find(|x| Some(x.turn) == first.turn).unwrap();
+        assert_eq!(
+            row.miss_cause.as_deref(),
+            Some(first.cause.short().as_str())
+        );
+        assert!(row
+            .miss_cause
+            .as_deref()
+            .unwrap()
+            .starts_with("tools changed"));
     }
 
     #[test]
