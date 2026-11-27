@@ -151,10 +151,40 @@ function layout(node: RenderNode | null | undefined, width: number): string[] {
     }
     case 'Code':
       return layoutText(typeof p.source === 'string' ? p.source : '', p.wrap, width);
+    case 'Raster':
+      return rasterText(p, width);
+    case 'Image': {
+      // A picture: its box of cells, drawn as ▒ so a test sees where it sits.
+      const cols = Math.min(width, num(p.columns));
+      return Array.from({ length: num(p.rows) }, () => '▒'.repeat(cols));
+    }
     default:
       return layoutColumn(el.children ?? [], width, {});
   }
 }
+
+// A Raster's cells as their glyphs, row by row (colours dropped): the base64
+// of little-endian u32 triplets [code point, fg, bg].
+export function rasterText(p: Props, width: number): string[] {
+  const cols = num(p.columns);
+  const rows = num(p.rows);
+  const raw = Buffer.from(typeof p.cells === 'string' ? p.cells : '', 'base64');
+  const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  const out: string[] = [];
+  for (let r = 0; r < rows; r++) {
+    let line = '';
+    for (let c = 0; c < cols; c++) {
+      const at = (r * cols + c) * 12;
+      line += at + 4 <= raw.byteLength ? String.fromCodePoint(view.getUint32(at, true)) : ' ';
+    }
+    out.push(line.slice(0, width));
+  }
+  return out;
+}
+
+// A child laid out of the flow (`position: "absolute"`) takes no room and
+// draws nothing here: the hover areas and the readouts they reveal.
+const inFlow = (n: RenderNode): boolean => propsOf(n).position !== 'absolute';
 
 function layoutBox(el: AnyElement, width: number): string[] {
   const p = el.props ?? {};
@@ -172,7 +202,7 @@ function layoutBox(el: AnyElement, width: number): string[] {
   const border = typeof p.borderStyle === 'string' ? 1 : 0;
   const boxWidth = Math.max(0, width - mL - mR);
   const inner = Math.max(0, boxWidth - 2 * border - padL - padR);
-  const children = el.children ?? [];
+  const children = (el.children ?? []).filter(inFlow);
   const dir = p.flexDirection;
   let body = dir === 'row' || dir === 'row-reverse' ? layoutRow(dir === 'row-reverse' ? [...children].reverse() : children, inner, p) : layoutColumn(dir === 'column-reverse' ? [...children].reverse() : children, inner, p);
   body = [...blank(padT), ...body, ...blank(padB)];

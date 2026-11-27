@@ -67,6 +67,35 @@ print()
   echo "$out/overview-cells-b.json"
 fi
 
+# The overview object the pane draws (`cctop query overview`): fixture B at the
+# binary's default, and a synthetic 300-turn session at the turns that fit a
+# 105-column pane body (two cells a turn: `--max-turns 18`), for the "last N
+# turns" form. The synthetic transcript is generated here and thrown away: a
+# prompt, one Bash call and one answer per turn, the shapes the Rust tests
+# build (src/advisor/rules/mod.rs `fixtures`).
+if [[ "$session" == fixtures/session-b.jsonl ]]; then
+  cargo run -q -- query overview --session "$session" > "$out/overview-b.json"
+  echo "$out/overview-b.json"
+  tmp=$(mktemp -d)
+  long="$tmp/session-long.jsonl"
+  python3 - "$long" <<'EOF'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    for i in range(300):
+        h, m = 10 + i // 60, i % 60
+        ts = lambda s: f"2026-01-01T{h:02}:{m:02}:{s:02}.000Z"
+        line = lambda o: f.write(json.dumps(o) + "\n")
+        line({"type": "user", "timestamp": ts(0), "promptSource": "typed", "message": {"role": "user", "content": "go"}})
+        line({"type": "assistant", "timestamp": ts(10), "message": {"id": f"t{i}", "model": "claude-opus-5", "content": [{"type": "tool_use", "id": f"t{i}", "name": "Bash", "input": {"command": "ls"}}], "usage": {"output_tokens": 1}}})
+        line({"type": "user", "timestamp": ts(10), "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": f"t{i}", "content": "x" * 200}]}})
+        line({"type": "assistant", "timestamp": ts(20), "message": {"id": f"r{i}", "model": "claude-opus-5", "content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {"input_tokens": 5, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 20000 + i * 500, "output_tokens": 10}}})
+EOF
+  cargo run -q -- query overview --session "$long" --max-turns 18 > "$out/overview-long.json"
+  rm -f "$long"
+  rmdir "$tmp"
+  echo "$out/overview-long.json"
+fi
+
 # The six moments of fixture B: name, line count, seconds after that line.
 if [[ "$session" == fixtures/session-b.jsonl ]]; then
   for moment in explore:214:0 edits:300:0 denials:761:0 waiting:788:240 cold:789:0 idle:738:240; do

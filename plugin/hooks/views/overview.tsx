@@ -13,9 +13,10 @@
 // needs (FR-16). Inline placement (the classic renderer's few rows above the
 // prompt) is the strip: the status line, the coach's L1 line, the act line.
 import type { ElementTable, RenderElement } from 'claude-code';
-import { TESTED_WITH, usageRows, type Model, type Placement, type TurnState } from '../model';
+import { TESTED_WITH, UNSUPPORTED, isSupported, usageRows, type Model, type Placement, type TurnState } from '../model';
 import { DASH, at, formatDuration, isMissing, stringAt } from './format';
 import { ACCENT, THEME, clip, dim, fit, join, seg, textRow, width, lineWidth, type Line, type Seg } from './frame';
+import { overviewOf, renderOverviewCharts, type ChartElements, type Pictures } from './overview-charts';
 
 /** The elements a view draws with, as `$.ui.resolve(e)` answers them. */
 export type ViewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text'>;
@@ -229,7 +230,12 @@ export type OverviewActions = {
   open(id: string): void;
   /** `? keys` pressed: expand the rule line into the key map, or collapse it. */
   keys(keys: boolean): void;
+  /** A turn number pressed under one of the overview's per-turn charts: show that turn's readout. */
+  readout(chart: string, turn: number): void;
 };
+
+/** What body 1 draws its charts with: the full element table (Raster, Image) and the pictures pane.tsx rendered. */
+export type OverviewCharts = { el: ChartElements; pictures: Pictures };
 
 /** What the pane's keys are, when the rule line is expanded: the hotkeys, and the pointer. */
 export const PANE_KEYS = '1-6 a 0 body  ·  click a cell, the act line or home  ·  the view bar for the other views';
@@ -468,6 +474,27 @@ function renderInline(model: Model, el: ViewElements, columns: number, now: numb
 }
 
 /**
+ * Body 1 is the overview (mod-pane US-007): the charts of `cctop query
+ * overview`, as the TUI's body 1 draws them, with the pictures pane.tsx
+ * rendered for them; a line until the binary has answered.
+ */
+function overviewBody(model: Model, el: ViewElements, columns: number, buttons: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts } | undefined): RenderElement {
+  const o = overviewOf(model.query.overview);
+  if (o === null) {
+    const text = isSupported(model, 'overview') ? 'waiting for cctop query overview…' : `overview: ${UNSUPPORTED}`;
+    return textRow([dim(` ${text}`)], el, 'body_context');
+  }
+  const bare = { ...el, Button: el.Box, Raster: el.Box, Image: el.Box } as unknown as ChartElements;
+  const actions = buttons?.actions;
+  return renderOverviewCharts(o, columns, {
+    el: buttons?.charts?.el ?? bare,
+    ...(buttons?.charts ? { pictures: buttons.charts.pictures } : {}),
+    readouts: model.readouts,
+    ...(actions ? { actions: { readout: (chart: string, turn: number) => actions.readout(chart, turn) } } : {}),
+  });
+}
+
+/**
  * Console: the header line, the six cells, the act line, the rule line and
  * the open body's rows. Inline placement draws the strip (renderInline).
  */
@@ -477,7 +504,7 @@ export function renderOverview(
   columns: number,
   placement: Placement,
   now: number,
-  buttons?: { el: OverviewElements; actions: OverviewActions },
+  buttons?: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts },
 ): RenderElement {
   const { Box } = el;
   if (placement !== 'dock') return renderInline(model, el, columns, now);
@@ -512,7 +539,8 @@ export function renderOverview(
   const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];
   if (shown !== undefined) {
     body.push(ruleRow(shown, model.keys, columns, bel, actions));
-    shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
+    if (shown.id === 'context') body.push(overviewBody(model, el, columns, buttons));
+    else shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
   }
   return <Box flexDirection="column">{body}</Box>;
 }

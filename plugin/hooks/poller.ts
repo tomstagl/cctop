@@ -11,7 +11,8 @@
 // slice of `$` it uses, built there by a top-level function.
 import type { EngineInterface, Timer } from 'claude-code';
 import { chartsMarker } from './charts';
-import { IDLE_ONLY_VERBS, QUERY_VERBS, TESTED_WITH, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
+import { IDLE_ONLY_VERBS, QUERY_VERBS, SHOWN_ONLY_VERBS, TESTED_WITH, isSupported, overviewShown, reduce, type Action, type Model, type QueryVerb } from './model';
+import { maxTurnsFor } from './views/overview-charts';
 
 export type PollerEngine = {
   /** `now` resolves a Promise: a host round trip since Claude Code 2.1.271 (issue #3). */
@@ -127,6 +128,16 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
 }
 
+/**
+ * What a verb takes beyond the session: the overview keeps as many turns as
+ * the pane's body draws at two cells a turn, the TUI's sizing for the same
+ * width (none before the first render: the binary's default).
+ */
+export function verbArgs(verb: QueryVerb, model: Model): string[] {
+  if (verb !== 'overview' || model.bodyColumns === null) return [];
+  return ['--max-turns', String(maxTurnsFor(model.bodyColumns))];
+}
+
 export function createPoller($: PollerEngine, getModel: () => Model, setModel: (model: Model) => void): Poller {
   let active = false;
   let timer: Timer | null = null;
@@ -168,7 +179,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     try {
       // `--surface pane`: a fire the binary promotes for this pane (no
       // dashboard running) is recorded as shown here.
-      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane'];
+      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane', ...verbArgs(verb, getModel())];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.
@@ -226,6 +237,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       if (!isSupported(getModel(), verb)) continue;
       // The busy tick is the coach's: the slow verbs wait for the idle one.
       if (busy && IDLE_ONLY_VERBS.includes(verb)) continue;
+      // The overview's charts are read only while body 1 shows them.
+      if (SHOWN_ONLY_VERBS.includes(verb) && !overviewShown(getModel())) continue;
       called += 1;
       if (!(await query(verb, sessionId))) ok = false;
     }

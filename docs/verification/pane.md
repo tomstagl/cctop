@@ -758,6 +758,60 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+47. **Ghostty draws the overview's charts as pictures** (the mod-pane PRD,
+    US-007; items 50–53 are the later tasks').
+    Setup: Ghostty with `font-family = JetBrains Mono`, `font-size = 13`,
+    `adjust-cell-height = 23%`; Claude Code in `/tui fullscreen`, the pane
+    docked 100 or more columns wide on the Overview; press cell 1 (or `1`).
+    Expected: the context chart across the width, then spend beside cost
+    per turn and the cache beside the tool calls, each chart smooth (a
+    picture, not half blocks) and sitting on whole cells: the axis labels,
+    titles and verdicts line up with the picture's edges and no letter is
+    inside a picture. `cctop pane status` prints `charts drawn as
+    pictures (this terminal)`. While a turn runs, a chart that changes swaps in place
+    without the pane flickering, and resizing the pane redraws the charts
+    at the new width.
+    Claude Code version:
+    Result: pending
+
+48. **Terminal.app draws the same overview in cells** (US-007).
+    Setup: Terminal.app with SF Mono Regular 13 pt, character and line
+    spacing 1, antialias on, bright-bold off; the pane docked on the
+    Overview, body 1 open, as in item 47.
+    Expected: the same layout as item 47 with every chart in half blocks
+    (two pixels a row, POC 8's colours), the same labels and verdicts in
+    the same places; `cctop pane status` prints `charts drawn as cells
+    (this terminal)`. Below 60 body columns each chart is one row of cells. The
+    rows of each chart match what `cctop run` shows at the same width.
+    Claude Code version:
+    Result: pending
+
+49. **tmux with and without passthrough** (US-006/US-007).
+    Setup: Claude Code inside tmux 3.3 or later in Ghostty, first with
+    `set -g allow-passthrough on` and `set -g focus-events on`, then with
+    either off (restart Claude Code between the two); body 1 open.
+    Expected: with both on the charts are pictures, as in item 47. With
+    either off the first picture is probed, refused, and the overview
+    switches to cells within a second; `cctop pane status` warns `charts
+    drawn as cells (a probe picture the terminal would not draw): tmux
+    holds pictures back` with the `allow-passthrough` / `focus-events` fix.
+    Claude Code version:
+    Result: pending
+
+54. **Hover readouts on the per-turn charts** (US-007).
+    Setup: as item 47 or 48, body 1 open, a session with five or more
+    turns.
+    Expected: moving the pointer over a turn's column of cost per turn,
+    the cache strip or the tool-call heat map shows that turn's readout in
+    the row under the chart (`Turn 4 · $9.26. A costly turn …`), and the
+    latest turn's readout comes back when the pointer leaves. Clicking a
+    turn number under the chart pins that turn's readout, also in a
+    terminal that reports no pointer movement. Record whether the hover
+    areas, drawn over the picture, take the pointer in Ghostty and in
+    Terminal.app.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

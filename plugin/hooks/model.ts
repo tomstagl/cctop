@@ -25,9 +25,11 @@ export const TESTED_WITH = '2.1.332';
 export const MIN_DOCK_COLUMNS = 110;
 
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
-export const QUERY_VERBS = ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+export const QUERY_VERBS = ['summary', 'dashboard', 'overview', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
 /** Verbs a busy tick (every 2 s) skips: they change at turn boundaries, the idle tick reads them. */
 export const IDLE_ONLY_VERBS: readonly QueryVerb[] = ['advice'];
+/** Verbs read only while the pane shows them: the overview's charts are drawn for body 1 of the Overview alone. */
+export const SHOWN_ONLY_VERBS: readonly QueryVerb[] = ['overview'];
 export type QueryVerb = (typeof QUERY_VERBS)[number];
 /** The parsed JSON of the last successful `cctop query <verb>`, per verb. */
 export type QueryData = Partial<Record<QueryVerb, unknown>>;
@@ -142,6 +144,8 @@ export type Model = {
   body: string;
   /** Console's rule line expanded into the key map (`? keys` pressed). */
   keys: boolean;
+  /** The overview's picked readout per per-turn chart (chart id → turn), a turn number's press; absent = the latest turn. */
+  readouts: Record<string, number>;
   /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
   openRun: string | null;
   /** `$.agent.list()` as last read: what the agent rows' ids are mapped against (agentmap.ts). */
@@ -188,6 +192,7 @@ export type Action =
   | { type: 'coach.status'; status: string | null }
   | { type: 'overview.body'; id: string }
   | { type: 'overview.keys'; keys: boolean }
+  | { type: 'overview.readout'; chart: string; turn: number }
   | { type: 'agents.run'; run: string | null }
   | { type: 'agents.live'; agents: LiveAgent[] }
   | { type: 'agents.viewed'; id: string | null };
@@ -246,6 +251,7 @@ export function initialModel(): Model {
     coachStatus: null,
     body: 'events',
     keys: false,
+    readouts: {},
     openRun: null,
     liveAgents: [],
     viewedAgent: null,
@@ -357,6 +363,7 @@ export function reduce(model: Model, action: Action): Model {
         coachToasted: null,
         coachToastTurn: null,
         coachStatus: null,
+        readouts: {},
         openRun: null,
         liveAgents: [],
         viewedAgent: null,
@@ -392,6 +399,8 @@ export function reduce(model: Model, action: Action): Model {
       return model.body === action.id ? model : { ...model, body: action.id };
     case 'overview.keys':
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
+    case 'overview.readout':
+      return model.readouts[action.chart] === action.turn ? model : { ...model, readouts: { ...model.readouts, [action.chart]: action.turn } };
     case 'agents.run':
       return model.openRun === action.run ? model : { ...model, openRun: action.run };
     case 'agents.live':
@@ -424,6 +433,11 @@ export function outcomeText(model: Model, viewLabel?: string): string {
     return `${subject} drawn above the prompt: the terminal is ${columns} columns wide, ${MIN_DOCK_COLUMNS} or more dock it beside the transcript.`;
   }
   return `${subject} drawn above the prompt: /tui fullscreen docks it beside the transcript.`;
+}
+
+/** Whether the pane shows the overview's charts: Console's body 1, docked. */
+export function overviewShown(model: Model): boolean {
+  return model.open && model.view === 'overview' && model.body === 'context' && model.placement === 'dock';
 }
 
 /** Whether `verb` may be polled: unknown until `--help` is read, then as listed. */

@@ -129,9 +129,16 @@ export function fakeElements(presses: Map<string, () => void>): ElementTable<'te
     const { children: _children, ...rest } = props;
     return { type: 'Code', props: rest } as unknown as RenderElement;
   };
+  // The picture leaves keep every prop (key, size, cells, source, alt): what a test inspects.
+  const picture = (type: string) => (props: Props): RenderElement => {
+    const { children: _children, ...rest } = props;
+    return { type, props: rest } as unknown as RenderElement;
+  };
   return {
     Box: plain('Box'),
     Text: plain('Text'),
+    Raster: picture('Raster'),
+    Image: picture('Image'),
     Button,
     Input: leaf('Input'),
     Select: leaf('Select'),

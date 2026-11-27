@@ -178,7 +178,7 @@ test('the width ladder: three cells per row at 80, two below; wide, mid and shor
 test('cells are keyed Boxes of plain Buttons sharing one scope and one press; the open cell is Text; a press opens the body', () => {
   const opened: string[] = [];
   const keys: boolean[] = [];
-  const actions: OverviewActions = { open: (id) => opened.push(id), keys: (k) => keys.push(k) };
+  const actions: OverviewActions = { open: (id) => opened.push(id), keys: (k) => keys.push(k), readout: () => undefined };
   // With tools open: five cell Buttons (the open cell is Text), `a` and `0`.
   const tree = renderOverview(build({ body: 'tools' }), el, 85, 'dock', NOW, { el, actions });
   const bs = buttons(tree);
@@ -313,7 +313,7 @@ test('fixture W live: the header strip renders row-identical on both surfaces at
     const tui = snap.split('\n---\n')[1].split('\n').map((l) => l.replace(/\s+$/, ''));
     while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
     tui.pop(); // the footer
-    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined }).map((l) => l.replace(/\s+$/, ''));
     assert.match(pane[1], /^ wf {5}▸ Verify/);
     for (let i = 0; i < tui.length; i++) assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}`);
   }
@@ -334,25 +334,12 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
       .map((l) => l.replace(/\s+$/, ''));
     while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
     tui.pop(); // the footer
-    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined }).map((l) => l.replace(/\s+$/, ''));
     assert.ok(tui.length >= 10, `${columns}: ${tui.length} TUI rows`);
     for (let i = 0; i < tui.length; i++) {
       assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}\n  tui:  ${JSON.stringify(tui[i])}\n  pane: ${JSON.stringify(pane[i])}`);
     }
   }
-});
-
-// The window's composition (PRD 3): the context body's row, from the dashboard
-// object, is the TUI's row character for character; the label names the source.
-// The TUI's own body 1 is now the overview (charts); this reads the snapshot of
-// the rows it draws when the dashboard object has no overview, which is what the
-// pane still draws until the pane draws the overview (mod-pane Task 7).
-test('the context body draws the composition row identically to the TUI at 85 columns', () => {
-  const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__console_context_rows_85x24.snap'), 'utf8');
-  const tuiRow = snap.split('\n').find((l) => l.startsWith('  per /context'));
-  assert.ok(tuiRow !== undefined, 'the TUI snapshot has the composition row');
-  const pane = raw(build({ dashboard: fixture('dashboard-b'), body: 'context' }), 85).map((l) => l.replace(/\s+$/, ''));
-  assert.ok(pane.includes(tuiRow!.replace(/\s+$/, '')), `pane rows: ${JSON.stringify(pane)}`);
 });
 
 // The status-bearing header (PRD 2): the TUI's `header_workspace_*` insta

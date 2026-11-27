@@ -229,15 +229,18 @@ test('turn.complete records the context size for the sparkline, capped at HISTOR
   for (let i = 0; i < HISTORY_TURNS + 5; i++) turn(3000 + i);
   assert.equal(model.contextHistory.length, HISTORY_TURNS);
   assert.equal(model.contextHistory.at(-1), 3000 + HISTORY_TURNS + 4);
-  // Console's context body is the object's (the sparkline of the engine's
-  // history was the Overview's own block, which is gone with the tiles);
-  // the history still feeds the engine-side usage rows.
+  // Console's context body is the overview object's charts (the sparkline of
+  // the engine's history was the Overview's own block, which is gone with
+  // the tiles); the history still feeds the engine-side usage rows.
   const withSummary = reduce(model, { type: 'query', verb: 'summary', data: fixture('summary') });
   const withDashboard = reduce(withSummary, { type: 'query', verb: 'dashboard', data: fixture('dashboard') });
   const opened = reduce(withDashboard, { type: 'overview.body', id: 'context' });
-  const lines = renderToText(renderOverview({ ...opened, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
-  assert.ok(lines.some((r) => r.startsWith('─── context ')), JSON.stringify(lines));
-  assert.ok(lines.some((r) => /^  prefix\s+\S+\s+[▇▆▁]+/.test(r)), JSON.stringify(lines));
+  const waiting = renderToText(renderOverview({ ...opened, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
+  assert.ok(waiting.some((r) => r.startsWith('─── context ')), JSON.stringify(waiting));
+  assert.equal(waiting.at(-1), ' waiting for cctop query overview…');
+  const drawn = reduce(opened, { type: 'query', verb: 'overview', data: fixture('overview-b') });
+  const lines = renderToText(renderOverview({ ...drawn, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
+  assert.ok(lines.some((r) => r.startsWith(' Context window  142k of 1M')), JSON.stringify(lines));
   assert.equal(reduce(opened, { type: 'overview.body', id: 'context' }), opened, 'the same body is a no-op');
 });
 
