@@ -3,6 +3,7 @@
 // views draw the model. Kept pure so it is testable from plain data.
 import type { RenderElement, SessionUsage } from 'claude-code';
 import type { LiveAgent } from './agentmap';
+import type { ChartsInfo, Probe } from './charts';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
@@ -71,6 +72,8 @@ export type SessionFacts = {
 export type AgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
 
 export type Model = {
+  /** What the pane knows of picture-or-cells (charts.ts); null until `initCharts` has read the environment. */
+  charts: ChartsInfo | null;
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
   usageAt: number | null;
@@ -168,6 +171,9 @@ export type Action =
   | { type: 'session.id'; id: string }
   | { type: 'session.info'; facts: SessionFacts }
   | { type: 'agent.limits'; limits: AgentLimits }
+  | { type: 'charts.info'; info: ChartsInfo }
+  // A probe blit's answer; `fix` is `$.ui.blit`'s stable code when it was denied.
+  | { type: 'charts.probe'; probe: Probe; fix?: string }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
@@ -196,6 +202,7 @@ export function breakdownDue(model: Model, now: number): boolean {
 
 export function initialModel(): Model {
   return {
+    charts: null,
     usage: null,
     usageAt: null,
     lastBreakdownAt: null,
@@ -316,6 +323,13 @@ export function reduce(model: Model, action: Action): Model {
       return JSON.stringify(model.sessionFacts) === JSON.stringify(action.facts) ? model : { ...model, sessionFacts: action.facts };
     case 'agent.limits':
       return JSON.stringify(model.agentLimits) === JSON.stringify(action.limits) ? model : { ...model, agentLimits: action.limits };
+    case 'charts.info':
+      return { ...model, charts: action.info };
+    case 'charts.probe': {
+      if (model.charts === null || model.charts.probe === action.probe) return model;
+      const { fix: _old, ...rest } = model.charts;
+      return { ...model, charts: { ...rest, probe: action.probe, ...(action.fix !== undefined ? { fix: action.fix } : {}) } };
+    }
     case 'session.id':
       if (model.sessionId === action.id) return model;
       if (model.sessionId === null) return { ...model, sessionId: action.id };

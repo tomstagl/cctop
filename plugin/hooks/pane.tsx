@@ -21,6 +21,7 @@ import {
   type View,
 } from './model';
 import { spoolText } from './breakdown';
+import { chartsDecision, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode } from './charts';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
@@ -80,6 +81,9 @@ let usageTimer: Timer | null = null;
 // already: once per session, and never retried in a loop (the next turn
 // simply tries again).
 let breakdownFailureLogged = false;
+// charts.wasm, compiled and instantiated once per session.start (null until
+// then, and for good when it would not load: the query's cells are drawn).
+let chartRenderer: ChartRenderer | null = null;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -346,6 +350,82 @@ function readNotifyEnv($: EngineInterface): Promise<void> {
       notifyOn = value === '1';
     })
     .catch((err: unknown) => $.ui.log(`cctop: env read failed: ${String(err)}`));
+}
+
+// What the terminal says of itself, one literal `$.env.get` each (the
+// validator reads the names off the source). Unset and empty are absent.
+async function readChartsEnv($: EngineInterface, config: string | undefined): Promise<ChartsEnv> {
+  const set = (v: string | undefined): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
+  const [override, termProgram, kitty, tmux, iterm] = await Promise.all([
+    $.env.get("CCTOP_PANE_CHARTS"),
+    $.env.get("TERM_PROGRAM"),
+    $.env.get("KITTY_WINDOW_ID"),
+    $.env.get("TMUX"),
+    $.env.get("ITERM_SESSION_ID"),
+  ]);
+  const env: ChartsEnv = { kitty: set(kitty) !== undefined, tmux: set(tmux) !== undefined, iterm: set(iterm) !== undefined };
+  if (set(override) !== undefined) env.override = set(override);
+  if (config !== undefined) env.config = config;
+  if (set(termProgram) !== undefined) env.termProgram = set(termProgram);
+  return env;
+}
+
+// `[pane] charts` from `cctop query config`; undefined when the binary is
+// missing, older than the verb, or answers something else.
+function readChartsConfig($: EngineInterface): Promise<string | undefined> {
+  return $.process
+    .run(['cctop', 'query', 'config'], { timeoutMs: VERSION_TIMEOUT_MS })
+    .then((result) => {
+      if (result.exitCode !== 0) return undefined;
+      const charts = (JSON.parse(result.stdout) as { pane?: { charts?: unknown } }).pane?.charts;
+      return typeof charts === 'string' ? charts : undefined;
+    })
+    .catch(() => undefined);
+}
+
+// US-006: compile charts.wasm once (a literal path, here, for the validator),
+// read the terminal's environment and the config, decide picture or cells,
+// and tell the marker. A wasm that will not load is logged once and leaves
+// the cells the query carries. Never awaited by a hook; `detected` settles
+// when detectBinary has put its answer in the model.
+async function initCharts($: EngineInterface, detected: Promise<void>): Promise<void> {
+  const runtime = await startCharts(
+    () => $.wasm.compile('./charts.wasm'),
+    (text) => $.ui.log(text),
+  );
+  chartRenderer = runtime.renderer;
+  // The config is the binary's to say: only asked once it is known to be there.
+  await detected;
+  const config = model.binary === 'present' ? await readChartsConfig($) : undefined;
+  const env = await readChartsEnv($, config);
+  apply($, { type: 'charts.info', info: { env, probe: 'unknown', wasm: runtime.wasm } });
+  updateMarker($);
+}
+
+// How the pane draws charts now: for the overview (Task 8) to choose
+// `Image` or `Raster` by, and `chartRenderer` to draw them with.
+export function chartsMode(): ChartsMode {
+  return model.charts === null ? 'cells' : chartsDecision(model.charts).mode;
+}
+
+// The wasm renderer, or null when it would not load.
+export function chartsRenderer(): ChartRenderer | null {
+  return chartRenderer;
+}
+
+// The probe blit (§5.3): the first time a chart is drawn as an `Image`, the
+// same source is blitted once. A `deny` means the terminal draws the alt, so
+// the session is cells; `fix` (tmux's passthrough) goes to the marker.
+export async function probeCharts($: EngineInterface, requestId: string, key: string, png: string): Promise<void> {
+  if (model.charts === null || model.charts.probe !== 'unknown') return;
+  try {
+    const answer = await $.ui.blit({ requestId, key, source: { png } });
+    apply($, { type: 'charts.probe', probe: probeOf(answer), ...(answer.fix !== undefined ? { fix: answer.fix } : {}) });
+    updateMarker($);
+    invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  } catch (err) {
+    $.ui.log(`cctop: chart probe failed: ${String(err)}`);
+  }
 }
 
 function sendNotify($: EngineInterface, text: string, key: string, options: { at?: number; untilBack?: boolean } = {}): void {
@@ -960,6 +1040,7 @@ export const register: Register = (on) => {
   renderPending = false;
   poller?.stop();
   poller = null;
+  chartRenderer = null;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.
@@ -982,7 +1063,9 @@ export const register: Register = (on) => {
     const result = await next(e);
     void announce($, check);
     readModelName($);
-    void detectBinary($).then(() => restorePane($, e.isInteractive));
+    const detected = detectBinary($);
+    void initCharts($, detected).catch((err: unknown) => $.ui.log(`cctop: charts init failed: ${String(err)}`));
+    void detected.then(() => restorePane($, e.isInteractive));
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: session.start failed: ${next.error.message ?? next.error.kind}`);

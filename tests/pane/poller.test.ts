@@ -57,7 +57,7 @@ const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // The queries spawned so far, `summary` alone or every verb.
 function queries($: FakeEngine, verb?: string): string[][] {
-  return $.process.calls.filter((argv) => argv[1] === 'query' && argv[2] !== '--help' && (verb === undefined || argv[2] === verb));
+  return $.process.calls.filter((argv) => argv[1] === 'query' && argv[2] !== '--help' && argv[2] !== 'config' && (verb === undefined || argv[2] === verb));
 }
 
 // The poller on its own: the model held by the test, the binary present.

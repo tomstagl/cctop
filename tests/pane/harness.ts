@@ -14,6 +14,8 @@
 // Importing this module also installs the two JSX globals a hooks module
 // compiles against (`h`, `Fragment`): the engine provides them in its own
 // environment, Node does not, so they must exist before a render hook runs.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
   AgentInfo,
   CommandSpec,
@@ -38,6 +40,8 @@ import type {
   SessionUsage,
   SiteView,
   Timer,
+  UiBlitArgs,
+  UiBlitResult,
   UiNotifyResult,
   UiViewResult,
 } from 'claude-code';
@@ -74,6 +78,17 @@ function h(tag: unknown, props: Props | null | undefined, ...children: unknown[]
 // `<>...</>`: a column Box around the children.
 function Fragment(props: { children?: RenderNode[] }): RenderElement {
   return { type: 'Box', props: { flexDirection: 'column' }, children: props.children ?? [] };
+}
+
+// The shipped charts.wasm, compiled once per test process.
+let compiled: Promise<WebAssembly.Module> | null = null;
+function chartsModule(): Promise<WebAssembly.Module> {
+  compiled ??= (async () => {
+    const bytes = readFileSync(join(__dirname, '..', '..', '..', 'plugin', 'hooks', 'charts.wasm'));
+    const wa = (globalThis as unknown as { WebAssembly: { compile(b: Uint8Array): Promise<WebAssembly.Module> } }).WebAssembly;
+    return wa.compile(bytes);
+  })();
+  return compiled;
 }
 
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -153,6 +168,8 @@ export type FakeEngineOptions = {
   store?: Record<string, unknown>;
   files?: Record<string, string>;
   plugin?: { name?: string; root?: string };
+  /** `$.wasm.compile('./charts.wasm')`: the real module (default) or a rejection (`CompileError`). */
+  wasm?: 'real' | 'fail';
 };
 
 // What the fake adds on top of `EngineInterface`: the inspection points.
@@ -186,7 +203,12 @@ export type FakeExtras = {
     viewAnswer: UiViewResult;
     /** Run on every `$.ui.invalidate("ui.render")`: how `fakeOn`'s surface learns to draw. */
     renderListeners: (() => void)[];
+    /** Every `$.ui.blit` argument, in order; the next calls answer `blitAnswer`. */
+    blits: UiBlitArgs[];
+    blitAnswer: UiBlitResult;
   };
+  /** Every path `$.wasm.compile` was asked for, in order. */
+  wasm: { compiles: string[] };
   clock: {
     /** Advances the clock by `ms`, firing every due timer in due order. */
     tick: (ms: number) => void;
@@ -278,6 +300,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const fills: string[] = [];
   const views: SiteView[] = [];
   const viewAnswer: UiViewResult = {};
+  const blits: UiBlitArgs[] = [];
+  const blitAnswer: UiBlitResult = {};
+  const compiles: string[] = [];
   const live: AgentInfo[] = [];
 
   const engine = {
@@ -313,6 +338,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (event === 'ui.render') for (const fn of renderListeners) fn();
       },
       renderListeners,
+      blits,
+      blitAnswer,
+      blit: async (args: UiBlitArgs): Promise<UiBlitResult> => {
+        blits.push(args);
+        return { ...blitAnswer };
+      },
       views,
       viewAnswer,
       view: async (view: SiteView): Promise<UiViewResult> => {
@@ -427,6 +458,14 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (answer instanceof Error) throw answer;
         if (typeof answer === 'function') return answer();
         return answer;
+      },
+    },
+    wasm: {
+      compiles,
+      compile: async (source: string | ArrayBuffer | ArrayBufferView): Promise<WebAssembly.Module> => {
+        compiles.push(String(source));
+        if (opts.wasm === 'fail') throw new Error('CompileError: WebAssembly.Module(): expected magic word');
+        return chartsModule();
       },
     },
     prompt: {

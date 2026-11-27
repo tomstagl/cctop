@@ -10,6 +10,7 @@
 // into functions declared in pane.tsx, so it receives `PollerEngine`, the
 // slice of `$` it uses, built there by a top-level function.
 import type { EngineInterface, Timer } from 'claude-code';
+import { chartsMarker } from './charts';
 import { IDLE_ONLY_VERBS, QUERY_VERBS, TESTED_WITH, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
 
 export type PollerEngine = {
@@ -120,6 +121,8 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
     bodyColumns: model.bodyColumns,
     viewportColumns: model.viewportColumns,
     facts: markerFacts(model),
+    // Pictures or cells, and whether charts.wasm loaded (`cctop pane status` prints it).
+    charts: model.charts === null ? undefined : chartsMarker(model.charts),
   };
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
 }

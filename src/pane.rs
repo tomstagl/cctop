@@ -225,6 +225,47 @@ fn marker_str<'a>(inputs: &'a Inputs, key: &str) -> Option<&'a str> {
     inputs.marker.as_ref()?.get(key)?.as_str()
 }
 
+/// The marker's `charts`: `{mode, why, wasm, fix?}`. Absent from a module
+/// older than the charts, which says nothing.
+fn charts_check(inputs: &Inputs) -> Option<Check> {
+    let c = inputs.marker.as_ref()?.get("charts")?;
+    let mode = c.get("mode")?.as_str()?;
+    let why = match c.get("why").and_then(|v| v.as_str()) {
+        Some("override") => "CCTOP_PANE_CHARTS",
+        Some("config") => "[pane] charts in config.toml",
+        Some("terminal") => "this terminal",
+        Some("probe") => "a probe picture the terminal would not draw",
+        Some("wasm") => "charts.wasm did not load",
+        Some("unknown") => "terminal not recognised, tried as pictures",
+        _ => "default",
+    };
+    let wasm_failed = c.get("wasm").and_then(|v| v.as_str()) == Some("failed");
+    let tmux_fix = c.get("fix").and_then(|v| v.as_str()) == Some("tmux-passthrough");
+    let what = if mode == "image" { "pictures" } else { "cells" };
+    Some(if wasm_failed {
+        check(
+            "charts",
+            Verdict::Warn,
+            format!("charts drawn as {what} ({why}): charts.wasm could not be compiled, the query's cells are used"),
+            Some("report it with both versions if it persists (`$.wasm` is early access)".into()),
+        )
+    } else if tmux_fix {
+        check(
+            "charts",
+            Verdict::Warn,
+            format!("charts drawn as {what} ({why}): tmux holds pictures back"),
+            Some("in tmux 3.3 or later set `allow-passthrough on` and `focus-events on`".into()),
+        )
+    } else {
+        check(
+            "charts",
+            Verdict::Ok,
+            format!("charts drawn as {what} ({why})"),
+            None,
+        )
+    })
+}
+
 pub fn report(inputs: &Inputs) -> Report {
     let loaded = marker_loaded(inputs);
     let hooks_on = loaded || inputs.env_flag.as_deref().is_some_and(env_truthy);
@@ -482,6 +523,13 @@ pub fn report(inputs: &Inputs) -> Report {
             checks.push(check("pane", verdict, text, action));
         } else {
             checks.push(check("pane", Verdict::Ok, "pane closed", None));
+        }
+    }
+
+    // 7b. Pictures or cells, as the pane decided (US-006 of PRD 9).
+    if loaded {
+        if let Some(c) = charts_check(inputs) {
+            checks.push(c);
         }
     }
 
@@ -1018,6 +1066,35 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bad, PaneFacts::default());
+    }
+
+    #[test]
+    fn status_prints_the_charts_choice_the_marker_carries() {
+        let line = |charts: serde_json::Value| {
+            let mut i = ready_inputs();
+            i.marker.as_mut().unwrap()["charts"] = charts;
+            let r = report(&i);
+            r.checks.into_iter().find(|c| c.id == "charts")
+        };
+        let c =
+            line(serde_json::json!({"mode": "image", "why": "terminal", "wasm": "ok"})).unwrap();
+        assert_eq!(c.verdict, Verdict::Ok);
+        assert_eq!(c.text, "charts drawn as pictures (this terminal)");
+        let c =
+            line(serde_json::json!({"mode": "cells", "why": "override", "wasm": "ok"})).unwrap();
+        assert_eq!(c.text, "charts drawn as cells (CCTOP_PANE_CHARTS)");
+        let c =
+            line(serde_json::json!({"mode": "cells", "why": "wasm", "wasm": "failed"})).unwrap();
+        assert_eq!(c.verdict, Verdict::Warn);
+        assert!(c.text.contains("the query's cells are used"), "{}", c.text);
+        let c = line(serde_json::json!({"mode": "cells", "why": "probe", "wasm": "ok", "fix": "tmux-passthrough"})).unwrap();
+        assert_eq!(c.verdict, Verdict::Warn);
+        assert!(c.action.unwrap().contains("allow-passthrough"));
+        // A module without charts, or a marker that is not loaded, says nothing.
+        assert!(report(&ready_inputs())
+            .checks
+            .iter()
+            .all(|c| c.id != "charts"));
     }
 
     fn marker(open: bool, visibility: &str, heartbeat_offset_ms: i64) -> serde_json::Value {
