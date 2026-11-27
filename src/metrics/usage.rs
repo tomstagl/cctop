@@ -278,8 +278,8 @@ pub struct CacheMissRecord {
     /// `cache_missed_input_tokens`, else the call's cache write.
     pub tokens: u64,
     pub message_id: String,
-    /// The `source` of a `ConfigChange` hook that preceded this miss with no
-    /// request between (set by `State::mark_config_changes`).
+    /// The `source` of a `ConfigChange` hook this request is the first
+    /// request after, when it missed (set by `State::mark_config_changes`).
     pub after_config_change: Option<String>,
 }
 

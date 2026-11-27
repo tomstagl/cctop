@@ -177,7 +177,8 @@ pub struct LocatedMiss {
     /// The API's own `diagnostics.cache_miss_reason.type`, kept beside the
     /// located cause.
     pub api_reason: Option<String>,
-    /// The `source` of the `ConfigChange` hook this is the first miss after
+    /// The `source` of the `ConfigChange` hook this request is the first
+    /// request after, when it missed and the cause is not an expired TTL
     /// (set by `State::mark_config_changes`).
     pub after_config_change: Option<String>,
 }
@@ -356,6 +357,10 @@ pub struct RequestChain {
     prev: Option<Closed>,
     misses: Vec<LocatedMiss>,
     by_id: HashMap<String, usize>,
+    /// Every main-thread response closed, hit or miss: its message id and
+    /// timestamp. `State::mark_config_changes` finds the first request after
+    /// a settings change here.
+    responses: Vec<(String, Option<String>)>,
     /// `thinking_drop` attachments by request id → `clientChange.kinds`:
     /// the record lands before the response it belongs to, so a miss closing
     /// later finds it here, and one already closed is filled when it lands.
@@ -399,6 +404,8 @@ impl RequestChain {
                     at: a.timestamp.clone(),
                     prior_sent: self.pending_prior,
                 };
+                self.responses
+                    .push((cur.message_id.clone(), a.timestamp.clone()));
                 let reason = a.cache_miss_reason().map(|r| r.kind.clone());
                 let shrank = self.prev.as_ref().is_some_and(|p| {
                     (p.cache_read + p.cache_creation).saturating_sub(cur.cache_read) >= MISS_TOKENS
@@ -486,6 +493,11 @@ impl RequestChain {
                 }
                 self.latest_shape.as_ref().and_then(|h| self.shapes.get(h))
             })
+    }
+
+    /// Every closed main-thread response as (message id, timestamp).
+    pub fn responses(&self) -> &[(String, Option<String>)] {
+        &self.responses
     }
 
     pub fn misses_mut(&mut self) -> &mut [LocatedMiss] {

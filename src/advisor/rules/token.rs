@@ -1295,6 +1295,78 @@ mod tests {
         );
     }
 
+    /// Three main-thread responses on one shape: `a` creates the cache, then
+    /// each `(id, read, create, ts, named)` follows.
+    fn chain_state(steps: &[(&str, u64, u64, &str, bool)]) -> State {
+        let req = |ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"s1","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"high"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str, named: bool| {
+            let extra = if named {
+                r#","diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}"#
+            } else {
+                ""
+            };
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}}{extra}}}}}"#
+            )
+        };
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(
+            &Line::parse(r#"{"type":"api-request-shape","shapeHash":"s1","shape":{"system":[{"type":"text","text":"xx"}],"tools":[]},"timestamp":"2026-01-01T00:00:00Z"}"#)
+                .unwrap(),
+        );
+        s.apply(&Line::parse(&req("2026-01-01T00:00:01Z")).unwrap());
+        s.apply(&Line::parse(&reply("a", 0, 40_000, "2026-01-01T00:00:02Z", false)).unwrap());
+        for (id, read, create, ts, named) in steps {
+            s.apply(&Line::parse(&req(ts)).unwrap());
+            s.apply(&Line::parse(&reply(id, *read, *create, ts, *named)).unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn config_change_marks_only_the_first_request_when_it_missed() {
+        // change -> hit -> miss: the miss is not the first request after.
+        let mut s = chain_state(&[
+            ("h", 40_000, 100, "2026-01-01T00:00:07Z", false),
+            ("b", 5_000, 30_000, "2026-01-01T00:00:12Z", true),
+        ]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        assert_eq!(s.agg.cache_misses.len(), 1);
+        assert_eq!(s.agg.cache_misses[0].after_config_change, None);
+        assert_eq!(s.requests.miss_for("b").unwrap().after_config_change, None);
+        // change -> miss (named): marked.
+        let mut s = chain_state(&[("b", 5_000, 30_000, "2026-01-01T00:00:12Z", true)]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        assert_eq!(
+            s.agg.cache_misses[0].after_config_change.as_deref(),
+            Some("project_settings")
+        );
+    }
+
+    #[test]
+    fn config_change_does_not_claim_an_expired_cache() {
+        // Twenty minutes idle on an unchanged prefix: the TTL, not the change.
+        let mut s = chain_state(&[("b", 0, 40_000, "2026-01-01T00:20:00Z", false)]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        let m = s.requests.miss_for("b").expect("a miss");
+        assert!(
+            matches!(m.cause, crate::requests::LocatedCause::Expired { .. }),
+            "{:?}",
+            m.cause
+        );
+        assert_eq!(m.after_config_change, None);
+        assert!(s
+            .agg
+            .cache_misses
+            .iter()
+            .all(|m| m.after_config_change.is_none()));
+    }
+
     #[test]
     fn a01_falls_back_when_unlocated() {
         // A transcript before 2.1.302: no request lines, so nothing is located.

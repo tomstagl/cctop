@@ -1357,25 +1357,32 @@ impl State {
             let end = sorted.get(i + 1).map_or(i64::MAX, |n| n.0);
             windows.push((*at, end, src.clone()));
         }
-        // Every miss, by message id and time.
-        let mut all: Vec<(i64, String)> = Vec::new();
-        for m in self.requests.misses() {
-            if let Some(t) = m.at.as_deref().and_then(parse) {
-                all.push((t, m.message_id.clone()));
-            }
-        }
-        for m in &self.agg.cache_misses {
-            if let Some(t) = m.at.as_deref().and_then(parse) {
-                all.push((t, m.message_id.clone()));
-            }
-        }
+        // The first request (hit or miss) after each change; it is marked
+        // only if it missed, and not for an expired TTL.
+        let first_request = |start: i64, end: i64| -> Option<&String> {
+            self.requests
+                .responses()
+                .iter()
+                .filter_map(|(id, at)| Some((at.as_deref().and_then(parse)?, id)))
+                .filter(|(t, _)| *t > start && *t < end)
+                .min_by_key(|(t, _)| *t)
+                .map(|(_, id)| id)
+        };
         let marks: Vec<(String, String)> = windows
             .iter()
             .filter_map(|(start, end, src)| {
-                all.iter()
-                    .filter(|(t, _)| t > start && t < end)
-                    .min_by_key(|(t, _)| *t)
-                    .map(|(_, id)| (id.clone(), src.clone()))
+                let id = first_request(*start, *end)?;
+                let located = self.requests.miss_for(id);
+                let named = self.agg.cache_misses.iter().any(|m| m.message_id == *id);
+                if located.is_none() && !named {
+                    return None;
+                }
+                if located.is_some_and(|m| {
+                    matches!(m.cause, crate::requests::LocatedCause::Expired { .. })
+                }) {
+                    return None;
+                }
+                Some((id.clone(), src.clone()))
             })
             .collect();
         for m in self.requests.misses_mut() {
