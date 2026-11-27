@@ -324,7 +324,7 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
         rows.iter()
             .skip(skip)
             .map(|r| {
-                json!({
+                let mut row = json!({
                     "turn": r.turn,
                     "started_at_ms": r.started_at_ms,
                     "duration": r.duration_ms.map(|d| m(d, "ms", "turn_duration", false)),
@@ -350,7 +350,13 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
                     "api_errors": r.api_errors,
                     "steers": r.steers,
                     "interrupted": r.interrupted,
-                })
+                });
+                // Only on a turn Claude Code dropped thinking in (2.1.308+).
+                if r.thinking_dropped > 0 {
+                    row["thinking_dropped"] =
+                        m(r.thinking_dropped, "count", "thinking_dropped", false);
+                }
+                row
             })
             .collect(),
     )
@@ -677,6 +683,16 @@ pub fn dashboard(state: &State) -> Value {
             .collect();
         v["composition_source"] = json!(c.source);
         v["composition_metric_id"] = json!("context_composition");
+    }
+    // Absent until Claude Code (2.1.308+) drops thinking from a request.
+    let td = &state.agg.thinking_dropped;
+    if td.blocks > 0 || td.turns > 0 {
+        v["thinking_dropped"] = json!({
+            "blocks": td.blocks,
+            "turns": td.turns,
+            "by_kind": td.by_kind,
+            "metric_id": "thinking_dropped",
+        });
     }
     v
 }
@@ -1271,5 +1287,21 @@ mod tests {
             .collect::<Vec<_>>()
             .join(" ");
         assert!(flat.contains("batch this phase's items, or lower its effort/model"));
+    }
+
+    #[test]
+    fn dashboard_reports_dropped_thinking_on_fixture_t() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-t.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["thinking_dropped"]["blocks"], 10);
+        assert_eq!(v["thinking_dropped"]["turns"], 10);
+        assert_eq!(
+            v["thinking_dropped"]["by_kind"]["messagesHistoryChanged"],
+            10
+        );
+        // Absent where nothing was dropped.
+        assert!(dashboard(&state())["thinking_dropped"].is_null());
     }
 }

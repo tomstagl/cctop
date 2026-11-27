@@ -196,6 +196,11 @@ pub struct Turn {
     pub instructions_seen: bool,
     /// Distinct source files edited this turn (basenames).
     pub files_edited: Vec<String>,
+    /// Thinking blocks / turns Claude Code dropped from this turn's requests
+    /// (`thinking_drop` attachments, 2.1.308+), and what it said changed.
+    pub thinking_dropped_blocks: u64,
+    pub thinking_dropped_turns: u64,
+    pub thinking_change_kinds: Vec<String>,
 }
 
 impl Turn {
@@ -414,6 +419,18 @@ pub struct Aggregate {
     pub cache_misses: Vec<CacheMissRecord>,
     /// The last `goal_status` attachment (`/goal`): met, tokens, iterations.
     pub goal: Option<GoalStatus>,
+    /// Thinking dropped over the session (`thinking_drop` attachments).
+    pub thinking_dropped: ThinkingDropped,
+}
+
+/// Session totals of dropped thinking. `by_kind` counts the blocks dropped
+/// under each `clientChange` kind as written (a drop naming two kinds counts
+/// its blocks under both).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ThinkingDropped {
+    pub blocks: u64,
+    pub turns: u64,
+    pub by_kind: std::collections::BTreeMap<String, u64>,
 }
 
 /// `/goal` progress as Claude Code reports it.
@@ -607,6 +624,28 @@ impl Aggregate {
                         ..
                     } => {
                         *self.hook_ms_by_command.entry(command).or_default() += duration_ms;
+                    }
+                    AttachmentKind::ThinkingDrop {
+                        dropped_blocks,
+                        dropped_turns,
+                        change_kinds,
+                        ..
+                    } => {
+                        let total = &mut self.thinking_dropped;
+                        total.blocks += dropped_blocks;
+                        total.turns += dropped_turns;
+                        for k in &change_kinds {
+                            *total.by_kind.entry(k.clone()).or_default() += dropped_blocks;
+                        }
+                        if let Some(t) = self.turns.last_mut() {
+                            t.thinking_dropped_blocks += dropped_blocks;
+                            t.thinking_dropped_turns += dropped_turns;
+                            for k in change_kinds {
+                                if !t.thinking_change_kinds.contains(&k) {
+                                    t.thinking_change_kinds.push(k);
+                                }
+                            }
+                        }
                     }
                     AttachmentKind::SilentTurnReminder => {
                         if let Some(t) = self.turns.last_mut() {
@@ -1329,5 +1368,42 @@ mod tests {
             .as_deref()
             .unwrap()
             .starts_with("2023-11-14T22:13:20"));
+    }
+
+    #[test]
+    fn thinking_drops_aggregate_per_turn_and_in_total() {
+        let drop = |blocks: u64, turns: u64, kinds: &str| {
+            Line::parse(
+                &serde_json::json!({"type": "attachment", "attachment": {
+                    "type": "thinking_drop", "requestId": "r",
+                    "newlyDropped": {"blockCount": blocks, "turnCount": turns},
+                    "clientChange": {"kinds": kinds}}})
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let user = Line::parse(
+            r#"{"type":"user","promptId":"p1","message":{"role":"user","content":"hi"}}"#,
+        )
+        .unwrap();
+        let mut a = Aggregate::default();
+        a.push(&user);
+        a.push(&drop(4, 2, "messagesHistoryChanged"));
+        a.push(&drop(3, 1, "messagesHistoryChanged,toolSchemasChanged"));
+        let t = a.turns.last().unwrap();
+        assert_eq!(
+            (t.thinking_dropped_blocks, t.thinking_dropped_turns),
+            (7, 3)
+        );
+        assert_eq!(
+            t.thinking_change_kinds,
+            ["messagesHistoryChanged", "toolSchemasChanged"]
+        );
+        assert_eq!(
+            (a.thinking_dropped.blocks, a.thinking_dropped.turns),
+            (7, 3)
+        );
+        assert_eq!(a.thinking_dropped.by_kind["messagesHistoryChanged"], 7);
+        assert_eq!(a.thinking_dropped.by_kind["toolSchemasChanged"], 3);
     }
 }

@@ -456,6 +456,28 @@ impl Log {
                 }
             }
             Line::Attachment(att) => {
+                if let crate::transcript::AttachmentKind::ThinkingDrop {
+                    dropped_blocks,
+                    dropped_turns,
+                    change_kinds,
+                    ..
+                } = att.kind()
+                {
+                    if let Some(at) = att.timestamp.as_deref().and_then(parse_ts_ms) {
+                        let mut text = format!(
+                            "thinking dropped · {dropped_blocks} blocks / {dropped_turns} turns"
+                        );
+                        if !change_kinds.is_empty() {
+                            text.push_str(" · ");
+                            text.push_str(&crate::requests::change_kinds_text(&change_kinds));
+                        }
+                        self.push(Event {
+                            at,
+                            kind: Kind::Note,
+                            text,
+                        });
+                    }
+                }
                 // A44: a plain IDE edit is a row; the collision (the same
                 // file edited by Claude this turn) is the coach's.
                 if let crate::transcript::AttachmentKind::EditedTextFile { filename, .. } =
@@ -604,6 +626,21 @@ mod tests {
         assert_eq!(
             l.iter().last().unwrap().text,
             "cache miss: model_changed 427k"
+        );
+    }
+
+    #[test]
+    fn thinking_drop_is_a_note_row() {
+        let l = log("session-t");
+        let rows: Vec<&Event> = l
+            .iter()
+            .filter(|e| e.text.starts_with("thinking dropped"))
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, Kind::Note);
+        assert_eq!(
+            rows[0].text,
+            "thinking dropped · 10 blocks / 10 turns · history changed"
         );
     }
 }

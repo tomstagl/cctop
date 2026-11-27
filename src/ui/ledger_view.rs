@@ -79,9 +79,18 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    // A DROP column (thinking blocks Claude Code dropped) only once a turn has one.
+    let show_drop = rows.iter().any(|r| r.thinking_dropped > 0);
+    let drop_col = |text: String| {
+        if show_drop {
+            format!("{text:>4} ")
+        } else {
+            String::new()
+        }
+    };
     let mut lines = vec![Line::from(Span::styled(
         format!(
-            " {:>3} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {:<6} {:<8} {}",
+            " {:>3} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {}{:<6} {:<8} {}",
             "#",
             "START",
             "DUR",
@@ -92,6 +101,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             "OUT",
             "THINK",
             "COST",
+            drop_col("DROP".into()),
             "EFFORT",
             "MODEL",
             "TOOLS"
@@ -103,7 +113,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     for (i, r) in rows.iter().enumerate().skip(first).take(body) {
         let model = r.model.trim_start_matches("claude-").to_string();
         let mut line = Line::from(format!(
-            " {:>2}{} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {:<6} {:<8} {}",
+            " {:>2}{} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {}{:<6} {:<8} {}",
             r.turn,
             if r.compaction { "C" } else { " " },
             clock(r.started_at_ms),
@@ -117,6 +127,11 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             fmt::tokens(r.usage.output),
             fmt::tokens(r.usage.thinking),
             r.cost_usd.map(fmt::usd).unwrap_or_else(|| "—".into()),
+            drop_col(if r.thinking_dropped > 0 {
+                r.thinking_dropped.to_string()
+            } else {
+                String::new()
+            }),
             fmt::clip(&r.effort, 6),
             fmt::clip(&model, 8),
             r.tools
@@ -156,6 +171,9 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
         }
         if let (Some(c), Some(at)) = (r.cost_usd, r.cost_at_100k_usd) {
             facts.push(format!("{} ({} at 100k)", fmt::usd(c), fmt::usd(at)));
+        }
+        if r.thinking_dropped > 0 {
+            facts.push(format!("thinking dropped {} blocks", r.thinking_dropped));
         }
         if r.steers > 0 {
             facts.push(format!("steers {}", r.steers));
