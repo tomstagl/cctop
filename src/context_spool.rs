@@ -121,7 +121,11 @@ impl Watcher {
     }
 
     pub fn poll(&mut self) -> Option<SpoolCapture> {
-        let mtime = std::fs::metadata(&self.path).ok()?.modified().ok();
+        let Ok(meta) = std::fs::metadata(&self.path) else {
+            self.last_mtime = None;
+            return None;
+        };
+        let mtime = meta.modified().ok();
         if mtime.is_some() && mtime == self.last_mtime {
             return None;
         }

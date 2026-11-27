@@ -509,9 +509,9 @@ pub struct State {
     /// The sources inspector shows its per-file list.
     pub sources_files: bool,
     pub prefix: crate::prefix::Prefix,
-    /// The pane's breakdown spool as a capture: `(capture, turn it is
-    /// anchored to, epoch ms the pane read it)`.
-    pub context_spool: Option<(crate::transcript::ContextCapture, usize, i64)>,
+    /// The pane's latest breakdown spool, raw: anchored and checked against
+    /// compactions when read, since the transcript may lag it.
+    pub context_spool: Option<crate::context_spool::SpoolCapture>,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
     /// OpenTelemetry data for this session, when the receiver is running.
@@ -1577,20 +1577,30 @@ impl State {
             let at = self.prefix.context_capture_at_ms.unwrap_or(0);
             (c, turn, CaptureSource::Transcript, at)
         });
-        let spool = self
-            .context_spool
-            .as_ref()
-            .map(|(c, turn, at)| (c, *turn, CaptureSource::Spool, *at));
+        let spool = self.anchored_spool();
         match (transcript, spool) {
             (Some(t), Some(s)) => Some(if s.3 >= t.3 { s } else { t }),
             (t, s) => t.or(s),
         }
     }
 
-    /// Take the pane's spool: anchor it to the turn of the last API call at
-    /// or before its time. Ignored when no call precedes it, or when it
-    /// predates the last compaction (it describes a window that is gone).
+    /// Keep the pane's latest spool; it is anchored when read.
     pub fn apply_context_spool(&mut self, s: crate::context_spool::SpoolCapture) {
+        self.context_spool = Some(s);
+    }
+
+    /// The spool anchored to the turn of the last API call at or before its
+    /// time; none while no such call is known, or when it predates the last
+    /// compaction (it describes a window that is gone).
+    fn anchored_spool(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let s = self.context_spool.as_ref()?;
         let compacted_at = self
             .agg
             .boundaries
@@ -1606,7 +1616,7 @@ impl State {
             .and_then(|b| b.at.as_deref())
             .and_then(crate::metrics::cost::parse_ts_ms);
         if compacted_at.is_some_and(|c| s.at_ms < c) {
-            return;
+            return None;
         }
         let turn = self
             .agg
@@ -1614,10 +1624,8 @@ impl State {
             .iter()
             .rev()
             .find(|c| c.at_ms.is_some_and(|t| t <= s.at_ms))
-            .map(|c| c.turn);
-        if let Some(turn) = turn {
-            self.context_spool = Some((s.capture, turn, s.at_ms));
-        }
+            .map(|c| c.turn)?;
+        Some((&s.capture, turn, CaptureSource::Spool, s.at_ms))
     }
 
     /// What is in the window right now and what put it there: the per-call
@@ -2596,5 +2604,48 @@ mod tests {
         });
         s.apply_context_spool(spool_at(boundary + 1000, 2));
         assert_eq!(s.context_capture().unwrap().0.used_tokens, 2);
+    }
+
+    #[test]
+    fn apply_then_boundary_hides_the_spool() {
+        let mut s = with_calls(&[(1, 1_000)]);
+        s.apply_context_spool(spool_at(2_000, 5));
+        assert!(s.context_capture().is_some());
+        s.agg.boundaries.push(crate::metrics::usage::Boundary {
+            at: Some("2026-08-01T00:00:00.000Z".into()),
+            turn: 2,
+            kind: crate::metrics::usage::BoundaryKind::Compact,
+        });
+        assert!(s.context_capture().is_none());
+    }
+
+    #[test]
+    fn spool_before_its_call_anchors_once_the_call_arrives() {
+        let mut s = State::new(Pricing::default());
+        s.apply_context_spool(spool_at(2_000, 5));
+        assert!(s.context_capture().is_none());
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 4,
+            at_ms: Some(1_500),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        assert_eq!(s.context_capture().unwrap().1, 4);
+    }
+
+    #[test]
+    fn lagging_tailer_reanchors() {
+        let mut s = with_calls(&[(1, 1_000)]);
+        s.apply_context_spool(spool_at(3_000, 5));
+        assert_eq!(s.context_capture().unwrap().1, 1);
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 2,
+            at_ms: Some(2_900),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        assert_eq!(s.context_capture().unwrap().1, 2);
     }
 }
