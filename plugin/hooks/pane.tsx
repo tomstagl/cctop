@@ -574,7 +574,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
   const el = $.ui.resolve(e);
   const { Box, Text } = el;
   const columns = e.props.bodyColumns;
-  if (e.props.placement === 'inline') {
+  if (e.props.placement !== 'dock') {
     return (
       <Box flexDirection="column">
         {renderView(model, el, columns, 'inline', now)}
@@ -632,7 +632,8 @@ function viewBar(
       used = 0;
       gap = 0;
     }
-    const line = lines[lines.length - 1];
+    const line = lines.at(-1);
+    if (!line) break;
     if (gap > 0) line.push(<Text wrap="truncate">{' '.repeat(gap)}</Text>);
     line.push(
       active ? (
@@ -651,7 +652,7 @@ function viewBar(
   const badges = badgesLine(header(model, 0).badges);
   const badgesWidth = badges.reduce((n, b) => n + b.text.length, 0);
   if (used + 2 + badgesWidth <= columns) {
-    lines[lines.length - 1].push(
+    lines.at(-1)?.push(
       <Text wrap="truncate">{'  '}</Text>,
       ...badges.map((b) => (
         <Text wrap="truncate" color={b.color} dimColor={b.dim}>

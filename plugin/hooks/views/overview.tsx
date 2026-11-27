@@ -307,7 +307,7 @@ export function wrap(segs: Seg[], columns: number, indent: number): Line[] {
   for (const s of segs) {
     let pending = '';
     const flush = (): void => {
-      if (pending !== '') rows[rows.length - 1].push({ ...s, text: pending });
+      if (pending !== '') rows.at(-1)?.push({ ...s, text: pending });
       pending = '';
     };
     for (const word of s.text.split(/(?<= )/)) {
@@ -446,7 +446,7 @@ export function renderOverview(
   buttons?: { el: OverviewElements; actions: OverviewActions },
 ): RenderElement {
   const { Box } = el;
-  if (placement === 'inline') return renderInline(model, el, columns, now);
+  if (placement !== 'dock') return renderInline(model, el, columns, now);
   const d = dashboardOf(model.query.dashboard);
   const body: RenderElement[] = [];
   if (d === null) {

@@ -136,6 +136,7 @@ export function statusLine(c: Coach, columns: number): string {
 /** The light whose level is highest (the first of equals): what the detail frame follows. */
 export function highestLight(c: Coach): LightId {
   let best = c.lights[0];
+  if (!best) return 'context';
   for (const l of c.lights) if (LEVELS.indexOf(l.level) > LEVELS.indexOf(best.level)) best = l;
   return best.id;
 }
@@ -245,6 +246,7 @@ function buttons(c: Coach, el: CoachElements, actions: CoachActions): RenderElem
 function detailFrame(c: Coach, id: LightId, columns: number, el: CoachElements, actions: CoachActions): RenderElement {
   const { Box, Text, Button } = el;
   const l = c.lights.find((x) => x.id === id) ?? c.lights[0];
+  if (!l) return <Box flexDirection="column" />;
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = l.lines.map((text) => row([{ text }], inner));
   if (rows.length === 0) rows.push(line('—'));

@@ -5,7 +5,7 @@ import type { RenderElement, SessionUsage } from 'claude-code';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
-export type Placement = 'dock' | 'inline';
+export type Placement = 'dock' | 'inline' | 'widget';
 export type Binary = 'unknown' | 'present' | 'missing';
 /** Whether the engine is drawing the pane: `hidden` once an open pane got
  * no `ui.render` for a while (the /diff panel holds the dock), `unknown`
@@ -361,7 +361,7 @@ export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const rank = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
-  return sorted[rank];
+  return sorted[rank] ?? 0;
 }
 
 /** `2h 30m`, `45m`, `30s`; `now` once the instant has passed. */
