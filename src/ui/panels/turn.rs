@@ -80,21 +80,30 @@ impl Panel for TurnPanel {
             ));
         }
         let traced_retries = turn.and_then(|t| state.turn_retries(t));
+        // The session-level figure from the cost-state; beside a traced
+        // turn's own retries it is labelled, so neither number is lost.
+        let session_retry = state.cost.authoritative.as_ref().and_then(|c| {
+            let retry = c
+                .total_api_duration
+                .saturating_sub(c.total_api_duration_without_retries);
+            (retry > 0).then_some(retry)
+        });
         if let Some((n, ms)) = traced_retries {
             l1.push(Span::styled(
                 format!(" · retries {n} (+{})", fmt::added_s(ms)),
                 amber,
             ));
-        } else if let Some(c) = &state.cost.authoritative {
-            let retry = c
-                .total_api_duration
-                .saturating_sub(c.total_api_duration_without_retries);
-            if retry > 0 {
+            if let Some(retry) = session_retry {
                 l1.push(Span::styled(
-                    format!(" · retries {}", fmt::duration_ms(retry as i64)),
+                    format!(" · session retries {}", fmt::duration_ms(retry as i64)),
                     amber,
                 ));
             }
+        } else if let Some(retry) = session_retry {
+            l1.push(Span::styled(
+                format!(" · retries {}", fmt::duration_ms(retry as i64)),
+                amber,
+            ));
         }
 
         // Line 2: what is running, or what the model waits on
@@ -463,8 +472,11 @@ mod tests {
             spans: vec![crate::ui::state::tests_support::llm_span(&rid, 3, 16)].into(),
             ..Default::default()
         });
-        let out = render_to_string(&app, 100, 60);
+        let out = render_to_string(&app, 130, 60);
         assert!(out.contains("retries 2 (+13 s)"), "{out}");
-        assert!(!out.contains("retries 0:02"), "{out}");
+        assert!(
+            out.contains("retries 2 (+13 s) · session retries 0:02"),
+            "{out}"
+        );
     }
 }
