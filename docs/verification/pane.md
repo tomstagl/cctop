@@ -834,6 +834,44 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+51. **The act dialog: the Esc hint first, and Esc stops the turn** (US-009).
+    Setup: the pane docked on the Coach view during a session where a
+    key-kind nudge holds the slot (a failing retry loop gives A38). Press
+    `a` on the NOW card (or click its headline).
+    Expected: the dialog `cctop-act` opens with the keyboard. The detail
+    on the right starts with `1  Press Esc to stop the turn`, before the
+    headline and body, and there is no Button that stops a turn (cctop
+    never calls `$.turn.abort`). Record what the first Esc does while a
+    turn runs (the dialog's `closeOnEscape` should hand the keys back and
+    close it; the dialog says so) and that a second Esc at the prompt
+    stops the turn and Claude Code writes its own interrupt marker
+    (`[Request interrupted by user]`) in the transcript.
+    Claude Code version:
+    Result: pending
+
+52. **The act dialog's keys, detail and buttons** (US-009, US-011 PRD 6).
+    Setup: as item 51, with two items (a NOW nudge and an "Up next" one:
+    an allow rule from approving the same `gh` command three times is
+    one, a setting from a slow hook another), and a running subagent for
+    the agents-key nudge.
+    Expected: the list is on the left (the detail stacks below under 72
+    body columns), Tab and the arrow keys walk the list and the Buttons,
+    Enter presses one, Esc closes. Toasts raised while the dialog is
+    open wait for it to close (`holdToasts`); the outcome of a copy or an
+    open is drawn in the dialog instead. An allow rule shows
+    `.claude/settings.local.json` as a diff (`+` line green) and the
+    rule; `Copy the rule` copies it, `Open settings.local.json` opens the
+    file without changing it (`git diff` stays clean). A fill (the exact
+    text, or its Button) closes the dialog and drafts into an empty
+    prompt box without sending; with a draft in the box the draft is kept
+    and the toast says so. The digit keys 1, 2, … press the numbered
+    Buttons. On the agents-key item, `Jump to agent <type>` puts the
+    agent's transcript in the main view (the dialog closes first) and
+    `back to main` returns. Pressing `a` again while open retitles it, no
+    second dialog.
+    Claude Code version:
+    Result: pending
+
 54. **Hover readouts on the per-turn charts** (US-007).
     Setup: as item 47 or 48, body 1 open, a session with five or more
     turns.

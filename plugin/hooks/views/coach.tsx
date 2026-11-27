@@ -301,6 +301,8 @@ export type CoachActions = {
   light(id: LightId | 'none'): void;
   /** Open an "Up next" row in place, or close it when it is the open one. */
   next(id: string): void;
+  /** Open the act dialog on this nudge (`a`, or a press on the nudge); the first item when none is named. */
+  act(id?: string): void;
 };
 
 // ---------------------------------------------------------------- drawing
@@ -312,18 +314,18 @@ function classColor(cls: string): string | undefined {
 }
 
 /** `text` wrapped at `inner - indent`, each line after `indent` spaces. */
-function wrapped(text: string, inner: number, style: Style = {}, indent = 0): FrameRow[] {
+export function wrapped(text: string, inner: number, style: Style = {}, indent = 0): FrameRow[] {
   const lead = ' '.repeat(indent);
   return wrapWords(text, inner - indent).map((w) => ({ line: [seg(lead), seg(w, style)] }));
 }
 
 /** `text` after a `prefix`, the lines after the first hanging under the text. */
-function hanging(prefix: Seg, text: string, inner: number, style: Style = {}): FrameRow[] {
+export function hanging(prefix: Seg, text: string, inner: number, style: Style = {}): FrameRow[] {
   const w = width(prefix.text);
   return wrapWords(text, inner - w).map((t, i) => ({ line: [i === 0 ? prefix : seg(' '.repeat(w)), seg(t, style)] }));
 }
 
-const blank = (): FrameRow => ({ line: [seg('')] });
+export const blank = (): FrameRow => ({ line: [seg('')] });
 
 function stateRow(c: Coach): FrameRow {
   const text = c.stateLine;
@@ -352,21 +354,21 @@ function headRows(a: Advice, right: string, inner: number): FrameRow[] {
  * without, so the card's digits stay put across polls). `said` is shared by
  * the whole view: the "is in your prompt box" line is drawn once.
  */
-type Counter = { n: number; hotkeys: boolean; said: { filled: boolean } };
+export type Counter = { n: number; hotkeys: boolean; said: { filled: boolean } };
 function hotkey(counter: Counter): string | undefined {
   const n = counter.n++;
   return counter.hotkeys && n <= 9 ? String(n) : undefined;
 }
 
 /** The "is in your prompt box" line, the first time the view draws it. */
-function filledRows(counter: Counter, line: string, inner: number): FrameRow[] {
+export function filledRows(counter: Counter, line: string, inner: number): FrameRow[] {
   if (counter.said.filled) return [];
   counter.said.filled = true;
   return wrapped(line, inner, { color: OK });
 }
 
 /** Buttons packed greedily into rows `inner` wide, BUTTON_GAP apart. */
-function packButtons(buttons: FrameButton[], inner: number): FrameRow[] {
+export function packButtons(buttons: FrameButton[], inner: number): FrameRow[] {
   const rows: FrameRow[] = [];
   let cur: FrameButton[] = [];
   let used = 0;
@@ -385,7 +387,7 @@ function packButtons(buttons: FrameButton[], inner: number): FrameRow[] {
 }
 
 /** The texts a press of this advice can put in the box. */
-function fillTexts(a: Advice): string[] {
+export function fillTexts(a: Advice): string[] {
   const out: string[] = [];
   for (const x of a.actions) {
     if (x.kind === 'prompt' || x.kind === 'slash') out.push(x.payload);
@@ -394,12 +396,32 @@ function fillTexts(a: Advice): string[] {
   return out;
 }
 
+/** A key-kind action as a numbered step row (it takes the next number of the card). */
+export function keyStepRow(x: CoachAction, inner: number, counter: Counter): FrameRow[] {
+  const n = counter.n++;
+  return hanging(seg(`${n}  `, { color: ACCENT, bold: true }), keyStep(x), inner, { bold: true });
+}
+
+/** Whether a key action is a step the person takes (the TUI's agents key is a Button instead). */
+export function isKeyStep(x: CoachAction): boolean {
+  return x.kind === 'key' && x.payload !== '6 Enter';
+}
+
 // An advice's actions, by kind and in the binary's order: a key is a step
 // the person takes (shown first, numbered with the Buttons); prompt and
 // slash fill the box; an allow rule copies, opens settings.local.json and fills
 // /permissions; a setting copies and opens; a tip is "Got it". Snooze last.
 // Then the line saying a fill took and nothing was sent.
-function actionRows(a: Advice, where: string, inner: number, actions: CoachActions, counter: Counter, model: Model, fixShown: boolean): FrameRow[] {
+export function actionRows(
+  a: Advice,
+  where: string,
+  inner: number,
+  actions: CoachActions,
+  counter: Counter,
+  model: Model,
+  fixShown: boolean,
+  stepsShown = false,
+): FrameRow[] {
   const rows: FrameRow[] = [];
   const buttons: FrameButton[] = [];
   const button = (key: string, label: string, onPress: () => void): void => {
@@ -412,9 +434,8 @@ function actionRows(a: Advice, where: string, inner: number, actions: CoachActio
         // The TUI's agents key: in the pane, the Agents view.
         if (x.payload === '6 Enter') {
           button(`${i}-agents`, 'Open the agents view', () => actions.agents());
-        } else {
-          const n = counter.n++;
-          rows.push(...hanging(seg(`${n}  `, { color: ACCENT, bold: true }), keyStep(x), inner, { bold: true }));
+        } else if (!stepsShown) {
+          rows.push(...keyStepRow(x, inner, counter));
         }
         break;
       case 'prompt':
@@ -478,8 +499,12 @@ function nowCard(c: Coach, model: Model, columns: number, now: number, actions: 
   } else {
     const age = n.firedAt === null ? '' : `${formatAgo(now - n.firedAt)} ago · `;
     rows.push(...headRows(n, `${age}rule ${n.id}`, inner));
-    rows.push(...wrapped(n.headline, inner, { bold: true }));
+    // The headline is a press (the act dialog), and `a` is its Button's key.
+    wrapWords(n.headline, inner).forEach((t, i) => {
+      rows.push({ line: [seg(t, { bold: true })], press: { key: `coach-now-headline-${i}`, onPress: () => actions.act(n.id), dimColor: false } });
+    });
     rows.push(...fullRows(n, 'now', inner, actions, counter, model));
+    rows.push({ line: [], buttons: [{ key: 'coach-now-act', label: 'Work through it in a dialog', hotkey: 'a', onPress: () => actions.act(n.id) }] });
   }
   return panel({ title: 'coach', summary: `${c.model.replace(/^claude-/, '')} · turn ${c.turn}` }, rows, columns, el);
 }

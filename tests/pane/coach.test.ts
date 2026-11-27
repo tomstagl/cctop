@@ -52,6 +52,7 @@ function recorder(): { actions: CoachActions; calls: Call[] } {
     agents: () => calls.push(['agents']),
     light: (id) => calls.push(['light', id]),
     next: (id) => calls.push(['next', id]),
+    act: (id) => calls.push(["act", id]),
   };
   return { actions, calls };
 }
@@ -112,7 +113,7 @@ function press(tree: RenderElement, key: string): void {
 }
 const labels = (tree: RenderElement, prefix: string) =>
   buttons(tree)
-    .filter((b) => String(b.props?.key).startsWith(prefix))
+    .filter((b) => String(b.props?.key).startsWith(prefix) && !/^coach-now-(act|headline-)/.test(String(b.props?.key)))
     .map((b) => `${b.props?.hotkey ?? '-'} ${b.props?.label}`);
 
 // A38 as Task 1's test words it: a key, then the fix prompt.

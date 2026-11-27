@@ -66,7 +66,7 @@ lit and pressed as one area. It shows the same views as the TUI:
 
 | View | TUI | What it shows |
 |---|---|---|
-| Coach | `c` | The NOW card: the state line and the nudge in full (plain name, age, rule id, headline, body, evidence), its fix prompt as a card a click puts in the prompt box, Buttons by action kind and snooze; "Up next" and the four lights opening in place (context: what fills the window and what put it there) |
+| Coach | `c` | The NOW card: the state line and the nudge in full (plain name, age, rule id, headline, body, evidence), its fix prompt as a card a click puts in the prompt box, Buttons by action kind and snooze, and `a` (or a press on the headline) opening the act dialog: the items on the left, the selected one's detail on the right (an allow rule as a settings diff, the exact text, Buttons; a key step such as "Press Esc to stop the turn" first; cctop never stops a turn); "Up next" and the four lights opening in place (context: what fills the window and what put it there) |
 | Overview | the dashboard | Console: the header, the six cells (`1`–`6`), the act line (`a`), the rule line (`0` home, `? keys`), the open body in place — every figure the TUI's nine panels carry, one body at a time |
 | Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
 | Agents | 6 | Subagents, MCP servers, background tasks |
