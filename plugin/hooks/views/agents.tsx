@@ -158,8 +158,11 @@ function listAt(obj: unknown, key: string): unknown[] {
   return Array.isArray(v) ? v : [];
 }
 
+/** Body columns from which the panel title carries `depth ≤ N` beside `no background` (the TUI keeps both). */
+const LIMITS_FULL = 76;
+
 /** `0/1 agents` as the TUI's panel summary: running over listed; a team alone as `1/3 team`. */
-function agentsSummary(data: unknown): string | undefined {
+function agentsSummary(data: unknown, inner: number): string | undefined {
   const agents = listAt(data, 'agents');
   const parts: string[] = [];
   // With the pane's limits the query says the line (`3 / 10 running · depth ≤ 2`),
@@ -167,7 +170,8 @@ function agentsSummary(data: unknown): string | undefined {
   const limits = stringAt(data, 'limits', 'line');
   if (limits !== null) {
     if (agents.length > 0) parts.push(`${agents.length} agents`);
-    parts.push(limits);
+    // Below LIMITS_FULL body columns the depth bound makes way for `no background`.
+    parts.push(inner < LIMITS_FULL ? limits.replace(/ · depth ≤ \d+/, '') : limits);
   } else if (agents.length > 0) {
     const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
     parts.push(`${running}/${agents.length} agents`);
@@ -214,7 +218,7 @@ function detailRows(rows: string[], heads: number): FrameRow[] {
 
 export function renderAgents(model: Model, el: ViewElements, columns: number, now: number, actions?: AgentsActions): RenderElement {
   const data = model.query.agents;
-  const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
+  const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data, bodyWidth(columns)) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
   const fel = actions?.el ?? el;

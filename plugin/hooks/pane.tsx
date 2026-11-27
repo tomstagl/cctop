@@ -509,8 +509,10 @@ function followSession($: EngineInterface): void {
     .then(async (rotated) => {
       // A new session is a new spool: its first failure is worth one line too.
       if (rotated) breakdownFailureLogged = false;
-      // Before the first query of a rotated session: its transcript path.
+      // Before the first query of a rotated session: its transcript path
+      // and the limits the model dropped with the old session.
       await readSessionInfo($);
+      if (rotated) await readAgentLimits($);
       if (!rotated || !model.open) return;
       readUsage($);
       void poller?.tick();

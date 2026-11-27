@@ -569,3 +569,13 @@ test('agents at 120 columns: the header names the limits when the query carries 
   // An older binary's query has no `limits`: the header is what it was.
   assert.deepEqual(frameTitles(rawRows('agents', build({ query: { agents: { ...agents, limits: null } } }), 120)), ['6 Agents & MCP ─ 0/1 agents']);
 });
+
+test('agents at 70 columns: the title drops depth before no background; 80 keeps both', () => {
+  const line = '0 / 10 running · depth ≤ 2 · no background';
+  const agents = { ...(fixture('agents') as Record<string, unknown>), limits: { line } };
+  const model = build({ query: { agents } });
+  assert.deepEqual(frameTitles(rawRows('agents', model, 70)), ['6 Agents & MCP ─ 1 agents · 0 / 10 running · no background']);
+  assert.deepEqual(frameTitles(rawRows('agents', model, 80)), [`6 Agents & MCP ─ 1 agents · ${line}`]);
+  const plain = { ...agents, limits: { line: '0 / 10 running · depth ≤ 2' } };
+  assert.deepEqual(frameTitles(rawRows('agents', build({ query: { agents: plain } }), 70)), ['6 Agents & MCP ─ 1 agents · 0 / 10 running']);
+});

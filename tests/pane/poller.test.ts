@@ -467,6 +467,8 @@ test('/clear while the pane is closed: the markers follow the id and nothing is 
   const next = readMarker($, NEXT_MARKER);
   assert.equal(next?.loaded, true, 'cctop pane status finds the module under the new id');
   assert.equal(next?.open, false);
+  // The limits the model dropped with the old id are read again at once, not at the next turn.complete.
+  assert.deepEqual((next?.facts as { agentLimits?: unknown } | undefined)?.agentLimits, { concurrent: 20, depth: 3, isBackgroundEnabled: true });
   assert.equal(next?.sessionId, NEXT);
   assert.equal(queries($).length, 0, 'closed: nothing polled');
 });
