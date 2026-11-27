@@ -791,7 +791,7 @@ mod tests {
             .unwrap()
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
-        assert!(first["tokens"]["id"] == "cache_miss_located" || first["tokens"].is_object());
+        assert_eq!(first["tokens"]["metric_id"], "cache_miss_located");
     }
 
     #[test]
