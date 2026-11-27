@@ -232,6 +232,9 @@ fn workspace_lines<'a>(state: &State, width: usize) -> Vec<Line<'a>> {
     if let Some(t) = w.git_worktree.as_deref().filter(|t| !t.is_empty()) {
         rows.push(format!(" worktree   {t}"));
     }
+    if let Some(p) = w.project_dir.as_deref().filter(|p| !p.is_empty()) {
+        rows.push(format!(" project    {p}"));
+    }
     for (i, d) in w.added_dirs.iter().enumerate() {
         let label = if i == 0 { " added dirs" } else { "           " };
         rows.push(format!("{label} {d}"));
@@ -354,6 +357,7 @@ mod tests {
         app.state.status_facts.workspace = Some(crate::status::Workspace {
             added_dirs: vec!["/x/lib".into(), "/y/docs".into()],
             git_worktree: Some("feat".into()),
+            project_dir: Some("/p/shop".into()),
             repo: Some(crate::status::Repo {
                 host: Some("github.com".into()),
                 owner: Some("acme".into()),
@@ -366,6 +370,7 @@ mod tests {
         assert!(out.contains("github.com/acme/shop"), "{out}");
         assert!(out.contains("/x/lib") && out.contains("/y/docs"), "{out}");
         assert!(out.contains("worktree   feat"), "{out}");
+        assert!(out.contains("project    /p/shop"), "{out}");
         // Absent without the fact.
         let app = app_on("session-a");
         let mut app = app;

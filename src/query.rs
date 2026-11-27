@@ -209,8 +209,8 @@ fn status_object(state: &State) -> Value {
         .and_then(|r| Some(format!("{}/{}", r.owner.as_deref()?, r.name.as_deref()?)));
     let spend = f.spend_limit_usd.map(|(used, limit)| {
         json!({
-            "used_usd": m(used, "usd", "spend_limit_usd", false),
-            "limit_usd": limit.map(|l| m(l, "usd", "spend_limit_usd", false)),
+            "used_usd": m(used, "USD", "spend_limit_usd", false),
+            "limit_usd": limit.map(|l| m(l, "USD", "spend_limit_usd", false)),
             "period": f.spend_limit_period,
             "resets_at_ms": f.spend_limit_resets_at_ms,
         })
@@ -225,6 +225,10 @@ fn status_object(state: &State) -> Value {
             "remote": f.remote_session_id.is_some(),
         },
         "spend_limit": spend,
+        "pr": (f.pr_url.is_some() || f.pr_kind.is_some()).then(|| json!({
+            "url": f.pr_url,
+            "kind": f.pr_kind,
+        })),
         "exceeds_200k_tokens": m(f.exceeds_200k_tokens, "bool", "exceeds_200k_tokens", false),
     })
 }
@@ -264,6 +268,25 @@ pub fn cache_object(state: &State) -> Value {
         "miss_causes": c.miss_causes,
         "hit_ratio": c.hit_ratio.or_else(|| state.agg.total.cache_hit_ratio()).map(|r| m(r, "ratio", "cache_hit_ratio", approx)),
     });
+    // What the status line counts and diagnoses beyond the headline figures;
+    // shim only, so a transcript-sourced block has none of these keys.
+    if c.from_shim {
+        v["requests"] = m(c.requests, "count", "cache_requests", false);
+        v["cache_write_tokens"] = m(c.cache_write_tokens, "tokens", "cache_write_shim", false);
+        v["miss_recache_tokens"] = m(c.miss_recache_tokens, "tokens", "cache_miss_recache", false);
+        v["last_miss_tools_added"] = c
+            .last_miss_tools_added
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_tools_removed"] = c
+            .last_miss_tools_removed
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_system_char_delta"] = c
+            .last_miss_system_delta
+            .map(|n| m(n, "chars", "cache_miss_system_delta", false))
+            .into();
+    }
     // Absent on transcripts before 2.1.302 (no request lines), so their output is unchanged.
     let located = located_misses(state);
     if located.as_array().is_some_and(|a| !a.is_empty()) {
@@ -891,6 +914,56 @@ mod tests {
         // Without spend, the key is null.
         s.status_facts.spend_limit_usd = None;
         assert!(summary(&s)["status"]["spend_limit"].is_null());
+        // The PR's link and kind: present with them, null without.
+        assert!(summary(&s)["status"]["pr"].is_null());
+        s.status_facts.pr_url = Some("https://github.com/acme/shop/pull/142".into());
+        s.status_facts.pr_kind = Some("github".into());
+        let pr = &summary(&s)["status"]["pr"];
+        assert_eq!(pr["url"], "https://github.com/acme/shop/pull/142");
+        assert_eq!(pr["kind"], "github");
+    }
+
+    #[test]
+    fn cache_object_carries_the_shims_counters_only_from_the_shim() {
+        let mut s = state_b();
+        let v = cache_object(&s);
+        for k in [
+            "requests",
+            "cache_write_tokens",
+            "miss_recache_tokens",
+            "last_miss_tools_added",
+            "last_miss_tools_removed",
+            "last_miss_system_char_delta",
+        ] {
+            assert!(v.get(k).is_none(), "{k} without a shim sample");
+        }
+        s.cache.from_shim = true;
+        s.cache.requests = 49;
+        s.cache.cache_write_tokens = 257_729;
+        s.cache.miss_recache_tokens = 95_700;
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let v = cache_object(&s);
+        for (k, val, id) in [
+            ("requests", 49, "cache_requests"),
+            ("cache_write_tokens", 257_729, "cache_write_shim"),
+            ("miss_recache_tokens", 95_700, "cache_miss_recache"),
+            ("last_miss_tools_added", 2, "cache_miss_tools_delta"),
+            ("last_miss_tools_removed", 0, "cache_miss_tools_delta"),
+            (
+                "last_miss_system_char_delta",
+                -800,
+                "cache_miss_system_delta",
+            ),
+        ] {
+            assert_eq!(v[k]["value"], val, "{k}");
+            assert_eq!(v[k]["metric_id"], id, "{k}");
+            assert!(crate::metrics::registry::get(id).is_some(), "{id}");
+        }
+        // A shim sample whose miss carried no deltas: the keys are null.
+        s.cache.last_miss_tools_added = None;
+        assert!(cache_object(&s)["last_miss_tools_added"].is_null());
     }
 
     #[test]
