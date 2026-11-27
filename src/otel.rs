@@ -403,7 +403,9 @@ pub fn ingest_traces(store: &mut Store, v: &Value) {
                     }
                     "claude_code.tool" => Span::Tool {
                         ids,
-                        tool_name: str_attr(&a, "tool_name"),
+                        tool_name: str_attr(&a, "tool_name_safe")
+                            .or_else(|| str_attr(&a, "tool_name"))
+                            .or_else(|| str_attr(&a, "gen_ai.tool.name")),
                         mcp_server: str_attr(&a, "anthropic.mcp.server.name"),
                         tool_use_id: str_attr(&a, "tool_use_id"),
                     },
@@ -499,6 +501,7 @@ fn handle(mut stream: TcpStream, store: &Shared, dump: Option<&Path>) {
     let path = parts.next().unwrap_or("").to_string();
     let mut len = 0usize;
     let mut ctype = String::new();
+    let mut chunked = false;
     loop {
         let mut h = String::new();
         if reader.read_line(&mut h).is_err() || h == "\r\n" || h == "\n" || h.is_empty() {
@@ -507,9 +510,23 @@ fn handle(mut stream: TcpStream, store: &Shared, dump: Option<&Path>) {
         let lower = h.to_ascii_lowercase();
         if let Some(v) = lower.strip_prefix("content-length:") {
             len = v.trim().parse().unwrap_or(0);
+        } else if lower
+            .strip_prefix("transfer-encoding:")
+            .is_some_and(|v| v.contains("chunked"))
+        {
+            chunked = true;
         } else if let Some(v) = lower.strip_prefix("content-type:") {
             ctype = v.trim().to_string();
         }
+    }
+    if chunked && len == 0 {
+        let b = r#"{"error":"send Content-Length; chunked bodies are not decoded"}"#;
+        let _ = write!(
+            stream,
+            "HTTP/1.1 411 Length Required\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{b}",
+            b.len()
+        );
+        return;
     }
     if len > MAX_BODY {
         let b = r#"{"error":"body over 4 MB"}"#;
@@ -790,6 +807,43 @@ mod tests {
         assert!(
             matches!(&d.spans[6], Span::Compaction { trigger: Some(t), message_count: Some(88), .. } if t == "auto")
         );
+    }
+
+    #[test]
+    fn tool_span_reads_tool_name_safe_first() {
+        let mut st = Store::default();
+        let only_safe = span("claude_code.tool", 1, &[("tool_name_safe", &s("Bash"))], "");
+        let both = span(
+            "claude_code.tool",
+            2,
+            &[("tool_name", &s("raw")), ("tool_name_safe", &s("safe"))],
+            "",
+        );
+        let legacy = span("claude_code.tool", 3, &[("tool_name", &s("old"))], "");
+        ingest_traces(&mut st, &traces(Some("t"), &[only_safe, both, legacy]));
+        let names: Vec<_> = st.sessions["t"]
+            .spans
+            .iter()
+            .map(|x| match x {
+                Span::Tool { tool_name, .. } => tool_name.clone().unwrap(),
+                _ => panic!(),
+            })
+            .collect();
+        assert_eq!(names, ["Bash", "safe", "old"]);
+    }
+
+    #[test]
+    fn chunked_without_length_is_411() {
+        let (_st, addr) = serve("127.0.0.1:0", None).unwrap();
+        let mut c = TcpStream::connect(addr).unwrap();
+        write!(
+            c,
+            "POST /v1/traces HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+        )
+        .unwrap();
+        let mut out = String::new();
+        c.read_to_string(&mut out).unwrap();
+        assert!(out.starts_with("HTTP/1.1 411"), "{out}");
     }
 
     #[test]

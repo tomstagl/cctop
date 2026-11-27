@@ -97,7 +97,7 @@ cctop's permission waits today come from hooks: `PermissionRequest` → next `Po
 
 ## 6. Technical considerations
 
-- Traces are larger than metrics: one interaction is tens of spans. The receiver already reads bodies fully; cap the body at 4 MB and answer 413 above it.
+- Traces are larger than metrics: one interaction is tens of spans. The receiver already reads bodies fully; cap the body at 4 MB and answer 413 above it. The cap is shared by `/v1/metrics`, `/v1/logs` and `/v1/traces`.
 - `tool_use_id` sits on the `claude_code.tool` span (via `Pt(span, tool_use_id)`). The permission and execution spans are its children, so the join goes through `parent_span_id`.
 - `source` values beyond `config`, `classifier`, `hook`, `user` may exist (the binary text lists them as a prefix). Keep unknown values verbatim as machine tokens, and show them as `other`.
 
