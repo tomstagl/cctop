@@ -20,6 +20,19 @@ enum Command {
     Query(QueryArgs),
     /// Print the metrics registry as Markdown.
     Metrics(MetricsArgs),
+    /// The coach's words as a Markdown table for review (docs/coach-copy.md).
+    Coach {
+        /// Print the table (the only output; the flag is for explicitness).
+        #[arg(long)]
+        copy_md: bool,
+    },
+    /// The overview's verdict thresholds and sentences as Markdown
+    /// (docs/verdicts.md).
+    Verdicts {
+        /// Print the tables (the only output; the flag is for explicitness).
+        #[arg(long)]
+        md: bool,
+    },
     /// Install the status-line shim and hooks into ~/.claude/settings.json.
     Install(InstallArgs),
     /// Remove what `install` added.
@@ -325,6 +338,14 @@ fn main() {
     match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
         Command::Run(args) => run(args),
         Command::Query(q) => query(q),
+        Command::Coach { copy_md } => {
+            let _ = copy_md;
+            print!("{}", cctop::copy_docs::coach_copy_md());
+        }
+        Command::Verdicts { md } => {
+            let _ = md;
+            print!("{}", cctop::copy_docs::verdicts_md());
+        }
         Command::Metrics(args) => {
             use cctop::metrics::registry;
             if let Some(path) = args.readme {

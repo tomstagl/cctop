@@ -8,7 +8,7 @@
 //! interrupt marker, an API-error line, a git operation — never a keyword
 //! in prompt text.
 
-use super::{count, spoken, PriceKind};
+use super::{count, phrase, spoken, PriceKind};
 use crate::advisor::{ActionKind, Advice, Rule, Saving, Ttl, Urgency, Words};
 use crate::phase::{BashClass, ToolClass};
 use crate::tools::Call;
@@ -1053,13 +1053,17 @@ impl Rule for WaitingOnYou {
         a.retires_on = "your reply";
         a.hole(
             "what",
-            match w.kind {
-                WaitingKind::Question => "Claude asked a question",
-                WaitingKind::Permission => "A permission dialog opened",
-                WaitingKind::Notification => "Claude asked for your input",
-                WaitingKind::Asked => "The turn ended with a question",
-                WaitingKind::Elicitation => "An MCP server asked you something",
-            },
+            phrase(
+                "A41",
+                "what",
+                match w.kind {
+                    WaitingKind::Question => "question",
+                    WaitingKind::Permission => "permission",
+                    WaitingKind::Notification => "notification",
+                    WaitingKind::Asked => "asked",
+                    WaitingKind::Elicitation => "elicitation",
+                },
+            ),
         );
         a.hole("since", spoken(since));
         a.hole(
@@ -1076,11 +1080,15 @@ impl Rule for WaitingOnYou {
         );
         a.hole(
             "hint",
-            if w.kind == WaitingKind::Permission {
-                "Approve, deny, or choose 'always' for this kind of command."
-            } else {
-                "A one-word reply is enough; /btw asks a side question first if you need a detail."
-            },
+            phrase(
+                "A41",
+                "hint",
+                if w.kind == WaitingKind::Permission {
+                    "permission"
+                } else {
+                    "other"
+                },
+            ),
         );
         Some(a)
     }
@@ -1173,13 +1181,17 @@ impl Rule for Checkpoint {
         a.retires_on = "a /clear";
         a.hole(
             "why",
-            if task_done {
-                "A task just completed"
-            } else if done_prompt {
-                "You said the work is done"
-            } else {
-                "The turn ended with a question"
-            },
+            phrase(
+                "A42",
+                "why",
+                if task_done {
+                    "task_done"
+                } else if done_prompt {
+                    "done_prompt"
+                } else {
+                    "question_ended"
+                },
+            ),
         );
         a.hole("ctx", fmt::tokens(ctx));
         a.hole("fresh", fmt::tokens(fresh));

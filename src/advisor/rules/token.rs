@@ -5,8 +5,8 @@
 //! miss) is A01's trigger; A22 folded into it.
 
 use super::{
-    about_usd, calls_per_turn, count, human_turns_since, model_short, money, percent, recent_turns,
-    spoken, usd_label, PriceKind,
+    about_usd, calls_per_turn, count, human_turns_since, model_short, money, percent, phrase,
+    recent_turns, spoken, usd_label, PriceKind,
 };
 use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency, Words};
 use crate::harness_facts::context_suggestions as ctx_rules;
@@ -196,54 +196,25 @@ fn miss_words(
     located: Option<&LocatedCause>,
     old_cli: bool,
 ) -> (&'static str, &'static str) {
-    const MODEL: (&str, &str) = (
-        "the model changed",
-        "Pick the model at the start of a task, or switch right after /clear while the context is small.",
-    );
-    const MESSAGES: (&str, &str) = (
-        "an earlier message changed (a rewind or an edited turn)",
-        "Steering forward with a new message is cheaper than rewriting an earlier one.",
-    );
-    let tools = (
-        "the tool list changed: an MCP server connected or Claude loaded a deferred tool",
-        if old_cli {
-            "This Claude Code is older than 2.1.267 and rebuilds the list often: run claude update."
-        } else {
-            "Next time, connect the tools you need early in the session, then leave the list alone."
-        },
-    );
-    match located {
-        Some(LocatedCause::PrefixRewritten { .. }) => MESSAGES,
-        Some(LocatedCause::Expired { .. }) => (
-            "the cache had expired between turns",
-            "Replies within the cache's lifetime keep it warm; a longer break costs one rebuild like this.",
-        ),
+    let tools = if old_cli { "tools_old" } else { "tools" };
+    let key = match located {
+        Some(LocatedCause::PrefixRewritten { .. }) => "messages",
+        Some(LocatedCause::Expired { .. }) => "expired",
         Some(LocatedCause::ToolsChanged { .. }) => tools,
-        Some(LocatedCause::SystemChanged { .. }) => (
-            "the system prompt changed (a settings, CLAUDE.md or output-style edit)",
-            "Make such edits between sessions, not in the middle of one.",
-        ),
+        Some(LocatedCause::SystemChanged { .. }) => "system",
         Some(LocatedCause::ParamsChanged { field, .. }) => match *field {
-            "model" => MODEL,
-            "effort" => (
-                "the effort level changed",
-                "Set the effort at the start of a session, or right after /clear.",
-            ),
-            "betas" => (
-                "Claude Code's request features changed (an update or a feature toggle)",
-                "Update Claude Code between sessions.",
-            ),
-            _ => (
-                "a request setting changed",
-                "Keep request settings fixed within a session.",
-            ),
+            "model" => "model",
+            "effort" => "effort",
+            "betas" => "betas",
+            _ => "setting",
         },
         _ => match kind {
-            "model_changed" => MODEL,
+            "model_changed" => "model",
             "tools_changed" => tools,
-            _ => MESSAGES,
+            _ => "messages",
         },
-    }
+    };
+    (phrase("A01", "cause", key), phrase("A01", "habit", key))
 }
 
 /// The status line's own deltas for its last miss (`tools_added`,
@@ -1310,19 +1281,15 @@ impl Rule for AgentsWaste {
         a.retires_on = "the view opened or the waste share under 10 %";
         a.mark = state.agents_view_opens;
         let why = match top {
-            crate::agent_ledger::WasteReason::Failed => ("agent that failed", "agents that failed"),
-            crate::agent_ledger::WasteReason::Killed => {
-                ("agent that was stopped", "agents that were stopped")
-            }
-            crate::agent_ledger::WasteReason::NoReturn => (
-                "agent that returned nothing",
-                "agents that returned nothing",
-            ),
-            crate::agent_ledger::WasteReason::Idle => (
-                "agent that went quiet mid-run",
-                "agents that went quiet mid-run",
-            ),
+            crate::agent_ledger::WasteReason::Failed => "failed",
+            crate::agent_ledger::WasteReason::Killed => "killed",
+            crate::agent_ledger::WasteReason::NoReturn => "no_return",
+            crate::agent_ledger::WasteReason::Idle => "idle",
         };
+        let why = (
+            phrase("A48", "why_one", why),
+            phrase("A48", "why_many", why),
+        );
         a.hole("total", money(t.cost.usd));
         a.hole("waste", money(t.waste_usd));
         a.hole("share", percent(waste_ratio(&t) * 100.0));
@@ -3204,11 +3171,7 @@ impl Rule for ContextCost {
         a.hole("next30", money(g.next_30_calls));
         a.hole(
             "when",
-            if clean {
-                "This is a clean stop"
-            } else {
-                "At the next clean stop"
-            },
+            phrase("A23", "when", if clean { "clean" } else { "not_clean" }),
         );
         Some(a)
     }

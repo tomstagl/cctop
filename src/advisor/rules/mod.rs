@@ -22,6 +22,92 @@ pub fn all() -> Vec<Box<dyn Rule>> {
     v
 }
 
+/// A small fixed phrase a rule chooses in code and puts into a `{hole}` of
+/// its words: listed here, in one table, so that `docs/coach-copy.md` shows
+/// every word the person reads (mod-pane PRD US-013).
+pub struct Phrase {
+    pub rule: &'static str,
+    /// The hole (or part of it) the phrase fills.
+    pub slot: &'static str,
+    /// Which case picks it.
+    pub key: &'static str,
+    pub text: &'static str,
+}
+
+const fn p(
+    rule: &'static str,
+    slot: &'static str,
+    key: &'static str,
+    text: &'static str,
+) -> Phrase {
+    Phrase {
+        rule,
+        slot,
+        key,
+        text,
+    }
+}
+
+pub const PHRASES: &[Phrase] = &[
+    // A01: what changed (`cause`) and the habit that avoids it next time.
+    p("A01", "cause", "model", "the model changed"),
+    p("A01", "habit", "model", "Pick the model at the start of a task, or switch right after /clear while the context is small."),
+    p("A01", "cause", "messages", "an earlier message changed (a rewind or an edited turn)"),
+    p("A01", "habit", "messages", "Steering forward with a new message is cheaper than rewriting an earlier one."),
+    p("A01", "cause", "expired", "the cache had expired between turns"),
+    p("A01", "habit", "expired", "Replies within the cache's lifetime keep it warm; a longer break costs one rebuild like this."),
+    p("A01", "cause", "tools", "the tool list changed: an MCP server connected or Claude loaded a deferred tool"),
+    p("A01", "habit", "tools", "Next time, connect the tools you need early in the session, then leave the list alone."),
+    p("A01", "cause", "tools_old", "the tool list changed: an MCP server connected or Claude loaded a deferred tool"),
+    p("A01", "habit", "tools_old", "This Claude Code is older than 2.1.267 and rebuilds the list often: run claude update."),
+    p("A01", "cause", "system", "the system prompt changed (a settings, CLAUDE.md or output-style edit)"),
+    p("A01", "habit", "system", "Make such edits between sessions, not in the middle of one."),
+    p("A01", "cause", "effort", "the effort level changed"),
+    p("A01", "habit", "effort", "Set the effort at the start of a session, or right after /clear."),
+    p("A01", "cause", "betas", "Claude Code's request features changed (an update or a feature toggle)"),
+    p("A01", "habit", "betas", "Update Claude Code between sessions."),
+    p("A01", "cause", "setting", "a request setting changed"),
+    p("A01", "habit", "setting", "Keep request settings fixed within a session."),
+    // A23: how the sentence opens.
+    p("A23", "when", "clean", "This is a clean stop"),
+    p("A23", "when", "not_clean", "At the next clean stop"),
+    // A41: what Claude is waiting on, and what to do about it.
+    p("A41", "what", "question", "Claude asked a question"),
+    p("A41", "what", "permission", "A permission dialog opened"),
+    p("A41", "what", "notification", "Claude asked for your input"),
+    p("A41", "what", "asked", "The turn ended with a question"),
+    p("A41", "what", "elicitation", "An MCP server asked you something"),
+    p("A41", "hint", "permission", "Approve, deny, or choose 'always' for this kind of command."),
+    p("A41", "hint", "other", "A one-word reply is enough; /btw asks a side question first if you need a detail."),
+    // A42: why this is a moment to start fresh.
+    p("A42", "why", "task_done", "A task just completed"),
+    p("A42", "why", "done_prompt", "You said the work is done"),
+    p("A42", "why", "question_ended", "The turn ended with a question"),
+    // A48: the reason agents' work did not come back (one, and counted).
+    p("A48", "why_one", "failed", "agent that failed"),
+    p("A48", "why_many", "failed", "agents that failed"),
+    p("A48", "why_one", "killed", "agent that was stopped"),
+    p("A48", "why_many", "killed", "agents that were stopped"),
+    p("A48", "why_one", "no_return", "agent that returned nothing"),
+    p("A48", "why_many", "no_return", "agents that returned nothing"),
+    p("A48", "why_one", "idle", "agent that went quiet mid-run"),
+    p("A48", "why_many", "idle", "agents that went quiet mid-run"),
+];
+
+/// The phrase a rule picks for `slot` in the case `key`.
+pub fn phrase(rule: &str, slot: &str, key: &str) -> &'static str {
+    match PHRASES
+        .iter()
+        .find(|p| p.rule == rule && p.slot == slot && p.key == key)
+    {
+        Some(p) => p.text,
+        None => {
+            debug_assert!(false, "no phrase {rule} {slot} {key}");
+            ""
+        }
+    }
+}
+
 /// Explanation shown for `Enter` / `e` on an advice.
 pub fn explain(doc_key: &str) -> &'static str {
     match doc_key {

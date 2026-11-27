@@ -357,6 +357,17 @@ pub const CACHE_COUNTDOWN_5M: Threshold = Threshold {
     source: "registry coach_cache (the last 2 min of a 5 m entry); coach PRD §5.2 A19",
 };
 
+pub const COST_CAUSE_SHARE: Threshold = Threshold {
+    chart: "cost_per_turn",
+    id: "cost_cause_share",
+    measure: "share of the last two turns' cost that agents or rebuilds must account for to be named the cause, else the context",
+    unit: "ratio",
+    dir: Dir::Above,
+    watch: Some(0.5),
+    act: None,
+    source: "drafted: at least half of the cost is what the sentence names; the larger of agents and rebuilds wins",
+};
+
 /// Every threshold, one row each: the table `docs/verdicts.md` is made of.
 pub const THRESHOLDS: &[Threshold] = &[
     CTX_TURNS_LEFT,
@@ -374,6 +385,7 @@ pub const THRESHOLDS: &[Threshold] = &[
     SPEND_JUMP_FROM,
     COST_TURN_RATIO,
     COST_TURN_FLOOR,
+    COST_CAUSE_SHARE,
     CACHE_HIT,
     CACHE_COUNTDOWN_1H,
     CACHE_COUNTDOWN_5M,
@@ -840,16 +852,17 @@ impl CostTurnFacts {
     }
 
     /// The cause of the `turns`' cost: agents or rebuilds when either is at
-    /// least half of it (the larger wins), else the context.
+    /// least [`COST_CAUSE_SHARE`] of it (the larger wins), else the context.
     pub fn cause(&self, turns: &[(usize, f64)]) -> Cause {
         let total: f64 = turns.iter().map(|(_, c)| *c).sum();
         let sum = |m: &std::collections::BTreeMap<usize, f64>| -> f64 {
             turns.iter().filter_map(|(t, _)| m.get(t)).sum()
         };
         let (a, r) = (sum(&self.agents), sum(&self.rebuilds));
-        if a >= r && a > 0.0 && a >= total / 2.0 {
+        let share = gate(&COST_CAUSE_SHARE);
+        if a >= r && a > 0.0 && a >= total * share {
             Cause::Agents(a)
-        } else if r > 0.0 && r >= total / 2.0 {
+        } else if r > 0.0 && r >= total * share {
             Cause::Rebuilds(r)
         } else {
             Cause::Context
