@@ -2,7 +2,7 @@
 // dependency (no @types/node) and tsconfig has `types: []`, so the two Node
 // modules the tests import are declared here with just the shape they use.
 declare module 'node:test' {
-  type TestFn = (t: { name: string }) => void | Promise<void>;
+  type TestFn = (t: { name: string; diagnostic(message: string): void }) => void | Promise<void>;
   export function test(name: string, fn: TestFn): void;
   export function describe(name: string, fn: () => void): void;
   export function it(name: string, fn: TestFn): void;
