@@ -62,29 +62,6 @@ fn cells_of(spans: &[Span]) -> usize {
     spans.iter().map(|s| s.content.chars().count()).sum()
 }
 
-/// The header facts with as many workspace items as fit `room`: the items
-/// are the tail of `line`, in priority order, and are dropped from the
-/// right, so `remote` goes first and the repo last.
-fn fit_workspace(line: &str, items: &[String], room: usize) -> String {
-    let tail = if items.is_empty() {
-        String::new()
-    } else {
-        format!(" · {}", items.join(" · "))
-    };
-    let base = line.strip_suffix(tail.as_str()).unwrap_or(line);
-    for n in (0..=items.len()).rev() {
-        let mut out = base.to_string();
-        for i in &items[..n] {
-            out.push_str(" · ");
-            out.push_str(i);
-        }
-        if out.chars().count() <= room || n == 0 {
-            return out;
-        }
-    }
-    base.to_string()
-}
-
 /// Row 1: ` cctop` bold, the session facts dim, the phase cell
 /// (`● WORKING 52:11`) right-aligned in its colour.
 fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
@@ -95,7 +72,7 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
     let facts_room = width.saturating_sub(8 + phase.chars().count() + 2);
-    let facts = fit_workspace(&facts, &d.header.workspace, facts_room);
+    let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
     let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count());
     let phase_style = match d.header.phase.glyph {

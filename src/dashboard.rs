@@ -161,7 +161,8 @@ pub struct Header {
     pub phase: PhaseCell,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
-    /// Appended to `line`; the TUI drops items from the right to fit.
+    /// Inside `line`, before the PR and the version; both surfaces drop
+    /// items from the right to fit (`fit_workspace`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub workspace: Vec<String>,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
@@ -347,14 +348,16 @@ fn header(state: &State, c: &Coach) -> Header {
     if let Some(t) = &team {
         parts.push(t.clone());
     }
+    // The workspace items come before the PR and the version, so a narrow
+    // row cuts those first (`fit_workspace` then drops items from the right).
+    let workspace = workspace_items(&state.status_facts);
+    parts.extend(workspace.iter().cloned());
     if let Some(n) = pr {
         parts.push(format!("PR #{n}"));
     }
     if !s.version.is_empty() {
         parts.push(format!("v{}", s.version));
     }
-    let workspace = workspace_items(&state.status_facts);
-    parts.extend(workspace.iter().cloned());
     Header {
         session: s.name.clone(),
         model: c.model.clone(),
@@ -379,6 +382,35 @@ fn header(state: &State, c: &Coach) -> Header {
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),
     }
+}
+
+/// The header facts (`line` without its `cctop  ` lead) with as many
+/// workspace items as leave the facts before them and those items within
+/// `room`: the items sit between the session facts and the PR / version,
+/// highest priority first, and are dropped from the right (`remote` first,
+/// the repo last). What follows them is cut by the caller's clip. The pane
+/// (`views/overview.tsx` `fitWorkspace`) mirrors this character for character.
+pub fn fit_workspace(facts: &str, items: &[String], room: usize) -> String {
+    if items.is_empty() {
+        return facts.to_string();
+    }
+    let mid = format!(" · {}", items.join(" · "));
+    let Some(at) = facts.rfind(&mid) else {
+        return facts.to_string();
+    };
+    let (base, after) = (&facts[..at], &facts[at + mid.len()..]);
+    for n in (0..=items.len()).rev() {
+        let mut out = base.to_string();
+        for i in &items[..n] {
+            out.push_str(" · ");
+            out.push_str(i);
+        }
+        if out.chars().count() <= room || n == 0 {
+            out.push_str(after);
+            return out;
+        }
+    }
+    facts.to_string()
 }
 
 /// The header's workspace items, highest priority first: `owner/name`,
@@ -1858,13 +1890,13 @@ mod tests {
         f.workspace = None;
         assert_eq!(workspace_items(&f), ["agent: reviewer", "remote"]);
         assert!(workspace_items(&Default::default()).is_empty());
-        // The line carries them after the other facts; the object lists them.
+        // The line carries them after the session facts, before the PR and version; the object lists them.
         let (mut s, e) = fixture_b();
         s.status_facts = facts_with_workspace();
         let h = snapshot(&s, &e).header;
         assert!(
-            h.line.ends_with(
-                "acme/shop · wt feat · +2 dirs · style Concise · agent: reviewer · remote"
+            h.line.contains(
+                " · acme/shop · wt feat · +2 dirs · style Concise · agent: reviewer · remote"
             ),
             "{}",
             h.line

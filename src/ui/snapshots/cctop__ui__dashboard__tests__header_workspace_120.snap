@@ -2,4 +2,4 @@
 source: src/ui/dashboard.rs
 expression: "header_row(&app, &d, w)"
 ---
- cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · PR #121 · v2.1.270    ● COMMITTING 8h 40m
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · acme/shop · wt feat…  ● COMMITTING 8h 40m

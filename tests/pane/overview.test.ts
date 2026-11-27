@@ -341,3 +341,28 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
     }
   }
 });
+
+// The status-bearing header (PRD 2): the TUI's `header_workspace_*` insta
+// snapshots (src/ui/snapshots/) hold the row `ui/dashboard.rs` draws for a
+// header whose line carries workspace items between the session facts and the
+// PR / version. The pane, given the same object, draws the same row at 80, 120
+// and 200 columns: items dropped from the right, the phase cell kept.
+test('a status-bearing header renders row-identical on both surfaces at 80, 120 and 200 columns', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  const model = build({ dashboard: dash });
+  const rows = new Map<number, string>();
+  for (const columns of [80, 120, 200]) {
+    const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', `cctop__ui__dashboard__tests__header_workspace_${columns}.snap`), 'utf8');
+    const tui = snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+    const pane = raw(model, columns)[0].replace(/\s+$/, '');
+    assert.equal(pane, tui, `${columns} columns`);
+    rows.set(columns, pane);
+  }
+  assert.match(rows.get(200) ?? '', /acme\/shop · wt feat · \+1 dir · style Concise · agent: reviewer · remote · PR #121 · v2\.1\.270/);
+  assert.match(rows.get(120) ?? '', /\/home\/user\/project · acme\/shop/);
+  assert.doesNotMatch(rows.get(120) ?? '', /remote/);
+});
