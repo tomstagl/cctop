@@ -127,6 +127,9 @@ pub fn decider_group(source: &str) -> &'static str {
 }
 
 /// Order the groups are shown in.
+/// A turn's hooks become an events row above this many milliseconds.
+pub const HOOK_ROW_MS: u64 = 500;
+
 pub const DECIDER_GROUPS: [&str; 5] = ["you", "rule", "classifier", "hook", "other"];
 
 /// The rule-shaped key of a permission prompt: `Bash(<argv0> <sub>)` for
@@ -589,6 +592,9 @@ pub struct State {
     pub context_view: ContextView,
     /// OpenTelemetry data for this session, when the receiver is running.
     pub otel: Option<crate::otel::SessionData>,
+    /// The `hooks +…` events row already shown per turn number (time, text),
+    /// so a later span replaces it instead of adding a second.
+    pub hook_rows: std::collections::HashMap<usize, (i64, String)>,
     /// Colours and glyphs for this terminal.
     pub theme: crate::theme::Theme,
     /// Session picker overlay (`L`).
@@ -1463,6 +1469,104 @@ impl State {
         self.tools.otel_durations = data.durations_by_tool();
         self.join_permission_spans(data);
         self.otel = Some(data.clone());
+        self.sync_hook_rows();
+    }
+
+    /// Hook time per turn and event, from `claude_code.hook` spans. A span
+    /// belongs to the turn whose start (the user line's timestamp) is the
+    /// latest one not after the span's start; spans before the first turn
+    /// are not assigned. Returns `(turn number, by_event ms, last span end ms)`.
+    pub fn hook_ms_by_turn(&self) -> Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> {
+        let Some(o) = &self.otel else {
+            return Vec::new();
+        };
+        let starts: Vec<(usize, i64)> = self
+            .agg
+            .turns
+            .iter()
+            .filter_map(|t| {
+                let at = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref()?)?;
+                Some((t.number, at))
+            })
+            .collect();
+        let mut out: Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> = Vec::new();
+        for sp in &o.spans {
+            let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            else {
+                continue;
+            };
+            let start_ms = (ids.start_ns / 1_000_000) as i64;
+            let Some((number, _)) = starts.iter().rev().find(|(_, at)| *at <= start_ms) else {
+                continue;
+            };
+            let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+            let end_ms = (ids.end_ns / 1_000_000) as i64;
+            let ev = hook_event.clone().unwrap_or_else(|| "other".into());
+            match out.iter_mut().find(|(n, _, _)| n == number) {
+                Some((_, m, e)) => {
+                    *m.entry(ev).or_default() += ms;
+                    *e = (*e).max(end_ms);
+                }
+                None => out.push((*number, [(ev, ms)].into(), end_ms)),
+            }
+        }
+        out
+    }
+
+    /// Session hook overhead for `cctop query dashboard`: `None` without
+    /// trace spans, else the total and the time per `hook_event`.
+    pub fn hook_overhead(&self) -> Option<(u64, std::collections::BTreeMap<String, u64>)> {
+        let o = self.otel.as_ref().filter(|o| !o.spans.is_empty())?;
+        let mut by: std::collections::BTreeMap<String, u64> = Default::default();
+        for sp in &o.spans {
+            if let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            {
+                let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+                *by.entry(hook_event.clone().unwrap_or_else(|| "other".into()))
+                    .or_default() += ms;
+            }
+        }
+        Some((by.values().sum(), by))
+    }
+
+    /// One `hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s` row per turn whose
+    /// hooks exceed 500 ms, events by descending time; replaced when more
+    /// hook time arrives for the same turn.
+    fn sync_hook_rows(&mut self) {
+        for (number, by, end_ms) in self.hook_ms_by_turn() {
+            let total: u64 = by.values().sum();
+            if total <= HOOK_ROW_MS {
+                continue;
+            }
+            let mut ev: Vec<(&String, &u64)> = by.iter().collect();
+            ev.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            let mut text = format!("hooks +{}", crate::ui::fmt::added_s(total));
+            for (name, ms) in ev {
+                text.push_str(&format!(" · {name} {}", crate::ui::fmt::added_s(*ms)));
+            }
+            if let Some((at, old)) = self.hook_rows.get(&number) {
+                if *at == end_ms && *old == text {
+                    continue;
+                }
+                self.events.remove(*at, crate::events::Kind::Hook, old);
+            }
+            self.events.push(crate::events::Event {
+                at: end_ms,
+                kind: crate::events::Kind::Hook,
+                text: text.clone(),
+            });
+            self.hook_rows.insert(number, (end_ms, text));
+        }
     }
 
     /// Permission spans hang under their tool span, which carries the
@@ -3387,6 +3491,118 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(s.turn_retries(&turn), None);
+    }
+
+    /// Two turns starting at 10:00:00 and 10:10:00 (2026-08-27 UTC), and a
+    /// `claude_code.hook` span of `ms` for `event` starting `at_s` seconds
+    /// after 10:00:00.
+    fn hooked_state() -> State {
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        for (t, id) in [("10:00:00", "p1"), ("10:10:00", "p2")] {
+            s.apply(&crate::transcript::Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"2026-08-27T{t}Z","promptId":"{id}","message":{{"role":"user","content":"go"}}}}"#
+            )).unwrap());
+        }
+        s
+    }
+
+    fn hook_span(event: &str, at_s: u64, ms: u64) -> crate::otel::Span {
+        // 2026-08-27T10:00:00Z in epoch seconds.
+        let base = crate::metrics::cost::parse_ts_ms("2026-08-27T10:00:00Z").unwrap() as u64;
+        let start_ns = (base + at_s * 1000) * 1_000_000;
+        crate::otel::Span::Hook {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("h-{event}-{at_s}"),
+                parent_span_id: None,
+                start_ns,
+                end_ns: start_ns + ms * 1_000_000,
+            },
+            hook_event: Some(event.into()),
+            hook_name: None,
+            num_hooks: Some(1),
+            duration_ms: Some(ms),
+            num_blocking: None,
+        }
+    }
+
+    fn apply_hooks(s: &mut State, spans: Vec<crate::otel::Span>) {
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+    }
+
+    fn hook_rows(s: &State) -> Vec<String> {
+        s.events
+            .iter()
+            .filter(|e| e.kind == crate::events::Kind::Hook)
+            .map(|e| e.text.clone())
+            .collect()
+    }
+
+    #[test]
+    fn hook_row_appears_at_501_ms_and_not_at_500() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 500)]);
+        assert!(hook_rows(&s).is_empty());
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 501)]);
+        assert_eq!(hook_rows(&s), ["hooks +0.5 s · Stop 0.5 s"]);
+    }
+
+    #[test]
+    fn hook_row_orders_events_by_descending_time_and_sums_per_turn() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 20, 300),
+                hook_span("PreToolUse", 5, 500),
+                hook_span("PreToolUse", 9, 400),
+                // second turn: under the threshold, no row
+                hook_span("Stop", 610, 400),
+            ],
+        );
+        assert_eq!(
+            hook_rows(&s),
+            ["hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s"]
+        );
+        let by = s.hook_ms_by_turn();
+        assert_eq!(by.len(), 2);
+        assert_eq!(by[0].0, 1);
+        assert_eq!(by[0].1["PreToolUse"], 900);
+        assert_eq!(by[1].1["Stop"], 400);
+    }
+
+    #[test]
+    fn hook_row_is_replaced_not_duplicated_when_more_time_arrives() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 600)]);
+        apply_hooks(
+            &mut s,
+            vec![hook_span("Stop", 5, 600), hook_span("Stop", 8, 600)],
+        );
+        assert_eq!(hook_rows(&s), ["hooks +1.2 s · Stop 1.2 s"]);
+    }
+
+    #[test]
+    fn hook_overhead_is_none_without_traces_and_sums_by_event_with_them() {
+        let mut s = hooked_state();
+        assert!(s.hook_overhead().is_none());
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, 300),
+                hook_span("Stop", 15, 200),
+                hook_span("Notification", 700, 50),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!(total, 550);
+        assert_eq!(by["Stop"], 500);
+        assert_eq!(by["Notification"], 50);
+        assert!(hook_rows(&s).is_empty());
     }
 
     #[test]
