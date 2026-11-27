@@ -705,6 +705,19 @@ pub fn dashboard(state: &State) -> Value {
             "metric_id": "thinking_dropped",
         });
     }
+    // Absent until an MCP server has asked the person something.
+    let ew = &state.elicitation_waits;
+    if ew.count > 0 || !state.elicitations.is_empty() {
+        v["elicitation_waits"] = json!({
+            "count": ew.count,
+            "total_wait_ms": ew.total_wait_ms,
+            "accept": ew.accept,
+            "decline": ew.decline,
+            "cancel": ew.cancel,
+            "open": state.elicitations.values().map(|q| q.len()).sum::<usize>(),
+            "metric_id": "elicitation_wait",
+        });
+    }
     v
 }
 
@@ -1338,6 +1351,29 @@ mod tests {
         );
         // Absent where nothing was dropped.
         assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_carries_elicitation_waits_only_once_a_server_asked() {
+        let mut state = State::new(crate::metrics::Pricing::bundled());
+        assert!(dashboard(&state).get("elicitation_waits").is_none());
+        let hook = |event: &str, at: i64, action: &str| crate::hooks::HookEvent {
+            at,
+            event: event.into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: json!({"mcp_server_name": "github", "action": action}),
+        };
+        state.apply_hook(&hook("Elicitation", 1_000, ""));
+        assert_eq!(dashboard(&state)["elicitation_waits"]["open"], 1);
+        state.apply_hook(&hook("ElicitationResult", 4_000, "accept"));
+        let v = &dashboard(&state)["elicitation_waits"];
+        assert_eq!(v["count"], 1);
+        assert_eq!(v["total_wait_ms"], 3_000);
+        assert_eq!(v["accept"], 1);
+        assert_eq!(v["open"], 0);
+        assert_eq!(v["metric_id"], "elicitation_wait");
     }
 
     #[test]

@@ -652,6 +652,7 @@ impl Rule for WaitingOnYou {
             WaitingKind::Permission => "a permission dialog is open",
             WaitingKind::Notification => "Claude needs your input",
             WaitingKind::Asked => "the turn ended with a question",
+            WaitingKind::Elicitation => "an MCP server asks you something",
         };
         let mut a = Advice::new("A41", "waiting", Urgency::Now);
         a.headline = format!("◆ WAITING {} · {what}", crate::coach::short_duration(since));

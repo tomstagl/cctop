@@ -825,10 +825,11 @@ fn act(state: &State, c: &Coach) -> Act {
         use crate::ui::state::WaitingKind;
         let since = coach::short_duration(state.clock_ms() - w.since_ms);
         let what = match w.kind {
-            WaitingKind::Permission => "permission prompt open",
-            WaitingKind::Question => "Claude asked a question",
-            WaitingKind::Notification => "Claude needs your input",
-            WaitingKind::Asked => "Claude asked, no reply yet",
+            WaitingKind::Permission => "permission prompt open".to_string(),
+            WaitingKind::Question => "Claude asked a question".to_string(),
+            WaitingKind::Notification => "Claude needs your input".to_string(),
+            WaitingKind::Asked => "Claude asked, no reply yet".to_string(),
+            WaitingKind::Elicitation => crate::coach::elicitation_text(state),
         };
         return Act {
             key: 'a',

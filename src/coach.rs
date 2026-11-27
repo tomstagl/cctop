@@ -187,6 +187,16 @@ pub fn usd_short(v: f64) -> String {
 }
 
 /// Minutes-first duration: `41m`, `2h10`, `4:12` under five minutes.
+/// `waiting on you · MCP <server> asks` (the server with the oldest open
+/// prompt, clipped), the one text the turn panel, the dashboard and the
+/// pane's header all read.
+pub fn elicitation_text(state: &State) -> String {
+    format!(
+        "waiting on you · MCP {} asks",
+        crate::ui::fmt::clip(state.open_elicitation().map_or("", |(s, _)| s), 24)
+    )
+}
+
 pub fn short_duration(ms: i64) -> String {
     let s = ms.max(0) / 1000;
     if s < 300 {
@@ -1095,6 +1105,7 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
             WaitingKind::Question => "Claude asked a question".into(),
             WaitingKind::Notification => "Claude needs your input".into(),
             WaitingKind::Asked => "Claude asked, no reply yet".into(),
+            WaitingKind::Elicitation => elicitation_text(state),
         });
     } else if turn_running(state) {
         let phase = state

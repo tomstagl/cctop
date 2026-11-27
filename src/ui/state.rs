@@ -299,6 +299,19 @@ pub enum WaitingKind {
     Notification,
     /// The turn ended with a question mark and nothing came back.
     Asked,
+    /// An MCP server's elicitation prompt is open (`State::elicitations`).
+    Elicitation,
+}
+
+/// Elicitation prompts that were answered: how many, how long the person
+/// took, and how each ended.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ElicitationWaits {
+    pub count: usize,
+    pub total_wait_ms: i64,
+    pub accept: usize,
+    pub decline: usize,
+    pub cancel: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -441,6 +454,12 @@ pub struct State {
     /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
     hook_pre: std::collections::HashMap<String, i64>,
     hook_perm: std::collections::HashMap<String, i64>,
+    /// Open MCP elicitation prompts: when each was raised (epoch ms), oldest
+    /// first, per server. An `ElicitationResult` pops the server's oldest;
+    /// `Stop` and `UserPromptSubmit` clear them all.
+    pub elicitations: std::collections::BTreeMap<String, std::collections::VecDeque<i64>>,
+    /// The completed prompts' accounting.
+    pub elicitation_waits: ElicitationWaits,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -933,7 +952,52 @@ impl State {
                     text: crate::ui::fmt::clip(&msg, 80),
                 });
             }
+            "Elicitation" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                self.elicitations
+                    .entry(server.clone())
+                    .or_default()
+                    .push_back(at);
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("MCP {server} asks"),
+                });
+            }
+            "ElicitationResult" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                let action = pstr("action").unwrap_or_default();
+                let opened = self
+                    .elicitations
+                    .get_mut(&server)
+                    .and_then(|q| q.pop_front());
+                if self.elicitations.get(&server).is_some_and(|q| q.is_empty()) {
+                    self.elicitations.remove(&server);
+                }
+                let w = &mut self.elicitation_waits;
+                w.count += 1;
+                w.total_wait_ms += opened.map_or(0, |o| (at - o).max(0));
+                match action.as_str() {
+                    "accept" => w.accept += 1,
+                    "decline" => w.decline += 1,
+                    "cancel" => w.cancel += 1,
+                    _ => {}
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!(
+                        "MCP {server} {}",
+                        if action.is_empty() {
+                            "answered"
+                        } else {
+                            action.as_str()
+                        }
+                    ),
+                });
+            }
             "UserPromptSubmit" => {
+                self.elicitations.clear();
                 self.session.notification = None;
                 self.events.push(crate::events::Event {
                     at,
@@ -978,6 +1042,7 @@ impl State {
                 });
             }
             "Stop" => {
+                self.elicitations.clear();
                 self.session.background_tasks = p
                     .get("background_tasks")
                     .and_then(|v| v.as_array())
@@ -1927,6 +1992,15 @@ impl State {
             .count()
     }
 
+    /// The server with the oldest open elicitation prompt, and when it was
+    /// raised.
+    pub fn open_elicitation(&self) -> Option<(&str, i64)> {
+        self.elicitations
+            .iter()
+            .filter_map(|(server, q)| q.front().map(|at| (server.as_str(), *at)))
+            .min_by_key(|(_, at)| *at)
+    }
+
     /// What the model is waiting on, if anything.
     pub fn waiting(&self) -> Option<Waiting> {
         if self.session.permission_pending {
@@ -1936,6 +2010,12 @@ impl State {
                     .session
                     .permission_waiting_since_ms
                     .unwrap_or(self.clock_ms()),
+            });
+        }
+        if self.open_elicitation().is_some() {
+            return Some(Waiting {
+                kind: WaitingKind::Elicitation,
+                since_ms: self.open_elicitation().map_or(0, |(_, at)| at),
             });
         }
         if let Some(c) = self.tools.running() {

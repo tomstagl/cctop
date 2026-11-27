@@ -695,6 +695,69 @@ mod state_tests {
     }
 
     #[test]
+    fn mcp_prompts_wait_fifo_per_server_and_are_counted_by_action() {
+        use crate::ui::state::WaitingKind;
+        let mut s = State::new(Pricing::bundled());
+        let el = |event: &str, at: i64, server: &str, action: &str| {
+            with(
+                event,
+                at,
+                "",
+                serde_json::json!({"mcp_server_name": server, "action": action}),
+            )
+        };
+        assert!(s.waiting().is_none());
+        s.apply_hook(&el("Elicitation", 1_000, "github", ""));
+        s.apply_hook(&el("Elicitation", 5_000, "linear", ""));
+        s.apply_hook(&el("Elicitation", 9_000, "github", ""));
+        let w = s.waiting().unwrap();
+        assert_eq!((w.kind, w.since_ms), (WaitingKind::Elicitation, 1_000));
+        assert_eq!(s.open_elicitation(), Some(("github", 1_000)));
+        // Review Focus 1: the result pops github's OLDEST prompt; its second
+        // stays open, and the oldest open is now linear's.
+        s.apply_hook(&el("ElicitationResult", 11_000, "github", "accept"));
+        assert_eq!(s.open_elicitation(), Some(("linear", 5_000)));
+        assert_eq!(s.elicitations["github"].len(), 1);
+        // Review Focus 2: a result for the other server leaves github's open.
+        s.apply_hook(&el("ElicitationResult", 12_000, "linear", "decline"));
+        assert_eq!(s.open_elicitation(), Some(("github", 9_000)));
+        assert!(!s.elicitations.contains_key("linear"));
+        s.apply_hook(&el("ElicitationResult", 20_000, "github", "cancel"));
+        assert!(s.waiting().is_none());
+        let w = s.elicitation_waits;
+        assert_eq!((w.count, w.accept, w.decline, w.cancel), (3, 1, 1, 1));
+        // 10 s + 7 s + 11 s
+        assert_eq!(w.total_wait_ms, 28_000);
+        // A result with nothing open counts the action but no wait.
+        s.apply_hook(&el("ElicitationResult", 30_000, "ghost", "accept"));
+        assert_eq!(s.elicitation_waits.total_wait_ms, 28_000);
+        assert!(s.waiting().is_none());
+    }
+
+    #[test]
+    fn stop_and_the_next_prompt_clear_every_open_mcp_prompt() {
+        for closer in ["Stop", "UserPromptSubmit"] {
+            let mut s = State::new(Pricing::bundled());
+            s.apply_hook(&with(
+                "Elicitation",
+                1_000,
+                "",
+                serde_json::json!({"mcp_server_name": "a"}),
+            ));
+            s.apply_hook(&with(
+                "Elicitation",
+                2_000,
+                "",
+                serde_json::json!({"mcp_server_name": "b"}),
+            ));
+            assert!(s.waiting().is_some());
+            s.apply_hook(&ev(closer, 3_000, ""));
+            assert!(s.waiting().is_none(), "{closer}");
+            assert_eq!(s.elicitation_waits.count, 0, "cleared, not completed");
+        }
+    }
+
+    #[test]
     fn every_field_of_the_spool_lands_in_state() {
         use crate::metrics::usage::BoundaryKind;
         let mut s = State::new(Pricing::bundled());
