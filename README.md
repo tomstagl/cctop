@@ -57,7 +57,25 @@ Claude Code as a panel when the build supports it, otherwise attached as a
   14:46  tool    TaskUpdate completed ▶
 ```
 
-Claude Code keeps running in the left pane; `cctop` attaches to it from the right. A header that never moves and one body that fills the rest: the identity line with the phase cell (`● COMMITTING 8h 40m`) at the right; six cells — context, limits, cache, spend, work, tools — three per row from 80 columns and two below, each a target whose digit opens its body in place; the act line, the coach's slot, wrapped rather than cut, `a` for the advisor; the rule line naming the open body, `0` the way home, `?` its key map; then the body — `1` above opens the context body, the five slices of the window as bars in order of what you can do about them, the counters and what the light says; `4` the spend with its provenance and the token mix; `6` the by-tool table with the agents and the team. `Enter` opens the body's full-screen panel (`Esc` back), and inside a panel the digits `1`–`9` still switch panels: inside panels 1 and 2 `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
+Claude Code keeps running in the left pane; `cctop` attaches to it from the right. A header that never moves and one body that fills the rest: the identity line with the phase cell (`● COMMITTING 8h 40m`) at the right; six cells — context, limits, cache, spend, work, tools — three per row from 80 columns and two below, each a target whose digit opens its body in place; the act line, the coach's slot, wrapped rather than cut, `a` for the advisor; the rule line naming the open body, `0` the way home, `?` its key map; then the body — `1` above opens the overview, the same five charts the pane draws (`cctop query overview`) — context across the width, then spend beside cost per turn, then the cache beside the tool calls, each with its verdict and the one thing to do, wrapped rather than cut (retries, the located rebuilds and the `/context` composition appear when the session has them); it scrolls with `j`/`k` and `PgUp`/`PgDn`; `4` the spend with its provenance and the token mix; `6` the by-tool table with the agents and the team. `Enter` opens the body's full-screen panel (`Esc` back), and inside a panel the digits `1`–`9` still switch panels: inside panels 1 and 2 `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
+
+## Best look
+
+The pane and the terminal view draw their charts in cells, and the pane draws them as pictures where the terminal can show them. Two terminal settings make both look as designed.
+
+**Ghostty** (`~/.config/ghostty/config`):
+
+```
+font-family = JetBrains Mono
+font-size = 13
+adjust-cell-height = 23%
+```
+
+**Terminal.app**: SF Mono Regular, 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
+
+**Which terminals show pictures.** kitty, Ghostty, WezTerm and iTerm2 3.5+ show the pane's charts as images; inside tmux only with passthrough on (`set -g allow-passthrough on`). Terminal.app and the VS Code terminal show the same charts as cells, character for character what the terminal view draws. `CCTOP_PANE_CHARTS=image|cells` forces one or the other, and `charts = "auto" | "image" | "cells"` under `[pane]` in `~/.cctop/config.toml` sets the default (the environment variable wins). No chart carries text inside the picture: labels are terminal text beside it.
+
+In the pane, `a` opens the act dialog (the items on the left, the selected one's detail on the right), notes and misses are placed in the transcript where they happened for as long as the session runs, and a fix prompt only ever goes into an empty prompt box: it never replaces a draft and is never sent.
 
 ## Two ways to see it
 

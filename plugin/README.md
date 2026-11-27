@@ -43,6 +43,7 @@ between the last contract change and the next one:
 | 0.9.0 | 2.1.278 | 2.1.269 – 2.1.284 (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next` and four events, and re-typed `$.fs.read` (a bytes form) and `$.prompt.fill`'s result — additive, nothing the pane calls moved); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
 | 0.10.0 | 2.1.284 | 2.1.269 – 2.1.284 (`$.process.spawn`, truncation flags on `$.process.run`'s result, `startedAt` on `$.session.usage()`, and `$.ui.open` resolving whether the pane was placed — additive; the poller's engine facade now takes `run` alone from `$.process`, so the new `spawn` is not required of it); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) |
 | 0.11.0 | 2.1.332 | 2.1.332 and later, as far as CI has seen (the validator type-checks with `noUncheckedIndexedAccess`, and `e.props.placement` gained `widget`, laid out as inline); says so at session start (`cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok`) |
+| 0.12.0 | 2.1.332 | 2.1.332 and later, as far as CI has seen (additive: `$.wasm.compile` for the bundled `charts.wasm`, the `Image` and `Raster` elements for the charts, `$.ui.place` for rows placed in the transcript, the `$.ui.open` dialog for the act dialog, and `$.prompt.read` before every `$.prompt.fill`); says so at session start (`cctop: plugin 0.12.0 (hooks contract 2.1.332) loaded; self-check ok`) |
 
 Function hooks are early access and change between Claude Code releases.
 CI checks the contract against the latest release daily
@@ -90,6 +91,17 @@ when a light's level or the nudge changes.
 `/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
 of `coach`, `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or
 closes it; with no argument it toggles.
+
+### Best look
+
+Terminal settings that make the pane look as designed:
+
+- **Ghostty**: `font-family = JetBrains Mono`, `font-size = 13`, `adjust-cell-height = 23%`.
+- **Terminal.app**: SF Mono Regular 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
+
+**Pictures or cells.** The Overview's charts are drawn as pictures (`Image`, rendered by the bundled `charts.wasm`) on kitty, Ghostty, WezTerm and iTerm2 3.5+, and in tmux only with passthrough on (`set -g allow-passthrough on`). Terminal.app and the VS Code terminal show cells (a `Raster`), the same characters the terminal view draws. `CCTOP_PANE_CHARTS=image|cells` forces one, and `[pane] charts = "auto" | "image" | "cells"` in `~/.cctop/config.toml` sets the default; the variable wins. There is no text inside any picture: labels are terminal text beside it.
+
+**The act dialog, placed rows, fills.** `a` opens the act dialog (`$.ui.open`): the items on the left, the selected one's detail on the right; a settings change is shown as the line to add, copied and the file opened, never written. Notes and misses are placed in the transcript where they happened (`$.ui.place`, display only; they are gone after `--resume`). A fill (`$.prompt.fill`, after `$.prompt.read`) goes only into an empty prompt box: a draft is never replaced, and nothing is submitted.
 
 ### Switching views
 

@@ -463,27 +463,41 @@ tr:target td{background:var(--spot-soft)}
         <h3>Inside Claude Code, above the prompt</h3>
         <p>On a Claude Code build with function hooks enabled, the dashboard docks inside Claude Code itself, drawn in its own frame and colours — no multiplexer needed. Seven views: the Overview (Console, Fig. 2 — the cells, the act line and home are Claude Code's own clickable chrome), the Coach, then Tools, Agents, Files, Events and the Advisor. The Coach view is the same card the terminal's <kbd>c</kbd> shows, with buttons: <code>fill</code> writes the nudge's action into your prompt box — nothing is ever submitted for you — <code>snooze</code> and <code>why</code> do what the keys do. The coach's one-line form sits under the prompt. Click a view name in the top row, or give the pane the keyboard with <kbd>ctrl</kbd>+<kbd>x</kbd> <kbd>Tab</kbd>.</p>
         <figure><div class="term"><pre>╭<span class="t">coach</span> ─ opus-5 · turn 5 ──────────────────────────────────╮
-│ PLANNING · 5c +490 · silent 13m · ▸ steer window         │
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · …     │
 │ ──────────────────────────────────────────────────────── │
-│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call              │
-│ ○ cache    warm 1h00 (1h) ≈                              │
-│ ○ limits   — no status line                              │
-│ ● rework   4 blocked · edits 3 ✓ none 18m                │
-│ ──────────────────────────────────────────────────────── │
-│ ▸ rm is denied by your rules                             │
-│   tell Claude the alternative — it cannot run this       │
-│   NOW · fired at call 6 · +4 queued (n)                  │
+│  NOW  A command keeps being blocked    7m ago · rule A45 │
+│ rm is denied by your rules                               │
 │                                                          │
-│ next     context-reset → next-row only · ctx 720k →…     │
-│ snoozed  —                                               │
+│ rm is denied by a permissions.deny rule in your          │
+│ settings, so Claude cannot run it however it tries. Tell │
+│ it the alternative, or what you need instead.            │
+│                                                          │
+│ · a permissions.deny rule in settings                    │
+│                                                          │
+│ Fix it with this prompt · click to put it in your prompt │
+│ box                                                      │
+│ ↵ You can&#x27;t run `rm` here (it&#x27;s denied by my settings).  │
+│   Use another way or tell me what you need.              │
+│                                                          │
+│ 1: Put the fix prompt in the box  2: Snooze              │
+│ goes away at the end of the turn                         │
 ╰──────────────────────────────────────────────────────────╯
-[1 fill] [2 snooze] [3 why]
-╭<span class="t">● rework</span> ─ transcript ────────────────────────────────────╮
-│ last check `python3 - lorem_i lorem…` ok 19m ago         │
-│ fails: Denied 4 · Other 2                                │
-│ rewind 1 checkpoints this turn                           │
+╭Up next ─ click a row to open it ─────────────────────────╮
+│ NEXT  The context is getting expensive                 › │
+│       ctx 720k → ≈$.37/call, ≈$5.6/turn (was ≈$.96)      │
 ╰──────────────────────────────────────────────────────────╯
-[◐ context] [○ cache] [○ limits]  ● rework</pre></div><figcaption><b>Fig. 3</b>The Coach view of the docked panel: the state line, four lights, the nudge with its buttons, and the detail frame of the highest light.</figcaption></figure>
+╭Session ─ click a row for the detail ─────────────────────╮
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call            › │
+│ ○ cache    warm 1h00 (1h) ≈                            › │
+│ ○ limits   — no status line                            › │
+│ ● rework   4 blocked · edits 3 ✓ none 18m              ▾ │
+│   last check `python3 - lorem_i lorem…` ok 19m ago       │
+│   fails: Denied 4 · Other 2                              │
+│   rewind 1 checkpoints this turn                         │
+│   from the transcript                                    │
+╰──────────────────────────────────────────────────────────╯
+spent so far ≈$19.26 · what this session would cost at API
+prices</pre></div><figcaption><b>Fig. 3</b>The Coach view of the docked panel: the state line, four lights, the nudge with its buttons, and the detail frame of the highest light.</figcaption></figure>
       </div>
       <div>
         <span class="eyebrow">Terminal split</span>
