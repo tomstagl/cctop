@@ -143,6 +143,10 @@ impl HookEvent {
                         .map_or(0, |p| p.len());
                     o.insert("schema_fields".into(), Value::from(n));
                 }
+                // A URL-mode prompt's link can carry a token: only its presence stays.
+                if let Some(url) = o.remove("url") {
+                    o.insert("has_url".into(), Value::Bool(!url.is_null()));
+                }
             }
             if event == "ElicitationResult" {
                 let n = o
@@ -437,9 +441,12 @@ mod tests {
         let line = |ev: &HookEvent| serde_json::to_string(ev).unwrap();
         let ev = HookEvent::from_stdin(1, serde_json::json!({
             "session_id":"s","hook_event_name":"Elicitation","mcp_server_name":"srv","message":"SECRET-MSG please","mode":"form","elicitation_id":"e1",
-            "requested_schema":{"type":"object","properties":{"a":{"description":"SECRET-SCHEMA"},"b":{}}}
+            "requested_schema":{"type":"object","properties":{"a":{"description":"SECRET-SCHEMA"},"b":{}}},
+            "url":"https://x.example/auth?t=SECRET-TOKEN"
         })).unwrap();
         assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(ev.payload["has_url"], true);
+        assert!(ev.payload.get("url").is_none());
         assert_eq!(ev.payload["message_chars"], 17);
         assert_eq!(ev.payload["schema_fields"], 2);
         assert_eq!(ev.payload["mcp_server_name"], "srv");
