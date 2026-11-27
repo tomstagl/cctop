@@ -94,14 +94,15 @@ Layout mirrors `~/.claude`:
   `--lines 20` it is the closed attempt, at `--lines 27` the first response
   that reopens the turn.
 
-- `session-r.jsonl` — the request-ledger fixture (431 lines, Claude Code
-  2.1.326): a whole short session whose transcript carries the three request
-  lines (26 `api-request`, 2 `api-request-shape`, 13 `api-request-blob`). Two
-  events the ledger locates are in it: a main-thread `shapeHash` change at
-  line 85 (`api-request` whose shape, line 81, differs from the one lines 36
-  and 66 used) and a `keep` drop at line 256 (`keep`
-  48 where the previous request, line 250, had `keep 47` + 3 new messages = 50:
-  a prefix rewritten from message 48 of 50). The anonymiser fills the
+- `session-r.jsonl` — the request-ledger fixture (577 lines, Claude Code
+  2.1.310): a session whose transcript carries the three request lines and
+  three real cache misses, located by `requests.rs` (prefix shrank by 20 k or
+  more, previous request = the last paired main-thread request): a
+  `shapeHash` change at about line 118 (a tool added or removed:
+  `tools_changed`), a params change at about line 519 (`params_changed`), and
+  one with no changed setting, shape or prefix at about line 565 (`expired`:
+  the gap passed the TTL). `PrefixRewritten` is covered by a synthetic unit
+  test only. The anonymiser fills the
   shapes' `system[].text`, tool `description` and `input_schema` strings and
   the blobs' content with same-length filler (uncapped, because the lines are
   read for their sizes; `--max-str` still caps the rest of the transcript),
@@ -196,8 +197,7 @@ python3 scripts/anonymise-transcript.py <session> fixtures/session-e.jsonl --max
 ```
 
 To rebuild `session-r.jsonl` (the source is any session of 2.1.302 or later
-with a main-thread `shapeHash` change and a `keep` drop; this one is the
-smallest of the sessions that had both):
+with real cache misses: a main-thread `shapeHash` change, a params change):
 
 ```
 python3 scripts/anonymise-transcript.py <session>.jsonl fixtures/session-r.jsonl --max-str 2000
