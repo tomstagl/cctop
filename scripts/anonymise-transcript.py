@@ -28,6 +28,8 @@ Shapes the parsers classify are preserved without their content:
 - Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
   17-hex strings Claude Code made up, so they stay as they are: the
   transcript file name, the launch result and the notification must agree.
+- The keys of a `file-history-snapshot`'s `trackedFileBackups` are file
+  paths and are rewritten like a path value (extension kept).
 - A `thinking_drop` attachment keeps its counts, `reason`, `reasonCounts`,
   `clientChange.kinds` (Claude Code's own words), `firstChangedMessageIndex`
   and `callNumber`; `blockHashes`, `newlyDropped.first` / `last` and
@@ -584,6 +586,9 @@ def anon(v, key=None, parent=None):
     if isinstance(v, dict):
         if isinstance(v.get("name"), str) and "input_schema" in v:
             return anon_tool(v)  # a tool definition anywhere (an attachment's surfaced one)
+        if key == "trackedFileBackups":
+            # a snapshot's map is keyed by file path: rewrite the keys like a path value
+            return {anon_path(k): anon(x, k, v) for k, x in v.items()}
         return {k: anon(x, k, v) for k, x in v.items()}
     if isinstance(v, list):
         return [anon(x, key, parent) for x in v]
