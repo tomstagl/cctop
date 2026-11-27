@@ -728,9 +728,13 @@ mod state_tests {
         assert_eq!((w.count, w.accept, w.decline, w.cancel), (3, 1, 1, 1));
         // 10 s + 7 s + 11 s
         assert_eq!(w.total_wait_ms, 28_000);
-        // A result with nothing open counts the action but no wait.
+        // A result with nothing open counts as nothing.
         s.apply_hook(&el("ElicitationResult", 30_000, "ghost", "accept"));
         assert_eq!(s.elicitation_waits.total_wait_ms, 28_000);
+        assert_eq!(
+            (s.elicitation_waits.count, s.elicitation_waits.accept),
+            (3, 1)
+        );
         assert!(s.waiting().is_none());
     }
 
@@ -754,6 +758,37 @@ mod state_tests {
             s.apply_hook(&ev(closer, 3_000, ""));
             assert!(s.waiting().is_none(), "{closer}");
             assert_eq!(s.elicitation_waits.count, 0, "cleared, not completed");
+        }
+    }
+
+    #[test]
+    fn the_mcp_waiting_line_is_the_same_text_on_every_surface_and_fits_the_width() {
+        let long = "m".repeat(40);
+        for server in ["github", long.as_str()] {
+            let mut s = State::new(Pricing::bundled());
+            s.apply_hook(&with(
+                "Elicitation",
+                1_000,
+                "",
+                serde_json::json!({"mcp_server_name": server}),
+            ));
+            let act = crate::dashboard::text_of(
+                &crate::dashboard::snapshot(&s, &crate::advisor::Engine::for_state(&s))
+                    .act
+                    .line,
+            );
+            let state_line =
+                crate::coach::state_line(&s, crate::advisor::SessionMode::Interactive).line;
+            for line in [&act, &state_line] {
+                assert!(line.chars().count() <= crate::coach::WIDTH, "{line}");
+                assert!(line.starts_with("◆ WAITING "), "{line}");
+                assert!(line.ends_with(" asks"), "{line}");
+                assert!(line.contains("MCP "), "{line}");
+            }
+            if server == "github" {
+                assert!(act.ends_with("— MCP github asks"), "{act}");
+                assert!(state_line.ends_with("· MCP github asks"), "{state_line}");
+            }
         }
     }
 

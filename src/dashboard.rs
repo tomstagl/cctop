@@ -829,7 +829,9 @@ fn act(state: &State, c: &Coach) -> Act {
             WaitingKind::Question => "Claude asked a question".to_string(),
             WaitingKind::Notification => "Claude needs your input".to_string(),
             WaitingKind::Asked => "Claude asked, no reply yet".to_string(),
-            WaitingKind::Elicitation => crate::coach::elicitation_text(state),
+            WaitingKind::Elicitation => {
+                crate::coach::elicitation_ask(state, &format!("◆ WAITING {since} — "))
+            }
         };
         return Act {
             key: 'a',

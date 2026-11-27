@@ -974,14 +974,18 @@ impl State {
                 if self.elicitations.get(&server).is_some_and(|q| q.is_empty()) {
                     self.elicitations.remove(&server);
                 }
-                let w = &mut self.elicitation_waits;
-                w.count += 1;
-                w.total_wait_ms += opened.map_or(0, |o| (at - o).max(0));
-                match action.as_str() {
-                    "accept" => w.accept += 1,
-                    "decline" => w.decline += 1,
-                    "cancel" => w.cancel += 1,
-                    _ => {}
+                // A result with nothing open (an unseen or already-cleared
+                // prompt) is not a completed wait.
+                if let Some(opened) = opened {
+                    let w = &mut self.elicitation_waits;
+                    w.count += 1;
+                    w.total_wait_ms += (at - opened).max(0);
+                    match action.as_str() {
+                        "accept" => w.accept += 1,
+                        "decline" => w.decline += 1,
+                        "cancel" => w.cancel += 1,
+                        _ => {}
+                    }
                 }
                 self.events.push(crate::events::Event {
                     at,
@@ -2012,10 +2016,10 @@ impl State {
                     .unwrap_or(self.clock_ms()),
             });
         }
-        if self.open_elicitation().is_some() {
+        if let Some((_, since_ms)) = self.open_elicitation() {
             return Some(Waiting {
                 kind: WaitingKind::Elicitation,
-                since_ms: self.open_elicitation().map_or(0, |(_, at)| at),
+                since_ms,
             });
         }
         if let Some(c) = self.tools.running() {
