@@ -314,6 +314,39 @@ mod tests {
         assert!(real_transcript_info_in(&p, None, None).is_none());
     }
 
+    #[test]
+    fn a_transcript_path_naming_a_live_registry_session_reads_its_registry_entry() {
+        let root = projects("live");
+        let reg = root.join("sessions");
+        fs::create_dir_all(&reg).unwrap();
+        let pid = std::process::id();
+        // A live entry for A (this test process), and a dead one for B.
+        fs::write(
+            reg.join(format!("{pid}.json")),
+            format!(
+                r#"{{"pid":{pid},"sessionId":"{A}","cwd":"/tmp/live","status":"busy","startedAt":1}}"#
+            ),
+        )
+        .unwrap();
+        fs::write(
+            reg.join("4194000.json"),
+            format!(r#"{{"pid":4194000,"sessionId":"{B}","cwd":"/tmp/dead","startedAt":1}}"#),
+        )
+        .unwrap();
+        let p = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        // The live branch wins even without a projects dir.
+        let info = real_transcript_info_in(&p, Some(reg.clone()), None).unwrap();
+        assert_eq!(info.session_id, A);
+        assert!(info.alive);
+        assert_eq!(info.pid, Some(pid));
+        // A dead entry is not live: B falls through to the projects branch
+        // (an ended session) or, without one, to nothing.
+        let dead = root.join("-Users-me-code-two").join(format!("{B}.jsonl"));
+        assert!(real_transcript_info_in(&dead, Some(reg.clone()), None).is_none());
+        let ended = real_transcript_info_in(&dead, Some(reg), Some(root)).unwrap();
+        assert!(!ended.alive);
+    }
+
     const A: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
     const B: &str = "b34fc081-0000-4000-8000-000000000000";
 

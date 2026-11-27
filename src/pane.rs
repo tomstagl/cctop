@@ -718,15 +718,38 @@ impl PaneFacts {
     }
 }
 
-/// `~/.cctop/pane/<session>.json`'s `facts` for a session id; `None` without a
-/// marker, a fact or a `HOME`.
-pub fn read_facts(session_id: &str) -> Option<PaneFacts> {
+/// What reading `~/.cctop/pane/<session>.json`'s `facts` found.
+#[derive(Debug, PartialEq)]
+pub enum ReadFacts {
+    Facts(PaneFacts),
+    /// No marker, no `facts` in it, or no `HOME`: nothing is known.
+    Absent,
+    /// The marker exists but did not read or parse (the pane is rewriting
+    /// it): the caller keeps what it had.
+    Unreadable,
+}
+
+/// The marker's `facts` for a session id.
+pub fn read_facts(session_id: &str) -> ReadFacts {
     if session_id.is_empty() || session_id.contains(['/', '\\']) {
-        return None;
+        return ReadFacts::Absent;
     }
-    let home = std::env::var_os("HOME")?;
-    let marker = read_json(&Path::new(&home).join(format!(".cctop/pane/{session_id}.json")))?;
-    PaneFacts::from_marker(&marker)
+    let Some(home) = std::env::var_os("HOME") else {
+        return ReadFacts::Absent;
+    };
+    read_facts_at(&Path::new(&home).join(format!(".cctop/pane/{session_id}.json")))
+}
+
+fn read_facts_at(path: &Path) -> ReadFacts {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return ReadFacts::Absent,
+        Err(_) => return ReadFacts::Unreadable,
+    };
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(marker) => PaneFacts::from_marker(&marker).map_or(ReadFacts::Absent, ReadFacts::Facts),
+        Err(_) => ReadFacts::Unreadable,
+    }
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
@@ -937,6 +960,23 @@ pub fn run_status(session: Option<&str>, json: bool) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_marker_that_does_not_parse_is_unreadable_not_absent() {
+        let dir = std::env::temp_dir().join(format!("cctop-facts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("m.json");
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(read_facts_at(&p), ReadFacts::Absent);
+        std::fs::write(&p, r#"{"facts": {"platform": "ma"#).unwrap();
+        assert_eq!(read_facts_at(&p), ReadFacts::Unreadable);
+        std::fs::write(&p, r#"{"version": "1"}"#).unwrap();
+        assert_eq!(read_facts_at(&p), ReadFacts::Absent);
+        std::fs::write(&p, r#"{"facts": {"platform": "macos"}}"#).unwrap();
+        assert!(
+            matches!(read_facts_at(&p), ReadFacts::Facts(f) if f.platform.as_deref() == Some("macos"))
+        );
+    }
+
     use super::*;
 
     const T0: i64 = 1_789_400_000_000;

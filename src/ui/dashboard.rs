@@ -66,7 +66,8 @@ fn cells_of(spans: &[Span]) -> usize {
 pub const MIN_FACTS_WITH_BADGE: usize = 12;
 
 /// The text between the facts and the phase cell: the hooks badge and the
-/// data rules, two cells apart (`views/overview.tsx` `badgeText` mirrors it).
+/// data rules, two cells apart (the pane's `headerLine` in `views/overview.tsx` mirrors it with
+/// an inline join).
 pub fn header_badge(hooks: Option<&str>, rules: Option<&str>) -> String {
     [hooks, rules]
         .into_iter()

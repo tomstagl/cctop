@@ -2472,7 +2472,13 @@ impl State {
 
     /// Read the pane marker's `facts` for this session (a fixture has none).
     pub fn load_pane_facts(&mut self) {
-        self.pane_facts = crate::pane::read_facts(&self.session.session_id);
+        // A marker read that fails (the pane is rewriting it) keeps what was
+        // known: the badges do not blink out and back.
+        match crate::pane::read_facts(&self.session.session_id) {
+            crate::pane::ReadFacts::Facts(f) => self.pane_facts = Some(f),
+            crate::pane::ReadFacts::Absent => self.pane_facts = None,
+            crate::pane::ReadFacts::Unreadable => {}
+        }
     }
 
     /// Read the autocompact overrides for a live session: settings.json and
