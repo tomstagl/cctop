@@ -734,26 +734,8 @@ impl App {
                     self.state.set_toast("nothing to act on");
                     return true;
                 };
-                use crate::advisor::ActionKind;
-                let (text, sendable) = match a.action_kind {
-                    ActionKind::Prompt | ActionKind::Slash if !a.action_text.is_empty() => {
-                        (a.action_text.clone(), true)
-                    }
-                    ActionKind::AllowRule => (
-                        format!("\"permissions\": {{ \"allow\": [\"{}\"] }}", a.action_text),
-                        false,
-                    ),
-                    ActionKind::Setting | ActionKind::Key if !a.action_text.is_empty() => {
-                        (a.action_text.clone(), false)
-                    }
-                    _ => (
-                        format!(
-                            "cctop advises: {} — {} ({}). Can you apply this now in this session?",
-                            a.headline, a.action, a.evidence
-                        ),
-                        true,
-                    ),
-                };
+                // The fix prompt when the rule has one (mod-pane US-001).
+                let (text, sendable) = a.act();
                 if i == 0 && self.state.advice_view.has_occupant {
                     self.state.advice_acting = true;
                 }

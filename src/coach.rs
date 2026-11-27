@@ -1,12 +1,14 @@
 //! The coach object ("Lights", coach PRD §6): one snapshot of `State` and
 //! the Advisor engine that every surface draws verbatim — the state line,
 //! four lights, the nudge slot, the `next` and `snoozed` rows, the
-//! lifecycle rows. Text is cut at [`WIDTH`] cells here so the TUI, the pane
-//! and `cctop query coach` show the same characters.
+//! lifecycle rows. The one-line forms are cut at [`WIDTH`] cells here so
+//! the TUI, the pane and `cctop query coach` show the same characters; a
+//! nudge's full words ([`Full`]: name, body, evidence, fix prompt,
+//! actions, foot) are uncut, and each surface wraps them at its width.
 
 use serde::Serialize;
 
-use crate::advisor::{ActionKind, Engine, SessionMode, Urgency};
+use crate::advisor::{Action, ActionKind, Engine, SessionMode, Urgency};
 use crate::phase::Phase;
 use crate::ui::fmt;
 use crate::ui::state::{State, WaitingKind};
@@ -65,6 +67,44 @@ impl Light {
     }
 }
 
+/// A nudge's full words, uncut (mod-pane PRD US-001): what a surface
+/// shows when it has room, wrapped at its own width. Every field comes
+/// from the rule's fixed words and structural facts, never from what the
+/// person or the model wrote.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Full {
+    /// The rule's plain-language name ("Claude is stuck retrying").
+    pub name: &'static str,
+    pub headline: String,
+    /// What happened, why it costs, what to do.
+    pub body: String,
+    /// One fact per row: the rule's evidence line, then its extra rows
+    /// (a failed call's shape and its error class's fixed label).
+    pub evidence: Vec<String>,
+    /// A ready prompt to put in the box; never sent.
+    pub fix_prompt: Option<String>,
+    pub actions: Vec<Action>,
+    /// When it goes away.
+    pub foot: String,
+}
+
+impl Full {
+    pub fn of(a: &crate::advisor::Advice) -> Full {
+        Full {
+            name: a.name,
+            headline: a.headline.clone(),
+            body: a.body.clone(),
+            evidence: std::iter::once(a.evidence.clone())
+                .filter(|e| !e.is_empty())
+                .chain(a.evidence_rows.iter().cloned())
+                .collect(),
+            fix_prompt: a.fix_prompt.clone(),
+            actions: a.actions.clone(),
+            foot: a.foot.clone(),
+        }
+    }
+}
+
 /// The nudge slot.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Nudge {
@@ -75,8 +115,10 @@ pub struct Nudge {
     pub line1: String,
     /// `  action` (cut).
     pub line2: String,
-    /// The evidence row: class, fire point, queue depth.
-    pub evidence: String,
+    /// The evidence row: class, fire point, queue depth (cut).
+    pub line3: String,
+    #[serde(flatten)]
+    pub full: Full,
     pub action_text: String,
     pub action_kind: ActionKind,
     pub since_turn: usize,
@@ -93,7 +135,8 @@ pub struct Next {
     pub id: &'static str,
     pub family: &'static str,
     pub class: Urgency,
-    pub headline: String,
+    #[serde(flatten)]
+    pub full: Full,
     /// What promotes it (`next prompt`, `when the slot frees`).
     pub promotes: &'static str,
     /// The `next` row as drawn.
@@ -257,7 +300,8 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
                 class: a.urgency,
                 line1: cut(&format!("▸ {}", a.headline)),
                 line2: cut(&format!("  {}", a.action)),
-                evidence: cut(&format!(
+                full: Full::of(a),
+                line3: cut(&format!(
                     "  {} · {fire_point} · +{queued} queued{}{}",
                     a.urgency.label(),
                     if queued > 0 { " (n)" } else { "" },
@@ -281,7 +325,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
             id: a.rule,
             family: a.family,
             class: a.urgency,
-            headline: a.headline.clone(),
+            full: Full::of(a),
             promotes,
             row: cut(&format!(
                 "next     {} → {} · {}",
@@ -1408,7 +1452,7 @@ mod tests {
         ];
         lines.extend(c.lights.iter().map(Light::row));
         if let Some(n) = &c.nudge {
-            lines.extend([n.line1.clone(), n.line2.clone(), n.evidence.clone()]);
+            lines.extend([n.line1.clone(), n.line2.clone(), n.line3.clone()]);
         }
         lines.extend(c.recent.iter().map(|r| r.row.clone()));
         for l in &lines {
@@ -1463,7 +1507,7 @@ mod tests {
             n.line1,
             "▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…"
         );
-        assert_eq!(n.evidence, "  LATER · since turn 6 · +0 queued");
+        assert_eq!(n.line3, "  LATER · since turn 6 · +0 queued");
         assert_eq!(
             c.lights[0].lines[1],
             "threshold 567k · 425k left · prefix 49k (35 %)"

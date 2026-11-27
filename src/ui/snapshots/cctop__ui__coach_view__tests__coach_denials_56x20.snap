@@ -13,12 +13,12 @@ expression: "render_to_string(&app, 56, 20)"
 │ ▸ rm is denied by your rules                         │
 │   tell Claude the alternative — it cannot run this   │
 │   NOW · fired at call 6 · +4 queued (n)              │
+│ A command keeps being blocked                        │
+│ rm is denied by a permissions.deny rule in your      │
+│ settings, so Claude cannot run it however it tries.  │
+│ … e shows the whole advice                           │
 │                                                      │
 │ next     context-reset → next-row only · ctx 720k →… │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
-
-
-
-
  ▸ rm is denied by your rules

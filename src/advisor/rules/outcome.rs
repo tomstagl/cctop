@@ -8,7 +8,8 @@
 //! interrupt marker, an API-error line, a git operation — never a keyword
 //! in prompt text.
 
-use crate::advisor::{ActionKind, Advice, Rule, Saving, Ttl, Urgency};
+use super::{count, spoken, PriceKind};
+use crate::advisor::{ActionKind, Advice, Rule, Saving, Ttl, Urgency, Words};
 use crate::phase::{BashClass, ToolClass};
 use crate::tools::Call;
 use crate::transcript::DenialKind;
@@ -99,7 +100,7 @@ fn turn_calls(state: &State) -> Vec<&Call> {
 
 /// The shape of a call: the tool name, or for Bash the command's argv0 and
 /// its word-like subcommands (`gh pr view`, `git push`, `rm`).
-fn prefix(c: &Call) -> String {
+pub(crate) fn prefix(c: &Call) -> String {
     if c.name != "Bash" {
         return c.name.clone();
     }
@@ -112,6 +113,189 @@ fn prefix(c: &Call) -> String {
     out.join(" ")
 }
 
+/// The fixed words for one error class (mod-pane spec §5.6): its key, the
+/// label the coach shows the person, and the fix a prompt asks Claude for.
+/// `rank` orders the fixes (sync the branch before opening the PR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorWords {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub fix: &'static str,
+    pub rank: u8,
+}
+
+/// Every error class's words, in fix order: the precise failures first,
+/// then Claude Code's own error classes.
+pub const ERROR_WORDS: &[ErrorWords] = &[
+    ErrorWords {
+        id: "rejected_non_ff",
+        label: "the remote has commits you don't",
+        fix: "run git pull --rebase, then push",
+        rank: 0,
+    },
+    ErrorWords {
+        id: "no_upstream",
+        label: "the branch has no upstream yet",
+        fix: "push it with git push -u origin HEAD",
+        rank: 1,
+    },
+    ErrorWords {
+        id: "merge_conflict",
+        label: "there are merge conflicts",
+        fix: "list them with git status and resolve them before going on",
+        rank: 2,
+    },
+    ErrorWords {
+        id: "no_pr",
+        label: "there is no PR for this branch yet",
+        fix: "open the PR with gh pr create --fill",
+        rank: 3,
+    },
+    ErrorWords {
+        id: "not_logged_in",
+        label: "the command line tool is not logged in",
+        fix: "stop and ask me to log in",
+        rank: 4,
+    },
+    ErrorWords {
+        id: "not_a_repo",
+        label: "this directory is not a git repository",
+        fix: "ask me for the repository's path",
+        rank: 4,
+    },
+    ErrorWords {
+        id: "command_not_found",
+        label: "the command isn't installed here",
+        fix: "ask me which tool to use instead",
+        rank: 4,
+    },
+    ErrorWords {
+        id: "file_not_found",
+        label: "the path does not exist",
+        fix: "find the right path with Glob before the next try",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "content_not_found",
+        label: "the search finds nothing",
+        fix: "widen the search, or ask me where it lives",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "edit_failed",
+        label: "the text to replace has changed",
+        fix: "re-read the file before the next edit",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "file_changed",
+        label: "the file changed since it was read",
+        fix: "re-read the file before the next edit",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "file_too_large",
+        label: "the file is too large to read whole",
+        fix: "read only the lines you need, with offset and limit",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "timeout",
+        label: "the command times out",
+        fix: "run it in the background, or with a longer timeout",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "tool_not_found",
+        label: "the tool isn't available",
+        fix: "use a tool from your list",
+        rank: 5,
+    },
+    ErrorWords {
+        id: "user_rejected",
+        label: "you rejected the call",
+        fix: "ask me before trying another way",
+        rank: 6,
+    },
+    ErrorWords {
+        id: "denied",
+        label: "a permission rule blocks it",
+        fix: "ask me before trying another way",
+        rank: 6,
+    },
+    ErrorWords {
+        id: "command_failed",
+        label: "the command exits with an error",
+        fix: "tell me which fact you're missing instead of guessing",
+        rank: 7,
+    },
+    ErrorWords {
+        id: "other",
+        label: "the call fails",
+        fix: "tell me which fact you're missing instead of guessing",
+        rank: 7,
+    },
+];
+
+/// The words for a failed call: its precise failure when the output
+/// carried a known marker, else Claude Code's error class.
+pub fn error_words(c: &Call) -> ErrorWords {
+    error_words_for(
+        c.failure,
+        c.error_class.unwrap_or(crate::tools::ErrorClass::Other),
+    )
+}
+
+/// [`error_words`] for a failure and an error class.
+pub fn error_words_for(
+    failure: Option<crate::tools::Failure>,
+    class: crate::tools::ErrorClass,
+) -> ErrorWords {
+    use crate::tools::{ErrorClass, Failure};
+    let id = match (failure, class) {
+        (Some(Failure::NoPr), _) => "no_pr",
+        (Some(Failure::RejectedNonFf), _) => "rejected_non_ff",
+        (Some(Failure::NoUpstream), _) => "no_upstream",
+        (Some(Failure::MergeConflict), _) => "merge_conflict",
+        (Some(Failure::NotLoggedIn), _) => "not_logged_in",
+        (Some(Failure::CommandNotFound), _) => "command_not_found",
+        (Some(Failure::NotARepo), _) => "not_a_repo",
+        (None, ErrorClass::FileNotFound) => "file_not_found",
+        (None, ErrorClass::ContentNotFound) => "content_not_found",
+        (None, ErrorClass::EditFailed) => "edit_failed",
+        (None, ErrorClass::FileChanged) => "file_changed",
+        (None, ErrorClass::FileTooLarge) => "file_too_large",
+        (None, ErrorClass::Timeout) => "timeout",
+        (None, ErrorClass::ToolNotFound) => "tool_not_found",
+        (None, ErrorClass::UserRejected) => "user_rejected",
+        (None, ErrorClass::Denied) => "denied",
+        (None, ErrorClass::CommandFailed) => "command_failed",
+        (None, ErrorClass::Other) => "other",
+    };
+    *ERROR_WORDS
+        .iter()
+        .find(|w| w.id == id)
+        .unwrap_or(&ERROR_WORDS[ERROR_WORDS.len() - 1])
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn and_list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+/// The first letter in upper case.
+fn sentence(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().chain(c).collect(),
+        None => String::new(),
+    }
+}
+
 /// A32 — source edits without a test run: nudged at the turn's end once
 /// ten minutes or fourteen calls passed since the first unverified edit.
 pub struct VerifyGap;
@@ -119,13 +303,26 @@ impl Rule for VerifyGap {
     fn id(&self) -> &'static str {
         "A32"
     }
+    fn name(&self) -> &'static str {
+        "Edits not tested yet"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Claude edited {files} {ago} ago ({edits} over {calls} calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
+                fix_prompt: Some("Run {test} and fix any failures before continuing."),
+                foot: "goes away after a test run or a read of an edited file",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "verify-gap"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let test = known_test(state)?;
         let since = state.last_check().map(|(_, _, at)| at).unwrap_or(i64::MIN);
         let edits = source_edits_since(state, since);
@@ -180,6 +377,14 @@ impl Rule for VerifyGap {
         a.saving = Saving::Avoids;
         a.retires_on = "a test run or a read of an edited file";
         a.mark = state.tools.calls.len() as u64;
+        a.hole(
+            "files",
+            count(files.len().max(1), "source file", "source files"),
+        );
+        a.hole("ago", spoken(now - first));
+        a.hole("edits", count(edits.len(), "edit", "edits"));
+        a.hole("calls", calls_since.to_string());
+        a.hole("test", test.clone());
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -205,13 +410,32 @@ impl Rule for CommitUnchecked {
     fn id(&self) -> &'static str {
         "A33"
     }
+    fn name(&self) -> &'static str {
+        "Committed without a test"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Commit {sha} went in with {edits} that no test checked. The next push runs CI on it, and a fix then arrives as a second commit or a force-push; running the tests now and amending is cheaper.",
+                fix_prompt: Some("Run {test}; if anything fails, fix it and amend the commit before pushing."),
+                foot: "goes away at the next commit",
+            },
+            Words {
+                variant: "failed",
+                body: "Commit {sha} went in right after a failing test, with {edits} unchecked. The next push runs CI on it, and a fix then arrives as a second commit or a force-push; running the tests now and amending is cheaper.",
+                fix_prompt: Some("Run {test}; if anything fails, fix it and amend the commit before pushing."),
+                foot: "goes away at the next commit",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "commit-unchecked"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let commits = &state.tools.commits;
         let (at, sha, turn) = commits.last()?;
         if state.agg.current_turn().map(|t| t.number) != Some(*turn) {
@@ -266,6 +490,12 @@ impl Rule for CommitUnchecked {
         a.saving = Saving::Avoids;
         a.retires_on = "the next commit";
         a.mark = commits.len() as u64;
+        if failed {
+            a.variant = "failed";
+        }
+        a.hole("sha", sha.chars().take(7).collect::<String>());
+        a.hole("edits", count(edits.len(), "source edit", "source edits"));
+        a.hole("test", test.clone());
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -283,13 +513,26 @@ impl Rule for PlanFirst {
     fn id(&self) -> &'static str {
         "A34"
     }
+    fn name(&self) -> &'static str {
+        "A big task without a plan"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Your last prompt is feature-sized ({chars} characters, {files}) and plan mode is off, so Claude acts on its first reading of it. Plan mode (Shift+Tab) or a 'plan first' line costs one short turn and gives you a checklist to correct before any file changes.",
+                fix_prompt: Some("Plan first: list the steps and the files you will touch, then wait for my go."),
+                foot: "goes away when Claude asks, plans or edits",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "plan-first"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let t = state.agg.current_turn().filter(|t| t.human)?;
         let s = t.prompt_shape;
         let feature = s.chars >= 300 || (s.path_tokens >= 2 && s.implementation_verb);
@@ -328,6 +571,14 @@ impl Rule for PlanFirst {
         a.saving = Saving::Avoids;
         a.next_row_only = true;
         a.retires_on = "an AskUserQuestion, a plan mode entry or an edit";
+        a.hole("chars", s.chars.to_string());
+        a.hole(
+            "files",
+            match s.path_tokens {
+                0 => "no file paths".to_string(),
+                n => count(n, "file path", "file paths"),
+            },
+        );
         Some(a)
     }
 }
@@ -339,13 +590,26 @@ impl Rule for CorrectionStreak {
     fn id(&self) -> &'static str {
         "A36"
     }
+    fn name(&self) -> &'static str {
+        "Claude keeps needing correction"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "You corrected Claude {n} times in a row ({kinds}) on the same work: its picture of the task has drifted and each steer patches it. Esc Esc (or /rewind) restores the conversation and the files to turn {turn}, so a restated prompt starts clean.{bash}",
+                fix_prompt: Some("Before you change anything else, tell me in two lines what you think I want, and wait for my answer."),
+                foot: "goes away after a /rewind",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "correction-streak"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         // The last four human turns, oldest first.
         let mut turns: Vec<&crate::metrics::Turn> = state
             .agg
@@ -428,6 +692,17 @@ impl Rule for CorrectionStreak {
         a.saving = Saving::Avoids;
         a.retires_on = "a /rewind";
         a.mark = state.clock_ms() as u64;
+        a.hole("n", corrections.to_string());
+        a.hole("kinds", kinds.join(", "));
+        a.hole("turn", first_turn.to_string());
+        a.hole(
+            "bash",
+            if bash_writes > 0 {
+                " Files written by shell commands are not covered by the checkpoint."
+            } else {
+                ""
+            },
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -448,13 +723,26 @@ impl Rule for FailureCascade {
     fn id(&self) -> &'static str {
         "A38"
     }
+    fn name(&self) -> &'static str {
+        "Claude is stuck retrying"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Claude keeps trying without a fact it can't find out by itself: {causes}. Each retry re-sends the whole {ctx}-token context{per_call}.",
+                fix_prompt: Some("Stop retrying. {facts} {fixes}."),
+                foot: "goes away when the failing command succeeds",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "failure-cascade"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         if !crate::coach::turn_running(state) {
             return None; // phase gate: a running turn only
         }
@@ -512,6 +800,33 @@ impl Rule for FailureCascade {
         a.saving = Saving::Avoids;
         a.retires_on = "a successful call of the failing command";
         a.mark = state.tools.calls.len() as u64;
+        // Fixed words per error class, never the output: one evidence row
+        // per failed call (oldest first), the distinct labels and fixes.
+        let mut words: Vec<ErrorWords> = Vec::new();
+        for c in run.iter().rev() {
+            let w = error_words(c);
+            a.evidence_rows.push(format!("{} · {}", prefix(c), w.label));
+            if !words.contains(&w) {
+                words.push(w);
+            }
+        }
+        words.sort_by_key(|w| w.rank);
+        let labels: Vec<&str> = words.iter().map(|w| w.label).collect();
+        let mut fixes: Vec<&str> = Vec::new();
+        for w in &words {
+            if !fixes.contains(&w.fix) {
+                fixes.push(w.fix);
+            }
+        }
+        let ctx = state.context().size;
+        let per_call = super::usd(state, ctx, PriceKind::CacheRead)
+            .map(|v| format!(", about {} a call", super::money(v)))
+            .unwrap_or_default();
+        a.hole("causes", and_list(&labels));
+        a.hole("ctx", fmt::tokens(ctx));
+        a.hole("per_call", per_call);
+        a.hole("facts", format!("{}.", sentence(&and_list(&labels))));
+        a.hole("fixes", sentence(&fixes.join("; then ")));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -536,13 +851,26 @@ impl Rule for ReviewBeforeMerge {
     fn id(&self) -> &'static str {
         "A40"
     }
+    fn name(&self) -> &'static str {
+        "A PR without a review"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "PR #{pr} is open with +{added}/−{removed} lines in {files} and no review this session. /code-review checks the change in a fresh context that hasn't seen the reasoning behind it, so it catches what the writing session assumed. Run it before gh pr merge.",
+                fix_prompt: None,
+                foot: "goes away after a review or the merge",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "review-before-merge"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let pr = state.status_facts.pr_number.or(state.agg.pr_number)?;
         if state
             .status_facts
@@ -605,6 +933,10 @@ impl Rule for ReviewBeforeMerge {
         a.saving = Saving::Avoids;
         a.retires_on = "a review marker or the merge";
         a.mark = pr;
+        a.hole("pr", pr.to_string());
+        a.hole("added", added.to_string());
+        a.hole("removed", removed.to_string());
+        a.hole("files", count(files, "file", "files"));
         Some(a)
     }
     fn ttl(&self) -> Ttl {
@@ -634,13 +966,24 @@ impl Rule for WaitingOnYou {
     fn id(&self) -> &'static str {
         "A41"
     }
+    fn name(&self) -> &'static str {
+        "Claude is waiting for you"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[Words {
+            variant: "",
+            body: "{what} {since} ago, and nothing moves until you answer.{cache} {hint}",
+            fix_prompt: None,
+            foot: "goes away when you reply",
+        }]
+    }
     fn family(&self) -> &'static str {
         "waiting"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let w = state.waiting()?;
         let now = state.clock_ms();
         let since = now - w.since_ms;
@@ -674,6 +1017,37 @@ impl Rule for WaitingOnYou {
         };
         a.saving = Saving::Seconds((since / 1000) as u64);
         a.retires_on = "your reply";
+        a.hole(
+            "what",
+            match w.kind {
+                WaitingKind::Question => "Claude asked a question",
+                WaitingKind::Permission => "A permission dialog opened",
+                WaitingKind::Notification => "Claude asked for your input",
+                WaitingKind::Asked => "The turn ended with a question",
+                WaitingKind::Elicitation => "An MCP server asked you something",
+            },
+        );
+        a.hole("since", spoken(since));
+        a.hole(
+            "cache",
+            cache
+                .map(|c| {
+                    format!(
+                        " The cache stays warm for {} more; after that, the reply writes {} tokens again.",
+                        spoken(c.remaining_ms),
+                        fmt::tokens(state.context().size)
+                    )
+                })
+                .unwrap_or_default(),
+        );
+        a.hole(
+            "hint",
+            if w.kind == WaitingKind::Permission {
+                "Approve, deny, or choose 'always' for this kind of command."
+            } else {
+                "A one-word reply is enough; /btw asks a side question first if you need a detail."
+            },
+        );
         Some(a)
     }
     fn acted(&self, state: &State, _fired: &Advice) -> bool {
@@ -694,13 +1068,26 @@ impl Rule for Checkpoint {
     fn id(&self) -> &'static str {
         "A42"
     }
+    fn name(&self) -> &'static str {
+        "A good moment to start fresh"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{why} with {ctx} tokens in context. If the next task is unrelated, every call would keep re-reading all of it; a fresh session starts at about {fresh}, {times}× less per call. Ask for a hand-off note, /rename this session, then /clear.",
+                fix_prompt: Some("Write a short hand-off note for the next session: what is done, what is still open, and the files that matter."),
+                foot: "goes away after a /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "context-reset"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let ctx = state.context().size;
         if ctx < 200_000 {
             return None;
@@ -750,6 +1137,19 @@ impl Rule for Checkpoint {
         a.action_kind = ActionKind::Slash;
         a.saving = Saving::Tokens(ctx.saturating_sub(fresh));
         a.retires_on = "a /clear";
+        a.hole(
+            "why",
+            if task_done {
+                "A task just completed"
+            } else if done_prompt {
+                "You said the work is done"
+            } else {
+                "The turn ended with a question"
+            },
+        );
+        a.hole("ctx", fmt::tokens(ctx));
+        a.hole("fresh", fmt::tokens(fresh));
+        a.hole("times", (ctx / fresh).max(1).to_string());
         a.mark = state
             .agg
             .boundaries
@@ -775,13 +1175,26 @@ impl Rule for DestructiveGit {
     fn id(&self) -> &'static str {
         "A43"
     }
+    fn name(&self) -> &'static str {
+        "Risky git on uncommitted work"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Claude ran {what} on a tree with uncommitted changes. Rewind restores only the files Claude changed with Edit and Write, not what a shell command did, so lost work may not come back that way; git reflog and git stash list are where it may still be.",
+                fix_prompt: Some("Stop. Before any other git command, show me git status, git stash list and the last 10 entries of git reflog."),
+                foot: "goes away at the end of the turn",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "destructive-git"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         if !state.session.git_dirty || !crate::coach::turn_running(state) {
             return None;
         }
@@ -799,6 +1212,7 @@ impl Rule for DestructiveGit {
         );
         a.action = "rewind can't undo bash: check git reflog / stash list".into();
         a.action_kind = ActionKind::Advice;
+        a.hole("what", what.clone());
         a.saving = Saving::Avoids;
         a.retires_on = "turn end";
         Some(a)
@@ -811,13 +1225,26 @@ impl Rule for StaleCollision {
     fn id(&self) -> &'static str {
         "A44"
     }
+    fn name(&self) -> &'static str {
+        "You and Claude edited one file"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "You changed {file} in your editor while Claude was editing it this turn ({ide} by you, {claude} by Claude). One of you is working from an old copy, so the next edit can fail or quietly drop your change. Say which version wins before the next edit.",
+                fix_prompt: Some("The file {file} was also changed in my editor — re-read it and keep my version where they differ."),
+                foot: "goes away after a re-read or another edit of the file",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "stale-collision"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let t = state.agg.current_turn()?;
         let f = state
             .files
@@ -852,6 +1279,9 @@ impl Rule for StaleCollision {
         a.action_kind = ActionKind::Prompt;
         a.saving = Saving::Avoids;
         a.retires_on = "a re-read or a further edit of the file";
+        a.hole("file", name.to_string());
+        a.hole("ide", count(f.ide_edits, "edit", "edits"));
+        a.hole("claude", count(f.edits_this_turn, "edit", "edits"));
         a.mark = state.tools.calls.len() as u64;
         Some(a)
     }
@@ -877,13 +1307,32 @@ impl Rule for DenialStreak {
     fn id(&self) -> &'static str {
         "A45"
     }
+    fn name(&self) -> &'static str {
+        "A command keeps being blocked"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "deny",
+                body: "{shape} is denied by a permissions.deny rule in your settings, so Claude cannot run it however it tries. Tell it the alternative, or what you need instead.",
+                fix_prompt: Some("You can't run `{shape}` here (it's denied by my settings). Use another way or tell me what you need."),
+                foot: "goes away at the end of the turn",
+            },
+            Words {
+                variant: "",
+                body: "Auto mode blocked {shape} {n} times{when}, and three blocks in a row pause it; Claude will keep trying variants. Allow the command once in your settings and it goes through. The rule: {rule}",
+                fix_prompt: None,
+                foot: "goes away when the command succeeds or the rule appears in permissions.allow",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "denial-streak"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         if !crate::coach::turn_running(state) {
             return None; // phase gate: a running turn only
         }
@@ -913,6 +1362,8 @@ impl Rule for DenialStreak {
             a.saving = Saving::Avoids;
             a.retires_on = "turn end";
             a.mark = state.tools.calls.len() as u64;
+            a.variant = "deny";
+            a.hole("shape", prefix(c));
             return Some(a);
         }
         let blocked: Vec<&Call> = recent
@@ -964,6 +1415,10 @@ impl Rule for DenialStreak {
         );
         a.evidence = format!("{} denials in the last 3 turns", recent.len());
         a.action = format!("allow {rule} or approve it");
+        a.hole("shape", p.clone());
+        a.hole("n", n.to_string());
+        a.hole("when", if this_turn >= 2 { " this turn" } else { "" });
+        a.hole("rule", rule.clone());
         a.action_text = rule;
         a.action_kind = ActionKind::AllowRule;
         a.saving = Saving::Avoids;
@@ -1003,13 +1458,26 @@ impl Rule for LongContextDrift {
     fn id(&self) -> &'static str {
         "A46"
     }
+    fn name(&self) -> &'static str {
+        "Early instructions are far back"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "The context is at {ctx} tokens and the constraints in your long prompt at turn {turn} are {back} tokens back. Nothing has re-injected them since, and on a long context Claude's attention to them fades. Restating the three that matter costs less than the drift.",
+                fix_prompt: Some("Before continuing, restate the constraints I gave earlier and keep to them."),
+                foot: "goes away when you restate them or CLAUDE.md is re-read",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "instruction-drift"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let v = state.context();
         if v.window < 900_000 {
             return None;
@@ -1051,6 +1519,12 @@ impl Rule for LongContextDrift {
         a.saving = Saving::Avoids;
         a.next_row_only = true;
         a.retires_on = "a restated prompt or an instructions attachment";
+        a.hole("ctx", fmt::tokens(v.size));
+        a.hole("turn", long.number.to_string());
+        a.hole(
+            "back",
+            fmt::tokens(v.size.saturating_sub(long.context_size)),
+        );
         Some(a)
     }
 }
@@ -1061,13 +1535,50 @@ impl Rule for TurnDied {
     fn id(&self) -> &'static str {
         "A47"
     }
+    fn name(&self) -> &'static str {
+        "The turn stopped on an error"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "rate_limit",
+                body: "The turn ended on the {kind} rate limit, not on a reply{resets}. Sending again now runs into the same limit: wait for the reset, or switch to another model family with /model, which has its own limit.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+            Words {
+                variant: "spend",
+                body: "The spend limit is reached, so nothing runs until it is raised or you switch account. Sending again now only hits the same wall.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+            Words {
+                variant: "auth",
+                body: "Authentication failed, so nothing runs. Log in again with /login, or check the API key.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+            Words {
+                variant: "too_long",
+                body: "The context is bigger than the model's window, so the request was refused. Only /compact or /clear lets the next message through.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+            Words {
+                variant: "",
+                body: "The turn ended on an API error ({error}), not on a reply. Claude Code retries server errors by itself; wait a minute, then send again.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "turn-died"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let e = state.agg.api_errors.iter().rev().find(|e| e.confirmed)?;
         let at =
             e.at.as_deref()
@@ -1087,6 +1598,20 @@ impl Rule for TurnDied {
                 k => k,
             };
             let resets = e.resets_at.map(|s| (s * 1000.0) as i64);
+            a.variant = "rate_limit";
+            a.hole("kind", kind_word.to_string());
+            a.hole(
+                "resets",
+                resets
+                    .map(|r| {
+                        format!(
+                            "; it resets at {} (in {})",
+                            fmt::clock_hhmm(r),
+                            spoken(r - now)
+                        )
+                    })
+                    .unwrap_or_default(),
+            );
             (
                 match resets {
                     Some(r) => format!(
@@ -1100,24 +1625,36 @@ impl Rule for TurnDied {
                 "/model".to_string(),
             )
         } else if err.contains("spend") || status == 402 {
+            a.variant = "spend";
             (
                 "Monthly spend limit hit · nothing will run".into(),
                 "raise the limit, switch account, or stop".into(),
                 String::new(),
             )
         } else if err.contains("auth") || status == 401 {
+            a.variant = "auth";
             (
                 "Authentication failed · nothing will run".into(),
                 "/login, or check the API key".into(),
                 "/login".into(),
             )
         } else if err.contains("prompt") && err.contains("long") || status == 413 {
+            a.variant = "too_long";
             (
                 "Prompt too long: the context exceeds the window".into(),
                 "/compact or /clear before the next message".into(),
                 "/compact".into(),
             )
         } else {
+            a.hole(
+                "error",
+                match (status, err.is_empty()) {
+                    (0, true) => "request failed".to_string(),
+                    (0, false) => err.to_string(),
+                    (s, true) => format!("status {s}"),
+                    (s, false) => format!("status {s}, {err}"),
+                },
+            );
             (
                 format!(
                     "API error{}: {}",
@@ -1585,6 +2122,144 @@ mod tests {
         });
         pair.history = h;
         assert!(CorrectionStreak.acted(&pair, &a));
+    }
+
+    #[test]
+    fn a38_names_each_error_class_in_fixed_words_never_the_output() {
+        let mut s = fresh();
+        let no_pr = "no pull requests found for branch SECRET-OUTPUT-abc";
+        let rejected = "! [rejected] SECRET-OUTPUT-abc (non-fast-forward)";
+        for (i, (cmd, out)) in [
+            ("gh pr view 24", no_pr),
+            ("gh pr view --json url", no_pr),
+            ("git push", rejected),
+        ]
+        .iter()
+        .enumerate()
+        {
+            bash(
+                &mut s,
+                &format!("f{i}"),
+                &format!("2026-01-01T10:0{}:00Z", i + 1),
+                cmd,
+                out,
+                r#","is_error":true"#,
+            );
+        }
+        s.now_ms = t("2026-01-01T10:04:00Z");
+        let a = FailureCascade.evaluate(&s).expect("fires");
+        assert_eq!(a.name, "Claude is stuck retrying");
+        assert_eq!(
+            a.evidence_rows,
+            [
+                "gh pr view · there is no PR for this branch yet",
+                "gh pr view · there is no PR for this branch yet",
+                "git push · the remote has commits you don't",
+            ]
+        );
+        assert!(
+            a.body.starts_with(
+                "Claude keeps trying without a fact it can't find out by itself: the remote has commits you don't and there is no PR for this branch yet. Each retry re-sends the whole 50k-token context, about $"
+            ),
+            "{}",
+            a.body
+        );
+        assert_eq!(
+            a.fix_prompt.as_deref(),
+            Some("Stop retrying. The remote has commits you don't and there is no PR for this branch yet. Run git pull --rebase, then push; then open the PR with gh pr create --fill.")
+        );
+        // Stop the turn, then fill the fix prompt.
+        let acts: Vec<(&str, &str)> = a
+            .actions
+            .iter()
+            .map(|x| (x.kind.id(), x.payload.as_str()))
+            .collect();
+        assert_eq!(acts[0], ("key", "Esc"));
+        assert_eq!(acts[1], ("prompt", a.fix_prompt.as_deref().unwrap()));
+        assert_eq!(a.foot, "goes away when the failing command succeeds");
+        // Nothing from the output, anywhere in the nudge.
+        assert!(!format!("{a:?}").contains("SECRET"), "{a:?}");
+        // An unknown failure keeps Claude Code's class and its fixed words.
+        let mut other = fresh();
+        for i in 0..3 {
+            bash(
+                &mut other,
+                &format!("o{i}"),
+                &format!("2026-01-01T10:0{}:00Z", i + 1),
+                "make build",
+                "SECRET-OUTPUT-abc",
+                r#","is_error":true"#,
+            );
+        }
+        other.now_ms = t("2026-01-01T10:04:00Z");
+        let a = FailureCascade.evaluate(&other).expect("fires");
+        assert_eq!(a.evidence_rows[0], "make build · the call fails");
+        assert_eq!(
+            a.fix_prompt.as_deref(),
+            Some("Stop retrying. The call fails. Tell me which fact you're missing instead of guessing.")
+        );
+        assert!(!format!("{a:?}").contains("SECRET"), "{a:?}");
+    }
+
+    #[test]
+    fn every_error_class_has_words() {
+        use crate::tools::{ErrorClass, Failure};
+        assert_eq!(
+            Failure::classify("no pull requests found for branch x"),
+            Some(Failure::NoPr)
+        );
+        assert_eq!(
+            Failure::classify(" ! [rejected] main -> main (non-fast-forward)"),
+            Some(Failure::RejectedNonFf)
+        );
+        assert_eq!(
+            Failure::classify("zsh: command not found: foo"),
+            Some(Failure::CommandNotFound)
+        );
+        assert_eq!(Failure::classify("Exit code 1"), None);
+        let ids: Vec<&str> = ERROR_WORDS.iter().map(|w| w.id).collect();
+        let mut sorted = ids.clone();
+        sorted.dedup();
+        assert_eq!(ids.len(), sorted.len(), "unique ids");
+        assert!(
+            ERROR_WORDS.windows(2).all(|w| w[0].rank <= w[1].rank),
+            "fix order"
+        );
+        for w in ERROR_WORDS {
+            assert!(!w.label.is_empty() && !w.fix.is_empty(), "{}", w.id);
+            assert!(w.label.chars().next().unwrap().is_lowercase(), "{}", w.id);
+        }
+        // A failure wins over its class; every class has its own words.
+        assert_eq!(
+            error_words_for(Some(Failure::NoPr), ErrorClass::CommandFailed).id,
+            "no_pr"
+        );
+        for (class, id) in [
+            (ErrorClass::CommandFailed, "command_failed"),
+            (ErrorClass::UserRejected, "user_rejected"),
+            (ErrorClass::EditFailed, "edit_failed"),
+            (ErrorClass::FileChanged, "file_changed"),
+            (ErrorClass::FileTooLarge, "file_too_large"),
+            (ErrorClass::FileNotFound, "file_not_found"),
+            (ErrorClass::ContentNotFound, "content_not_found"),
+            (ErrorClass::Timeout, "timeout"),
+            (ErrorClass::ToolNotFound, "tool_not_found"),
+            (ErrorClass::Denied, "denied"),
+            (ErrorClass::Other, "other"),
+        ] {
+            assert_eq!(error_words_for(None, class).id, id);
+        }
+        for (f, id) in [
+            (Failure::NoPr, "no_pr"),
+            (Failure::RejectedNonFf, "rejected_non_ff"),
+            (Failure::NoUpstream, "no_upstream"),
+            (Failure::MergeConflict, "merge_conflict"),
+            (Failure::NotLoggedIn, "not_logged_in"),
+            (Failure::CommandNotFound, "command_not_found"),
+            (Failure::NotARepo, "not_a_repo"),
+        ] {
+            assert_eq!(error_words_for(Some(f), ErrorClass::Other).id, id);
+        }
     }
 
     #[test]

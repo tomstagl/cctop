@@ -870,7 +870,7 @@ fn act(state: &State, c: &Coach) -> Act {
             crate::advisor::Urgency::Later => Tone::Fg,
         };
         let tag = n
-            .evidence
+            .line3
             .trim()
             .split(" · ")
             .take(2)
@@ -1919,8 +1919,8 @@ fn body_advisor(c: &Coach, engine: &Engine) -> Body {
             if !n.line2.trim().is_empty() {
                 rows.push(vec![dim(format!("    {}", n.line2.trim()))]);
             }
-            if !n.evidence.trim().is_empty() {
-                rows.push(vec![dim(format!("    {}", n.evidence.trim()))]);
+            if !n.line3.trim().is_empty() {
+                rows.push(vec![dim(format!("    {}", n.line3.trim()))]);
             }
             if !n.saving.is_empty() {
                 rows.push(vec![dim(format!("    saves {}", n.saving))]);

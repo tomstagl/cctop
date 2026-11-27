@@ -2,8 +2,8 @@
 //! permission prompts, long foreground calls, the rate-limit fit, hook
 //! timings (A06, A09, A10, A13, A16).
 
-use super::recent_turns;
-use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
+use super::{count, percent, recent_turns, spoken};
+use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency, Words};
 use crate::harness_facts::autocompact;
 use crate::ui::fmt;
 use crate::ui::State;
@@ -26,13 +26,32 @@ impl Rule for PostCompaction {
     fn id(&self) -> &'static str {
         "A06"
     }
+    fn name(&self) -> &'static str {
+        "Compaction keeps coming back"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "retrigger",
+                body: "After the last compaction {after} tokens were left, close to the {threshold} threshold, so it will compact again within a few turns{approx}. Each compaction spends output on a summary and loses detail Claude then re-reads. At the next clean stop, /compact with a focus keeps what matters; a hand-off note and /clear is cheaper still.",
+                fix_prompt: None,
+                foot: "goes away after a /compact or /clear",
+            },
+            Words {
+                variant: "",
+                body: "This session compacted {n} times, the last from {before} to {after} tokens{approx}. Each compaction spends output on a summary and loses detail Claude then re-reads. At the next clean stop, /compact with a focus keeps what matters; two compactions usually cost more than a hand-off note and a fresh session.",
+                fix_prompt: None,
+                foot: "goes away after a /compact or /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "post-compaction"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let v = state.context();
         let last = v.compactions.last()?;
         let retrigger = last.after + autocompact::WARN_TOKENS >= v.threshold;
@@ -65,6 +84,21 @@ impl Rule for PostCompaction {
         a.saving = Saving::Avoids;
         a.retires_on = "a /compact or /clear";
         a.mark = boundaries_and_compacts(state);
+        if retrigger {
+            a.variant = "retrigger";
+        }
+        a.hole("n", v.compactions.len().to_string());
+        a.hole("before", fmt::tokens(last.before));
+        a.hole("after", fmt::tokens(last.after));
+        a.hole("threshold", fmt::tokens(v.threshold));
+        a.hole(
+            "approx",
+            if v.compactions_heuristic {
+                " (inferred from the context drops)"
+            } else {
+                ""
+            },
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -102,13 +136,26 @@ impl Rule for PermissionWaits {
     fn id(&self) -> &'static str {
         "A09"
     }
+    fn name(&self) -> &'static str {
+        "Approving the same command"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Claude stopped and waited for you {count} on {shape}, {wait} in all. Allow it once in your settings and it stops asking. The rule: {rule}",
+                fix_prompt: None,
+                foot: "goes away when the rule appears in permissions.allow",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "permission-wait"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let s = &state.session;
         // With traces, only the person's own decisions count: a wait the
         // classifier, a hook or a rule decided is not one the person made.
@@ -175,6 +222,15 @@ impl Rule for PermissionWaits {
         a.action = format!(
             "allow {rule} (permissions.allow in settings), or approve it once with 'always'"
         );
+        a.hole("count", count(ask.count, "time", "times"));
+        a.hole(
+            "shape",
+            key.trim_start_matches("Bash(")
+                .trim_end_matches(')')
+                .to_string(),
+        );
+        a.hole("wait", spoken(wait_ms));
+        a.hole("rule", rule.clone());
         a.action_text = rule;
         a.action_kind = ActionKind::AllowRule;
         a.saving = Saving::Seconds(per_turn_s.max(1));
@@ -193,13 +249,26 @@ impl Rule for LongForeground {
     fn id(&self) -> &'static str {
         "A10"
     }
+    fn name(&self) -> &'static str {
+        "A long command blocked the turn"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{what} ran in the foreground for {duration} and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
+                fix_prompt: Some("Run builds and test suites longer than a minute in the background and keep working meanwhile."),
+                foot: "goes away when Claude backgrounds a command, or after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "long-foreground"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let now = state.clock_ms();
         let first_turn = recent_turns(state, 5).last().map(|t| t.number).unwrap_or(0);
         let (call, ms) = state
@@ -234,6 +303,17 @@ impl Rule for LongForeground {
         a.saving = Saving::Seconds((ms / 1000) as u64);
         a.window_turns = 5;
         a.mark = background_calls(state);
+        // The command's shape, never its arguments; a bare `cd` says nothing.
+        let shape = super::outcome::prefix(call);
+        a.hole(
+            "what",
+            if shape.is_empty() || shape == "cd" {
+                "A shell command".to_string()
+            } else {
+                format!("The command `{shape}`")
+            },
+        );
+        a.hole("duration", spoken(ms));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -257,13 +337,32 @@ impl Rule for RateLimitPacing {
     fn id(&self) -> &'static str {
         "A13"
     }
+    fn name(&self) -> &'static str {
+        "Usage limit runs out early"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{used} of the 5-hour limit is used. At this pace it runs out {early} before it resets, and the session stalls until then. Sonnet roughly doubles the time left and /effort medium shortens answers on top; switching the model rebuilds the cache once.",
+                fix_prompt: None,
+                foot: "goes away when you move to a cheaper model or effort",
+            },
+            Words {
+                variant: "cheap",
+                body: "{used} of the 5-hour limit is used. At this pace it runs out {early} before it resets, and the session stalls until then. /effort medium shortens answers; moving exploration to subagents, or pausing heavy work until the reset, also helps.",
+                fix_prompt: None,
+                foot: "goes away when you move to a cheaper model or effort",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "rate-limit"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let mut a = Advice::new("A13", "rate-limit", Urgency::Next);
         let model = state.model().unwrap_or("");
         let lever = if model.contains("sonnet") || model.contains("haiku") {
@@ -304,6 +403,17 @@ impl Rule for RateLimitPacing {
         a.action_kind = ActionKind::Slash;
         a.saving = Saving::Avoids;
         a.retires_on = "a cheaper model or effort";
+        if lever.0 == "/model sonnet" {
+            a.actions.push(crate::advisor::Action::new(
+                ActionKind::Slash,
+                "Put /effort medium in the box",
+                "/effort medium",
+            ));
+        } else {
+            a.variant = "cheap";
+        }
+        a.hole("used", percent(l.five_hour_pct));
+        a.hole("early", spoken(reset - ex));
         a.mark = (crate::harness_facts::usage_weight::tier(model) * 10.0) as u64;
         Some(a)
     }
@@ -321,13 +431,26 @@ impl Rule for HookOverhead {
     fn id(&self) -> &'static str {
         "A16"
     }
+    fn name(&self) -> &'static str {
+        "Hooks slow every turn"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Hooks add {per_turn} to every turn, {share} of turn time over the last {turns}; the slowest is {hook}, {total} in all. Hooks run inside the turn: make that one asynchronous (\"async\": true) or narrow its matcher to the tools and paths it needs.",
+                fix_prompt: None,
+                foot: "goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "hook-overhead"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let turns: Vec<_> = state
             .agg
             .turns
@@ -370,9 +493,15 @@ impl Rule for HookOverhead {
             "make `{}` async (\"async\": true) or narrow its matcher to the tools and paths it needs",
             slowest.0
         );
+        a.action_text = "\"async\": true".into();
         a.action_kind = ActionKind::Setting;
         a.saving = Saving::Seconds((per_turn / 1000).max(1));
         a.window_turns = turns.len();
+        a.hole("per_turn", fmt::short_ms(per_turn));
+        a.hole("share", percent(hook as f64 / total as f64 * 100.0));
+        a.hole("turns", count(turns.len(), "turn", "turns"));
+        a.hole("hook", slowest.0.clone());
+        a.hole("total", fmt::short_ms(slowest.1));
         Some(a)
     }
 }
@@ -456,6 +585,16 @@ mod tests {
             "Claude Code's own suggestion, verbatim"
         );
         assert_eq!(a.action_kind, ActionKind::AllowRule);
+        // The full words: the rule to copy, named in the body.
+        assert_eq!(a.name, "Approving the same command");
+        assert_eq!(
+            a.body,
+            "Claude stopped and waited for you 3 times on gh api, 45 seconds in all. Allow it once in your settings and it stops asking. The rule: Bash(gh api:*)"
+        );
+        let kinds: Vec<&str> = a.actions.iter().map(|x| x.kind.id()).collect();
+        assert_eq!(kinds, ["allow_rule"]);
+        assert_eq!(a.actions[0].payload, "Bash(gh api:*)");
+        assert_eq!(a.fix_prompt, None);
         assert!(!PermissionWaits.acted(&s, &a));
         s.allow_rules.push("Bash(gh api:*)".into());
         assert!(PermissionWaits.acted(&s, &a));
@@ -532,6 +671,21 @@ mod tests {
             "At this burn you hit the 5 h limit 8:20 before it resets"
         );
         assert_eq!(a.action_text, "/model sonnet");
+        // Two slash commands to fill: the model, then the effort.
+        let acts: Vec<(&str, &str)> = a
+            .actions
+            .iter()
+            .map(|x| (x.kind.id(), x.payload.as_str()))
+            .collect();
+        assert_eq!(
+            acts,
+            [("slash", "/model sonnet"), ("slash", "/effort medium")]
+        );
+        assert!(
+            a.body.starts_with("80 % of the 5-hour limit is used."),
+            "{}",
+            a.body
+        );
         assert!(
             a.action.starts_with("/model sonnet ≈ 2× the runway"),
             "{}",
