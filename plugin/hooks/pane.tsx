@@ -22,7 +22,7 @@ import {
 } from './model';
 import { spoolText } from './breakdown';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
-import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, settledRules, type NotifyState } from './notify';
+import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
@@ -342,7 +342,7 @@ function notifyNudge($: EngineInterface, c: NonNullable<ReturnType<typeof coachO
   const todo = nudgeActions(
     notifyState,
     n === null ? null : { ruleId: n.id, fireId: String(n.firedAt ?? 0), urgency: n.cls === 'NOW' || n.cls === 'NEXT' ? n.cls : 'LATER', headline: n.line1 },
-    settledRules(model.query.coach, notifyState),
+    settledRules(model.query.coach, notifyState, n === null ? null : { ruleId: n.id, fireId: String(n.firedAt ?? 0) }),
   );
   for (const key of todo.cancel) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
   for (const item of todo.notify) sendNotify($, item.text, item.key);
@@ -358,6 +358,7 @@ function notifyResets($: EngineInterface, usage: SessionUsage, now: number): voi
     const resetsAtMs = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt);
     if (key !== null && Number.isFinite(resetsAtMs)) windows.push({ key, usedPct: l.percentUsed, resetsAtMs });
   }
+  for (const key of resetCancels(notifyState, windows)) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
   for (const item of resetActions(notifyState, windows, now)) sendNotify($, item.text, item.key, { at: item.at, untilBack: true });
 }
 

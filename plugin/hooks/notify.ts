@@ -87,6 +87,15 @@ export function resetActions(
   return out;
 }
 
+/** Reset bookings whose window has since fallen below the threshold: forgotten, and their keys returned so the caller takes them back. A rejected notify call is not retried (the failure is logged once; the next change books again). */
+export function resetCancels(s: NotifyState, windows: { key: 'reset-5h' | 'reset-7d'; usedPct: number }[]): string[] {
+  const keys: string[] = [];
+  for (const w of windows) {
+    if (w.usedPct < RESET_AT_PCT && s.scheduledReset.delete(w.key)) keys.push(w.key);
+  }
+  return keys;
+}
+
 /** `$.ui.notify`'s answer for `key`: stops all further calls on `disabled` / `no-channel`; returns the line to log the first time for this key, else null. */
 export function noteResult(
   s: NotifyState,
@@ -106,8 +115,8 @@ export function noteFailure(s: NotifyState, key: string, err: unknown): string |
   return `cctop: notify ${key} failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 
-/** The rule ids of a raw `cctop query coach` object that are snoozed, or acted on since a notified fire. */
-export function settledRules(coach: unknown, s: NotifyState): string[] {
+/** The rule ids of a raw `cctop query coach` object that are snoozed, or acted on since the fire in question: the current nudge's if it is that rule's, else the latest one notified. An older acted entry never settles a re-fire. */
+export function settledRules(coach: unknown, s: NotifyState, current: { ruleId: string; fireId: string } | null = null): string[] {
   const rules = new Set<string>();
   if (coach === null || typeof coach !== 'object') return [];
   const snoozed = (coach as { snoozed?: unknown }).snoozed;
@@ -122,9 +131,13 @@ export function settledRules(coach: unknown, s: NotifyState): string[] {
     for (const x of recent) {
       const r = x as { what?: unknown; id?: unknown; at_ms?: unknown } | null;
       if (r?.what !== 'acted' || typeof r.id !== 'string' || typeof r.at_ms !== 'number') continue;
-      for (const sent of s.sent) {
-        if (sent.startsWith(`${r.id}:`) && Number(sent.slice(r.id.length + 1).split(':')[0]) <= r.at_ms) rules.add(r.id);
+      let fire: number | null = current !== null && current.ruleId === r.id ? Number(current.fireId) : null;
+      if (fire === null) {
+        for (const sent of s.sent) {
+          if (sent.startsWith(`${r.id}:`)) fire = Math.max(fire ?? -Infinity, Number(sent.slice(r.id.length + 1)));
+        }
       }
+      if (fire !== null && fire <= r.at_ms) rules.add(r.id);
     }
   }
   return [...rules];

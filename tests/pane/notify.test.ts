@@ -8,6 +8,7 @@ import {
   nudgeActions,
   noteResult,
   noteFailure,
+  resetCancels,
   resetActions,
   settledRules,
   type NudgeInput,
@@ -71,6 +72,24 @@ test('settledRules: snoozed ids, and acted ones only since the notified fire', (
   coach.recent.push({ what: 'acted', id: 'A47', at_ms: 150 });
   assert.deepEqual(settledRules(coach, s), ['S1', 'A47']);
   assert.deepEqual(settledRules(null, s), []);
+});
+
+test('fire, notify, act, re-fire: the re-fire is notified and the first was cancelled', () => {
+  const s = initialNotifyState();
+  assert.equal(nudgeActions(s, nudge('NOW', '100'), []).notify.length, 1);
+  const coach = { snoozed: [], recent: [{ what: 'acted', id: 'A47', at_ms: 150 }] };
+  assert.deepEqual(nudgeActions(s, null, settledRules(coach, s, null)).cancel, ['nudge-A47']);
+  const again = nudgeActions(s, nudge('NOW', '200'), settledRules(coach, s, { ruleId: 'A47', fireId: '200' }));
+  assert.equal(again.notify.length, 1, 'the stale acted entry does not suppress the re-fire');
+  // and the acted entry still settles the fire it followed
+  assert.deepEqual(settledRules(coach, s, { ruleId: 'A47', fireId: '100' }), ['A47']);
+});
+
+test('a booking whose window fell below 90 % is taken back once', () => {
+  const s = initialNotifyState();
+  resetActions(s, [{ key: 'reset-5h', usedPct: 95, resetsAtMs: 5000 }], 0);
+  assert.deepEqual(resetCancels(s, [{ key: 'reset-5h', usedPct: 40 }]), ['reset-5h']);
+  assert.deepEqual(resetCancels(s, [{ key: 'reset-5h', usedPct: 40 }]), []);
 });
 
 // The pane end to end, with a fake `$.ui.notify`.
