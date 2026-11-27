@@ -725,6 +725,8 @@ mod tests {
 
     #[test]
     fn limits_text_reads_running_over_concurrent() {
+        // The pane's title (plugin/hooks/views/agents.tsx) drops ` · depth ≤ N`
+        // by this wording; tests/pane/views.test.ts pins the same literals.
         let l = crate::pane::AgentLimits {
             concurrent: 10,
             depth: 2,

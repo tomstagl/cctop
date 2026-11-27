@@ -217,12 +217,12 @@ function detailRows(rows: string[], heads: number): FrameRow[] {
   });
 }
 
-/** The agent rows as the mapping reads them: id, what the Agent call said, spawn order (the query's list order). */
+/** The agent rows as the mapping reads them: id, what the Agent call said, whether it runs. */
 function agentRows(agents: unknown[]): AgentRow[] {
-  return agents.flatMap((a, order) => {
+  return agents.flatMap((a) => {
     const id = stringAt(a, 'id');
     if (id === null || id === undefined) return [];
-    const row: AgentRow = { id, order };
+    const row: AgentRow = { id, running: stringAt(a, 'state') === 'running' };
     const type = stringAt(a, 'type');
     const description = stringAt(a, 'description');
     if (type !== null && type !== undefined) row.type = type;

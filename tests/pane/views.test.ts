@@ -588,6 +588,7 @@ test('agents: a row whose agent the engine lists is a Button that jumps; a row w
   presses.get(`agent-${agent.id as string}`)?.();
   assert.deepEqual(jumped, [agent.id]);
   // No exact id: description and type; the press carries the engine's id.
+  data.agents = [{ ...agent, state: 'running' }];
   draw([{ id: 'engine-id', type: agent.type as string, description: agent.description as string }]);
   presses.get('agent-engine-id')?.();
   assert.deepEqual(jumped, [agent.id, 'engine-id']);
@@ -598,6 +599,7 @@ test('agents: a row whose agent the engine lists is a Button that jumps; a row w
 });
 
 test('agents at 70 columns: the title drops depth before no background; 80 keeps both', () => {
+  // The literal Rust's limits_text pins (src/ui/agents_view.rs): the drop below relies on ` · depth ≤ N`.
   const line = '0 / 10 running · depth ≤ 2 · no background';
   const agents = { ...(fixture('agents') as Record<string, unknown>), limits: { line } };
   const model = build({ query: { agents } });

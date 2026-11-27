@@ -709,7 +709,8 @@ hooks are off or before its module is accepted.
     stopped one) raises one toast with the reason and does not move the
     view. Record whether cctop's agent ids equal `AgentInfo.id` (a press on
     a row with no match draws no Button: the mapping falls back on
-    description and type).
+    description and type only for a running agent whose pair is unique,
+    so two running agents alike show no button).
     Claude Code version:
     Result: pending
 
