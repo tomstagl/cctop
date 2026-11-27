@@ -181,6 +181,8 @@ struct RunArgs {
     otlp: Option<String>,
     /// With --otlp, write each raw OTLP request body to DIR as
     /// `<unix-ms>-<path-tail>.json` (for learning what Claude Code sends).
+    /// The bodies contain account identifiers and prompt text: the directory
+    /// is created private (0700); keep it so and delete it afterwards.
     #[arg(long, value_name = "DIR", requires = "otlp")]
     dump_otel: Option<PathBuf>,
 }

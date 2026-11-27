@@ -448,7 +448,10 @@ pub fn ingest_traces(store: &mut Store, v: &Value) {
 
 /// Write one raw request body to `<dir>/<unix-ms>-<path-tail>.json`
 /// (`cctop run --dump-otel`). Best effort: a failed write never fails the
-/// request. Bodies are kept as received, whatever the path or content type.
+/// request. Bodies are kept as received, whatever the path or content type,
+/// so they CONTAIN account identifiers (email, user and organization ids) and
+/// prompt text: the directory is created 0700 and the files 0600 on Unix;
+/// keep it private and delete it afterwards.
 fn dump_body(dir: &Path, path: &str, body: &[u8]) {
     let tail: String = path
         .rsplit('/')
@@ -460,8 +463,28 @@ fn dump_body(dir: &Path, path: &str, body: &[u8]) {
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis());
-    let _ = std::fs::create_dir_all(dir);
-    let _ = std::fs::write(dir.join(format!("{ms}-{tail}.json")), body);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(dir.join(format!("{ms}-{tail}.json")))
+        {
+            let _ = f.write_all(body);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = std::fs::write(dir.join(format!("{ms}-{tail}.json")), body);
+    }
 }
 
 /// Handle one HTTP/1.1 request on `stream`.
@@ -955,6 +978,13 @@ mod tests {
         let name = files[0].file_name().unwrap().to_string_lossy().into_owned();
         assert!(name.ends_with("-traces.json"), "{name}");
         assert_eq!(std::fs::read_to_string(&files[0]).unwrap(), body);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode(&dir), 0o700);
+            assert_eq!(mode(&files[0]), 0o600);
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

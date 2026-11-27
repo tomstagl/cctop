@@ -733,7 +733,10 @@ hooks are off or before its module is accepted.
     `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` and `OTEL_TRACES_EXPORTER=otlp`
     to it) in the environment Claude Code starts in, and `cctop run --otlp
     --dump-otel /tmp/otel` for that session in a real terminal; accept one
-    permission prompt, call one MCP tool, run one Bash command.
+    permission prompt, call one MCP tool, run one Bash command. The dumped
+    bodies contain account identifiers (email, user and organization ids)
+    and prompt text: cctop creates the directory 0700 and the files 0600;
+    keep it private and delete it afterwards.
     Expected: `blocked_on_user` spans with `source` `user` for the prompt
     you accepted; note every other `source` value, and whether
     `claude_code.mcp.rpc` and `claude_code.bash.subprocess` spans appear in
