@@ -42,7 +42,7 @@ The scheduled `contract` CI job has failed on every run `gh run list` shows, the
 | Route | Credentials | Result on 2.1.332 |
 |---|---|---|
 | The engine writes `.claude-plugin/types/claude-code/index.d.ts` beside a mod on load. The d.ts header promises this. | — | **Not written** by `claude -p --plugin-dir ./plugin`, with either the temp HOME or the real, trusted HOME. The 2.1.284 copy from 2026-09-29 stayed. It is probably interactive-only; unverified, and not usable in CI either way. |
-| The bundled `plugin-authoring` skill. Invoking it writes `types/claude-code.d.ts` under `$TMPDIR/claude-<uid>/bundled-skills/<version>/<random>/plugin-authoring/` | **yes** (one model call) | Full file, tool tables included: 29 571 lines, line 1 `// Written by Claude Code 2.1.332.` Under the temp HOME without credentials: "Not logged in", nothing written. |
+| The bundled `plugin-authoring` skill. Invoking it writes `types/claude-code.d.ts` under `$CLAUDE_CODE_TMPDIR/claude-<uid>/bundled-skills/<version>/<random>/plugin-authoring/` | **yes** (one model call) | Full file, tool tables included: 29 571 lines, line 1 `// Written by Claude Code 2.1.332.` Under the temp HOME without credentials: "Not logged in", nothing written. |
 | The binary. The core d.ts is bundled zstd-compressed as `/$bunfs/root/claude-code.d.ts-138c1d26.txt.zst`; its decompressed text starts `// Claude Code function hooks: the plugin API's TypeScript declarations.` | no | The core surface (23 551 lines, no tool tables). With `// Written by Claude Code <v>.` prepended, its surface equals the skill file's **apart from one trailing newline**. |
 
 So the full file (for typecheck) needs the skill and credentials, run locally at release time. The surface (for CI's drift check) can come from the binary without credentials.
@@ -70,7 +70,7 @@ So the full file (for typecheck) needs the skill and credentials, run locally at
 **Description:** As the maintainer, I want one command that replaces the checked-in d.ts with the installed `claude`'s full declarations, tool tables included.
 
 **Acceptance criteria:**
-- [ ] `scripts/regen-dts.sh` creates a temp dir `T`, then runs `TMPDIR=$T CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --max-turns 1 "/plugin-authoring reply with ok and do nothing else" </dev/null`. It copies `T/claude-*/bundled-skills/<v>/*/plugin-authoring/types/claude-code.d.ts` (the newest match) to `plugin/.claude/types/claude-code.d.ts`, then removes `T`.
+- [ ] `scripts/regen-dts.sh` creates a temp dir `T`, then runs `CLAUDE_CODE_TMPDIR=$T CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --max-turns 1 "/plugin-authoring reply with ok and do nothing else" </dev/null`. It copies `T/claude-*/bundled-skills/<v>/*/plugin-authoring/types/claude-code.d.ts` (the newest match) to `plugin/.claude/types/claude-code.d.ts`, then removes `T`.
 - [ ] It fails, naming the path it looked in, when no file appears or line 1 does not name `claude --version`'s version.
 - [ ] Its header comment says it makes one model call and needs a logged-in `claude`, and names `extract-dts.py` as the credential-free route for the surface alone.
 

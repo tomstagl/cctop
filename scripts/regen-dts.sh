@@ -5,7 +5,7 @@
 #
 # Makes one model call (`claude -p --max-turns 1`) and needs a logged-in
 # `claude`: invoking the bundled /plugin-authoring skill is what makes Claude
-# Code write the file, into a temp TMPDIR that this script then reads and
+# Code write the file, into a temp CLAUDE_CODE_TMPDIR that this script then reads and
 # removes. scripts/extract-dts.py is the credential-free route for the surface
 # alone, without the tool tables.
 #
@@ -20,7 +20,7 @@ trap 'rm -rf "$T"' EXIT
 
 v=$(claude --version | awk '{print $1}')
 
-TMPDIR=$T CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
+CLAUDE_CODE_TMPDIR=$T CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
   claude -p --max-turns 1 "/plugin-authoring reply with ok and do nothing else" </dev/null >/dev/null || true
 
 dir="$T/claude-*/bundled-skills/$v/*/plugin-authoring/types"
