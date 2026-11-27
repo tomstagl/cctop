@@ -312,10 +312,18 @@ impl Teammate {
             self.last_line_at
                 .is_none_or(|l| l <= h.saturating_add(HOOK_IDLE_GRACE_MS))
         }) {
+            // The status word (`idle <age>`) shows at once; the money
+            // counts as waste only once it has stood idle for `IDLE_MS`,
+            // like the inferred case.
+            let age = now_ms.saturating_sub(idle_at).max(0);
             return Some(Waste {
-                usd: self.current_turn_usd(),
+                usd: if age >= IDLE_MS {
+                    self.current_turn_usd()
+                } else {
+                    0.0
+                },
                 reason: WasteReason::Idle,
-                idle_ms: Some(now_ms.saturating_sub(idle_at).max(0)),
+                idle_ms: Some(age),
             });
         }
         if self.pending_tool_uses > 0 {
@@ -1230,6 +1238,17 @@ mod tests {
         let waste = w(&team).expect("idle by the hook");
         assert_eq!(waste.reason, WasteReason::Idle);
         assert_eq!(waste.idle_ms, Some(40_000));
+        // The word shows at once, but it is not waste yet.
+        assert_eq!(waste.usd, 0.0);
+        // At `IDLE_MS` the turn's cost counts.
+        let later = t0 + 20_000 + IDLE_MS;
+        let m = &team.members["t"];
+        let at_limit = m.waste(later, Liveness::Active).unwrap();
+        assert_eq!(at_limit.idle_ms, Some(IDLE_MS));
+        assert!(at_limit.usd > 0.0, "{at_limit:?}");
+        let before = later - 1;
+        let just = m.waste(before, Liveness::Active).unwrap();
+        assert_eq!(just.usd, 0.0);
         // Work after the hook clears it.
         team.members
             .get_mut("t")

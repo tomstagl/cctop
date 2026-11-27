@@ -910,6 +910,8 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let out = render_to_string(&app, 120, 30);
         assert!(out.contains("idle 1:00"), "{out}");
+        // Idle for a minute is a word, not yet waste.
+        assert!(!out.contains("wasted"), "{out}");
         insta::assert_snapshot!("agents_d_hook_idle_120x30", out);
     }
 
