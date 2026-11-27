@@ -9,62 +9,77 @@ use crate::advisor::rules::outcome::ERROR_WORDS;
 use crate::advisor::rules::{self, PHRASES};
 use crate::verdict::{self, Dir, Threshold, Verdict};
 
-/// What the actions column of a rule lists: `(kind, payload, needle)`. The
-/// needle is a literal of the rule's source (the payload up to its first
-/// `{hole}`), so a test notices when the code's text moves on.
-pub type ActionDoc = (&'static str, &'static str, &'static str);
+/// What a rule said when it fired on the fixture sessions: the first
+/// firing of each rule and variant, its line 1 and evidence as the coach
+/// draws them, and every action it offered (by kind and label, the payload
+/// of the first firing).
+#[derive(Debug, Clone, Default)]
+pub struct Fired {
+    pub headline: String,
+    pub evidence: String,
+    pub actions: Vec<(String, String, String)>,
+}
 
-/// Every rule's primary and extra actions besides the fix prompt (which
-/// each rule's words carry), as the code sets them. `read` is "Got it":
-/// nothing to type.
-pub const ACTION_DOCS: &[(&str, &[ActionDoc])] = &[
-    ("A01", &[]),
-    ("A02", &[]),
-    ("A03", &[]),
-    ("A04", &[("prompt", "After an Edit, trust the tool result — don't re-read the file before the next edit.", "After an Edit, trust the tool result")]),
-    ("A06", &[("slash", "/compact ", "\"/compact \"")]),
-    ("A07", &[("slash", "/mcp (an idle MCP server) or /plugin (an unused plugin)", "\"/mcp\""), ("slash", "/plugin", "\"/plugin\"")]),
-    ("A08", &[("slash", "/effort medium", "\"/effort medium\"")]),
-    ("A09", &[("allow_rule", "the rule Claude Code suggests, e.g. Bash(gh api:*)", "ActionKind::AllowRule")]),
-    ("A10", &[("prompt", "Run builds and test suites longer than a minute in the background and keep working meanwhile.", "Run builds and test suites longer than a minute")]),
-    ("A11", &[]),
-    ("A12", &[]),
-    ("A13", &[("slash", "/model sonnet, then /effort medium (or /effort medium alone)", "/model sonnet"), ("slash", "/effort medium", "/effort medium")]),
-    ("A14", &[("prompt", "Run search and summary subagents on sonnet (model: \"sonnet\"), keep opus for the main thread.", "Run search and summary subagents on sonnet")]),
-    ("A16", &[("setting", "\"async\": true", "\"\\\"async\\\": true\"")]),
-    ("A17", &[("slash", "/context", "\"/context\"")]),
-    ("A19", &[]),
-    ("A21", &[("slash", "/model", "\"/model\"")]),
-    ("A21b", &[("slash", "/model", "\"/model\"")]),
-    ("A23", &[("slash", "/compact ", "\"/compact \"")]),
-    ("A25", &[("prompt", "Use an Explore subagent for the rest of this search and give me a short summary.", "Use an Explore subagent for the rest of this search")]),
-    ("A27", &[("slash", "/clear", "\"/clear\"")]),
-    ("A30", &[("slash", "/clear", "\"/clear\"")]),
-    ("A32", &[("prompt", "Run {test} and fix any failures before continuing.", "and fix any failures before continuing.")]),
-    ("A33", &[("prompt", "Run {test}; if anything fails, fix it and amend the commit before pushing.", "if anything fails, fix it and amend the commit before pushing.")]),
-    ("A34", &[("prompt", "Plan first: list the steps and the files you will touch, then wait for my go.", "Plan first: list the steps and the files you will touch")]),
-    ("A36", &[("key", "Esc Esc", "\"Esc Esc\"")]),
-    ("A38", &[("key", "Esc", "\"Esc\"")]),
-    ("A40", &[("slash", "/code-review", "\"/code-review\"")]),
-    ("A41", &[]),
-    ("A42", &[("slash", "/clear", "\"/clear\"")]),
-    ("A43", &[]),
-    ("A44", &[("prompt", "The file {name} was also changed in my editor — re-read it and keep my version where they differ.", "was also changed in my editor")]),
-    ("A45", &[
-        ("prompt", "You can't run `{shape}` here (it's denied by my settings). Use another way or tell me what you need.", "(it's denied by my settings). Use another way"),
-        ("allow_rule", "the permissions.allow rule for the blocked shape", "ActionKind::AllowRule"),
-    ]),
-    ("A46", &[("prompt", "Before continuing, restate the constraints I gave earlier and keep to them.", "Before continuing, restate the constraints I gave earlier")]),
-    ("A47", &[("slash", "/model (a per-model limit), /login (authentication), /compact (prompt too long); nothing to type for the rest", "\"/login\"")]),
-    ("A48", &[("key", "6 Enter", "\"6 Enter\"")]),
-];
+/// Fire every rule on the fixture sessions, fed line by line and read at
+/// 40 points and at two clocks (live, and ten minutes idle): the same
+/// sweep as the rules' own whole-words test. Keyed by `(rule id, variant)`.
+pub fn fired_examples() -> std::collections::BTreeMap<(String, String), Fired> {
+    use crate::ui::state::{SessionInfo, State};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+    let rules = rules::all();
+    let mut out: std::collections::BTreeMap<(String, String), Fired> = Default::default();
+    for name in ["a", "b", "c", "d", "e", "r", "s", "t", "w", "w-live"] {
+        let path = root.join(format!("session-{name}.jsonl"));
+        let Ok(parsed) = crate::transcript::parse_file(&path) else {
+            continue;
+        };
+        let step = (parsed.len() / 40).max(1);
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        s.session = SessionInfo::from_fixture(&path);
+        for (i, line) in parsed.iter().enumerate() {
+            s.apply(line);
+            let lines = i + 1;
+            if lines % step != 0 && lines != parsed.len() {
+                continue;
+            }
+            for idle_ms in [30_000, 600_000] {
+                s.clock_override = true;
+                s.now_ms = s.last_line_at_ms.unwrap_or(0) + idle_ms;
+                for r in &rules {
+                    let Some(a) = r.evaluate(&s) else { continue };
+                    let e = out
+                        .entry((r.id().to_string(), a.variant.to_string()))
+                        .or_insert_with(|| Fired {
+                            headline: a.headline.clone(),
+                            evidence: a.evidence.clone(),
+                            actions: Vec::new(),
+                        });
+                    for x in &a.actions {
+                        let (k, l) = (x.kind.id().to_string(), x.label.clone());
+                        if !e.actions.iter().any(|(k2, l2, _)| *k2 == k && *l2 == l) {
+                            e.actions.push((k, l, x.payload.clone()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
 
-/// The three rule source files, for the freshness of [`ACTION_DOCS`].
-pub const RULE_SOURCES: [&str; 3] = [
-    include_str!("advisor/rules/token.rs"),
-    include_str!("advisor/rules/events.rs"),
-    include_str!("advisor/rules/outcome.rs"),
-];
+fn actions_cell(f: &Fired) -> String {
+    f.actions
+        .iter()
+        .map(|(k, l, p)| {
+            if p.trim().is_empty() {
+                format!("{k}: {}", cell(l))
+            } else {
+                format!("{k}: {} {}", cell(l), code_cell(p))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
 
 /// A table cell: pipes escaped, line breaks folded.
 fn cell(s: &str) -> String {
@@ -79,32 +94,25 @@ fn code_cell(s: &str) -> String {
 pub fn coach_copy_md() -> String {
     let mut out = String::new();
     out.push_str("# The coach's words\n\n");
-    out.push_str("Generated by `cctop coach --copy-md > docs/coach-copy.md` from the code that says these words; a test fails when this file is stale. Review every cell: this is what a person reads. `{holes}` are filled from facts only (counts, sizes, prices, durations, fixed labels, a file's basename), never from what the person or the model wrote.\n\n");
+    out.push_str("Generated by `cctop coach --copy-md > docs/coach-copy.md` from the code that says these words; a test fails when this file is stale. Review every cell: this is what a person reads. `{holes}` are filled from facts only (counts, sizes, prices, durations, fixed labels, a file's basename), never from what the person or the model wrote. This file covers each rule's words, the small phrases the rules choose in code, and an example of each rule's headline, evidence line and actions taken from rules that fired on the fixture sessions (the dynamic parts there are examples); the overview's verdict sentences are in `docs/verdicts.md`.\n\n");
 
     out.push_str("## Rules\n\n");
-    out.push_str("One row per rule and variant. A rule with variants says a different whole sentence for each case; the variant column names the case. The fix prompt is a ready prompt that is put in the box, never sent. Actions list what the person can do besides the fix prompt; `read` means nothing to type.\n\n");
-    out.push_str(
-        "| Rule | Name | Class · family | Variant | Body | Fix prompt | Actions | Foot |\n",
-    );
-    out.push_str("|---|---|---|---|---|---|---|---|\n");
+    out.push_str("One row per rule and variant. A rule with variants says a different whole sentence for each case; the variant column names the case. The fix prompt is a ready prompt that is put in the box, never sent. Body, fix prompt and foot are the rule's words, as written. **Example headline, example evidence and actions are what the rule said when it fired on the fixture sessions** (`fixtures/session-*.jsonl`, the first firing of each variant): numbers, file names and tool names in them are examples, the sentence shapes are the code's. Actions are listed by kind and label, with the payload of that example; `read` means nothing to type. A variant that none of the fixtures reaches says `not fired in tests`.\n\n");
+    out.push_str("| Rule | Name | Class · family | Variant | Body | Fix prompt | Example headline | Example evidence | Actions | Foot |\n");
+    out.push_str("|---|---|---|---|---|---|---|---|---|---|\n");
+    let fired = fired_examples();
     for rule in rules::all() {
-        let actions = ACTION_DOCS
-            .iter()
-            .find(|(id, _)| *id == rule.id())
-            .map(|(_, a)| *a)
-            .unwrap_or(&[]);
-        let actions = if actions.is_empty() {
-            "read".to_string()
-        } else {
-            actions
-                .iter()
-                .map(|(k, p, _)| format!("{k}: {}", code_cell(p)))
-                .collect::<Vec<_>>()
-                .join("<br>")
-        };
-        for (i, w) in rule.words().iter().enumerate() {
+        for w in rule.words() {
+            let f = fired.get(&(rule.id().to_string(), w.variant.to_string()));
+            let (h, e, a) = match f {
+                Some(f) => (cell(&f.headline), cell(&f.evidence), actions_cell(f)),
+                None => {
+                    let n = "not fired in tests".to_string();
+                    (n.clone(), n.clone(), n)
+                }
+            };
             out.push_str(&format!(
-                "| {} | {} | {} · {} | {} | {} | {} | {} | {} |\n",
+                "| {} | {} | {} · {} | {} | {} | {} | {} | {} | {} | {} |\n",
                 rule.id(),
                 cell(rule.name()),
                 rule.urgency().label(),
@@ -116,16 +124,13 @@ pub fn coach_copy_md() -> String {
                 },
                 cell(w.body),
                 w.fix_prompt.map(cell).unwrap_or_else(|| "—".into()),
-                if i == 0 {
-                    actions.clone()
-                } else {
-                    "same".into()
-                },
+                h,
+                e,
+                a,
                 cell(w.foot),
             ));
         }
     }
-
     out.push_str("\n## Phrases chosen in code\n\n");
     out.push_str("Small fixed phrases a rule picks by case and puts into a `{hole}` above. One row per phrase.\n\n");
     out.push_str("| Rule | Slot | Case | Phrase |\n|---|---|---|---|\n");
@@ -664,33 +669,17 @@ mod tests {
     }
 
     #[test]
-    fn every_rule_has_a_row_and_its_actions_are_in_its_source() {
-        for rule in rules::all() {
-            assert!(
-                ACTION_DOCS.iter().any(|(id, _)| *id == rule.id()),
-                "{} has no ACTION_DOCS row",
-                rule.id()
-            );
-        }
-        assert_eq!(ACTION_DOCS.len(), rules::all().len());
-        for (id, actions) in ACTION_DOCS {
-            for (kind, _, needle) in *actions {
-                assert!(
-                    RULE_SOURCES.iter().any(|s| s.contains(needle)),
-                    "{id} {kind}: the rules' source no longer has {needle:?}; update ACTION_DOCS"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn every_phrase_is_used_and_every_level_has_a_sentence() {
         for p in PHRASES {
             assert!(
-                RULE_SOURCES
-                    .iter()
-                    .any(|s| s.contains(&format!("\"{}\"", p.slot))
-                        && s.contains(&format!("\"{}\"", p.key))),
+                [
+                    include_str!("advisor/rules/token.rs"),
+                    include_str!("advisor/rules/events.rs"),
+                    include_str!("advisor/rules/outcome.rs"),
+                ]
+                .iter()
+                .any(|s| s.contains(&format!("\"{}\"", p.slot))
+                    && s.contains(&format!("\"{}\"", p.key))),
                 "{} {} {} is not used",
                 p.rule,
                 p.slot,
@@ -699,7 +688,7 @@ mod tests {
         }
         let rows = examples();
         for chart in ["context", "spend", "cost_per_turn", "cache", "tool_calls"] {
-            for level in [Level::Good, Level::Watch] {
+            for level in [Level::Good, Level::Watch, Level::Act] {
                 assert!(
                     rows.iter()
                         .any(|r| r.chart == chart && r.verdict.level == level),
