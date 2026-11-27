@@ -460,7 +460,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       run: async (argv: readonly string[]) => {
         calls.push([...argv]);
         const key = argv.join(' ');
-        const answer = script[key];
+        // A script for `cctop query overview` answers it at any `--max-turns`
+        // (the pane derives it from its width) unless one names the count.
+        const answer = script[key] ?? script[key.replace(/ --max-turns \d+$/, '')];
         if (answer === undefined) throw new Error(`fakeEngine: no script for process.run: ${key}`);
         if (answer instanceof Error) throw answer;
         if (typeof answer === 'function') return answer();

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { CommandRunResult, ProcessRunResult, RenderElement, RenderNode } from 'claude-code';
 import { fakeElements, fakeEngine, fakeOn, paneRender, textOf, type FakeEngine, type ProcessScript } from './harness';
 import { chartsRenderer, register } from '../../plugin/hooks/pane';
+import { initialModel, reduce } from '../../plugin/hooks/model';
 import { renderToText } from './render';
 import { fixture } from './fixture';
 import { drawPicture, instantiateCharts, type ChartRenderer, type ChartsMode, type Picture } from '../../plugin/hooks/charts';
@@ -20,6 +21,7 @@ import {
   pictureJobs,
   renderOverviewCharts,
   sectionWidth,
+  turnAreas,
   turnNumbers,
   turnScope,
   turnsIn,
@@ -233,8 +235,10 @@ test('before the pictures are drawn: blank boxes of their size, the labels alrea
 });
 
 // Hover (spec §3): no code runs on hover, so every per-turn readout is drawn
-// beforehand, hidden, and revealed by a keyed Box laid over its turn column.
-test('hover: a keyed Box over each turn column reveals that turn\'s readout; the turn numbers are Buttons', async () => {
+// beforehand, hidden, and revealed through its turn's scope. The targets are
+// in the flow (an absolute Box passes the pointer to its parent, per the
+// d.ts): the turn-numbers row is one keyed Box per turn column.
+test('hover: each turn column has an in-flow keyed Box that reveals its readout; its Button pins it', async () => {
   const o = B();
   const picked: [string, number][] = [];
   const { tree, lines } = await draw(o, 105, { picked });
@@ -246,16 +250,22 @@ test('hover: a keyed Box over each turn column reveals that turn\'s readout; the
     const areas = all(tree, 'Box').filter((b) => String(b.props?.key).startsWith(`hover-${id}-`));
     assert.equal(areas.length, n, `${id}: one area per turn`);
     let x = 0;
+    let numbers = '';
     for (const [i, a] of areas.entries()) {
       const turn = c.spec.x.from + i;
-      assert.equal(a.props?.position, 'absolute');
-      assert.equal(a.props?.left, x, `${id} turn ${turn}: columns meet`);
+      assert.notEqual(a.props?.position, 'absolute', `${id} turn ${turn}: in the flow`);
       assert.ok((a.props?.width as number) >= 2, `${id}: two cells a turn at least`);
-      assert.equal(a.props?.height, pic.props?.rows);
       assert.deepEqual(a.props?.hover, { scope: turnScope(id, turn) });
+      const button = (a.children ?? []).find((ch) => typeof ch === 'object' && ch.type === 'Button') as Node | undefined;
+      assert.equal(button?.props?.key, `turn-${id}-${turn}`, `${id} turn ${turn}: a Button inside`);
+      assert.equal((button?.props?.label as string).length, a.props?.width);
+      numbers += button?.props?.label as string;
       x += a.props?.width as number;
     }
-    assert.equal(x, cols, `${id}: the areas cover the chart`);
+    assert.equal(x, cols, `${id}: the areas cover the chart's width`);
+    // The row reads as the TUI's turn numbers.
+    const want = turnNumbers(c.spec, cols).reduce((t, p) => t + ' '.repeat(p.at - t.length) + p.label, '');
+    assert.equal(numbers.trimEnd(), want, id);
     // The readouts: hidden, revealed in the turn's scope, the readout's own text.
     const reveals = all(tree, 'Box').filter((b) => b.props?.display === 'none' && String((b.props?.hover as { scope?: string })?.scope).startsWith(`cctop-${id}-turn-`));
     assert.equal(reveals.length, c.readouts.length, id);
@@ -263,17 +273,9 @@ test('hover: a keyed Box over each turn column reveals that turn\'s readout; the
       const box = reveals.find((b) => (b.props?.hover as { scope: string }).scope === turnScope(id, r.x));
       assert.ok(box !== undefined, `${id} turn ${r.x}`);
       assert.deepEqual(box.props?.hover, { scope: turnScope(id, r.x), display: 'flex' });
+      assert.equal(box.props?.key, `readout-${id}-${r.x}`);
       assert.ok(textOf(box.children).includes(r.text.slice(0, 20)), `${id} turn ${r.x}: ${textOf(box.children)}`);
     }
-    // The turn numbers, where they fit as the TUI places them, press: each
-    // sets its turn's readout.
-    const nums = all(tree, 'Button').filter((b) => String(b.props?.key).startsWith(`turn-${id}-`));
-    assert.deepEqual(
-      nums.map((b) => b.props?.label),
-      turnNumbers(c.spec, cols).map((p) => p.label),
-      `${id}: a Button per turn number drawn`,
-    );
-    assert.ok(nums.length >= Math.ceil(n / 2), `${id}: ${nums.length} numbers for ${n} turns`);
     presses.get(`turn-${id}-3`)?.();
   }
   assert.deepEqual(picked, [['cost_per_turn', 3], ['cache', 3], ['tool_calls', 3]]);
@@ -283,6 +285,17 @@ test('hover: a keyed Box over each turn column reveals that turn\'s readout; the
   const pickedLines = (await draw(o, 105, { readouts: { cost_per_turn: 2 } })).lines;
   assert.ok(pickedLines.some((l) => l.includes('Turn 2 · $5.95. A costly turn')), JSON.stringify(pickedLines));
   assert.ok(!pickedLines.some((l) => l.includes(cost.readouts.at(-1)!.text.slice(0, 30))));
+});
+
+test('narrow columns: a turn without a whole cell shares an area with the next (spec §8)', () => {
+  const spec = { ...B().charts.find((c) => c.id === 'cost_per_turn')!.spec };
+  assert.equal(turnsIn(spec), 6);
+  const two = turnAreas(spec, 4);
+  assert.deepEqual(two.map((a) => a.turns), [[1, 2], [3, 4], [5, 6]]);
+  assert.deepEqual(two.map((a) => [a.x0, a.x1]), [[0, 1], [1, 2], [2, 4]]);
+  const one = turnAreas(spec, 12);
+  assert.equal(one.length, 6);
+  assert.deepEqual([one[0]!.x0, one.at(-1)!.x1], [0, 12]);
 });
 
 test('a 300-turn session: the per-turn charts show the last turns that fit at two cells each, labelled; context spans the whole', async () => {
@@ -383,7 +396,7 @@ test('every keyed text row of the overview is a metric id from docs/metrics.md',
   const ids = new Set([...doc.matchAll(/<a id="([a-z0-9_]+)"><\/a>/g)].map((m) => m[1]));
   const { tree } = await draw(B(), 122);
   const rows = all(tree, 'Box').filter((b) => typeof b.props?.key === 'string' && (b.children ?? []).some((c) => typeof c === 'object' && c.type === 'Text'));
-  const keys = rows.map((b) => String(b.props?.key)).filter((k) => !/^(hover|readout|plot)-/.test(k));
+  const keys = rows.map((b) => String(b.props?.key)).filter((k) => !/^(hover|readout|plot|axis)-/.test(k));
   assert.deepEqual(keys.sort(), ['verdict_cache', 'verdict_context', 'verdict_cost_per_turn', 'verdict_spend', 'verdict_tool_calls']);
   for (const k of keys) assert.ok(ids.has(k), k);
 });
@@ -397,7 +410,7 @@ const HELP = `Commands:\n${VERBS.map((v) => `  ${v}  x`).join('\n')}\n\nOptions:
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const OVERVIEW_ARGV = (columns: number) => `cctop query overview --session ${SESSION} --surface pane --max-turns ${maxTurnsFor(columns)}`;
 
-async function bootPane(env: Record<string, string>, columns = 122) {
+async function bootPane(env: Record<string, string>, columns = 122, view = 'overview') {
   const script: Record<string, ProcessScript> = {
     'cctop --version': ok('cctop 0.12.0\n'),
     'cctop query config': ok(JSON.stringify({ schema: 1, pane: { charts: 'auto' } })),
@@ -415,7 +428,7 @@ async function bootPane(env: Record<string, string>, columns = 122) {
   register(on, {});
   await dispatch('session.start', { cwd: '/p', surface: 'terminal', isInteractive: false }, () => ({ cwd: '/p' }));
   for (let i = 0; i < 4; i++) await settle();
-  await dispatch<CommandRunResult>('command.run', { command: 'cctop-pane', args: 'overview', origin: { kind: 'composer' } });
+  await dispatch<CommandRunResult>('command.run', { command: 'cctop-pane', args: view, origin: { kind: 'composer' } });
   for (let i = 0; i < 4; i++) await settle();
   // Runs the timers due in `ms` and lets what they start settle.
   const advance = async (ms: number) => {
@@ -429,13 +442,14 @@ async function bootPane(env: Record<string, string>, columns = 122) {
 const overviewQueries = ($: FakeEngine) => $.process.calls.filter((argv) => argv[2] === 'overview');
 
 test('the pane draws only the charts whose spec changed, off the render hook, and swaps them with $.ui.blit', async () => {
-  const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'Apple_Terminal' });
-  assert.equal(overviewQueries($).length, 0, 'the overview is not read while body 1 is closed');
+  const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'Apple_Terminal' }, 122, 'tools');
+  await advance(1);
+  assert.equal(overviewQueries($).length, 0, 'the overview is not read while its charts are not shown');
   const wasm = chartsRenderer();
   assert.ok(wasm !== null);
   assert.equal(wasm.renders, 0);
-  // Body 1 opens: its verb is read at once, at the turns that fit 122 columns.
-  $.ui.press('cell-context');
+  // The Overview opens on its charts: the verb is read at once, at the turns that fit 122 columns.
+  $.ui.press('overview');
   await advance(1);
   await advance(1);
   assert.deepEqual(overviewQueries($).at(-1), OVERVIEW_ARGV(122).split(' '));
@@ -470,7 +484,6 @@ test('the pane draws only the charts whose spec changed, off the render hook, an
 
 test('pictures in a picture terminal: Images, the first one probed once it is mounted', async () => {
   const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'ghostty' });
-  $.ui.press('cell-context');
   await advance(1);
   await advance(1);
   const tree = await render();
@@ -490,7 +503,6 @@ test('pictures in a picture terminal: Images, the first one probed once it is mo
 
 test('a denied probe turns the session to cells: every picture drawn again as a Raster', async () => {
   const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'ghostty', TMUX: '/tmp/tmux-1/default,1,0' });
-  $.ui.press('cell-context');
   await advance(1);
   await advance(1);
   await render();
@@ -504,7 +516,6 @@ test('a denied probe turns the session to cells: every picture drawn again as a 
 
 test('a new width redraws the overview at the TUI\'s sizes for it and reads the turns that fit', async () => {
   const { $, surface, advance, render } = await bootPane({ TERM_PROGRAM: 'Apple_Terminal' });
-  $.ui.press('cell-context');
   await advance(1);
   await advance(1);
   await render();
@@ -524,11 +535,42 @@ test('a new width redraws the overview at the TUI\'s sizes for it and reads the 
 
 test('a turn number pressed in the pane shows that turn\'s readout', async () => {
   const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'Apple_Terminal' });
-  $.ui.press('cell-context');
   await advance(1);
   await advance(1);
   await render();
   $.ui.press('turn-cost_per_turn-2');
   const lines = renderToText(await render(), 122);
   assert.ok(lines.some((l) => l.includes('Turn 2 · $5.95. A costly turn')), JSON.stringify(lines));
+});
+
+test('a probe denied for a reason that is not the alt keeps pictures and tries again on a later render', async () => {
+  const { $, advance, render } = await bootPane({ TERM_PROGRAM: 'ghostty' });
+  await advance(1);
+  await advance(1);
+  await render();
+  Object.assign($.ui.blitAnswer, { deny: 'nothing of this plugin is mounted there' });
+  await advance(200);
+  assert.equal($.ui.blits.length, 1);
+  let tree = await render();
+  assert.ok(all(tree, 'Image').length > 0, 'still pictures');
+  delete ($.ui.blitAnswer as { deny?: string }).deny;
+  await advance(200);
+  assert.equal($.ui.blits.length, 2, 'probed again after the next render');
+  tree = await render();
+  await advance(400);
+  assert.equal($.ui.blits.length, 2, 'the answer is in: no more probes');
+  assert.ok(all(tree, 'Image').length > 0);
+});
+
+test('a picked readout: a second press on its turn, or a new turn, brings the latest back', () => {
+  let m = initialModel();
+  m = reduce(m, { type: 'overview.readout', chart: 'cost_per_turn', turn: 2 });
+  m = reduce(m, { type: 'overview.readout', chart: 'cache', turn: 4 });
+  assert.deepEqual(m.readouts, { cost_per_turn: 2, cache: 4 });
+  m = reduce(m, { type: 'overview.readout', chart: 'cost_per_turn', turn: 2 });
+  assert.deepEqual(m.readouts, { cache: 4 }, 'the same turn again clears it');
+  m = reduce(m, { type: 'overview.readout', chart: 'cache', turn: 5 });
+  assert.deepEqual(m.readouts, { cache: 5 });
+  m = reduce(m, { type: 'turn.start', at: 1 });
+  assert.deepEqual(m.readouts, {}, 'a new turn is the latest again');
 });

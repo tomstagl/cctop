@@ -72,6 +72,12 @@ test('chartsChoice says which step decided; a failed wasm leaves cells', () => {
 test('a blit that names a deny is the probe failing', () => {
   assert.equal(probeOf({}), 'ok');
   assert.equal(probeOf({ deny: 'the Image is drawing its alt' }), 'denied');
+  assert.equal(probeOf({ deny: 'no placeholder images' }), 'denied');
+  assert.equal(probeOf({ deny: 'tmux holds images back', fix: 'tmux-passthrough' }), 'denied');
+  // A deny that says nothing of the terminal leaves the probe to the next draw.
+  assert.equal(probeOf({ deny: 'nothing of this plugin is mounted there' }), 'unknown', 'not mounted');
+  assert.equal(probeOf({ deny: 'no-surface: no surface is attached' }), 'unknown', 'no surface');
+  assert.equal(probeOf({ deny: 'the size is not the mounted one' }), 'unknown', 'another size');
 });
 
 test('toBase64 is standard padded base64', () => {

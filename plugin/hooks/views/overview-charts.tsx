@@ -13,10 +13,11 @@
 // (`Pictures`); one not drawn yet is a blank box of its size. Labels, axis
 // values and verdicts are text beside the pictures, never inside them.
 //
-// Below SPARKLINE columns every chart is a Raster one row high. Over each
-// per-turn chart a keyed Box per turn column reveals that turn's readout
-// under the chart on hover (no code runs on hover); the turn numbers are
-// Buttons that set the readout for a terminal that reports no pointer.
+// Below SPARKLINE columns every chart is a Raster one row high. Under each
+// per-turn chart the turn-numbers row is one keyed Box per turn column, in
+// the flow: the pointer over it reveals that turn's readout (no code runs on
+// hover), and the Button inside pins it for a terminal that reports no
+// pointer.
 import type { ElementTable, RenderElement } from 'claude-code';
 import type { Picture, PictureJob, RasterCells } from '../charts';
 import { at, stringAt } from './format';
@@ -257,8 +258,6 @@ export function dims(c: Chart, w: number, sparkline = false): Dims {
   return { gutter, cols, rows: sparkline ? 1 : rows };
 }
 
-const PER_TURN = new Set(['cost_per_turn', 'cache', 'tool_calls']);
-
 /** The picture keys of a chart and of its bar. */
 export const chartKey = (id: string): string => `chart-${id}`;
 export const barKey = (id: string): string => `chart-${id}-bar`;
@@ -421,23 +420,63 @@ export function turnNumbers(spec: ChartSpec, cols: number): { at: number; label:
   return out;
 }
 
-/** The turn numbers row: each a plain Button that sets the readout, the gaps text. */
-function numbersRow(c: Chart, indent: number, cols: number, ctx: Ctx): Block {
-  const { Box, Button } = ctx.el;
-  const places = turnNumbers(c.spec, cols);
-  if (ctx.actions === undefined) {
-    let text = '';
-    for (const p of places) text += ' '.repeat(p.at - text.length) + p.label;
-    return textBlock([seg(' '.repeat(indent)), dim(text)], ctx);
+/** One hover area under a per-turn chart: the cells `x0..x1` and the turns it stands for (the first names its scope). */
+export type TurnArea = { turn: number; turns: number[]; x0: number; x1: number };
+
+/**
+ * The turn columns of a per-turn chart `cols` cells wide: one area a turn,
+ * or, where a turn would get no whole cell, one area per two turns (or as
+ * many as it takes) — spec §8. The areas meet and cover the chart.
+ */
+export function turnAreas(spec: ChartSpec, cols: number): TurnArea[] {
+  const n = turnsIn(spec);
+  const first = Math.floor(spec.x.from);
+  const k = Math.max(1, Math.ceil(n / Math.max(1, cols)));
+  const out: TurnArea[] = [];
+  for (let i = 0; i < n; i += k) {
+    const turns = Array.from({ length: Math.min(k, n - i) }, (_, j) => first + i + j);
+    const x0 = Math.floor((i * cols) / n);
+    const x1 = Math.floor((Math.min(i + k, n) * cols) / n);
+    const last = out.at(-1);
+    if (x1 <= x0 && last !== undefined) {
+      last.turns.push(...turns);
+      continue;
+    }
+    out.push({ turn: turns[0]!, turns, x0, x1 });
   }
+  return out;
+}
+
+/** The hover scope a turn column and its readout share. */
+export const turnScope = (chart: string, turn: number): string => `cctop-${chart}-turn-${turn}`;
+
+/**
+ * The turn numbers row, as the TUI writes it, cut into one keyed Box per
+ * turn column: each joins its turn's hover scope (the pointer over the
+ * column, in the flow, reveals the turn's readout) and holds its share of
+ * the numbers as a plain Button that pins that turn's readout.
+ */
+function numbersRow(c: Chart, indent: number, cols: number, ctx: Ctx): Block {
+  const { Box, Button, Text } = ctx.el;
+  let text = '';
+  for (const p of turnNumbers(c.spec, cols)) text += ' '.repeat(p.at - text.length) + p.label;
+  text = text.padEnd(cols);
   const actions = ctx.actions;
   const parts: RenderElement[] = [];
-  let used = -indent;
-  for (const p of places) {
-    const gap = p.at - used;
-    if (gap > 0) parts.push(textRow([seg(' '.repeat(gap))], ctx.el));
-    parts.push(<Button key={`turn-${c.id}-${p.turn}`} label={p.label} plain dimColor onPress={() => actions.readout(c.id, p.turn)} />);
-    used = p.at + p.label.length;
+  if (indent > 0) parts.push(textRow([seg(' '.repeat(indent))], ctx.el));
+  for (const a of turnAreas(c.spec, cols)) {
+    const label = text.slice(a.x0, a.x1);
+    parts.push(
+      <Box key={`hover-${c.id}-${a.turn}`} width={a.x1 - a.x0} flexShrink={0} hover={{ scope: turnScope(c.id, a.turn) }}>
+        {actions === undefined ? (
+          <Text wrap="truncate" dimColor>
+            {label}
+          </Text>
+        ) : (
+          <Button key={`turn-${c.id}-${a.turn}`} label={label} plain dimColor onPress={() => actions.readout(c.id, a.turn)} />
+        )}
+      </Box>,
+    );
   }
   return { el: <Box flexDirection="row">{parts}</Box>, rows: 1 };
 }
@@ -451,39 +490,20 @@ function pictureEl(key: string, cols: number, rows: number, alt: string, ctx: Ct
   return { el: <Raster key={key} columns={p.cols} rows={p.rows} cells={p.cells} />, cols: p.cols, rows: p.rows };
 }
 
-/** The hover scope a turn column and its readout share. */
-export const turnScope = (chart: string, turn: number): string => `cctop-${chart}-turn-${turn}`;
-
-/**
- * The chart's cells beside its label column, with a keyed Box laid over
- * each turn column of a per-turn chart: the pointer over it lights the
- * turn's scope, which reveals its readout (`readoutBlock`).
- */
+/** The chart's cells beside its label column. */
 function chartBand(c: Chart, d: Dims, labels: string[], ctx: Ctx): { block: Block; cols: number } {
   const { Box, Text } = ctx.el;
   const alt = c.readouts.at(-1)?.text ?? `${c.title} ${c.figure}`;
   const pic = pictureEl(chartKey(c.id), d.cols, d.rows, alt, ctx);
-  const overlays: RenderElement[] = [];
-  if (PER_TURN.has(c.id)) {
-    const n = turnsIn(c.spec);
-    const first = Math.floor(c.spec.x.from);
-    for (let i = 0; i < n; i++) {
-      const x0 = Math.floor((i * pic.cols) / n);
-      const x1 = Math.floor(((i + 1) * pic.cols) / n);
-      if (x1 <= x0) continue;
-      const turn = first + i;
-      overlays.push(
-        <Box key={`hover-${c.id}-${turn}`} position="absolute" top={0} left={x0} width={x1 - x0} height={pic.rows} hover={{ scope: turnScope(c.id, turn) }} />,
-      );
-    }
-  }
   const gutter =
     d.gutter > 0 ? (
       <Box flexDirection="column" width={d.gutter} flexShrink={0}>
         {Array.from({ length: pic.rows }, (_, i) => (
-          <Text wrap="truncate" dimColor>
-            {(labels[i] ?? '').padEnd(d.gutter)}
-          </Text>
+          <Box key={`axis-${c.id}-${i}`}>
+            <Text wrap="truncate" dimColor>
+              {(labels[i] ?? '').padEnd(d.gutter)}
+            </Text>
+          </Box>
         ))}
       </Box>
     ) : null;
@@ -494,7 +514,6 @@ function chartBand(c: Chart, d: Dims, labels: string[], ctx: Ctx): { block: Bloc
           {gutter}
           <Box key={`plot-${c.id}`} width={pic.cols} height={pic.rows} flexShrink={0} position="relative">
             {pic.el}
-            {overlays}
           </Box>
         </Box>
       ),
@@ -536,7 +555,7 @@ function readoutBlock(c: Chart, w: number, ctx: Ctx, hover: boolean): Block | nu
   const picked = ctx.readouts[c.id];
   const shown = c.readouts.find((r) => r.x === picked) ?? c.readouts.at(-1)!;
   const base = readoutLines(shown.text, w);
-  if (!hover) return { el: <Box flexDirection="column">{base.map((l) => textRow(l, ctx.el))}</Box>, rows: base.length };
+  if (!hover) return { el: <Box flexDirection="column">{base.map((l, i) => textRow(l, ctx.el, `readout-${c.id}-row-${i}`))}</Box>, rows: base.length };
   const n = turnsIn(c.spec);
   const first = Math.floor(c.spec.x.from);
   const turns = c.readouts.filter((r) => r.x >= first && r.x < first + n && Number.isInteger(r.x));
@@ -546,11 +565,13 @@ function readoutBlock(c: Chart, w: number, ctx: Ctx, hover: boolean): Block | nu
   return {
     el: (
       <Box key={`readout-${c.id}`} flexDirection="column" height={rows} position="relative">
-        {Array.from({ length: rows }, (_, i) => textRow(base[i] ?? [seg('')], ctx.el))}
+        {Array.from({ length: rows }, (_, i) => textRow(base[i] ?? [seg('')], ctx.el, `readout-${c.id}-row-${i}`))}
         {turns.map((r) => (
-          <Box position="absolute" top={0} left={0} width={w} height={rows} flexDirection="column" display="none" hover={{ scope: turnScope(c.id, r.x), display: 'flex' }}>
-            {padded(readoutLines(r.text, w)).map((line) => (
-              <Text wrap="truncate">{line}</Text>
+          <Box key={`readout-${c.id}-${r.x}`} position="absolute" top={0} left={0} width={w} height={rows} flexDirection="column" display="none" hover={{ scope: turnScope(c.id, r.x), display: 'flex' }}>
+            {padded(readoutLines(r.text, w)).map((line, i) => (
+              <Box key={`readout-${c.id}-${r.x}-${i}`}>
+                <Text wrap="truncate">{line}</Text>
+              </Box>
             ))}
           </Box>
         ))}
@@ -689,6 +710,8 @@ function pair(a: Block[], b: Block[], l: Layout, ctx: Ctx): Block {
 /** What the overview body draws with: the elements, the pictures pane.tsx rendered, the picked readouts, the presses. */
 export type OverviewChartsInput = {
   el: ChartElements;
+  /** Rows pinned under the charts, above the footer: Console's act line (the nudge). */
+  pinned?: RenderElement[];
   pictures?: Pictures;
   readouts?: Record<string, number>;
   actions?: ChartsActions;
@@ -716,6 +739,7 @@ export function renderOverviewCharts(o: Overview, columns: number, input: Overvi
     else out.push(...section(a, l.inner, ctx), textBlock([], ctx), ...section(b, l.inner, ctx));
     out.push(textBlock(rule(l.inner), ctx));
   }
+  for (const p of input.pinned ?? []) out.push({ el: p, rows: 1 });
   // Wrapped, never cut: one row from 66 columns, as the TUI draws it.
   out.push(...lines(wrap([dim(o.footer)], l.inner, 0), ctx));
   return (

@@ -37,6 +37,12 @@ export type Poller = {
    * no-op while stopped.
    */
   pollNow(): void;
+  /**
+   * One verb now, outside the rounds (the overview when its charts come
+   * into view or the turns that fit change); a no-op while stopped, before
+   * the session is known, without the binary or for a verb it lacks.
+   */
+  queryNow(verb: QueryVerb): Promise<void>;
   /** Re-arms the timer when the cadence changed with the turn state; a no-op while stopped. */
   reschedule(): void;
   running(): boolean;
@@ -279,6 +285,11 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
           }
         });
       return inflight;
+    },
+    async queryNow(verb) {
+      const model = getModel();
+      if (!active || model.sessionId === null || model.binary !== 'present' || !isSupported(model, verb)) return;
+      await query(verb, model.sessionId);
     },
     pollNow() {
       if (!active) return;

@@ -140,11 +140,11 @@ export type Model = {
   coachToastTurn: number | null;
   /** The last `$.ui.status` line the coach set; set again only when it changes. */
   coachStatus: string | null;
-  /** Console's open body (its id); events, the way home, by default. */
+  /** Console's open body (its id): the overview's charts (`context`, key 1) by default, as spec §5.2 opens the Overview; `0` is events, the way home. */
   body: string;
   /** Console's rule line expanded into the key map (`? keys` pressed). */
   keys: boolean;
-  /** The overview's picked readout per per-turn chart (chart id → turn), a turn number's press; absent = the latest turn. */
+  /** The overview's picked readout per per-turn chart (chart id → turn), a turn number's press; absent = the latest turn. Cleared by a new turn and by pressing the picked turn again. */
   readouts: Record<string, number>;
   /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
   openRun: string | null;
@@ -249,7 +249,7 @@ export function initialModel(): Model {
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
-    body: 'events',
+    body: 'context',
     keys: false,
     readouts: {},
     openRun: null,
@@ -272,6 +272,8 @@ export function reduce(model: Model, action: Action): Model {
     case 'turn.start':
       return {
         ...model,
+        // A new turn is the latest again: a picked readout gives way to it.
+        readouts: {},
         turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at, toolMs: 0 },
       };
     case 'turn.complete': {
@@ -399,8 +401,11 @@ export function reduce(model: Model, action: Action): Model {
       return model.body === action.id ? model : { ...model, body: action.id };
     case 'overview.keys':
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
-    case 'overview.readout':
-      return model.readouts[action.chart] === action.turn ? model : { ...model, readouts: { ...model.readouts, [action.chart]: action.turn } };
+    case 'overview.readout': {
+      // A second press on the picked turn lets the latest show again.
+      const { [action.chart]: picked, ...rest } = model.readouts;
+      return picked === action.turn ? { ...model, readouts: rest } : { ...model, readouts: { ...rest, [action.chart]: action.turn } };
+    }
     case 'agents.run':
       return model.openRun === action.run ? model : { ...model, openRun: action.run };
     case 'agents.live':

@@ -237,7 +237,7 @@ test('turn.complete records the context size for the sparkline, capped at HISTOR
   const opened = reduce(withDashboard, { type: 'overview.body', id: 'context' });
   const waiting = renderToText(renderOverview({ ...opened, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
   assert.ok(waiting.some((r) => r.startsWith('─── context ')), JSON.stringify(waiting));
-  assert.equal(waiting.at(-1), ' waiting for cctop query overview…');
+  assert.ok(waiting.includes(' waiting for cctop query overview…'), JSON.stringify(waiting));
   const drawn = reduce(opened, { type: 'query', verb: 'overview', data: fixture('overview-b') });
   const lines = renderToText(renderOverview({ ...drawn, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
   assert.ok(lines.some((r) => r.startsWith(' Context window  142k of 1M')), JSON.stringify(lines));
