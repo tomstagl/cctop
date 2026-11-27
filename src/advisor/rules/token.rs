@@ -142,8 +142,15 @@ impl Rule for CacheMiss {
         };
         let mut a = Advice::new("A01", "cache-miss", Urgency::Later);
         a.headline = format!("{head}{what}{tail}");
+        // `· after settings change` does not fit the headline beside the
+        // never-clipped tail (52 cells): it leads the evidence line instead.
+        let after = located
+            .and_then(|l| l.after_config_change.as_ref())
+            .or(miss.after_config_change.as_ref())
+            .map(|_| "after settings change · ")
+            .unwrap_or_default();
         a.evidence = format!(
-            "{} · turn {} · {} named misses this session{}",
+            "{after}{} · turn {} · {} named misses this session{}",
             miss.kind,
             miss.turn,
             state.agg.cache_misses.len(),
@@ -1209,6 +1216,82 @@ mod tests {
             a.evidence.contains("located: tools_changed"),
             "{}",
             a.evidence
+        );
+    }
+
+    fn config_change(at: &str, source: &str) -> crate::hooks::HookEvent {
+        crate::hooks::HookEvent {
+            at: crate::metrics::cost::parse_ts_ms(at).unwrap(),
+            event: "ConfigChange".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"source": source, "file_path": "/p/.claude/settings.json"}),
+        }
+    }
+
+    #[test]
+    fn config_change_marks_next_miss() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        // Not marked before any ConfigChange.
+        let plain = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!plain.evidence.contains("after settings change"));
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        let miss = s.requests.miss_for("b").expect("located");
+        assert_eq!(
+            miss.after_config_change.as_deref(),
+            Some("project_settings")
+        );
+        assert_eq!(
+            s.agg.cache_misses[0].after_config_change.as_deref(),
+            Some("project_settings")
+        );
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "settings changed · settings.json"));
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        // The tail is never cut, and the headline stays inside the coach width.
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+        assert!(2 + a.headline.chars().count() <= crate::coach::WIDTH);
+        assert!(
+            a.evidence
+                .starts_with("after settings change · tools_changed"),
+            "{}",
+            a.evidence
+        );
+    }
+
+    #[test]
+    fn config_change_marks_only_the_first_miss_and_not_one_before() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        // After the miss: it was not caused by this change.
+        s.apply_hook(&config_change("2026-01-01T00:00:20Z", "user_settings"));
+        assert_eq!(s.requests.miss_for("b").unwrap().after_config_change, None);
+        // A second change between: the miss belongs to the later one.
+        s.apply_hook(&config_change("2026-01-01T00:00:03Z", "skills"));
+        s.apply_hook(&config_change("2026-01-01T00:00:08Z", "project_settings"));
+        assert_eq!(
+            s.requests
+                .miss_for("b")
+                .unwrap()
+                .after_config_change
+                .as_deref(),
+            Some("project_settings")
         );
     }
 

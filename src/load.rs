@@ -139,6 +139,7 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
         state.session.ended_at_ms = state.last_line_at_ms;
     }
     state.team = load_team(transcript, &state);
+    state.sync_teammate_idle();
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let cwd = state.session.cwd.clone();
     state.prefix.scan(&cwd, home.as_deref());

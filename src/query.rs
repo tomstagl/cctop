@@ -413,7 +413,17 @@ pub fn tools(state: &State) -> Value {
             |(n, c)| json!({"tool": n, "tokens": m(*c as u64 / 4, "tokens", "input_tokens", true)}),
         )
         .collect();
-    json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads})
+    let skill_shell: Vec<Value> = state
+        .skill_shell
+        .iter()
+        .map(|(n, c)| json!({"skill": n, "count": c}))
+        .collect();
+    let mut out = json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads});
+    // Only once a skill ran a shell command (`PreSkillShellCommand` hook).
+    if !skill_shell.is_empty() {
+        out["skill_shell"] = Value::Array(skill_shell);
+    }
+    out
 }
 
 pub fn files(state: &State) -> Value {

@@ -278,6 +278,7 @@ mod tests {
             tokens: 30_000,
             cause,
             api_reason: api.map(String::from),
+            after_config_change: None,
         }
     }
 

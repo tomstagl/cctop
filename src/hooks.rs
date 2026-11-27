@@ -695,6 +695,107 @@ mod state_tests {
     }
 
     #[test]
+    fn cwd_changed_moves_display() {
+        let mut s = State::new(Pricing::bundled());
+        s.session.cwd = "/work/proj".into();
+        assert_eq!(s.work_dir(), std::path::Path::new("/work/proj"));
+        s.apply_hook(&with(
+            "CwdChanged",
+            1_000,
+            "",
+            serde_json::json!({"old_cwd":"/work/proj","new_cwd":"/elsewhere/lib"}),
+        ));
+        // Git and file paths follow; the session's own folder does not move.
+        assert_eq!(s.work_dir(), std::path::Path::new("/elsewhere/lib"));
+        assert_eq!(s.session.cwd, std::path::PathBuf::from("/work/proj"));
+        assert!(s.events.iter().any(|e| e.text == "cwd proj → lib"));
+    }
+
+    #[test]
+    fn directory_added_no_double_count() {
+        let mut s = State::new(Pricing::bundled());
+        let added = |dir: &str| {
+            with(
+                "DirectoryAdded",
+                2_000,
+                "",
+                serde_json::json!({"directory": dir, "source": "command"}),
+            )
+        };
+        s.apply_hook(&added("/x/y"));
+        assert_eq!(s.added_dirs_count(), 1);
+        // The status line names the same folder, and another: union by path.
+        let st = crate::status::Sample::parse(
+            r#"{"session_id":"s","workspace":{"added_dirs":["/x/y","/z"]}}"#,
+        )
+        .unwrap();
+        s.apply_status(&st, &[]);
+        assert_eq!(s.added_dirs_count(), 2);
+        // The hook again, and one the status line already has.
+        s.apply_hook(&added("/x/y"));
+        s.apply_hook(&added("/z/"));
+        assert_eq!(s.added_dirs_count(), 2);
+        assert_eq!(
+            s.events
+                .iter()
+                .filter(|e| e.text == "dir added · y")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn skill_shell_counts() {
+        let mut s = State::new(Pricing::bundled());
+        let run = |name: &str, cmd: &str| {
+            with(
+                "PreSkillShellCommand",
+                3_000,
+                "",
+                serde_json::json!({"command_name": name, "tool_input": {"command": cmd}}),
+            )
+        };
+        s.apply_hook(&run("review", "git diff"));
+        s.apply_hook(&run("review", "git log"));
+        s.apply_hook(&run("deploy", "make"));
+        assert_eq!(s.skill_shell["review"], 2);
+        assert_eq!(s.skill_shell["deploy"], 1);
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "skill shell: review · git diff"));
+        let q = crate::query::tools(&s);
+        assert_eq!(q["skill_shell"][0]["skill"], "deploy");
+        assert_eq!(q["skill_shell"][1]["count"], 2);
+    }
+
+    #[test]
+    fn teammate_idle_hook_reaches_a_team_loaded_later() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply_hook(&with(
+            "TeammateIdle",
+            4_000,
+            "",
+            serde_json::json!({"teammate_name": "t", "team_name": "x"}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "t idle"));
+        let mut team = crate::team::Team {
+            name: "session-x".into(),
+            source: crate::team::Source::Transcripts,
+            members: Default::default(),
+            looked_in: vec![],
+            dir_seen: false,
+        };
+        team.members.insert(
+            "t".into(),
+            crate::team::Teammate::new("t", Pricing::bundled()),
+        );
+        s.team = Some(team);
+        s.sync_teammate_idle();
+        assert!(s.team.as_ref().unwrap().members["t"].is_hook_idle());
+    }
+
+    #[test]
     fn mcp_prompts_wait_fifo_per_server_and_are_counted_by_action() {
         use crate::ui::state::WaitingKind;
         let mut s = State::new(Pricing::bundled());

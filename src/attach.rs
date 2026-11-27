@@ -48,17 +48,17 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         if !state.session.alive && state.session.ended_at_ms.is_none() {
             state.session.ended_at_ms = state.last_line_at_ms;
         }
-        if last_git.elapsed() >= Duration::from_secs(5) && state.session.cwd.is_dir() {
+        if last_git.elapsed() >= Duration::from_secs(5) && state.work_dir().is_dir() {
             last_git = Instant::now();
-            if let Some(g) = crate::git::info(&state.session.cwd) {
+            if let Some(g) = crate::git::info(state.work_dir()) {
                 state.session.git_branch = g.branch;
                 state.session.git_dirty = g.dirty;
             }
             if let Some(base) = &base_commit {
-                let ns = crate::files::numstat(&state.session.cwd, base);
-                let cwd = state.session.cwd.clone();
+                let ns = crate::files::numstat(state.work_dir(), base);
+                let cwd = state.work_dir().to_path_buf();
                 state.files.apply_numstat(&cwd, &ns);
-                let head = crate::files::numstat(&state.session.cwd, "HEAD");
+                let head = crate::files::numstat(state.work_dir(), "HEAD");
                 state.uncommitted = Some((
                     head.iter().map(|(_, a, _)| a).sum(),
                     head.iter().map(|(_, _, d)| d).sum(),
@@ -247,6 +247,7 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         let now = state.clock_ms();
         team.poll(&mut state.team, &state.tools.agent_spawns, now);
+        state.sync_teammate_idle();
     }));
     // The transcript itself.
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
@@ -313,6 +314,7 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
     app.state.team = crate::load::load_team(transcript, &app.state);
+    app.state.sync_teammate_idle();
     app.tick();
 }
 

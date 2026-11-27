@@ -156,7 +156,14 @@ pub struct Teammate {
     pending_tool_uses: usize,
     /// The last assistant line was an API error, and when.
     last_api_error_at: Option<i64>,
+    /// When a `TeammateIdle` hook said it went idle; stands until a line of
+    /// its transcript follows.
+    hook_idle_at: Option<i64>,
 }
+
+/// A transcript line this close after a `TeammateIdle` is the turn's own
+/// closing line, not new work.
+const HOOK_IDLE_GRACE_MS: i64 = 2_000;
 
 impl Teammate {
     pub fn new(name: &str, pricing: Pricing) -> Teammate {
@@ -176,6 +183,7 @@ impl Teammate {
             ended_by_ledger: false,
             pending_tool_uses: 0,
             last_api_error_at: None,
+            hook_idle_at: None,
         }
     }
 
@@ -249,6 +257,10 @@ impl Teammate {
         }
     }
 
+    pub fn is_hook_idle(&self) -> bool {
+        self.hook_idle_at.is_some()
+    }
+
     /// Time since its first line, to its last when it ended.
     pub fn elapsed_ms(&self, now_ms: i64, alive: Liveness) -> Option<i64> {
         let end = if alive.is_alive() {
@@ -292,7 +304,21 @@ impl Teammate {
                 });
             }
         }
-        if !alive.is_alive() || self.pending_tool_uses > 0 {
+        if !alive.is_alive() {
+            return None;
+        }
+        // The hook's word, exact to its time, over the inference below.
+        if let Some(idle_at) = self.hook_idle_at.filter(|&h| {
+            self.last_line_at
+                .is_none_or(|l| l <= h.saturating_add(HOOK_IDLE_GRACE_MS))
+        }) {
+            return Some(Waste {
+                usd: self.current_turn_usd(),
+                reason: WasteReason::Idle,
+                idle_ms: Some(now_ms.saturating_sub(idle_at).max(0)),
+            });
+        }
+        if self.pending_tool_uses > 0 {
             return None;
         }
         let last_api = self.agg.last_api_at.as_deref().and_then(parse_ts_ms)?;
@@ -362,6 +388,18 @@ pub struct Team {
 }
 
 impl Team {
+    /// A `TeammateIdle` hook: the member went idle at `at`. A name the team
+    /// does not know is ignored (the inference stands).
+    pub fn note_idle(&mut self, name: &str, at: i64) -> bool {
+        match self.members.get_mut(name) {
+            Some(m) => {
+                m.hook_idle_at = Some(at);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Members with a transcript.
     pub fn read(&self) -> usize {
         self.members.values().filter(|m| m.path.is_some()).count()
@@ -1154,6 +1192,50 @@ mod tests {
             Some(&dir.join("teams")),
         );
         assert!(load(&lead, &layout, &[], None, &Pricing::bundled(), 0).is_none());
+    }
+
+    #[test]
+    fn teammate_idle_exact() {
+        let t0 = parse_ts_ms("2026-01-01T00:00:00Z").unwrap();
+        let line = |ts: &str| {
+            Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","teamName":"session-x","agentName":"t","message":{{"id":"m","model":"claude-opus-5","content":[{{"type":"tool_use","id":"t1","name":"Bash","input":{{}}}}],"stop_reason":"tool_use","usage":{{"cache_read_input_tokens":50000,"output_tokens":1000}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let mut team = Team {
+            name: "session-x".into(),
+            source: Source::Transcripts,
+            members: BTreeMap::new(),
+            looked_in: Vec::new(),
+            dir_seen: false,
+        };
+        let mut m = Teammate::new("t", Pricing::bundled());
+        m.path = Some(PathBuf::from("/x.jsonl"));
+        // A tool call in flight: the inference says it is busy.
+        m.push(&line("2026-01-01T00:00:05Z"));
+        team.members.insert("t".into(), m);
+        let now = t0 + 60_000;
+        let w = |team: &Team| {
+            let m = &team.members["t"];
+            m.waste(now, m.liveness(now, team.source))
+        };
+        assert_eq!(w(&team), None);
+        // Review Focus 5: a name the team does not know changes nothing.
+        assert!(!team.note_idle("ghost", t0 + 20_000));
+        assert_eq!(w(&team), None);
+        // The hook's word: idle since its time, to the millisecond, well
+        // inside the 5-minute inference window.
+        assert!(team.note_idle("t", t0 + 20_000));
+        let waste = w(&team).expect("idle by the hook");
+        assert_eq!(waste.reason, WasteReason::Idle);
+        assert_eq!(waste.idle_ms, Some(40_000));
+        // Work after the hook clears it.
+        team.members
+            .get_mut("t")
+            .unwrap()
+            .push(&line("2026-01-01T00:00:40Z"));
+        assert_eq!(w(&team), None);
     }
 
     #[test]

@@ -177,6 +177,9 @@ pub struct LocatedMiss {
     /// The API's own `diagnostics.cache_miss_reason.type`, kept beside the
     /// located cause.
     pub api_reason: Option<String>,
+    /// The `source` of the `ConfigChange` hook this is the first miss after
+    /// (set by `State::mark_config_changes`).
+    pub after_config_change: Option<String>,
 }
 
 /// A request paired with its response.
@@ -424,6 +427,7 @@ impl RequestChain {
                         tokens: cur.cache_creation,
                         cause,
                         api_reason: reason,
+                        after_config_change: None,
                     });
                 }
                 self.prev = Some(cur);
@@ -482,6 +486,10 @@ impl RequestChain {
                 }
                 self.latest_shape.as_ref().and_then(|h| self.shapes.get(h))
             })
+    }
+
+    pub fn misses_mut(&mut self) -> &mut [LocatedMiss] {
+        &mut self.misses
     }
 
     pub fn miss_for(&self, message_id: &str) -> Option<&LocatedMiss> {

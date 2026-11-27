@@ -672,6 +672,16 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+42. **An MCP elicitation with cctop's silent hook installed still shows
+    the person the prompt unchanged** (hook events PRD, §6).
+    Setup: an MCP server that elicits, and cctop's hooks installed
+    (`cctop install`, so `Elicitation` and `ElicitationResult` have a
+    `cctop hook` entry).
+    Expected: the prompt appears and works as it does without cctop;
+    cctop shows `waiting on you · MCP <server> asks` until it is answered.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

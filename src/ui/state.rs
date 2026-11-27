@@ -460,6 +460,19 @@ pub struct State {
     pub elicitations: std::collections::BTreeMap<String, std::collections::VecDeque<i64>>,
     /// The completed prompts' accounting.
     pub elicitation_waits: ElicitationWaits,
+    /// `ConfigChange` hooks: `(epoch ms, source)`, in arrival order. The
+    /// first cache miss after each is marked (`mark_config_changes`).
+    pub config_changes: Vec<(i64, String)>,
+    /// The folder the session moved to (`CwdChanged`): git and file paths
+    /// follow it; `session.cwd` (the project's identity) does not.
+    pub cwd_now: Option<PathBuf>,
+    /// Folders `DirectoryAdded` reported, merged into the status line's
+    /// `workspace.added_dirs` (no folder twice).
+    hook_dirs: Vec<String>,
+    /// `PreSkillShellCommand` count per skill (`command_name`).
+    pub skill_shell: std::collections::BTreeMap<String, u32>,
+    /// `TeammateIdle` times by member name, for members not yet in the team.
+    teammate_idle: std::collections::BTreeMap<String, i64>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -744,6 +757,18 @@ pub struct ToolsUi {
     pub editing: bool,
     /// Selected row in the (sorted, filtered) table.
     pub selected: usize,
+}
+
+fn merge_dirs(facts: &mut StatusFacts, dirs: &[String]) {
+    if dirs.is_empty() {
+        return;
+    }
+    let w = facts.workspace.get_or_insert_with(Default::default);
+    for d in dirs {
+        if !w.added_dirs.iter().any(|x| x.trim_end_matches('/') == d) {
+            w.added_dirs.push(d.clone());
+        }
+    }
 }
 
 impl State {
@@ -1191,7 +1216,179 @@ impl State {
                     other => other.to_string(),
                 },
             }),
+            "ConfigChange" => {
+                let source = pstr("source").unwrap_or_else(|| "settings".into());
+                let file = pstr("file_path")
+                    .as_deref()
+                    .and_then(|f| f.rsplit('/').next())
+                    .filter(|f| !f.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| source.clone());
+                self.config_changes.push((at, source));
+                self.mark_config_changes();
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("settings changed · {file}"),
+                });
+            }
+            "CwdChanged" => {
+                if let Some(new) = pstr("new_cwd").filter(|c| !c.is_empty()) {
+                    let new = PathBuf::from(&new);
+                    self.files.move_cwd(&new);
+                    self.cwd_now = Some(new);
+                }
+                let name = |k: &str| {
+                    pstr(k)
+                        .as_deref()
+                        .and_then(|c| c.trim_end_matches('/').rsplit('/').next())
+                        .filter(|c| !c.is_empty())
+                        .map(str::to_string)
+                };
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: match (name("old_cwd"), name("new_cwd")) {
+                        (Some(a), Some(b)) => format!("cwd {a} → {b}"),
+                        (None, Some(b)) => format!("cwd → {b}"),
+                        _ => "cwd changed".into(),
+                    },
+                });
+            }
+            "DirectoryAdded" => {
+                let dir = pstr("directory").unwrap_or_default();
+                let dir = dir.trim_end_matches('/').to_string();
+                if !dir.is_empty() && !self.hook_dirs.contains(&dir) {
+                    self.hook_dirs.push(dir.clone());
+                    self.merge_hook_dirs();
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!(
+                        "dir added · {}",
+                        dir.rsplit('/')
+                            .next()
+                            .filter(|d| !d.is_empty())
+                            .unwrap_or(&dir)
+                    ),
+                });
+            }
+            "TeammateIdle" => {
+                if let Some(name) = pstr("teammate_name") {
+                    if let Some(t) = self.team.as_mut() {
+                        t.note_idle(&name, at);
+                    }
+                    self.teammate_idle.insert(name.clone(), at);
+                    self.events.push(crate::events::Event {
+                        at,
+                        kind: Kind::Agent,
+                        text: format!("{name} idle"),
+                    });
+                }
+            }
+            "PreSkillShellCommand" => {
+                let skill = pstr("command_name").unwrap_or_else(|| "skill".into());
+                *self.skill_shell.entry(skill.clone()).or_default() += 1;
+                let cmd = p
+                    .get("tool_input")
+                    .and_then(|i| i.get("command"))
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("");
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: if cmd.is_empty() {
+                        format!("skill shell: {skill}")
+                    } else {
+                        format!("skill shell: {skill} · {}", crate::ui::fmt::clip(cmd, 60))
+                    },
+                });
+            }
             _ => {}
+        }
+    }
+
+    /// Re-apply the `TeammateIdle` hooks to a team that was (re)loaded or
+    /// grew a member after they arrived.
+    pub fn sync_teammate_idle(&mut self) {
+        if let Some(t) = self.team.as_mut() {
+            for (name, at) in &self.teammate_idle {
+                t.note_idle(name, *at);
+            }
+        }
+    }
+
+    /// The folder git and file paths are read in: where the session moved
+    /// to, else where it started.
+    pub fn work_dir(&self) -> &Path {
+        self.cwd_now.as_deref().unwrap_or(&self.session.cwd)
+    }
+
+    /// Folders added to the session: the status line's `added_dirs` and the
+    /// `DirectoryAdded` hooks, each folder once.
+    pub fn added_dirs_count(&self) -> usize {
+        // The hook's folders are merged into the workspace on arrival.
+        self.status_facts
+            .workspace
+            .as_ref()
+            .map_or(0, |w| w.added_dirs.len())
+    }
+
+    /// Fold the hook's folders into `workspace.added_dirs`, which every
+    /// surface already reads. A folder both sources name stays one.
+    fn merge_hook_dirs(&mut self) {
+        merge_dirs(&mut self.status_facts, &self.hook_dirs);
+    }
+
+    /// Mark the first cache miss after each `ConfigChange` and before the
+    /// next: both the located and the named record of that request. Derived
+    /// from the two collectors' data each time, so the order they arrive in
+    /// does not matter.
+    pub fn mark_config_changes(&mut self) {
+        if self.config_changes.is_empty() {
+            return;
+        }
+        let parse = crate::metrics::cost::parse_ts_ms;
+        let mut windows: Vec<(i64, i64, String)> = Vec::new();
+        let mut sorted = self.config_changes.clone();
+        sorted.sort_by_key(|c| c.0);
+        for (i, (at, src)) in sorted.iter().enumerate() {
+            let end = sorted.get(i + 1).map_or(i64::MAX, |n| n.0);
+            windows.push((*at, end, src.clone()));
+        }
+        // Every miss, by message id and time.
+        let mut all: Vec<(i64, String)> = Vec::new();
+        for m in self.requests.misses() {
+            if let Some(t) = m.at.as_deref().and_then(parse) {
+                all.push((t, m.message_id.clone()));
+            }
+        }
+        for m in &self.agg.cache_misses {
+            if let Some(t) = m.at.as_deref().and_then(parse) {
+                all.push((t, m.message_id.clone()));
+            }
+        }
+        let marks: Vec<(String, String)> = windows
+            .iter()
+            .filter_map(|(start, end, src)| {
+                all.iter()
+                    .filter(|(t, _)| t > start && t < end)
+                    .min_by_key(|(t, _)| *t)
+                    .map(|(_, id)| (id.clone(), src.clone()))
+            })
+            .collect();
+        for m in self.requests.misses_mut() {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
+        }
+        for m in &mut self.agg.cache_misses {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
         }
     }
 
@@ -1282,6 +1479,7 @@ impl State {
             spend.and_then(|l| l.resets_at).map(|x| (x * 1000.0) as i64);
         if let Some(w) = &s.workspace {
             facts.workspace = Some(w.clone());
+            merge_dirs(facts, &self.hook_dirs);
         }
         if let Some(n) = s.output_style.as_ref().and_then(|n| n.name.clone()) {
             facts.output_style = Some(n);
@@ -1509,6 +1707,7 @@ impl State {
         let ttl = self.cache_ttl_ms().max(0) as u64;
         let turn = self.agg.current_turn().map(|t| t.number);
         self.requests.apply(line, turn, ttl);
+        self.mark_config_changes();
         if self.agg.turns.len() > turns_before {
             self.files.new_turn();
         }

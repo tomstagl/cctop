@@ -128,6 +128,14 @@ impl Files {
         }
     }
 
+    /// The session moved to another folder (`CwdChanged`): relative Bash
+    /// paths resolve there from now on.
+    pub fn move_cwd(&mut self, cwd: &Path) {
+        if !cwd.as_os_str().is_empty() {
+            self.cwd = Some(cwd.to_path_buf());
+        }
+    }
+
     fn entry(&mut self, path: &str) -> &mut FileStats {
         self.files
             .entry(path.to_string())
