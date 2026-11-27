@@ -11,8 +11,12 @@ keywords = ["claude", "tui", "dashboard", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = ["brand/", "fixtures/", "ralph/", "tasks/", "docs/verification/", "site/", "plugin/", ".github/", "scripts/", "packaging/"]
 
+[workspace]
+members = [".", "crates/cctop-charts"]
+
 [dependencies]
 anyhow = "1"
+cctop-charts = { path = "crates/cctop-charts", version = "0.1.0" }
 libc = "0.2"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"

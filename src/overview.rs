@@ -4,11 +4,11 @@
 //! its legend. The TUI and the pane draw it verbatim; `cctop query overview`
 //! prints it.
 
-pub mod spec;
-
 use serde::Serialize;
 
-pub use spec::{Axis, Cell, ChartSpec, Forecast, Kind, Marker, Point, Role, Series, Threshold};
+pub use cctop_charts::{
+    Axis, Cell, ChartSpec, Forecast, Kind, Marker, Point, Role, Series, Threshold,
+};
 
 use std::collections::BTreeMap;
 

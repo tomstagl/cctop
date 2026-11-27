@@ -1,0 +1,627 @@
+[
+ {
+  "name": "context",
+  "cols": 98,
+  "rows": 8,
+  "spec": {
+   "forecast": null,
+   "kind": "area_forecast",
+   "markers": [
+    {
+     "kind": "compaction",
+     "role": "warn",
+     "x": 6.0,
+     "y": 230014.0
+    },
+    {
+     "kind": "now",
+     "role": "fg",
+     "x": 6.0,
+     "y": 142482.0
+    }
+   ],
+   "roles": [
+    "accent",
+    "warn",
+    "fg",
+    "crit"
+   ],
+   "series": [
+    {
+     "name": "context",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 140279.0
+      },
+      {
+       "x": 2.0,
+       "y": 250086.0
+      },
+      {
+       "x": 3.0,
+       "y": 254422.0
+      },
+      {
+       "x": 4.0,
+       "y": 333147.0
+      },
+      {
+       "x": 5.0,
+       "y": 720842.0
+      },
+      {
+       "x": 6.0,
+       "y": 142482.0
+      }
+     ],
+     "role": "accent"
+    }
+   ],
+   "thresholds": [
+    {
+     "name": "auto-compact",
+     "role": "crit",
+     "y": 567672.0
+    }
+   ],
+   "x": {
+    "from": 1.0,
+    "to": 6.0,
+    "unit": "turn"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 1000000.0,
+    "unit": "tokens"
+   }
+  }
+ },
+ {
+  "name": "context_bar",
+  "cols": 103,
+  "rows": 1,
+  "spec": {
+   "forecast": null,
+   "kind": "stacked_bar",
+   "markers": [],
+   "roles": [
+    "s0",
+    "s1",
+    "s2",
+    "dim",
+    "warn"
+   ],
+   "series": [
+    {
+     "name": "System prompt",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 10200.0
+      }
+     ],
+     "role": "s0"
+    },
+    {
+     "name": "System tools",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 31200.0
+      }
+     ],
+     "role": "s0"
+    },
+    {
+     "name": "Skills",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 4800.0
+      }
+     ],
+     "role": "s1"
+    },
+    {
+     "name": "Messages",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 42900.0
+      }
+     ],
+     "role": "s2"
+    },
+    {
+     "name": "free",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 877900.0
+      }
+     ],
+     "role": "dim"
+    },
+    {
+     "name": "buffer",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 33000.0
+      }
+     ],
+     "role": "warn"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 0.0,
+    "to": 1000000.0,
+    "unit": "tokens"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 1.0,
+    "unit": "tokens"
+   }
+  }
+ },
+ {
+  "name": "spend",
+  "cols": 46,
+  "rows": 8,
+  "spec": {
+   "forecast": {
+    "from": {
+     "x": 565.9145666666667,
+     "y": 20.048954999999996
+    },
+    "high": 22.174606769463196,
+    "low": 21.061534399999996,
+    "role": "dim",
+    "to": {
+     "x": 625.9145666666667,
+     "y": 21.061534399999996
+    }
+   },
+   "kind": "cumulative_forecast",
+   "markers": [
+    {
+     "kind": "jump",
+     "role": "warn",
+     "x": 14.183133333333334,
+     "y": 8.2545735
+    },
+    {
+     "kind": "jump",
+     "role": "warn",
+     "x": 29.052366666666668,
+     "y": 17.8513465
+    }
+   ],
+   "roles": [
+    "accent",
+    "warn",
+    "dim"
+   ],
+   "series": [
+    {
+     "name": "spend",
+     "points": [
+      {
+       "x": 0.0,
+       "y": 0.0
+      },
+      {
+       "x": 3.1334666666666666,
+       "y": 2.305902
+      },
+      {
+       "x": 14.183133333333334,
+       "y": 8.2545735
+      },
+      {
+       "x": 15.89725,
+       "y": 8.588078999999999
+      },
+      {
+       "x": 29.052366666666668,
+       "y": 17.8513465
+      },
+      {
+       "x": 45.35915,
+       "y": 19.687319499999997
+      },
+      {
+       "x": 565.9145666666667,
+       "y": 20.048954999999996
+      }
+     ],
+     "role": "accent"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 0.0,
+    "to": 625.9145666666667,
+    "unit": "min"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 22.174606769463196,
+    "unit": "USD"
+   }
+  }
+ },
+ {
+  "name": "cost_per_turn",
+  "cols": 42,
+  "rows": 8,
+  "spec": {
+   "forecast": null,
+   "kind": "bars",
+   "markers": [],
+   "roles": [
+    "accent"
+   ],
+   "series": [
+    {
+     "name": "cost",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 2.305902
+      },
+      {
+       "x": 2.0,
+       "y": 5.9486715
+      },
+      {
+       "x": 3.0,
+       "y": 0.3335055
+      },
+      {
+       "x": 4.0,
+       "y": 9.2632675
+      },
+      {
+       "x": 5.0,
+       "y": 1.835973
+      },
+      {
+       "x": 6.0,
+       "y": 0.3616355
+      }
+     ],
+     "role": "accent"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 1.0,
+    "to": 6.0,
+    "unit": "turn"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 9.2632675,
+    "unit": "USD"
+   }
+  }
+ },
+ {
+  "name": "cache",
+  "cols": 42,
+  "rows": 2,
+  "spec": {
+   "forecast": null,
+   "kind": "pills",
+   "markers": [],
+   "roles": [
+    "ok",
+    "dim"
+   ],
+   "series": [
+    {
+     "name": "turns",
+     "points": [
+      {
+       "role": "dim",
+       "x": 1.0,
+       "y": 1.0
+      },
+      {
+       "x": 2.0,
+       "y": 1.0
+      },
+      {
+       "x": 3.0,
+       "y": 1.0
+      },
+      {
+       "x": 4.0,
+       "y": 1.0
+      },
+      {
+       "x": 5.0,
+       "y": 1.0
+      },
+      {
+       "x": 6.0,
+       "y": 1.0
+      }
+     ],
+     "role": "ok"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 1.0,
+    "to": 6.0,
+    "unit": "turn"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 1.0,
+    "unit": "turn"
+   }
+  }
+ },
+ {
+  "name": "cache_bar",
+  "cols": 30,
+  "rows": 1,
+  "spec": {
+   "forecast": null,
+   "kind": "progress",
+   "markers": [],
+   "roles": [
+    "ok"
+   ],
+   "series": [
+    {
+     "name": "warm",
+     "points": [
+      {
+       "x": 3596352.0,
+       "y": 1.0
+      }
+     ],
+     "role": "ok"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 0.0,
+    "to": 3600000.0,
+    "unit": "ms"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 1.0,
+    "unit": "ms"
+   }
+  }
+ },
+ {
+  "name": "tool_calls",
+  "cols": 28,
+  "rows": 6,
+  "spec": {
+   "forecast": null,
+   "kind": "heat",
+   "markers": [
+    {
+     "kind": "failed",
+     "role": "crit",
+     "row": 0,
+     "x": 1.0
+    },
+    {
+     "kind": "failed",
+     "role": "crit",
+     "row": 0,
+     "x": 4.0
+    }
+   ],
+   "roles": [
+    "accent",
+    "crit"
+   ],
+   "series": [
+    {
+     "name": "Bash",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 14.0
+      },
+      {
+       "x": 2.0,
+       "y": 17.0
+      },
+      {
+       "x": 3.0,
+       "y": 0.0
+      },
+      {
+       "x": 4.0,
+       "y": 39.0
+      },
+      {
+       "x": 5.0,
+       "y": 5.0
+      },
+      {
+       "x": 6.0,
+       "y": 3.0
+      }
+     ],
+     "role": "accent"
+    },
+    {
+     "name": "Read",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 6.0
+      },
+      {
+       "x": 2.0,
+       "y": 14.0
+      },
+      {
+       "x": 3.0,
+       "y": 1.0
+      },
+      {
+       "x": 4.0,
+       "y": 9.0
+      },
+      {
+       "x": 5.0,
+       "y": 0.0
+      },
+      {
+       "x": 6.0,
+       "y": 0.0
+      }
+     ],
+     "role": "accent"
+    },
+    {
+     "name": "Edit",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 0.0
+      },
+      {
+       "x": 2.0,
+       "y": 18.0
+      },
+      {
+       "x": 3.0,
+       "y": 0.0
+      },
+      {
+       "x": 4.0,
+       "y": 11.0
+      },
+      {
+       "x": 5.0,
+       "y": 0.0
+      },
+      {
+       "x": 6.0,
+       "y": 0.0
+      }
+     ],
+     "role": "accent"
+    },
+    {
+     "name": "AskUserQuestion",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 0.0
+      },
+      {
+       "x": 2.0,
+       "y": 0.0
+      },
+      {
+       "x": 3.0,
+       "y": 0.0
+      },
+      {
+       "x": 4.0,
+       "y": 0.0
+      },
+      {
+       "x": 5.0,
+       "y": 0.0
+      },
+      {
+       "x": 6.0,
+       "y": 1.0
+      }
+     ],
+     "role": "accent"
+    },
+    {
+     "name": "TaskUpdate",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 0.0
+      },
+      {
+       "x": 2.0,
+       "y": 0.0
+      },
+      {
+       "x": 3.0,
+       "y": 0.0
+      },
+      {
+       "x": 4.0,
+       "y": 0.0
+      },
+      {
+       "x": 5.0,
+       "y": 1.0
+      },
+      {
+       "x": 6.0,
+       "y": 0.0
+      }
+     ],
+     "role": "accent"
+    },
+    {
+     "name": "other",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 1.0
+      },
+      {
+       "x": 2.0,
+       "y": 0.0
+      },
+      {
+       "x": 3.0,
+       "y": 0.0
+      },
+      {
+       "x": 4.0,
+       "y": 0.0
+      },
+      {
+       "x": 5.0,
+       "y": 0.0
+      },
+      {
+       "x": 6.0,
+       "y": 0.0
+      }
+     ],
+     "role": "accent"
+    }
+   ],
+   "thresholds": [],
+   "x": {
+    "from": 1.0,
+    "to": 6.0,
+    "unit": "turn"
+   },
+   "y": {
+    "from": 0.0,
+    "to": 39.0,
+    "unit": "calls"
+   }
+  }
+ }
+]
