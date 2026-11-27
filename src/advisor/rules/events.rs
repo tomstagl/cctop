@@ -112,6 +112,8 @@ impl Rule for PermissionWaits {
         let s = &state.session;
         // With traces, only the person's own decisions count: a wait the
         // classifier, a hook or a rule decided is not one the person made.
+        // A wait no span joined to (yet) is counted as theirs: never fewer
+        // than without traces.
         let traced = s.permission_records.iter().any(|r| r.source.is_some());
         let mut own = s.permission_asks.clone();
         let mut wait_ms = s.permission_wait_ms;
@@ -125,7 +127,7 @@ impl Rule for PermissionWaits {
             for r in s
                 .permission_records
                 .iter()
-                .filter(|r| r.source.as_deref() == Some("user"))
+                .filter(|r| matches!(r.source.as_deref(), None | Some("user")))
             {
                 if let Some(a) = own.get_mut(&r.key) {
                     a.count += 1;
