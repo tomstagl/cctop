@@ -18,7 +18,7 @@ use crate::metrics::Turn;
 use crate::requests::LocatedCause;
 use crate::ui::fmt;
 use crate::ui::State;
-use crate::verdict::{self, Verdict};
+use crate::verdict::{self, money, Verdict};
 
 /// Per-turn charts show this many turns by default.
 pub const DEFAULT_MAX_TURNS: usize = 50;
@@ -109,13 +109,16 @@ pub fn build_with(state: &State, opts: &Options) -> Overview {
     let max_turns = opts.max_turns.max(1);
     let all: Vec<&Turn> = state.agg.turns.iter().collect();
     let shown = &all[all.len().saturating_sub(max_turns)..];
-    let label = (all.len() > shown.len()).then(|| format!("last {} turns", shown.len()));
+    let label = (all.len() > shown.len()).then(|| match shown.len() {
+        1 => "last 1 turn".to_string(),
+        n => format!("last {n} turns"),
+    });
     let per_turn = PerTurn::of(state, shown);
     let footer = match state.cost_combined() {
         Some(c) => format!(
             "spent so far {}{} · what this session would cost at API prices",
             if c.approx { "≈" } else { "" },
-            fmt::usd(c.usd)
+            money(c.usd)
         ),
         None => "spent so far — (no price for this model)".to_string(),
     };
@@ -193,7 +196,7 @@ fn context(state: &State) -> Chart {
     if let (Some(last), Some(vel), Some(n)) = (
         last,
         v.velocity.filter(|v| *v > 0.0),
-        v.turns_until_compaction(),
+        verdict::trusted_turns_left(state),
     ) {
         // Forecast to the threshold, no further ahead than the session so far.
         let horizon = n.ceil().clamp(1.0, last.max(10.0));
@@ -369,19 +372,8 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
         at_turn.insert(t.number, (p.x, p.y));
         raw.push(p);
     }
-    // The turns are priced one by one; the figure is the session's own
-    // (the ledger, the agents after it, the team). Scale the line so it
-    // ends at the figure: the shape is the turns', the height the figure's.
-    if let Some(total) = facts.total.filter(|t| *t > 0.0 && cum > 0.0) {
-        let k = total / cum;
-        for p in &mut raw {
-            p.y *= k;
-        }
-        for v in at_turn.values_mut() {
-            v.1 *= k;
-        }
-        cum = total;
-    }
+    // The line is the turns priced one by one (≈); the figure is the
+    // session's own count. Where they part, a readout names both.
     let points = bucket(raw);
     let now = if points.is_empty() {
         0.0
@@ -392,7 +384,7 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
     let mut y_to = cum;
     let mut legend_rows = vec![legend(Role::Accent, "spent")];
     let mut figure = match facts.total {
-        Some(t) => fmt::usd(t),
+        Some(t) => money(t),
         None => "—".to_string(),
     };
     let mut spec_forecast = None;
@@ -415,10 +407,15 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
         });
         x_to = end;
         y_to = y_to.max(at(rate.max(average)));
-        figure.push_str(&format!(" · ≈ {} {when}", fmt::usd(at(rate))));
+        // The figure's forecast adds the line's forecast to the figure.
+        let ahead = at(rate) - cum;
+        figure.push_str(&format!(
+            " · ≈ {} {when}",
+            money(facts.total.unwrap_or(cum) + ahead)
+        ));
         legend_rows.push(legend(
             Role::Dim,
-            format!("forecast · {} a minute", fmt::usd(rate)),
+            format!("forecast · {} a minute", money(rate)),
         ));
     }
     let mut spec = ChartSpec::new(
@@ -440,13 +437,41 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
             role: Role::Warn,
         });
         spec.y.to = spec.y.to.max(total);
-        let mut text = format!("budget {}", fmt::usd(total));
+        let mut text = format!("budget {}", money(total));
         if let Some(m) = facts.halt_min() {
             text.push_str(&format!(" · halts in ~{:.0} min", m.ceil()));
         }
         legend_rows.push(legend(Role::Warn, text));
     }
+    // The account's spend limit (PRD 2): a line where the limit is, and the
+    // limits panel's text at now.
     let mut readouts = Vec::new();
+    if let Some((_, text)) = &facts.spend_limit {
+        if let Some((_, Some(limit))) = state.status_facts.spend_limit_usd {
+            spec.thresholds.push(Threshold {
+                name: "spend limit".into(),
+                y: limit,
+                role: Role::Warn,
+            });
+        }
+        legend_rows.push(legend(Role::Warn, text.clone()));
+        readouts.push(Readout {
+            x: now,
+            text: format!("now · {text}"),
+        });
+    }
+    if let Some(total) = facts.total.filter(|t| *t > 0.0 && cum > 0.0) {
+        if ((cum - total) / total).abs() > verdict::gate(&verdict::SPEND_PRICED_GAP) {
+            readouts.push(Readout {
+                x: now,
+                text: format!(
+                    "now · priced turns {} · Claude Code's own count {}",
+                    money(cum),
+                    money(total)
+                ),
+            });
+        }
+    }
     for j in verdict::spend_jumps(state) {
         let Some((x, y)) = at_turn.get(&j.turn).copied() else {
             continue;
@@ -465,7 +490,7 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
                 "turn {} · {} {}",
                 j.turn,
                 j.kind.words().trim_start_matches("a "),
-                fmt::usd(j.usd)
+                money(j.usd)
             ),
         });
     }
@@ -475,8 +500,8 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
             x: now,
             text: format!(
                 "now · {} this session · {} with the sessions it came from",
-                fmt::usd(total),
-                fmt::usd(chain)
+                money(total),
+                money(chain)
             ),
         });
     }
@@ -559,12 +584,17 @@ impl<'a> PerTurn<'a> {
 /// A located cause in words (PRD 1).
 fn cause_words(c: &LocatedCause) -> String {
     match c {
-        LocatedCause::ToolsChanged { added, removed, .. } => match (added.first(), removed.first())
-        {
-            (Some(a), _) => format!("a new tool loaded ({})", ident(a)),
-            (None, Some(r)) => format!("a tool was removed ({})", ident(r)),
-            (None, None) => "a tool's schema changed".to_string(),
-        },
+        LocatedCause::ToolsChanged { added, removed, .. } => {
+            // An MCP tool is named first: it is the change a habit avoids.
+            let mcp = |v: &Vec<String>| v.iter().find(|n| n.starts_with("mcp__")).cloned();
+            match (mcp(added), mcp(removed), added.first(), removed.first()) {
+                (Some(a), _, _, _) => format!("a new MCP tool loaded ({})", ident(&a)),
+                (None, Some(r), _, _) => format!("an MCP tool was removed ({})", ident(&r)),
+                (None, None, Some(a), _) => format!("a new tool loaded ({})", ident(a)),
+                (None, None, None, Some(r)) => format!("a tool was removed ({})", ident(r)),
+                (None, None, None, None) => "a tool's schema changed".to_string(),
+            }
+        }
         LocatedCause::PrefixRewritten { .. } => "an earlier message changed".to_string(),
         LocatedCause::ParamsChanged { field, from, to } => {
             let v = |s: &Option<String>, model: bool| match s {
@@ -605,7 +635,23 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
     let live = state.agg.current_turn().map(|t| t.number);
     let jumps: Vec<usize> = verdict::spend_jumps(state).iter().map(|j| j.turn).collect();
     for t in &pt.turns {
-        let usd = pt.costs.get(&t.number).copied().unwrap_or(0.0);
+        let now = if live == Some(t.number) && state.session.alive {
+            " (now)"
+        } else {
+            ""
+        };
+        // A turn without a price has no bar: a $0 bar would be a claim.
+        let usd = match pt.costs.get(&t.number) {
+            Some(u) => *u,
+            None if t.api_calls == 0 => 0.0,
+            None => {
+                readouts.push(Readout {
+                    x: t.number as f64,
+                    text: format!("Turn {}{now} · unpriced.", t.number),
+                });
+                continue;
+            }
+        };
         let agent = pt.agents.get(&t.number).copied().filter(|a| *a > 0.0);
         let miss = pt.located.contains_key(&t.number) || pt.miss_label.contains_key(&t.number);
         let role = if miss {
@@ -634,11 +680,6 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
                 role: Role::Warn,
             });
         }
-        let now = if live == Some(t.number) && state.session.alive {
-            " (now)"
-        } else {
-            ""
-        };
         if t.api_calls == 0 {
             readouts.push(Readout {
                 x: t.number as f64,
@@ -646,13 +687,10 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
             });
             continue;
         }
-        let mut text = format!("Turn {}{now} · {}.", t.number, fmt::usd(usd));
+        let mut text = format!("Turn {}{now} · {}.", t.number, money(usd));
         let mut normal = true;
         if let Some(a) = agent {
-            text.push_str(&format!(
-                " Claude started a helper agent ({}).",
-                fmt::usd(a)
-            ));
+            text.push_str(&format!(" Claude started a helper agent ({}).", money(a)));
             normal = false;
         }
         if miss {
@@ -716,7 +754,7 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         id: "cost_per_turn",
         title: "Cost per turn",
         figure: match facts.typical() {
-            Some(t) => format!("≈ {} typical", fmt::usd(t)),
+            Some(t) => format!("≈ {} typical", money(t)),
             None => "—".to_string(),
         },
         verdict,
@@ -732,7 +770,7 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
 }
 
 fn cache(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
-    let verdict = verdict::cache(state);
+    let verdict = verdict::cache_with(state, label.as_ref().map(|_| pt.x_axis().from as usize));
     let facts = verdict::CacheFacts::of(state);
     let mut spec = ChartSpec::new(Kind::Pills, pt.x_axis(), axis(0.0, 1.0, "turn"));
     let mut points = Vec::new();
@@ -752,7 +790,7 @@ fn cache(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
                 LocatedCause::ParamsChanged { field, .. } => Some(*field),
                 _ => None,
             };
-            if let Some(habit) = verdict::habit(m.cause.kind(), field) {
+            if let Some(habit) = verdict::habit_of(&m.cause) {
                 prevent.push(Prevent {
                     turn: n,
                     kind: m.cause.kind(),
@@ -840,7 +878,11 @@ fn cache(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
     let ttl = state.cache_ttl_ms();
     let (bar, note) = match (state.cache_clock(), state.cache_warm()) {
         (Some(k), Some((true, _))) if k.remaining_ms > 0 && pt.first_call_turn.is_some() => {
-            let band = if ttl >= 3_600_000 { 300_000 } else { 120_000 };
+            let band = verdict::gate(if ttl >= 3_600_000 {
+                &verdict::CACHE_COUNTDOWN_1H
+            } else {
+                &verdict::CACHE_COUNTDOWN_5M
+            }) as i64;
             let mut bar = ChartSpec::new(
                 Kind::Progress,
                 axis(0.0, ttl as f64, "ms"),
@@ -1176,12 +1218,25 @@ mod tests {
 
     #[test]
     fn the_cache_chart_says_how_to_avoid_each_located_rebuild() {
-        let o = build(&fixture("fixtures/session-r.jsonl"));
+        let fixture_r = fixture("fixtures/session-r.jsonl");
+        let o = build(&fixture_r);
         sane(&o);
         let c = chart(&o, "cache");
         assert!(!c.prevent.is_empty());
+        // Turn 1's tools change loaded MCP tools beside the built-in
+        // EnterWorktree: the MCP tool is named, and it is avoidable.
+        assert!(c.prevent.iter().any(|p| p.kind == "tools_changed"));
+        assert!(c.readouts[0]
+            .text
+            .starts_with("Turn 1: rebuilt because a new MCP tool loaded (mcp__"));
         for p in &c.prevent {
-            assert_eq!(Some(p.habit), verdict::habit(p.kind, p.field), "{p:?}");
+            let m = fixture_r
+                .requests
+                .misses()
+                .iter()
+                .find(|m| m.turn == Some(p.turn) && m.cause.kind() == p.kind)
+                .unwrap();
+            assert_eq!(Some(p.habit), verdict::habit_of(&m.cause), "{p:?}");
             assert!(
                 c.readouts
                     .iter()
@@ -1215,6 +1270,68 @@ mod tests {
                 serde_json::to_string_pretty(&o).unwrap()
             );
         }
+    }
+
+    /// Fixture B just autocompacted (720k → 142k): the growth rate from
+    /// before is no forecast, and the coach's light is quiet — so is the
+    /// verdict. Its spend line is the priced turns, and where that parts
+    /// from Claude Code's own count a readout names both.
+    #[test]
+    fn fixture_b_after_compaction_is_calm_and_names_both_spend_figures() {
+        let s = fixture("fixtures/session-b.jsonl");
+        let o = build(&s);
+        let ctx = chart(&o, "context");
+        assert_ne!(ctx.verdict.level, verdict::Level::Act, "{:?}", ctx.verdict);
+        assert_eq!(
+            crate::coach::context_light(&s).level,
+            crate::coach::Level::Quiet
+        );
+        assert!(ctx.spec.forecast.is_none());
+        let spend = chart(&o, "spend");
+        let line_end = spend.spec.series[0].points.last().unwrap().y;
+        assert!(spend.readouts.iter().any(|r| r.text
+            == format!(
+                "now · priced turns {} · Claude Code's own count $18.75",
+                money(line_end)
+            )));
+        // A jump readout carries the bar's own figure.
+        let bars = &chart(&o, "cost_per_turn").spec.series[0].points;
+        for r in spend
+            .readouts
+            .iter()
+            .filter(|r| r.text.starts_with("turn "))
+        {
+            let turn: usize = r.text[5..].split(' ').next().unwrap().parse().unwrap();
+            let bar = bars.iter().find(|p| p.x == turn as f64).unwrap();
+            assert!(r.text.ends_with(&money(bar.y)), "{} vs {}", r.text, bar.y);
+        }
+    }
+
+    /// A turn on a model with no price has no bar and says so.
+    #[test]
+    fn an_unpriced_turn_has_no_bar() {
+        use crate::transcript::Line;
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T10:00:00.000Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:10.000Z","message":{"id":"u1","model":"claude-nopriced-9","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":5,"cache_creation_input_tokens":3000,"cache_read_input_tokens":0,"output_tokens":10}}}"#).unwrap());
+        let o = build(&s);
+        sane(&o);
+        let c = chart(&o, "cost_per_turn");
+        assert!(c.spec.series[0].points.is_empty());
+        assert_eq!(c.readouts[0].text, "Turn 1 · unpriced.");
+    }
+
+    #[test]
+    fn a_cut_of_one_turn_is_singular() {
+        let s = fixture("fixtures/session-b.jsonl");
+        let o = build_with(
+            &s,
+            &Options {
+                max_turns: 1,
+                chain_usd: None,
+            },
+        );
+        assert_eq!(chart(&o, "cache").label.as_deref(), Some("last 1 turn"));
     }
 
     #[test]

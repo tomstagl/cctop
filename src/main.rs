@@ -121,8 +121,9 @@ enum QueryWhat {
     /// readouts and legend.
     Overview {
         /// Per-turn charts keep this many of the latest turns.
-        #[arg(long, default_value_t = cctop::overview::DEFAULT_MAX_TURNS)]
-        max_turns: usize,
+        #[arg(long, default_value_t = cctop::overview::DEFAULT_MAX_TURNS as u64,
+              value_parser = clap::value_parser!(u64).range(1..))]
+        max_turns: u64,
     },
     /// The coach object: state line, four lights, the nudge, next, snoozed.
     Coach {
@@ -724,7 +725,7 @@ fn query(q: QueryArgs) {
                         .as_ref()
                         .and_then(|_| cctop::load::resolve(&target(&q.attach)).ok())
                         .map(|(p, _)| p);
-                    qy::overview(&state, *max_turns, path.as_deref())
+                    qy::overview(&state, *max_turns as usize, path.as_deref())
                 }
                 QueryWhat::Coach {
                     snooze,

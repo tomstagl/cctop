@@ -12,7 +12,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
       "verdict": {
         "level": "good",
         "text": "Plenty of room: about 308 more turns before Claude Code compacts on its own.",
-        "todo": "Do: /compact when you finish this task, not mid-way.",
+        "todo": null,
         "metric_id": "verdict_context"
       },
       "spec": {
@@ -139,10 +139,10 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
     {
       "id": "spend",
       "title": "Spend",
-      "figure": "$2.70 · ≈ $27.3 in an hour",
+      "figure": "$2.70 · ≈ $27.35 in an hour",
       "verdict": {
         "level": "watch",
-        "text": "$0.41 a minute. One jump: a cache rebuild in turn 1 ($1.53).",
+        "text": "$0.41 a minute.",
         "todo": "Do: /clear between unrelated tasks; a smaller context makes every turn cheaper.",
         "metric_id": "verdict_spend"
       },
@@ -155,7 +155,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         },
         "y": {
           "from": 0.0,
-          "to": 27.345424299999998,
+          "to": 27.3454243,
           "unit": "USD"
         },
         "series": [
@@ -169,65 +169,52 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
               },
               {
                 "x": 26.55855,
-                "y": 1.5298689999999997
+                "y": 1.529869
               },
               {
                 "x": 55.17216666666667,
-                "y": 1.6482867999999997
+                "y": 1.6482868
               },
               {
                 "x": 58.38308333333333,
-                "y": 1.7181639999999998
+                "y": 1.718164
               },
               {
                 "x": 59.86541666666667,
-                "y": 1.8559313999999998
+                "y": 1.8559314
               },
               {
                 "x": 8200.6289,
-                "y": 2.2898145999999997
+                "y": 2.2898146
               },
               {
                 "x": 8228.665066666666,
-                "y": 2.7005622999999996
+                "y": 2.7005623
               }
             ]
           }
         ],
-        "markers": [
-          {
-            "kind": "jump",
-            "x": 26.55855,
-            "y": 1.5298689999999997,
-            "role": "crit"
-          }
-        ],
+        "markers": [],
         "forecast": {
           "from": {
             "x": 8228.665066666666,
-            "y": 2.7005622999999996
+            "y": 2.7005623
           },
           "to": {
             "x": 8288.665066666666,
-            "y": 27.345424299999998
+            "y": 27.3454243
           },
-          "low": 2.7202536760236002,
-          "high": 27.345424299999998,
+          "low": 2.7202536760236007,
+          "high": 27.3454243,
           "role": "dim"
         },
         "thresholds": [],
         "roles": [
           "accent",
-          "crit",
           "dim"
         ]
       },
-      "readouts": [
-        {
-          "x": 26.55855,
-          "text": "turn 1 · cache rebuild $1.53"
-        }
-      ],
+      "readouts": [],
       "legend": [
         {
           "role": "accent",
@@ -312,7 +299,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
       "readouts": [
         {
           "x": 1.0,
-          "text": "Turn 1 · $1.53. The cache was rebuilt: a new tool loaded (EnterWorktree)."
+          "text": "Turn 1 · $1.53. The cache was rebuilt: a new MCP tool loaded (mcp__server2__tool5)."
         },
         {
           "x": 2.0,
@@ -457,7 +444,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
       "readouts": [
         {
           "x": 1.0,
-          "text": "Turn 1: rebuilt because a new tool loaded (EnterWorktree) · 70k rebuilt."
+          "text": "Turn 1: rebuilt because a new MCP tool loaded (mcp__server2__tool5) · 70k rebuilt."
         },
         {
           "x": 2.0,
@@ -498,7 +485,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         {
           "turn": 1,
           "kind": "tools_changed",
-          "cause": "a new tool loaded (EnterWorktree)",
+          "cause": "a new MCP tool loaded (mcp__server2__tool5)",
           "tokens": 70709,
           "habit": "Connect the MCP servers you need before your first prompt."
         },

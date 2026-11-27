@@ -13,9 +13,10 @@ use crate::harness_facts::autocompact;
 use crate::ui::fmt;
 use crate::ui::State;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Level {
+    #[default]
     Good,
     Watch,
     Act,
@@ -242,28 +243,157 @@ pub const TOOLS_READS_PER_EDIT: Threshold = Threshold {
         "drafted; coach PRD §3.1: exploration is 32.5 % of calls and 51 % of context growth (A25)",
 };
 
+// -- gates and wording cuts: rows whose `watch` is the number a verdict
+// or a chart compares against, not a level of their own.
+
+pub const CTX_GROWTH_DELTAS: Threshold = Threshold {
+    chart: "context",
+    id: "ctx_growth_deltas",
+    measure: "growth steps (turn to turn) since the last compaction before the turns-left forecast counts",
+    unit: "steps",
+    dir: Dir::Above,
+    watch: Some(2.0),
+    act: None,
+    source: "mod-pane task 2 review: a velocity from before a compaction is not evidence about the window after it",
+};
+
+pub const CTX_COMPACT_DO: Threshold = Threshold {
+    chart: "context",
+    id: "ctx_compact_do",
+    measure: "turns until autocompact within which a Good verdict offers /compact at the end of the task (2× the watch band)",
+    unit: "turns",
+    dir: Dir::Below,
+    watch: Some(30.0),
+    act: None,
+    source: "2 × ctx_turns_left's watch",
+};
+
+pub const CTX_MESSAGES: Threshold = Threshold {
+    chart: "context",
+    id: "ctx_messages",
+    measure: "share of the used window that is the conversation, for \"nearly all of it is your conversation\"",
+    unit: "ratio",
+    dir: Dir::Above,
+    watch: Some(0.8),
+    act: None,
+    source: "drafted (POC 6 wording)",
+};
+
+pub const SPEND_LIMIT: Threshold = Threshold {
+    chart: "spend",
+    id: "spend_limit",
+    measure: "share of the account's spend limit used (status line, PRD 2)",
+    unit: "ratio",
+    dir: Dir::Above,
+    watch: Some(0.80),
+    act: None,
+    source:
+        "mod-pane task 2 review; the coach's limits light is ◐ at ≥ 80 % (registry coach_limits)",
+};
+
+pub const SPEND_PRICED_GAP: Threshold = Threshold {
+    chart: "spend",
+    id: "spend_priced_gap",
+    measure: "gap between the priced turns (the line) and Claude Code's own count (the figure) before a readout names both",
+    unit: "ratio",
+    dir: Dir::Above,
+    watch: Some(0.02),
+    act: None,
+    source: "mod-pane task 2 review",
+};
+
+pub const SPEND_JUMP_FROM: Threshold = Threshold {
+    chart: "spend",
+    id: "spend_jump_from",
+    measure: "priced turns before any turn can be a jump (the first turn, which writes the cache, never is)",
+    unit: "turns",
+    dir: Dir::Above,
+    watch: Some(3.0),
+    act: None,
+    source: "drafted: a median needs a few turns",
+};
+
+pub const TOOLS_FAILED_FROM: Threshold = Threshold {
+    chart: "tool_calls",
+    id: "tools_failed_from",
+    measure: "calls in the last three turns before tools_failed counts",
+    unit: "calls",
+    dir: Dir::Above,
+    watch: Some(6.0),
+    act: None,
+    source: "drafted: two failures of three calls is not a pattern (A38 needs three in a row)",
+};
+
+pub const TOOLS_READS_FROM: Threshold = Threshold {
+    chart: "tool_calls",
+    id: "tools_reads_from",
+    measure: "whole-file reads before tools_reads_per_edit counts",
+    unit: "reads",
+    dir: Dir::Above,
+    watch: Some(15.0),
+    act: None,
+    source: "drafted; coach PRD §5.2 A25 (a run of ≥ 8 read-only calls)",
+};
+
+pub const CACHE_COUNTDOWN_1H: Threshold = Threshold {
+    chart: "cache",
+    id: "cache_countdown_1h",
+    measure: "time left on a 1 h cache entry when the countdown turns warn",
+    unit: "ms",
+    dir: Dir::Below,
+    watch: Some(300_000.0),
+    act: None,
+    source: "registry coach_cache (the last 5 min of a 1 h entry); coach PRD §5.2 A19",
+};
+
+pub const CACHE_COUNTDOWN_5M: Threshold = Threshold {
+    chart: "cache",
+    id: "cache_countdown_5m",
+    measure: "time left on a 5 min cache entry when the countdown turns warn",
+    unit: "ms",
+    dir: Dir::Below,
+    watch: Some(120_000.0),
+    act: None,
+    source: "registry coach_cache (the last 2 min of a 5 m entry); coach PRD §5.2 A19",
+};
+
 /// Every threshold, one row each: the table `docs/verdicts.md` is made of.
 pub const THRESHOLDS: &[Threshold] = &[
     CTX_TURNS_LEFT,
     CTX_HEADROOM,
     CTX_SIZE,
     CTX_MCP,
+    CTX_GROWTH_DELTAS,
+    CTX_COMPACT_DO,
+    CTX_MESSAGES,
     SPEND_RATE,
     SPEND_BUDGET,
     SPEND_HALT,
+    SPEND_LIMIT,
+    SPEND_PRICED_GAP,
+    SPEND_JUMP_FROM,
     COST_TURN_RATIO,
     COST_TURN_FLOOR,
     CACHE_HIT,
+    CACHE_COUNTDOWN_1H,
+    CACHE_COUNTDOWN_5M,
     TOOLS_FAILED,
+    TOOLS_FAILED_FROM,
     TOOLS_HOOKS,
     TOOLS_REREAD,
     TOOLS_READS_PER_EDIT,
+    TOOLS_READS_FROM,
 ];
 
-/// Reads of the last three turns count for [`TOOLS_FAILED`] from this many calls.
-const MIN_RECENT_CALLS: usize = 6;
-/// [`TOOLS_READS_PER_EDIT`] counts from this many reads.
-const MIN_READS: usize = 15;
+/// A gate row's number (its `watch`).
+pub fn gate(t: &Threshold) -> f64 {
+    t.watch.or(t.act).unwrap_or(0.0)
+}
+
+/// `$18.75`: every dollar figure of the overview, two decimals.
+pub fn money(v: f64) -> String {
+    format!("${v:.2}")
+}
 
 fn verdict(level: Level, text: String, todo: Option<&str>, metric_id: &'static str) -> Verdict {
     Verdict {
@@ -307,7 +437,12 @@ pub struct ContextFacts {
     pub window: u64,
     /// The autocompact threshold.
     pub threshold: u64,
+    /// Turns until autocompact, only once the window has grown at least
+    /// [`CTX_GROWTH_DELTAS`] steps since the last compaction.
     pub turns_left: Option<f64>,
+    /// The coach's context light for the same state: the verdict never
+    /// says more than the light (Quiet → Good).
+    pub light: Level,
     /// MCP tools in the window, per Claude Code's own `/context` (PRD 3).
     pub mcp_tokens: Option<u64>,
     /// Messages ÷ the used window, per the same capture.
@@ -332,7 +467,12 @@ impl ContextFacts {
             size: v.size,
             window: v.window,
             threshold: v.threshold,
-            turns_left: v.turns_until_compaction(),
+            turns_left: trusted_turns_left(state),
+            light: match crate::coach::context_light(state).level {
+                crate::coach::Level::Quiet => Level::Good,
+                crate::coach::Level::Watch => Level::Watch,
+                crate::coach::Level::Act => Level::Act,
+            },
             mcp_tokens: cap.map(|_| by("MCP tools").unwrap_or(0)),
             messages_share: cap.and_then(|c| {
                 let u = used(&c.categories);
@@ -340,6 +480,24 @@ impl ContextFacts {
             }),
         }
     }
+}
+
+/// Turns until autocompact at the session's growth, once the window has
+/// grown [`CTX_GROWTH_DELTAS`] steps since the last compaction (before
+/// that, the growth rate describes a window that is gone).
+pub fn trusted_turns_left(state: &State) -> Option<f64> {
+    let v = state.context();
+    let since = v.compactions.last().map_or(0, |c| c.turn);
+    let turns = state
+        .agg
+        .turns
+        .iter()
+        .filter(|t| t.api_calls > 0 && t.number >= since)
+        .count();
+    if (turns.saturating_sub(1) as f64) < gate(&CTX_GROWTH_DELTAS) {
+        return None;
+    }
+    v.turns_until_compaction()
 }
 
 pub fn context(state: &State) -> Verdict {
@@ -365,7 +523,7 @@ pub fn context_from(f: &ContextFacts) -> Verdict {
     let by_mcp = f
         .mcp_tokens
         .map_or(Level::Good, |t| CTX_MCP.level(t as f64));
-    let level = worst(&[by_turns, by_room, by_size, by_mcp]);
+    let level = worst(&[by_turns, by_room, by_size, by_mcp]).min(f.light);
     let size = fmt::tokens(f.size);
     let window = window_words(f.window);
     match level {
@@ -392,7 +550,17 @@ pub fn context_from(f: &ContextFacts) -> Verdict {
             )
         }
         Level::Watch => {
-            if by_turns == Level::Watch {
+            if by_room >= Level::Watch {
+                verdict(
+                    level,
+                    format!(
+                        "{size} of {window}: inside the last {} before Claude Code compacts on its own.",
+                        fmt::tokens(autocompact::WARN_TOKENS)
+                    ),
+                    Some("Do: /compact at the next break, not mid-task."),
+                    ID,
+                )
+            } else if by_turns >= Level::Watch {
                 let n = f.turns_left.unwrap_or(0.0);
                 verdict(
                     level,
@@ -403,7 +571,7 @@ pub fn context_from(f: &ContextFacts) -> Verdict {
                     Some("Do: /compact at the next break, not mid-task."),
                     ID,
                 )
-            } else if by_size == Level::Watch {
+            } else if by_size >= Level::Watch {
                 verdict(
                     level,
                     format!("{size} in the window: every call re-reads all of it."),
@@ -437,18 +605,27 @@ pub fn context_from(f: &ContextFacts) -> Verdict {
             };
             if let Some(mcp) = f.mcp_tokens.filter(|t| *t > 0) {
                 text.push_str(&format!(
-                    " MCP tools take {} ({}), which is fine.",
+                    " MCP tools take {} ({}){}.",
                     fmt::tokens(mcp),
-                    pct(mcp as f64 / f.window.max(1) as f64)
+                    pct(mcp as f64 / f.window.max(1) as f64),
+                    if by_mcp == Level::Good {
+                        ", which is fine"
+                    } else {
+                        " of every request"
+                    }
                 ));
             }
-            if f.messages_share.is_some_and(|s| s >= 0.8) {
+            if f.messages_share.is_some_and(|s| s >= gate(&CTX_MESSAGES)) {
                 text.push_str(" Nearly all of it is your conversation.");
             }
+            // The Do only while autocompact is near enough to plan for.
+            let near = f
+                .turns_left
+                .is_some_and(|n| CTX_COMPACT_DO.level(n) != Level::Good);
             verdict(
                 level,
                 text,
-                Some("Do: /compact when you finish this task, not mid-way."),
+                near.then_some("Do: /compact when you finish this task, not mid-way."),
                 ID,
             )
         }
@@ -496,6 +673,9 @@ pub struct SpendFacts {
     pub jumps: Vec<Jump>,
     /// `(used, total)` of a `--max-budget-usd` budget (PRD 4).
     pub budget: Option<(f64, f64)>,
+    /// The account's spend limit (status line, PRD 2): the share used and
+    /// the limits panel's text (`spend $412 / $500 · monthly`).
+    pub spend_limit: Option<(f64, String)>,
 }
 
 impl SpendFacts {
@@ -506,6 +686,7 @@ impl SpendFacts {
             per_min: rates.usd_per_hour.map(|h| h / 60.0),
             jumps: spend_jumps(state),
             budget: state.budget_usd.map(|(used, total, _)| (used, total)),
+            spend_limit: spend_limit(&state.status_facts),
         }
     }
 
@@ -515,6 +696,16 @@ impl SpendFacts {
         let rate = self.per_min.filter(|r| *r > 0.0)?;
         Some((total - used).max(0.0) / rate)
     }
+}
+
+/// The share of the spend limit used and its text, when the status line
+/// carries one (in dollars with a limit, else as a percentage).
+pub fn spend_limit(f: &crate::ui::state::StatusFacts) -> Option<(f64, String)> {
+    let ratio = match f.spend_limit_usd {
+        Some((used, Some(limit))) if limit > 0.0 => used / limit,
+        _ => f.spend_limit_pct? / 100.0,
+    };
+    Some((ratio, crate::dashboard::spend_limit_text(f)?))
 }
 
 pub fn spend(state: &State) -> Verdict {
@@ -528,14 +719,7 @@ fn jumps_sentence(jumps: &[Jump]) -> String {
         .rev()
         .take(2)
         .rev()
-        .map(|j| {
-            format!(
-                "{} in turn {} ({})",
-                j.kind.words(),
-                j.turn,
-                fmt::usd(j.usd)
-            )
-        })
+        .map(|j| format!("{} in turn {} ({})", j.kind.words(), j.turn, money(j.usd)))
         .collect();
     match (jumps.len(), shown.as_slice()) {
         (0, _) => String::new(),
@@ -565,13 +749,14 @@ pub fn spend_from(f: &SpendFacts) -> Verdict {
         .filter(|(_, t)| *t > 0.0)
         .map_or(Level::Good, |(u, t)| SPEND_BUDGET.level(u / t));
     let by_halt = f.halt_min().map_or(Level::Good, |m| SPEND_HALT.level(m));
-    let level = worst(&[by_rate, by_budget, by_halt]);
+    let by_limit = f
+        .spend_limit
+        .as_ref()
+        .map_or(Level::Good, |(r, _)| SPEND_LIMIT.level(*r));
+    let level = worst(&[by_rate, by_budget, by_halt, by_limit]);
     let rate = match f.per_min {
-        Some(r) => format!("{} a minute.", fmt::usd(r)),
-        None => format!(
-            "{} so far, nothing in the last 15 minutes.",
-            fmt::usd(total)
-        ),
+        Some(r) => format!("{} a minute.", money(r)),
+        None => format!("{} so far, nothing in the last 15 minutes.", money(total)),
     };
     let jumps = jumps_sentence(&f.jumps);
     if by_budget.max(by_halt) == level && level != Level::Good {
@@ -584,8 +769,8 @@ pub fn spend_from(f: &SpendFacts) -> Verdict {
             level,
             format!(
                 "{} of the {} budget used.{halt}",
-                fmt::usd(used),
-                fmt::usd(budget)
+                money(used),
+                money(budget)
             ),
             Some(if level == Level::Act {
                 "Do: finish the current step now, or start again with a larger --max-budget-usd."
@@ -595,14 +780,24 @@ pub fn spend_from(f: &SpendFacts) -> Verdict {
             ID,
         );
     }
-    let todo = match level {
-        Level::Act => {
+    if by_limit == level && level != Level::Good {
+        let (r, text) = f.spend_limit.clone().unwrap_or_default();
+        return verdict(
+            level,
+            format!("{text}: {} of the spend limit used.", pct(r)),
+            Some("Do: keep to the work that matters; at the limit every session on the account stops."),
+            ID,
+        );
+    }
+    // The Do names what the latest jump was; without one, the context.
+    let todo = match (level, f.jumps.last().map(|j| j.kind)) {
+        (Level::Good, _) => "Do: /clear between unrelated tasks to keep it that way.",
+        (_, Some(JumpKind::Agent)) => "Do: give helper agents narrower tasks, or a cheaper model.",
+        (_, Some(JumpKind::Rebuild)) => "Do: keep the cache warm; the cache chart says how.",
+        (Level::Act, _) => {
             "Do: stop and /compact, or hand off and /clear; every turn re-reads the whole context."
         }
-        Level::Watch => {
-            "Do: /clear between unrelated tasks; a smaller context makes every turn cheaper."
-        }
-        Level::Good => "Do: /clear between unrelated tasks to keep it that way.",
+        (_, _) => "Do: /clear between unrelated tasks; a smaller context makes every turn cheaper.",
     };
     verdict(level, format!("{rate}{jumps}"), Some(todo), ID)
 }
@@ -618,6 +813,19 @@ pub struct CostTurnFacts {
     pub context: u64,
     /// Requests passed 200k tokens (the status line's flag, PRD 2).
     pub over_200k: bool,
+    /// USD of the agents each turn launched.
+    pub agents: std::collections::BTreeMap<usize, f64>,
+    /// USD of each turn's located cache rebuilds, at the cache-write price.
+    pub rebuilds: std::collections::BTreeMap<usize, f64>,
+}
+
+/// What made the latest turns dear.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Cause {
+    /// Every call re-sends a large context.
+    Context,
+    Agents(f64),
+    Rebuilds(f64),
 }
 
 impl CostTurnFacts {
@@ -626,6 +834,25 @@ impl CostTurnFacts {
             costs: turn_costs(state),
             context: state.context().size,
             over_200k: state.status_facts.exceeds_200k_tokens,
+            agents: agent_costs(state),
+            rebuilds: rebuild_costs(state),
+        }
+    }
+
+    /// The cause of the `turns`' cost: agents or rebuilds when either is at
+    /// least half of it (the larger wins), else the context.
+    pub fn cause(&self, turns: &[(usize, f64)]) -> Cause {
+        let total: f64 = turns.iter().map(|(_, c)| *c).sum();
+        let sum = |m: &std::collections::BTreeMap<usize, f64>| -> f64 {
+            turns.iter().filter_map(|(t, _)| m.get(t)).sum()
+        };
+        let (a, r) = (sum(&self.agents), sum(&self.rebuilds));
+        if a >= r && a > 0.0 && a >= total / 2.0 {
+            Cause::Agents(a)
+        } else if r > 0.0 && r >= total / 2.0 {
+            Cause::Rebuilds(r)
+        } else {
+            Cause::Context
         }
     }
 
@@ -661,7 +888,7 @@ pub fn cost_per_turn_from(f: &CostTurnFacts) -> Verdict {
         [(_, c)] => {
             return verdict(
                 Level::Good,
-                format!("One turn so far, at {}.", fmt::usd(*c)),
+                format!("One turn so far, at {}.", money(*c)),
                 Some(todo_good),
                 ID,
             )
@@ -683,10 +910,22 @@ pub fn cost_per_turn_from(f: &CostTurnFacts) -> Verdict {
         COST_TURN_RATIO.level(r).min(COST_TURN_FLOOR.level(mean))
     });
     let typical = f.typical().unwrap_or(0.0);
+    let cause = f.cause(&f.costs[n.saturating_sub(2)..]);
+    let why = match cause {
+        Cause::Context => format!("every turn now re-sends {}", fmt::tokens(f.context)),
+        Cause::Agents(a) => format!("helper agents account for {}", money(a)),
+        Cause::Rebuilds(r) => format!("cache rebuilds account for {}", money(r)),
+    };
+    let todo = |act: bool| match cause {
+        Cause::Agents(_) => "Do: give helper agents narrower tasks, or a cheaper model.",
+        Cause::Rebuilds(_) => "Do: keep the cache warm; the cache chart says how.",
+        Cause::Context if act => "Do: /compact now, or write a hand-off note and /clear.",
+        Cause::Context => "Do: /compact at the next break.",
+    };
     let last_two = format!(
         "The last two turns cost {} and {}",
-        fmt::usd(recent[0]),
-        fmt::usd(recent[recent.len() - 1])
+        money(recent[0]),
+        money(recent[recent.len() - 1])
     );
     let long = if f.over_200k {
         " Requests are past 200k tokens."
@@ -697,25 +936,21 @@ pub fn cost_per_turn_from(f: &CostTurnFacts) -> Verdict {
         Level::Act => verdict(
             level,
             format!(
-                "{last_two}, {:.0}× the turns before: every turn now re-sends {}.{long}",
+                "{last_two}, {:.0}× the turns before: {why}.{long}",
                 ratio.unwrap_or(0.0),
-                fmt::tokens(f.context)
             ),
-            Some("Do: /compact now, or write a hand-off note and /clear."),
+            Some(todo(true)),
             ID,
         ),
         Level::Watch => verdict(
             level,
-            format!(
-                "{last_two}: every turn now re-sends {}.{long}",
-                fmt::tokens(f.context)
-            ),
-            Some("Do: /compact at the next break."),
+            format!("{last_two}: {why}.{long}"),
+            Some(todo(false)),
             ID,
         ),
         Level::Good => verdict(
             level,
-            format!("Turns cost about {} each.{long}", fmt::usd(typical)),
+            format!("Turns cost about {} each.{long}", money(typical)),
             Some(todo_good),
             ID,
         ),
@@ -732,21 +967,56 @@ pub struct Miss {
     pub kind: &'static str,
     /// The changed parameter of a `params_changed` miss (`effort`, `model`).
     pub field: Option<&'static str>,
+    /// A `tools_changed` miss names an MCP tool (`mcp__…`), not a built-in
+    /// or deferred tool Claude Code loaded itself.
+    pub mcp: bool,
     pub tokens: u64,
 }
 
 impl Miss {
-    /// The habit that avoids this rebuild, for the four causes the person
-    /// can prevent; `None` for the rest.
+    pub fn of(m: &crate::requests::LocatedMiss) -> Option<Miss> {
+        let (field, mcp) = cause_parts(&m.cause);
+        Some(Miss {
+            turn: m.turn?,
+            kind: m.cause.kind(),
+            field,
+            mcp,
+            tokens: m.tokens,
+        })
+    }
+
+    /// The habit that avoids this rebuild, for the causes the person can
+    /// prevent; `None` for the rest.
     pub fn habit(&self) -> Option<&'static str> {
-        habit(self.kind, self.field)
+        habit(self.kind, self.field, self.mcp)
     }
 }
 
-/// Located cause → the habit that avoids it. Fixed sentences.
-pub fn habit(kind: &str, field: Option<&str>) -> Option<&'static str> {
+/// A cause's changed parameter, and whether a tools change names an MCP tool.
+fn cause_parts(c: &crate::requests::LocatedCause) -> (Option<&'static str>, bool) {
+    use crate::requests::LocatedCause;
+    match c {
+        LocatedCause::ParamsChanged { field, .. } => (Some(*field), false),
+        LocatedCause::ToolsChanged { added, removed, .. } => (
+            None,
+            added.iter().chain(removed).any(|n| n.starts_with("mcp__")),
+        ),
+        _ => (None, false),
+    }
+}
+
+/// The habit for a located cause.
+pub fn habit_of(c: &crate::requests::LocatedCause) -> Option<&'static str> {
+    let (field, mcp) = cause_parts(c);
+    habit(c.kind(), field, mcp)
+}
+
+/// Located cause → the habit that avoids it. Fixed sentences. A tools
+/// change counts only when an MCP tool came or went: a built-in tool
+/// Claude Code loads on demand (deferred tools) is not the person's doing.
+pub fn habit(kind: &str, field: Option<&str>, mcp: bool) -> Option<&'static str> {
     Some(match (kind, field) {
-        ("tools_changed", _) => "Connect the MCP servers you need before your first prompt.",
+        ("tools_changed", _) if mcp => "Connect the MCP servers you need before your first prompt.",
         ("prefix_rewritten", _) => {
             "Steer forward with a new message instead of editing or rewinding an old one."
         }
@@ -772,6 +1042,8 @@ pub struct CacheFacts {
     pub avoidable_usd: Option<f64>,
     /// `5 minutes` or `1 hour`.
     pub ttl_words: &'static str,
+    /// The first turn a per-turn chart shows, when it cuts the session.
+    pub shown_from: Option<usize>,
 }
 
 impl CacheFacts {
@@ -780,18 +1052,7 @@ impl CacheFacts {
             .requests
             .misses()
             .iter()
-            .filter_map(|m| {
-                let field = match &m.cause {
-                    crate::requests::LocatedCause::ParamsChanged { field, .. } => Some(*field),
-                    _ => None,
-                };
-                Some(Miss {
-                    turn: m.turn?,
-                    kind: m.cause.kind(),
-                    field,
-                    tokens: m.tokens,
-                })
-            })
+            .filter_map(Miss::of)
             .collect();
         let avoidable: u64 = misses
             .iter()
@@ -814,12 +1075,20 @@ impl CacheFacts {
                 3_600_000 => "1 hour",
                 _ => "5 minutes",
             },
+            shown_from: None,
         }
     }
 }
 
 pub fn cache(state: &State) -> Verdict {
-    cache_from(&CacheFacts::of(state))
+    cache_with(state, None)
+}
+
+/// The cache verdict for a chart that shows the turns from `shown_from` on.
+pub fn cache_with(state: &State, shown_from: Option<usize>) -> Verdict {
+    let mut f = CacheFacts::of(state);
+    f.shown_from = shown_from;
+    cache_from(&f)
 }
 
 pub fn cache_from(f: &CacheFacts) -> Verdict {
@@ -837,9 +1106,18 @@ pub fn cache_from(f: &CacheFacts) -> Verdict {
     let tokens: u64 = avoidable.iter().map(|m| m.tokens).sum();
     let price = f
         .avoidable_usd
-        .map(|u| format!(", about {}", fmt::usd(u)))
+        .map(|u| format!(", about {}", money(u)))
         .unwrap_or_default();
     let good = level == Level::Good;
+    let shown = avoidable
+        .iter()
+        .filter(|m| f.shown_from.is_none_or(|from| m.turn >= from))
+        .count();
+    let how = match shown {
+        0 => String::new(),
+        n if n == avoidable.len() => " How, below.".to_string(),
+        n => format!(" How for the {n} in the turns shown, below."),
+    };
     let but = if good { "But " } else { "" };
     let all = if good { "all" } else { "All" };
     let the = if good { "the" } else { "The" };
@@ -848,15 +1126,15 @@ pub fn cache_from(f: &CacheFacts) -> Verdict {
         (0, 1) => " One rebuild, with no habit that avoids it.".into(),
         (0, n) => format!(" {n} rebuilds, none with a habit that avoids it."),
         (1, 1) => format!(
-            " {but}{the} one rebuild ({} tokens{price}) was avoidable. How, below.",
+            " {but}{the} one rebuild ({} tokens{price}) was avoidable.{how}",
             fmt::tokens(tokens)
         ),
         (k, n) if k == n => format!(
-            " {but}{all} {n} rebuilds ({} tokens{price}) were avoidable. How, below.",
+            " {but}{all} {n} rebuilds ({} tokens{price}) were avoidable.{how}",
             fmt::tokens(tokens)
         ),
         (k, n) => format!(
-            " {but}{k} of {n} rebuilds ({} tokens{price}) were avoidable. How, below.",
+            " {but}{k} of {n} rebuilds ({} tokens{price}) were avoidable.{how}",
             fmt::tokens(tokens)
         ),
     };
@@ -980,7 +1258,7 @@ pub fn tool_calls_from(f: &ToolFacts) -> Verdict {
     if f.calls == 0 {
         return verdict(Level::Good, "No tool calls yet.".into(), None, ID);
     }
-    let by_failed = if f.recent_calls >= MIN_RECENT_CALLS {
+    let by_failed = if f.recent_calls as f64 >= gate(&TOOLS_FAILED_FROM) {
         TOOLS_FAILED.level(f.recent_failed as f64 / f.recent_calls as f64)
     } else {
         Level::Good
@@ -992,7 +1270,7 @@ pub fn tool_calls_from(f: &ToolFacts) -> Verdict {
         .reread
         .as_ref()
         .map_or(Level::Good, |(_, n, _)| TOOLS_REREAD.level(*n as f64));
-    let by_ratio = if f.reads >= MIN_READS {
+    let by_ratio = if f.reads as f64 >= gate(&TOOLS_READS_FROM) {
         TOOLS_READS_PER_EDIT.level(f.reads as f64 / f.edits.max(1) as f64)
     } else {
         Level::Good
@@ -1073,6 +1351,24 @@ pub fn agent_costs(state: &State) -> std::collections::BTreeMap<usize, f64> {
     agents
 }
 
+/// USD of each turn's located cache rebuilds, at the cache-write price.
+pub fn rebuild_costs(state: &State) -> std::collections::BTreeMap<usize, f64> {
+    let mut tokens: std::collections::BTreeMap<usize, u64> = Default::default();
+    for m in state.requests.misses() {
+        if let Some(t) = m.turn {
+            *tokens.entry(t).or_default() += m.tokens;
+        }
+    }
+    tokens
+        .into_iter()
+        .filter_map(|(t, n)| {
+            let usd =
+                crate::advisor::rules::usd(state, n, crate::advisor::rules::PriceKind::CacheWrite)?;
+            Some((t, usd))
+        })
+        .collect()
+}
+
 /// `(turn, USD)` for every turn that made an API call: its own calls priced
 /// as the ledger prices them (at its first model) plus the agents it
 /// launched. Unpriced turns are left out.
@@ -1097,14 +1393,18 @@ pub fn turn_costs(state: &State) -> Vec<(usize, f64)> {
 /// times the median and [`COST_TURN_FLOOR`]'s watch, unexplained for now
 /// ([`JumpKind::Turn`]); [`spend_jumps`] names them.
 fn jumps(costs: &[(usize, f64)]) -> Vec<Jump> {
+    if (costs.len() as f64) < gate(&SPEND_JUMP_FROM) {
+        return Vec::new();
+    }
     let Some(typ) = median(costs.iter().map(|(_, c)| *c).collect()) else {
         return Vec::new();
     };
-    let ratio = COST_TURN_RATIO.watch.unwrap_or(2.0);
-    let floor = COST_TURN_FLOOR.watch.unwrap_or(0.5);
-    costs
+    let ratio = gate(&COST_TURN_RATIO);
+    let floor = gate(&COST_TURN_FLOOR);
+    // The first priced turn writes the cache: dear by nature, never a jump.
+    costs[1..]
         .iter()
-        .filter(|(_, c)| costs.len() >= 3 && *c >= typ * ratio && *c >= floor)
+        .filter(|(_, c)| *c >= typ * ratio && *c >= floor)
         .map(|(turn, usd)| Jump {
             turn: *turn,
             usd: *usd,
@@ -1118,29 +1418,14 @@ fn jumps(costs: &[(usize, f64)]) -> Vec<Jump> {
 /// the cache-write price), else a costly turn.
 pub fn spend_jumps(state: &State) -> Vec<Jump> {
     let mut v = jumps(&turn_costs(state));
+    let agents = agent_costs(state);
+    let rebuilds = rebuild_costs(state);
     for j in &mut v {
-        let agents: f64 = state
-            .agents
-            .values()
-            .filter(|a| a.launched_turn == Some(j.turn))
-            .filter_map(|a| state.cost.pricing().estimate(&a.usage, &a.model))
-            .sum();
-        let rebuilt: u64 = state
-            .requests
-            .misses()
-            .iter()
-            .filter(|m| m.turn == Some(j.turn))
-            .map(|m| m.tokens)
-            .sum();
-        let rebuild = crate::advisor::rules::usd(
-            state,
-            rebuilt,
-            crate::advisor::rules::PriceKind::CacheWrite,
-        )
-        .unwrap_or(0.0);
-        j.kind = if agents > 0.0 && agents >= rebuild {
+        let a = agents.get(&j.turn).copied().unwrap_or(0.0);
+        let r = rebuilds.get(&j.turn).copied();
+        j.kind = if a > 0.0 && a >= r.unwrap_or(0.0) {
             JumpKind::Agent
-        } else if rebuilt > 0 {
+        } else if r.is_some() {
             JumpKind::Rebuild
         } else {
             JumpKind::Turn
@@ -1193,6 +1478,7 @@ mod tests {
             window: 1_000_000,
             threshold: 967_000,
             turns_left: Some(29.2),
+            light: Level::Act,
             mcp_tokens: Some(10_000),
             messages_share: Some(0.9),
         }
@@ -1212,6 +1498,27 @@ mod tests {
             v.todo.as_deref(),
             Some("Do: /compact when you finish this task, not mid-way.")
         );
+    }
+
+    /// Far from autocompact, Good offers no Do; the coach's light caps the
+    /// level (fixture B after its compaction: a quiet light, so no Act).
+    #[test]
+    fn context_good_far_from_autocompact_and_capped_by_the_light() {
+        let mut f = ctx();
+        f.size = 120_000;
+        f.turns_left = Some(300.0);
+        let v = context_from(&f);
+        assert_eq!(v.level, Level::Good);
+        assert_eq!(v.todo, None);
+        let mut f = ctx();
+        f.size = 142_000;
+        f.turns_left = Some(3.0);
+        f.light = Level::Good;
+        assert_eq!(context_from(&f).level, Level::Good);
+        f.light = Level::Watch;
+        let v = context_from(&f);
+        assert_eq!(v.level, Level::Watch);
+        assert!(v.text.starts_with("About 3 more turns"), "{}", v.text);
     }
 
     #[test]
@@ -1263,6 +1570,7 @@ mod tests {
             per_min: Some(0.12),
             jumps: vec![],
             budget: None,
+            spend_limit: None,
         }
     }
 
@@ -1301,10 +1609,28 @@ mod tests {
         let v = spend_from(&f);
         assert_eq!(v.level, Level::Watch);
         assert!(
-            v.text.starts_with("$8.00 of the $10.0 budget used."),
+            v.text.starts_with("$8.00 of the $10.00 budget used."),
             "{}",
             v.text
         );
+        // The account's spend limit 80 % used (PRD 2).
+        let mut f = spend_f();
+        f.spend_limit = Some((0.824, "spend $412 / $500 · monthly".into()));
+        let v = spend_from(&f);
+        assert_eq!(v.level, Level::Watch);
+        assert_eq!(
+            v.text,
+            "spend $412 / $500 · monthly: 82 % of the spend limit used."
+        );
+        // The Do names the latest jump's cause.
+        let mut f = spend_f();
+        f.per_min = Some(0.5);
+        f.jumps = vec![Jump {
+            turn: 4,
+            usd: 3.0,
+            kind: JumpKind::Agent,
+        }];
+        assert!(spend_from(&f).todo.unwrap().contains("helper agents"));
     }
 
     #[test]
@@ -1328,6 +1654,8 @@ mod tests {
             costs: v.iter().enumerate().map(|(i, c)| (i + 1, *c)).collect(),
             context: 412_000,
             over_200k: false,
+            agents: Default::default(),
+            rebuilds: Default::default(),
         }
     }
 
@@ -1358,12 +1686,28 @@ mod tests {
         f.over_200k = true;
         let v = cost_per_turn_from(&f);
         assert_eq!(v.level, Level::Act);
-        assert!(v.text.contains("6× the turns before"), "{}", v.text);
+        assert!(
+            v.text
+                .contains("6× the turns before: every turn now re-sends 412k"),
+            "{}",
+            v.text
+        );
         assert!(
             v.text.ends_with("Requests are past 200k tokens."),
             "{}",
             v.text
         );
+        // Agents that make up most of the last two turns are named instead.
+        let mut f = costs(&[0.5, 0.6, 0.55, 0.6, 3.1, 3.4]);
+        f.agents.insert(6, 2.5);
+        f.agents.insert(5, 1.0);
+        let v = cost_per_turn_from(&f);
+        assert!(
+            v.text.ends_with("helper agents account for $3.50."),
+            "{}",
+            v.text
+        );
+        assert!(v.todo.unwrap().contains("helper agents"));
     }
 
     // -- cache
@@ -1375,6 +1719,7 @@ mod tests {
             misses,
             avoidable_usd: Some(2.3),
             ttl_words: "1 hour",
+            shown_from: None,
         }
     }
 
@@ -1383,6 +1728,7 @@ mod tests {
             turn,
             kind,
             field,
+            mcp: kind == "tools_changed",
             tokens,
         }
     }
@@ -1416,6 +1762,36 @@ mod tests {
         );
     }
 
+    /// A built-in tool Claude Code loaded on demand is not avoidable; a
+    /// cut chart says how many of the avoidable rebuilds it shows.
+    #[test]
+    fn deferred_tools_are_not_avoidable_and_a_cut_chart_says_so() {
+        let mut deferred = miss(1, "tools_changed", None, 70_000);
+        deferred.mcp = false;
+        let v = cache_from(&cache_f(0.95, vec![deferred]));
+        assert_eq!(
+            v.text,
+            "Reused 95 %. One rebuild, with no habit that avoids it."
+        );
+        let mut f = cache_f(
+            0.95,
+            vec![
+                miss(4, "expired", None, 100_000),
+                miss(60, "prefix_rewritten", None, 50_000),
+            ],
+        );
+        f.shown_from = Some(30);
+        let v = cache_from(&f);
+        assert!(
+            v.text
+                .ends_with("were avoidable. How for the 1 in the turns shown, below."),
+            "{}",
+            v.text
+        );
+        f.shown_from = Some(70);
+        assert!(cache_from(&f).text.ends_with("were avoidable."));
+    }
+
     #[test]
     fn cache_watch() {
         let v = cache_from(&cache_f(0.7, vec![miss(6, "thinking_drop", None, 50_000)]));
@@ -1443,19 +1819,32 @@ mod tests {
 
     #[test]
     fn every_avoidable_cause_has_a_habit() {
-        for (kind, field) in [
-            ("tools_changed", None),
-            ("prefix_rewritten", None),
-            ("params_changed", Some("effort")),
-            ("params_changed", Some("model")),
-            ("expired", None),
+        for (kind, field, mcp) in [
+            ("tools_changed", None, true),
+            ("prefix_rewritten", None, false),
+            ("params_changed", Some("effort"), false),
+            ("params_changed", Some("model"), false),
+            ("expired", None, false),
         ] {
-            assert!(habit(kind, field).is_some(), "{kind} {field:?}");
+            assert!(habit(kind, field, mcp).is_some(), "{kind} {field:?}");
         }
-        for kind in ["system_changed", "thinking_drop", "unlocated"] {
-            assert!(habit(kind, None).is_none(), "{kind}");
+        for kind in [
+            "system_changed",
+            "thinking_drop",
+            "unlocated",
+            "tools_changed",
+        ] {
+            assert!(habit(kind, None, false).is_none(), "{kind}");
         }
-        assert!(habit("params_changed", Some("betas")).is_none());
+        assert!(habit("params_changed", Some("betas"), false).is_none());
+        // From the located cause: MCP names count, built-in names do not.
+        let tools = |n: &str| crate::requests::LocatedCause::ToolsChanged {
+            added: vec![n.to_string()],
+            removed: vec![],
+            resized: vec![],
+        };
+        assert!(habit_of(&tools("mcp__linear__search")).is_some());
+        assert!(habit_of(&tools("EnterWorktree")).is_none());
     }
 
     // -- tool calls
