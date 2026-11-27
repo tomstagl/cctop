@@ -68,11 +68,11 @@ export function selectedItem(items: readonly ActItem[], model: Model): ActItem |
 
 /**
  * What adding an allow rule does to the project's `settings.local.json`, as a
- * unified diff. cctop does not read the file, so the hunk shows the shape
- * (the added line under `permissions.allow`), not the person's other rules.
+ * unified diff. cctop does not read the file, so nothing of it is invented:
+ * the file headers and the one line to add, no hunk header, no context.
  */
 export function allowDiff(rule: string): string {
-  return ['--- a/.claude/settings.local.json', '+++ b/.claude/settings.local.json', '@@ -1,3 +1,4 @@', ' {', '   "permissions": {', '     "allow": [', `+      "${rule}",`].join('\n');
+  return ['--- a/.claude/settings.local.json', '+++ b/.claude/settings.local.json', `+      "${rule}",`].join('\n');
 }
 
 /** What the dialog's buttons do: the coach card's, plus the dialog's own selection and the agent jump. */
@@ -125,7 +125,7 @@ function exactTexts(a: Advice): string[] {
   return out;
 }
 
-function detail(item: ActItem, model: Model, inner: number, actions: ActActions, el: ActElements): RenderElement[] {
+function detail(item: ActItem, model: Model, inner: number, actions: ActActions, el: ActElements, focused: boolean): RenderElement[] {
   const a = item.advice;
   const { Code } = el;
   const out: RenderElement[] = [];
@@ -136,7 +136,7 @@ function detail(item: ActItem, model: Model, inner: number, actions: ActActions,
   // The steps the person takes come first: "press Esc to stop the turn".
   const steps = a.actions.filter(isKeyStep);
   for (const x of steps) add(keyStepRow(x, inner, counter));
-  if (steps.some((x) => x.payload === 'Esc')) {
+  if (focused && steps.some((x) => x.payload === 'Esc')) {
     add(wrapped('Esc closes this dialog first; Esc at the prompt then stops the turn. cctop never stops it for you.', inner, { dim: true }, 3));
   }
   if (steps.length > 0) add([blank()]);
@@ -149,7 +149,7 @@ function detail(item: ActItem, model: Model, inner: number, actions: ActActions,
   // What changes: the settings diff, the line to add, the exact text for the box.
   for (const x of a.actions) {
     if (x.kind === 'allow_rule') {
-      add([blank(), ...wrapped('What changes: one line is added under permissions.allow in .claude/settings.local.json (yours, not committed). cctop shows it and copies it; it never edits your settings.', inner, { dim: true })]);
+      add([blank(), ...wrapped('What changes: one line is added in .claude/settings.local.json (yours, not committed). cctop copies it and opens the file; it never edits your settings.', inner, { dim: true }), ...wrapped("the line to add under permissions.allow — cctop doesn't read your file", inner, { dim: true })]);
       out.push(<Code key="act-diff" source={allowDiff(x.payload)} format="diff" path=".claude/settings.local.json" wrap="truncate-end" />);
       add(wrapped(`copy: ${x.payload}`, inner, { dim: true }));
     } else if (x.kind === 'setting') {
@@ -201,12 +201,12 @@ function listRows(items: readonly ActItem[], selected: ActItem | null, width_: n
 }
 
 /** The dialog's tree: the header line, the list, the selected item's detail. */
-export function renderAct(model: Model, el: ActElements, columns: number, actions: ActActions): RenderElement {
+export function renderAct(model: Model, el: ActElements, columns: number, actions: ActActions, focused = true): RenderElement {
   const { Box, Text } = el;
   const c = coachOf(model.query.coach);
   const items = actItems(c);
   const selected = selectedItem(items, model);
-  const head: Line = [seg('cctop · act', { color: ACCENT, bold: true }), seg(`  ${items.length} open · Tab and ↑↓ walk · Esc closes · toasts wait`, { dim: true })];
+  const head: Line = [seg('cctop · act', { color: ACCENT, bold: true }), seg(`  ${items.length} open${focused ? ' · Tab and ↑↓ walk · Esc closes' : ''} · toasts wait`, { dim: true })];
   const header = textRow(fit(head, columns), el);
   if (model.binary === 'missing') return <Box flexDirection="column">{header}<Text wrap="truncate">{NEEDS_BINARY}</Text></Box>;
   if (selected === null) {
@@ -217,7 +217,7 @@ export function renderAct(model: Model, el: ActElements, columns: number, action
   const listW = side ? ACT_LIST_COLUMNS : columns;
   const detailW = side ? columns - ACT_LIST_COLUMNS - BUTTON_GAP : columns;
   const list = listRows(items, selected, listW, actions, el);
-  const body = detail(selected, model, detailW, actions, el);
+  const body = detail(selected, model, detailW, actions, el, focused);
   if (!side) {
     return (
       <Box flexDirection="column">
