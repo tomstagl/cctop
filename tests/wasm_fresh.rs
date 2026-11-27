@@ -1,8 +1,9 @@
 //! plugin/hooks/charts.wasm is a committed build output: it must come from
 //! the sources in the tree. `charts.wasm.inputs` records the SHA-256 of what
 //! it was built from (same recipe as scripts/wasm-inputs.py: the cctop-charts
-//! manifest and sources, and Cargo.lock without cctop's own entry); this
-//! recomputes it and fails when they differ.
+//! manifest and sources, Cargo.lock without cctop's own entry, the root
+//! Cargo.toml's `[profile.wasm]` block and the Makefile's `RUSTFLAGS="..."`);
+//! this recomputes it and fails when they differ.
 
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -54,6 +55,20 @@ fn sources_hash() -> String {
         .join("\n\n");
     h.update(format!("Cargo.lock\0{}\0", lock.len()));
     h.update(lock.as_bytes());
+    // [profile.wasm] up to the next table header; the recipe's RUSTFLAGS.
+    let toml = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    let start = toml.find("[profile.wasm]").unwrap();
+    let end = toml[start + 1..]
+        .find("\n[")
+        .map_or(toml.len(), |i| start + 1 + i);
+    let profile = toml[start..end].trim_end();
+    h.update(format!("Cargo.toml[profile.wasm]\0{}\0", profile.len()));
+    h.update(profile.as_bytes());
+    let make = std::fs::read_to_string(root.join("Makefile")).unwrap();
+    let a = make.find("RUSTFLAGS=\"").unwrap();
+    let flags = &make[a..make[a + 11..].find('"').map(|i| a + 11 + i).unwrap() + 1];
+    h.update(format!("Makefile:RUSTFLAGS\0{}\0", flags.len()));
+    h.update(flags.as_bytes());
     use std::fmt::Write as _;
     h.finalize().iter().fold(String::new(), |mut s, b| {
         write!(s, "{b:02x}").unwrap();
