@@ -872,6 +872,24 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+53. **Placed rows scroll with the conversation and are gone after `--resume`** (US-010).
+    Setup: the pane open in `/tui fullscreen` with a NOW nudge firing
+    (a failing retry loop gives A38) and a session where a located cache
+    miss happens (a new MCP tool loaded mid-session). Scroll the
+    transcript up and down, then quit and `claude --resume` the session.
+    Expected: at the turn end a bordered `cctop` card with the NOW
+    headline, one line of body and two Buttons (the first action and
+    Snooze, doing what the coach card's do) stands in the transcript, and
+    a located miss adds one dim row naming the cause and the tokens
+    re-written. Both scroll with the conversation, `onScreen` following
+    the viewport. Once the nudge is snoozed or gone the card reads as one
+    dim "no longer current" line. Nothing is written to the transcript
+    file (`git diff`-style: the `.jsonl` is unchanged), the model never
+    mentions the rows, and after `--resume` none comes back. Record
+    whether a compaction removes them.
+    Claude Code version:
+    Result: pending
+
 54. **Hover readouts on the per-turn charts** (US-007).
     Setup: as item 47 or 48, body 1 open, a session with five or more
     turns.

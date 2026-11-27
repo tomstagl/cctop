@@ -407,22 +407,9 @@ export function isKeyStep(x: CoachAction): boolean {
   return x.kind === 'key' && x.payload !== '6 Enter';
 }
 
-// An advice's actions, by kind and in the binary's order: a key is a step
-// the person takes (shown first, numbered with the Buttons); prompt and
-// slash fill the box; an allow rule copies, opens settings.local.json and fills
-// /permissions; a setting copies and opens; a tip is "Got it". Snooze last.
-// Then the line saying a fill took and nothing was sent.
-export function actionRows(
-  a: Advice,
-  where: string,
-  inner: number,
-  actions: CoachActions,
-  counter: Counter,
-  model: Model,
-  fixShown: boolean,
-  stepsShown = false,
-): FrameRow[] {
-  const rows: FrameRow[] = [];
+/** An advice's actions as the key steps (rows) and the Buttons they make, numbered by `counter`; the one place a card's Buttons are built, so the pane's card and the transcript's say and do the same. */
+function actionItems(a: Advice, where: string, actions: CoachActions, counter: Counter, stepsShown: boolean, inner = 0): { steps: FrameRow[]; buttons: FrameButton[] } {
+  const steps: FrameRow[] = [];
   const buttons: FrameButton[] = [];
   const button = (key: string, label: string, onPress: () => void): void => {
     const hk = hotkey(counter);
@@ -435,7 +422,7 @@ export function actionRows(
         if (x.payload === '6 Enter') {
           button(`${i}-agents`, 'Open the agents view', () => actions.agents());
         } else if (!stepsShown) {
-          rows.push(...keyStepRow(x, inner, counter));
+          steps.push(...keyStepRow(x, inner, counter));
         }
         break;
       case 'prompt':
@@ -457,7 +444,34 @@ export function actionRows(
     }
   });
   button('snooze', 'Snooze', () => actions.snooze(a.id));
-  rows.push(...packButtons(buttons, inner));
+  return { steps, buttons };
+}
+
+/** The two Buttons a transcript card keeps: the advice's first action and Snooze. A nudge whose only step is a key press has just Snooze. */
+export function mainButtons(a: Advice, where: string, actions: CoachActions): FrameButton[] {
+  const { buttons } = actionItems(a, where, actions, { n: 1, hotkeys: false, said: { filled: false } }, true);
+  const first = buttons.length > 1 ? buttons[0] : undefined;
+  const snooze = buttons[buttons.length - 1];
+  return [...(first ? [first] : []), ...(snooze ? [snooze] : [])];
+}
+
+// An advice's actions, by kind and in the binary's order: a key is a step
+// the person takes (shown first, numbered with the Buttons); prompt and
+// slash fill the box; an allow rule copies, opens settings.local.json and fills
+// /permissions; a setting copies and opens; a tip is "Got it". Snooze last.
+// Then the line saying a fill took and nothing was sent.
+export function actionRows(
+  a: Advice,
+  where: string,
+  inner: number,
+  actions: CoachActions,
+  counter: Counter,
+  model: Model,
+  fixShown: boolean,
+  stepsShown = false,
+): FrameRow[] {
+  const { steps, buttons } = actionItems(a, where, actions, counter, stepsShown, inner);
+  const rows: FrameRow[] = [...steps, ...packButtons(buttons, inner)];
   const filled = model.coachFilled;
   if (filled !== null && fillTexts(a).includes(filled) && !(fixShown && filled === a.fixPrompt)) {
     rows.push(...filledRows(counter, filledText(filled), inner));

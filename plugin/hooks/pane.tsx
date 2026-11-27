@@ -26,6 +26,7 @@ import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type Ch
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, copiedText, DRAFT_KEPT, openerFor, settingsPath, settingsScope, statusLine, USER_SETTINGS, type CoachActions, type LightId, type SettingsKind } from './views/coach';
+import { missPlacements, nudgePlacement, placedTree, type PlacedRow } from './views/placed';
 import { ACT_ID, ACT_ROWS, renderAct, type ActActions } from './views/act';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
@@ -132,6 +133,12 @@ let notifyState: NotifyState = initialNotifyState();
 // a terminal ignores `at` and raises a notification at once, so the wait is
 // ours and the notification is sent only when the reset arrives.
 const resetTimers = new Map<string, Timer>();
+// Rows placed in the transcript (`$.ui.place`), by id: what each draws from
+// when the engine asks. Each id is placed once. `missesSeen` holds the
+// located misses the first summary already had (a resumed session's history
+// is not replayed into the transcript); null until that summary arrives.
+const placedRows = new Map<string, PlacedRow>();
+let missesSeen: Set<string> | null = null;
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -270,9 +277,14 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open || model.actOpen) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
+  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($);
   if (model.queryAt !== before.queryAt) checkFilled($);
   overviewChanged($, before);
-  if (model.sessionId !== before.sessionId) agentsAsked.clear();
+  if (model.sessionId !== before.sessionId) {
+    agentsAsked.clear();
+    placedRows.clear();
+    missesSeen = null;
+  }
   if (model.query.agents !== before.query.agents) agentsPolled($);
 }
 
@@ -699,6 +711,29 @@ function coachActions($: EngineInterface): CoachActions {
     next: (id) => apply($, { type: 'coach.next', id }),
     act: (id) => openAct($, id),
   };
+}
+
+// Notes where they happened (US-010): a NOW nudge (`nudge-<fire time>`) and
+// a located cache miss that came after the first summary (`miss-<turn>`) are
+// placed at the transcript's end once each, and only between turns, so they
+// land at the turn end. Display only: nothing is written to the transcript.
+function placeNotes($: EngineInterface): void {
+  if (model.turn.state === 'busy') return;
+  const misses = missPlacements(model.query.summary);
+  const wanted = [];
+  const nudge = nudgePlacement(coachOf(model.query.coach));
+  if (nudge !== null) wanted.push(nudge);
+  if (model.query.summary !== undefined) {
+    if (missesSeen === null) missesSeen = new Set(misses.map((m) => m.id));
+    else wanted.push(...misses.filter((m) => !missesSeen?.has(m.id)));
+  }
+  for (const { id, row } of wanted) {
+    if (placedRows.has(id)) continue;
+    placedRows.set(id, row);
+    $.ui.place({ id }).catch((err: unknown) => $.ui.log(`cctop: place ${id} failed: ${String(err)}`));
+  }
+  // A card whose nudge has left the slot is redrawn as its settled line, pane open or not.
+  if (!model.open && placedRows.size > 0) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
 }
 
 // What the act dialog's buttons do: the coach card's own (one implementation
@@ -1378,6 +1413,8 @@ export const register: Register = (on) => {
   poller?.stop();
   poller = null;
   chartRenderer = null;
+  placedRows.clear();
+  missesSeen = null;
   pictures = new Map();
   mounted = new Map();
   chartsBusy = false;
@@ -1432,6 +1469,7 @@ export const register: Register = (on) => {
 
   on('turn.complete', async ($, e, next) => {
     apply($, { type: 'turn.complete', at: await clockNow($), durationMs: e.durationMs, reason: e.reason });
+    placeNotes($);
     stopUsageTimer();
     poller?.reschedule();
     const result = await next(e);
@@ -1548,6 +1586,17 @@ export const register: Register = (on) => {
     });
   }).catch(($, e, next) => {
     $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
+  // A row this plugin placed in the transcript: drawn from what was kept
+  // when it was placed; another plugin's row is not ours.
+  on('ui.render', { component: 'Placed' }, ($, e, next) => {
+    const row = e.props.plugin === $.plugin.name ? placedRows.get(e.props.id) : undefined;
+    if (row === undefined || e.surface !== 'terminal') return next(e);
+    return placedTree(row, coachOf(model.query.coach), e.viewport?.columns ?? 80, $.ui.resolve(e), coachActions($));
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: render failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
   });
 
