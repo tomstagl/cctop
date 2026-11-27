@@ -55,10 +55,13 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
                 state.session.git_dirty = g.dirty;
             }
             if let Some(base) = &base_commit {
-                let ns = crate::files::numstat(state.work_dir(), base);
-                let cwd = state.work_dir().to_path_buf();
+                // The repo the session started in: `CwdChanged` moves the
+                // branch display and Bash paths, not the diff base or the
+                // folder the file paths are relative to.
+                let cwd = state.session.cwd.clone();
+                let ns = crate::files::numstat(&cwd, base);
                 state.files.apply_numstat(&cwd, &ns);
-                let head = crate::files::numstat(state.work_dir(), "HEAD");
+                let head = crate::files::numstat(&cwd, "HEAD");
                 state.uncommitted = Some((
                     head.iter().map(|(_, a, _)| a).sum(),
                     head.iter().map(|(_, _, d)| d).sum(),
