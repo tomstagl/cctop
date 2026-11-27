@@ -168,9 +168,8 @@ def hid(s):
 
 
 REQUEST_TYPES = ("api-request", "api-request-shape", "api-request-blob")
-# Keys whose string value in a message block or a schema node is structure, not prose.
-MCP_NAMES = {}  # (kind, original) -> renamed, stable across every shape line
-BLOCK_KEEP = {"type", "role", "name", "tool_use_id", "media_type", "format", "required"}
+MCP_NAMES = {}  # (kind, original) -> renamed, stable across every shape and blob line
+MCP_PROPS = {}  # original MCP tool name -> {property name: p<N>}
 
 
 def h64(s):
@@ -179,16 +178,103 @@ def h64(s):
     return hashlib.sha256(("cctop-fixture:" + s).encode()).hexdigest()
 
 
-def exact_fill(v, key=None):
+def fill_all(v):
     """Same-length filler for every string under `v` (no MAX_STR cap: the
-    request lines are read for their sizes), keeping BLOCK_KEEP keys' strings."""
+    request lines are read for their sizes). Dict keys stay."""
     if isinstance(v, dict):
-        return {k: exact_fill(x, k) for k, x in v.items()}
+        return {k: fill_all(x) for k, x in v.items()}
     if isinstance(v, list):
-        return [exact_fill(x, key) for x in v]
-    if isinstance(v, str):
-        return v if key in BLOCK_KEEP else fill(len(v))
-    return v
+        return [fill_all(x) for x in v]
+    return fill(len(v)) if isinstance(v, str) else v
+
+
+def tool_name(n):
+    """Built-in names stay; `mcp__<server>__<tool>` -> `mcp__server<N>__tool<M>`."""
+    if not n.startswith("mcp__"):
+        return n
+    server = MCP_NAMES.setdefault(("s", n.split("__")[1]), "server%d" % (sum(k[0] == "s" for k in MCP_NAMES) + 1))
+    tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
+    return f"mcp__{server}__{tool}"
+
+
+def prop_name(tool, p):
+    """An MCP tool's parameter names are renamed `p1`, `p2`, ... per tool;
+    a built-in tool's keep theirs."""
+    if not tool.startswith("mcp__"):
+        return p
+    m = MCP_PROPS.setdefault(tool, {})
+    return m.setdefault(p, "p%d" % (len(m) + 1))
+
+
+def anon_schema(node, tool):
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            if k == "properties" and isinstance(v, dict):
+                out[k] = {prop_name(tool, pk): anon_schema(pv, tool) for pk, pv in v.items()}
+            elif k == "required" and isinstance(v, list):
+                out[k] = [prop_name(tool, r) if isinstance(r, str) else r for r in v]
+            elif k == "type" and isinstance(v, str):
+                out[k] = v
+            else:
+                out[k] = anon_schema(v, tool)
+        return out
+    if isinstance(node, list):
+        return [anon_schema(x, tool) for x in node]
+    return fill(len(node)) if isinstance(node, str) else node
+
+
+def anon_tool(t):
+    orig = t.get("name", "") if isinstance(t.get("name"), str) else ""
+    out = {}
+    for k, v in t.items():
+        if k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input_schema":
+            out[k] = anon_schema(v, orig)
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_block(b):
+    """One system block or message content block: `type` and `tool_use_id`
+    stay on the block itself, a tool's `name` is renamed, everything else
+    (text, input values, results) is filler."""
+    if not isinstance(b, dict):
+        return fill_all(b)
+    out = {}
+    for k, v in b.items():
+        if k in ("type", "tool_use_id") and isinstance(v, str):
+            out[k] = v
+        elif k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input" and isinstance(v, dict):
+            tool = b.get("name") if isinstance(b.get("name"), str) else ""
+            out[k] = {prop_name(tool, ik): fill_all(iv) for ik, iv in v.items()}
+        elif k == "tool" and isinstance(v, dict):
+            out[k] = {
+                tk: (tv if tk == "type" and isinstance(tv, str)
+                     else anon_tool(tv) if tk == "definition" and isinstance(tv, dict) else fill_all(tv))
+                for tk, tv in v.items()
+            }
+        elif k == "caller" and isinstance(v, dict):
+            out[k] = {ck: (cv if ck == "type" and isinstance(cv, str) else fill_all(cv)) for ck, cv in v.items()}
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_message(m):
+    out = {}
+    for k, v in m.items():
+        if k == "role" and isinstance(v, str):
+            out[k] = v
+        elif k == "content" and isinstance(v, list):
+            out[k] = [anon_block(b) for b in v]
+        else:
+            out[k] = fill_all(v)
+    return out
 
 
 def anon_request(o):
@@ -209,37 +295,21 @@ def anon_request(o):
         elif k == "shape" and isinstance(v, dict):
             out[k] = anon_shape(v)
         elif k == "message" and isinstance(v, dict):
-            out[k] = exact_fill(v)
-        elif isinstance(v, str):
-            out[k] = fill(len(v))
+            out[k] = anon_message(v)
         else:
-            out[k] = v
+            out[k] = fill_all(v)
     return out
 
 
 def anon_shape(shape):
-    def tool_name(n):
-        if not n.startswith("mcp__"):
-            return n
-        parts = n.split("__", 2)
-        server = MCP_NAMES.setdefault(("s", parts[1]), "server%d" % (len([k for k in MCP_NAMES if k[0] == "s"]) + 1))
-        tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (len([k for k in MCP_NAMES if k[0] == "t"]) + 1))
-        return f"mcp__{server}__{tool}"
-
     out = {}
     for k, v in shape.items():
         if k == "system" and isinstance(v, list):
-            out[k] = [exact_fill(b) for b in v]
+            out[k] = [anon_block(b) for b in v]
         elif k == "tools" and isinstance(v, list):
-            tools = []
-            for t in v:
-                nt = {}
-                for tk, tv in t.items():
-                    nt[tk] = tool_name(tv) if tk == "name" and isinstance(tv, str) else exact_fill(tv, tk)
-                tools.append(nt)
-            out[k] = tools
+            out[k] = [anon_tool(t) if isinstance(t, dict) else fill_all(t) for t in v]
         else:
-            out[k] = exact_fill(v, k)
+            out[k] = fill_all(v)
     return out
 
 
@@ -357,6 +427,8 @@ def anon_text(s):
 
 def anon(v, key=None, parent=None):
     if isinstance(v, dict):
+        if isinstance(v.get("name"), str) and "input_schema" in v:
+            return anon_tool(v)  # a tool definition anywhere (an attachment's surfaced one)
         return {k: anon(x, k, v) for k, x in v.items()}
     if isinstance(v, list):
         return [anon(x, key, parent) for x in v]
@@ -366,7 +438,7 @@ def anon(v, key=None, parent=None):
             # error is free text.
             return v if len(v) <= 40 and " " not in v else fill(min(len(v), MAX_STR))
         if key in KEEP_KEYS:
-            return anon_team(v)
+            return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:
             return hid(v)
         if key == "cwd":
