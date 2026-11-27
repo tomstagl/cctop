@@ -561,3 +561,11 @@ test('wrapWords splits by word and never past the width', () => {
   assert.deepEqual(wrapWords('', 6), []);
   assert.deepEqual(wrapWords('toolongword x', 4), ['toolongword', 'x']);
 });
+
+test('agents at 120 columns: the header names the limits when the query carries them', () => {
+  const agents = { ...(fixture('agents') as Record<string, unknown>), limits: { line: '0 / 10 running · depth ≤ 2 · no background' } };
+  const model = build({ query: { agents } });
+  assert.deepEqual(frameTitles(rawRows('agents', model, 120)), ['6 Agents & MCP ─ 1 agents · 0 / 10 running · depth ≤ 2 · no background']);
+  // An older binary's query has no `limits`: the header is what it was.
+  assert.deepEqual(frameTitles(rawRows('agents', build({ query: { agents: { ...agents, limits: null } } }), 120)), ['6 Agents & MCP ─ 0/1 agents']);
+});

@@ -367,14 +367,35 @@ pub fn team_group_line(t: &TeamTotals, collapsed: bool) -> String {
     fmt::clip(&s, WIDTH)
 }
 
-/// The header line: count, running, spend and waste.
-pub fn header_line(t: &agent_ledger::Totals) -> String {
+/// The limits the pane read of `$.agent.limits()`, as the header and the
+/// pane's summary say them: `3 / 10 running · depth ≤ 2`, plus
+/// `· no background` where agents cannot run in the background.
+pub fn limits_text(running: usize, l: &crate::pane::AgentLimits) -> String {
+    let mut s = format!("{running} / {} running · depth ≤ {}", l.concurrent, l.depth);
+    if !l.is_background_enabled {
+        s.push_str(" · no background");
+    }
+    s
+}
+
+/// The header line: count, running, spend and waste. With the pane's
+/// `limits`, "running" reads against the concurrency bound and names the
+/// depth bound; without them it is unchanged.
+pub fn header_line(t: &agent_ledger::Totals, limits: Option<&crate::pane::AgentLimits>) -> String {
     let spend = if t.cost.source == Source::Unpriced {
         "—".to_string()
     } else {
         format!("≈{}", fmt::usd(t.cost.usd))
     };
-    let mut s = format!(" Agents ─ {} · {} running · {spend}", t.agents, t.running);
+    let plain = format!("{} running", t.running);
+    let running = match limits {
+        Some(l) => limits_text(t.running, l),
+        None => plain.clone(),
+    };
+    // The limits make room for themselves: spend and waste keep the width
+    // they had.
+    let width = WIDTH + running.chars().count() - plain.chars().count();
+    let mut s = format!(" Agents ─ {} · {running} · {spend}", t.agents);
     if t.waste_usd > 0.0 {
         let share = if t.cost.usd > 0.0 {
             t.waste_usd / t.cost.usd * 100.0
@@ -386,7 +407,7 @@ pub fn header_line(t: &agent_ledger::Totals) -> String {
             fmt::usd(t.waste_usd)
         ));
     }
-    fmt::clip(&s, WIDTH)
+    fmt::clip(&s, width)
 }
 
 /// The two footer lines: waste by reason; cold starts and the return ratio.
@@ -413,6 +434,10 @@ pub fn footer_lines(t: &agent_ledger::Totals) -> [String; 2] {
     ]
 }
 
+fn limits_of(state: &State) -> Option<&crate::pane::AgentLimits> {
+    state.pane_facts.as_ref()?.agent_limits.as_ref()
+}
+
 pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let ui = &state.agents_ui;
     let rows = agent_ledger::rows(state, ui.sort, ui.ascending);
@@ -429,7 +454,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let dim = state.theme.dim();
     let block = Block::default().borders(Borders::ALL).title(format!(
         "{}  ↕{}{}  (s/S sort, j/k, Enter expand, Esc back) ",
-        header_line(&totals),
+        header_line(&totals, limits_of(state)),
         ui.sort.label(),
         if ui.ascending { "↑" } else { "↓" }
     ));
@@ -515,7 +540,7 @@ fn render_detail(
     let dim = state.theme.dim();
     let block = Block::default().borders(Borders::ALL).title(format!(
         "{}  (j/k, o copy pointer, Esc back) ",
-        header_line(totals)
+        header_line(totals, limits_of(state))
     ));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -659,6 +684,61 @@ mod tests {
         }
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(app.state.overlay, None);
+    }
+
+    fn with_limits(app: &mut App, concurrent: u32, depth: u32, background: bool) {
+        app.state.pane_facts = Some(crate::pane::PaneFacts {
+            agent_limits: Some(crate::pane::AgentLimits {
+                concurrent,
+                depth,
+                is_background_enabled: background,
+            }),
+            ..Default::default()
+        });
+    }
+
+    #[test]
+    fn header_names_the_limits_the_pane_read_and_is_unchanged_without() {
+        let mut app = fixture_app("session-c");
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        // No marker: the header is what it was.
+        let plain = render_to_string(&app, 120, 30);
+        assert!(plain.contains("Agents ─ 2 · 0 running · ≈$"), "{plain}");
+        assert!(!plain.contains("depth ≤"), "{plain}");
+        with_limits(&mut app, 10, 2, true);
+        let out = render_to_string(&app, 120, 30);
+        assert!(
+            out.contains("Agents ─ 2 · 0 / 10 running · depth ≤ 2 · ≈$"),
+            "{out}"
+        );
+        assert!(!out.contains("no background"), "{out}");
+        insta::assert_snapshot!("agents_c_limits_120x30", out);
+        with_limits(&mut app, 10, 2, false);
+        let out = render_to_string(&app, 120, 30);
+        assert!(
+            out.contains("0 / 10 running · depth ≤ 2 · no background · ≈$"),
+            "{out}"
+        );
+        insta::assert_snapshot!("agents_c_limits_nobg_120x30", out);
+    }
+
+    #[test]
+    fn limits_text_reads_running_over_concurrent() {
+        let l = crate::pane::AgentLimits {
+            concurrent: 10,
+            depth: 2,
+            is_background_enabled: true,
+        };
+        assert_eq!(limits_text(3, &l), "3 / 10 running · depth ≤ 2");
+        let l = crate::pane::AgentLimits {
+            is_background_enabled: false,
+            ..l
+        };
+        assert_eq!(
+            limits_text(3, &l),
+            "3 / 10 running · depth ≤ 2 · no background"
+        );
     }
 
     /// An agent with `n` opus calls at `start` (cold first call when

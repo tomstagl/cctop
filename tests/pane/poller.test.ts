@@ -548,18 +548,43 @@ test('session.info: the marker carries facts (rules, platform, screen reader) an
   await start();
   await settle();
   const facts = readMarker($, MARKER)?.facts;
-  assert.deepEqual(facts, { dataRules: ['zdr', 'acme'], platform: 'macos', isScreenReader: true });
+  assert.deepEqual(facts, { dataRules: ['zdr', 'acme'], platform: 'macos', isScreenReader: true, agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
   // The rules can change mid-session: the next turn writes them.
   $.session.scripted.info = { transcriptPath: '', platform: 'macos', dataRules: [] };
   await turnStart();
   await settle();
-  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos' });
+  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos', agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
   // A failing read keeps what was known and logs once per failure.
   $.session.info = () => Promise.reject(new Error('gone'));
   await turnStart();
   await settle();
-  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos' });
+  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos', agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
   assert.ok($.ui.logs.some((l) => l.includes('session.info failed: Error: gone')));
+});
+
+// `$.agent.limits()` (PRD 6 US-002): read at session.start and at each
+// turn.complete, written to the marker; a failing read keeps what was known.
+test('agent.limits: read at session.start and turn.complete, written to the marker', async () => {
+  const { $, start, turnStart, turnComplete } = bootHooks(binaryScripts());
+  $.agent.scripted.concurrent = 10;
+  $.agent.scripted.depth = 2;
+  await start();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: true } });
+  // Not on turn.start; read again on turn.complete.
+  $.agent.scripted.isBackgroundEnabled = false;
+  await turnStart();
+  await settle();
+  assert.equal((readMarker($, MARKER)?.facts as { agentLimits: { isBackgroundEnabled: boolean } }).agentLimits.isBackgroundEnabled, true);
+  await turnComplete();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: false } });
+  // A failing read keeps what was known and logs.
+  $.agent.limits = () => Promise.reject(new Error('gone'));
+  await turnComplete();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: false } });
+  assert.ok($.ui.logs.some((l) => l.includes('agent.limits failed: Error: gone')));
 });
 
 test('session.info: no facts in the marker before the first read', async () => {

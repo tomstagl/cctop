@@ -1,6 +1,7 @@
 {
   "agents": [],
   "depth": 0,
+  "limits": null,
   "mcp": {
     "hint": "no live process (fixture)",
     "source": "missing"

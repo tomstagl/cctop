@@ -450,6 +450,7 @@ function updateMarker($: EngineInterface): void {
 function noteSession($: EngineInterface): Promise<void> {
   return (poller?.sync() ?? Promise.resolve(false))
     .then(() => readSessionInfo($))
+    .then(() => readAgentLimits($))
     .catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
 }
 
@@ -477,6 +478,24 @@ function readSessionInfo($: EngineInterface): Promise<void> {
       updateMarker($);
     })
     .catch((err: unknown) => $.ui.log(`cctop: session.info failed: ${String(err)}`));
+}
+
+// `$.agent.limits()`: how many agents may run at once and how deep they
+// nest, for the agents view's header. Read at session.start and at each
+// turn.complete (the d.ts: read at each call), written to the marker when
+// it changed. A read that lands after `/clear` is dropped.
+function readAgentLimits($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.agent
+    .limits()
+    .then((l) => {
+      if (model.sessionId !== sessionId) return;
+      const limits = { concurrent: l.concurrent, depth: l.depth, isBackgroundEnabled: l.isBackgroundEnabled };
+      if (JSON.stringify(model.agentLimits) === JSON.stringify(limits)) return;
+      apply($, { type: 'agent.limits', limits });
+      updateMarker($);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: agent.limits failed: ${String(err)}`));
 }
 
 // `/clear` gives the session a new id and fires no session.start (the d.ts:
@@ -797,6 +816,7 @@ export const register: Register = (on) => {
     const result = await next(e);
     if (model.open) readUsage($);
     void writeBreakdown($);
+    void readAgentLimits($);
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);

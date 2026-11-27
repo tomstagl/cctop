@@ -71,12 +71,12 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
 // The marker's `facts` (cctop's header badges read them), without the
 // transcript path: the binary is told that by the poller's argv, not the marker.
 function markerFacts(model: Model): Record<string, unknown> | undefined {
-  const f = model.sessionFacts;
-  if (f === null) return undefined;
+  const f = model.sessionFacts ?? {};
   const out: Record<string, unknown> = {};
   if (f.dataRules !== undefined) out.dataRules = f.dataRules;
   if (f.platform !== undefined) out.platform = f.platform;
   if (f.isScreenReader !== undefined) out.isScreenReader = f.isScreenReader;
+  if (model.agentLimits !== null) out.agentLimits = model.agentLimits;
   return Object.keys(out).length === 0 ? undefined : out;
 }
 

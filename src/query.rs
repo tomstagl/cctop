@@ -578,6 +578,16 @@ pub fn agents(state: &State) -> Value {
         "agents": agents,
         "totals": totals_v,
         "depth": state.agent_depth(),
+        "limits": state
+            .pane_facts
+            .as_ref()
+            .and_then(|f| f.agent_limits.as_ref())
+            .map(|l| json!({
+                "concurrent": m(l.concurrent, "count", "agent_limits", false),
+                "depth": m(l.depth, "count", "agent_limits", false),
+                "background": l.is_background_enabled,
+                "line": crate::ui::agents_view::limits_text(totals.running, l),
+            })),
         "workflows": workflows,
         "teammates": teammates,
         "mcp": if state.session.pid.is_some() { Value::Array(mcp) } else { missing("no live process (fixture)") },
@@ -1131,6 +1141,35 @@ mod tests {
             let s = summary(&st);
             assert!(s.get("team_cost").is_none(), "{}", s["team_cost"]);
         }
+    }
+
+    #[test]
+    fn query_agents_carries_the_limits_only_with_the_pane_facts() {
+        let mut st = state_d();
+        assert!(agents(&st)["limits"].is_null());
+        st.pane_facts = Some(crate::pane::PaneFacts {
+            agent_limits: Some(crate::pane::AgentLimits {
+                concurrent: 10,
+                depth: 2,
+                is_background_enabled: false,
+            }),
+            ..Default::default()
+        });
+        let l = &agents(&st)["limits"];
+        assert_eq!(l["concurrent"]["value"], 10);
+        assert_eq!(l["concurrent"]["metric_id"], "agent_limits");
+        assert_eq!(l["depth"]["value"], 2);
+        assert_eq!(l["background"], false);
+        let running = agents(&st)["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["state"] == "running")
+            .count();
+        assert_eq!(
+            l["line"],
+            format!("{running} / 10 running · depth ≤ 2 · no background")
+        );
     }
 
     #[test]

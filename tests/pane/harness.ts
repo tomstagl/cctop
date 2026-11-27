@@ -135,6 +135,9 @@ export type ScriptedSession = {
   info: SessionInfo;
 };
 
+/** What `$.agent.limits()` answers, unless a test replaces `agent.limits`. */
+export type ScriptedAgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
+
 export type FakeEngineOptions = {
   /** Clock start in ms since the epoch; default 2026-09-12T12:00:00Z. */
   now?: number;
@@ -181,6 +184,7 @@ export type FakeExtras = {
   fs: { files: Map<string, string> };
   process: { calls: string[][]; script: Record<string, ProcessScript> };
   session: { scripted: ScriptedSession };
+  agent: { scripted: ScriptedAgentLimits };
   command: { registered: CommandSpec[] };
   env: { values: Record<string, string> };
 };
@@ -245,6 +249,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     info: { transcriptPath: '' },
     ...opts.session,
   };
+  const agentLimits: ScriptedAgentLimits = { concurrent: 20, depth: 3, isBackgroundEnabled: true };
   const env = { ...(opts.env ?? {}) };
   const registered: CommandSpec[] = [];
   const logs: string[] = [];
@@ -302,6 +307,10 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         closes.push({ ...pane });
         openIds.delete(pane.id);
       },
+    },
+    agent: {
+      scripted: agentLimits,
+      limits: async () => ({ ...agentLimits }),
     },
     session: {
       scripted,

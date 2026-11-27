@@ -224,6 +224,8 @@ function expectedMarker(rest: Record<string, unknown>): Record<string, unknown> 
     loaded: true,
     loadedAt: new Date(T0).toISOString(),
     placement: 'dock',
+    // What the fake engine's `$.agent.limits()` answers.
+    facts: { agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } },
     ...rest,
   };
 }

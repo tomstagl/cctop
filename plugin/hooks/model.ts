@@ -66,6 +66,9 @@ export type SessionFacts = {
   dataRules?: string[];
 };
 
+/** What `$.agent.limits()` said: how many agents run at once, how deep they nest, whether they may run in the background. */
+export type AgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
+
 export type Model = {
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
@@ -86,6 +89,9 @@ export type Model = {
    * transcript path the poller queries by, and the facts the marker carries.
    * Null before the first read and after `/clear` rotated the id. */
   sessionFacts: SessionFacts | null;
+  /** `$.agent.limits()`, read after session.start and on every turn.complete;
+   * null before the first read and after `/clear` rotated the id. */
+  agentLimits: AgentLimits | null;
   // Precedence between the two sources: the Context and Limits rows come
   // from `usage` (engine-native, live) when it is present, else from
   // `query.summary`; every other figure (tokens & cost breakdown, burn rate,
@@ -154,6 +160,7 @@ export type Action =
   | { type: 'binary'; binary: Binary }
   | { type: 'session.id'; id: string }
   | { type: 'session.info'; facts: SessionFacts }
+  | { type: 'agent.limits'; limits: AgentLimits }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
@@ -198,6 +205,7 @@ export function initialModel(): Model {
     binary: 'unknown',
     sessionId: null,
     sessionFacts: null,
+    agentLimits: null,
     query: {},
     queryAt: null,
     verbs: null,
@@ -291,6 +299,8 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, binary: action.binary };
     case 'session.info':
       return JSON.stringify(model.sessionFacts) === JSON.stringify(action.facts) ? model : { ...model, sessionFacts: action.facts };
+    case 'agent.limits':
+      return JSON.stringify(model.agentLimits) === JSON.stringify(action.limits) ? model : { ...model, agentLimits: action.limits };
     case 'session.id':
       if (model.sessionId === action.id) return model;
       if (model.sessionId === null) return { ...model, sessionId: action.id };
@@ -304,6 +314,7 @@ export function reduce(model: Model, action: Action): Model {
         sessionId: action.id,
         // The old transcript's path and rules: the next read is the new session's.
         sessionFacts: null,
+        agentLimits: null,
         usage: null,
         usageAt: null,
         lastBreakdownAt: null,

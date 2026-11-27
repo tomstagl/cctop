@@ -162,7 +162,13 @@ function listAt(obj: unknown, key: string): unknown[] {
 function agentsSummary(data: unknown): string | undefined {
   const agents = listAt(data, 'agents');
   const parts: string[] = [];
-  if (agents.length > 0) {
+  // With the pane's limits the query says the line (`3 / 10 running · depth ≤ 2`),
+  // the TUI's header text verbatim; the count of agents then stands alone.
+  const limits = stringAt(data, 'limits', 'line');
+  if (limits !== null) {
+    if (agents.length > 0) parts.push(`${agents.length} agents`);
+    parts.push(limits);
+  } else if (agents.length > 0) {
     const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
     parts.push(`${running}/${agents.length} agents`);
   }
