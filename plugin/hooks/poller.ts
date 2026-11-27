@@ -149,6 +149,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   let timer: Timer | null = null;
   let timerMs = 0;
   let inflight: Promise<void> | null = null;
+  // Counts the stops: an answer from a query begun before the last stop is dropped.
+  let generation = 0;
   // A pollNow arrived while a round ran: one more round follows it.
   let followUp = false;
   // When the poller started; stands in for `queryAt` until the first success.
@@ -182,6 +184,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   const queryKey = (sessionId: string): string => getModel().sessionFacts?.transcriptPath || sessionId;
 
   const query = async (verb: QueryVerb, sessionId: string): Promise<boolean> => {
+    const gen = generation;
     try {
       // `--surface pane`: a fire the binary promotes for this pane (no
       // dashboard running) is recorded as shown here.
@@ -190,6 +193,10 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.
       if (getModel().sessionId !== sessionId) return false;
+      // The poller stopped (the pane closed) while the binary ran: the
+      // answer predates the next start, whose first answers are the
+      // pane's baseline, so it is dropped.
+      if (generation !== gen) return false;
       if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}: ${result.stderr.trim()}`);
       dispatch({ type: 'query', verb, data: JSON.parse(result.stdout) as unknown });
       failing.delete(verb);
@@ -270,6 +277,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     },
     stop() {
       active = false;
+      generation += 1;
       timer?.cancel();
       timer = null;
     },

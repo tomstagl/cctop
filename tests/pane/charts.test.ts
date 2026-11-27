@@ -38,7 +38,8 @@ test('decideCharts: override, then config, then the terminal, then the probe', (
     // 3. The terminal.
     ['ghostty', { termProgram: 'ghostty' }, 'unknown', 'image'],
     ['iTerm.app', { termProgram: 'iTerm.app' }, 'unknown', 'image'],
-    ['WezTerm', { termProgram: 'WezTerm' }, 'unknown', 'image'],
+    ['WezTerm is not named by the host: tried as pictures, the probe decides', { termProgram: 'WezTerm' }, 'unknown', 'image'],
+    ['WezTerm, probe refused', { termProgram: 'WezTerm' }, 'denied', 'cells'],
     ['kitty', { kitty: true }, 'unknown', 'image'],
     ['iTerm session in tmux', { termProgram: 'tmux', iterm: true, tmux: true }, 'unknown', 'image'],
     ['Apple_Terminal', { termProgram: 'Apple_Terminal' }, 'unknown', 'cells'],
@@ -59,6 +60,7 @@ test('chartsChoice says which step decided; a failed wasm leaves cells', () => {
   assert.equal(chartsChoice({ config: 'image' }, 'unknown').why, 'config');
   assert.equal(chartsChoice({ termProgram: 'ghostty' }, 'unknown').why, 'terminal');
   assert.equal(chartsChoice({}, 'unknown').why, 'unknown');
+  assert.equal(chartsChoice({ termProgram: 'WezTerm' }, 'unknown').why, 'unknown', 'WezTerm is not one the host names');
   assert.equal(chartsChoice({}, 'denied').why, 'probe');
   assert.deepEqual(chartsMarker({ env: { termProgram: 'ghostty' }, probe: 'unknown', wasm: 'failed' }), { mode: 'cells', why: 'wasm', wasm: 'failed' });
   assert.deepEqual(chartsMarker({ env: { termProgram: 'ghostty' }, probe: 'denied', wasm: 'ok', fix: 'tmux-passthrough' }), {

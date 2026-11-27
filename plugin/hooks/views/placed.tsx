@@ -30,12 +30,12 @@ export function nudgePlacement(c: Coach | null): { id: string; row: PlacedRow } 
   return { id: `nudge-${n.firedAt}`, row: { kind: 'nudge', fire: n.firedAt, advice: n } };
 }
 
-/** The one line a located miss is: what changed, and how much it re-wrote. */
-export function missText(cause: string, tokens: number | null, usd: number | null, after: string | null): string {
+/** The one line a located miss is: its turn, what changed, and how much it re-wrote. */
+export function missText(turn: number, cause: string, tokens: number | null, usd: number | null, after: string | null): string {
   const what = cause === '' ? 'cause not named' : cause;
   const cost = usd === null ? '' : ` ≈ ${formatUsd(usd)}`;
   const written = tokens === null ? '' : `, ${formatTokensTui(tokens)} tokens${cost} re-written`;
-  return `cache miss here: ${what}${written}${after === null ? '' : ', after a settings change'}`;
+  return `turn ${turn} · cache miss here: ${what}${written}${after === null ? '' : ', after a settings change'}`;
 }
 
 /** Every located miss of `cache.located_misses` with a turn, as `miss-<turn>` rows (an unlocated one has no cause to name). */
@@ -52,7 +52,7 @@ export function missPlacements(summary: unknown): { id: string; row: PlacedRow }
     const after = stringAt(m, 'after_config_change');
     out.push({
       id: `miss-${turn}`,
-      row: { kind: 'miss', turn, text: missText(stringAt(at(m, 'located'), 'detail') ?? '', typeof tokens === 'number' ? tokens : null, typeof usd === 'number' ? usd : null, after) },
+      row: { kind: 'miss', turn, text: missText(turn, stringAt(at(m, 'located'), 'words') ?? stringAt(at(m, 'located'), 'detail') ?? '', typeof tokens === 'number' ? tokens : null, typeof usd === 'number' ? usd : null, after) },
     });
   }
   return out;

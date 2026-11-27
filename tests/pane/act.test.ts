@@ -248,6 +248,20 @@ async function boot(c: unknown, agents?: unknown) {
   return { $, dispatch, pane, dialog };
 }
 
+test('/clear closes an open act dialog: its nudges were the old session\'s', async () => {
+  const { $, dispatch, pane } = await boot(coach(A38, A09));
+  $.ui.press('coach-now-act');
+  await settle();
+  assert.deepEqual($.ui.closes, []);
+  $.session.scripted.id = 'rotated-session';
+  for (const verb of QUERY_FIXTURES) $.process.script[`cctop query ${verb} --session rotated-session --surface pane`] = ok(JSON.stringify(fixture(verb)));
+  await dispatch('turn.start', { text: 'hi', turnId: 't1' }, () => ({ turnId: 't1' }));
+  await settle();
+  await settle();
+  assert.deepEqual($.ui.closes, [{ id: ACT_ID }]);
+  await pane();
+});
+
 test('`a` or a press on the nudge opens the dialog with focus, Esc, held toasts and its rows', async () => {
   const { $, pane } = await boot(coach(A38, A09));
   await pane();
