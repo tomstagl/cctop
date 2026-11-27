@@ -9,6 +9,7 @@ expression: "render_to_string(&app, 85, 24)"
    builds and test suites longer than a …  LATER · turn 6
 ─── context ────────────────────────────────────────────────── 0: home  ·  ? keys ───
   142k of 1.00M est   autocompact 567k   425k left   +146k/turn
+  per /context  sys 10k  tools 31k  skills 4.8k …
 
   prefix    ≈49k  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇
   harness     ≈0  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
@@ -25,4 +26,3 @@ expression: "render_to_string(&app, 85, 24)"
   compactions 1   re-reads 0   stale 0   autocompact in ~3 turns
 
   next 15c ≈$.50 · fresh ≈$.38
-  threshold 567k · 425k left · prefix 49k (35 %)

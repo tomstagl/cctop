@@ -71,6 +71,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let r = state.residency();
     let dim = state.theme.dim();
     let est = if v.window_exact { "" } else { " est" };
+    // A calibrated prefix says how old its `/context` table is.
+    let calibrated = match (&r.mode, state.context_capture()) {
+        (Mode::Calibrated { .. }, Some((_, _, _, at))) if at > 0 => format!(
+            ", calibrated {} ago",
+            crate::coach::short_duration(state.clock_ms() - at)
+        ),
+        _ => String::new(),
+    };
     let title = if state.sources_files {
         format!(
             " Sources › files — {} in the window, since {}  (← back · Esc close) ",
@@ -79,11 +87,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         )
     } else {
         format!(
-            " Sources — {} of {}{}, since {}  (Esc back) ",
+            " Sources — {} of {}{}, since {}{}  (Esc back) ",
             fmt::tokens(r.size),
             fmt::tokens(v.window),
             est,
-            since_text(&r)
+            since_text(&r),
+            calibrated
         )
     };
     let block = Block::default().borders(Borders::ALL).title(title);
