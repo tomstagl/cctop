@@ -29,6 +29,12 @@ export type Poller = {
   stop(): void;
   /** One round of queries; resolves at once when a round is already in flight. */
   tick(): Promise<void>;
+  /**
+   * A round now, for an event that changed what the pane shows (a Stop).
+   * While one is in flight, exactly one follow-up round runs after it; a
+   * no-op while stopped.
+   */
+  pollNow(): void;
   /** Re-arms the timer when the cadence changed with the turn state; a no-op while stopped. */
   reschedule(): void;
   running(): boolean;
@@ -121,6 +127,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   let timer: Timer | null = null;
   let timerMs = 0;
   let inflight: Promise<void> | null = null;
+  // A pollNow arrived while a round ran: one more round follows it.
+  let followUp = false;
   // When the poller started; stands in for `queryAt` until the first success.
   let startedAt = 0;
   // Verbs that failed since their last success, so each failure is logged once.
@@ -247,8 +255,17 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
         .catch((err: unknown) => $.ui.log(`cctop: poll failed: ${err instanceof Error ? err.message : String(err)}`))
         .finally(() => {
           inflight = null;
+          if (followUp) {
+            followUp = false;
+            if (active) void poller.tick();
+          }
         });
       return inflight;
+    },
+    pollNow() {
+      if (!active) return;
+      if (inflight !== null) followUp = true;
+      else void poller.tick();
     },
     reschedule() {
       if (!active) return;

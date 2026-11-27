@@ -613,3 +613,38 @@ test('session.info: under isScreenReader the view bar holds no glyph-only token'
   assert.ok(tokens.length > 3);
   assert.ok(tokens.every((t) => /[\p{L}\p{N}]/u.test(t)), JSON.stringify(tokens));
 });
+
+test('pollNow runs a round at once; during one in flight it runs exactly one follow-up', async () => {
+  const scripts = binaryScripts();
+  const key = `cctop query summary --session ${SESSION} --surface pane`;
+  const answer = scripts[key] as ProcessRunResult;
+  let release: () => void = () => undefined;
+  let calls = 0;
+  // The first summary is held open; later ones answer at once.
+  scripts[key] = () => {
+    calls += 1;
+    return calls === 1 ? new Promise<ProcessRunResult>((resolve) => (release = () => resolve(answer))) : Promise.resolve(answer);
+  };
+  const { $, poller, busy } = bootPoller(scripts);
+  await busy();
+  poller.start();
+  await settle();
+  assert.equal(queries($, 'summary').length, 1, 'the first round is in flight');
+  poller.pollNow();
+  poller.pollNow();
+  await settle();
+  assert.equal(queries($, 'summary').length, 1, 'nothing starts beside a round in flight');
+  release();
+  for (let i = 0; i < 10; i += 1) await settle();
+  assert.equal(queries($, 'summary').length, 2, 'two pollNow calls leave exactly one follow-up round');
+  poller.pollNow();
+  for (let i = 0; i < 10; i += 1) await settle();
+  assert.equal(queries($, 'summary').length, 3, 'with nothing in flight it polls once now');
+});
+
+test('pollNow on a stopped poller does nothing', async () => {
+  const { $, poller } = bootPoller();
+  poller.pollNow();
+  await settle();
+  assert.equal(queries($).length, 0);
+});

@@ -366,6 +366,15 @@ function notifyResets($: EngineInterface, usage: SessionUsage, now: number): voi
 // action into the prompt box (never submits it), `snooze` asks the binary
 // (queued for the TUI while it runs) and re-polls, `why` and `light` are
 // view state.
+// The person's Stop: the running turn ends now rather than at the next poll,
+// and a round runs at once (turn.complete may not follow an interrupt).
+function noteStop($: EngineInterface): void {
+  apply($, { type: 'turn.stop', at: Date.now() });
+  stopUsageTimer();
+  poller?.reschedule();
+  poller?.pollNow();
+}
+
 function coachActions($: EngineInterface): CoachActions {
   return {
     fill: (text) => {
@@ -944,6 +953,13 @@ export const register: Register = (on) => {
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
+  // Observe only: the Stop is noted before any await (the d.ts: it is raised
+  // before the abort and nothing waits on it), and `next(e)` is returned as is.
+  on('session.stop', ($, e, next) => {
+    noteStop($);
     return next(e);
   });
 

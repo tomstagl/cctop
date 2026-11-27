@@ -154,6 +154,8 @@ export type Action =
   | { type: 'session.start'; at: number; selfCheck?: string }
   | { type: 'turn.start'; at: number }
   | { type: 'turn.complete'; at: number; durationMs: number; reason: string }
+  /** `session.stop`: the person's Stop; ends a running turn like turn.complete, with no duration. */
+  | { type: 'turn.stop'; at: number }
   | { type: 'tool.start'; name: string; at: number }
   // `startedAt` is the matching `tool.start`'s `at`: the hook keeps it in its
   // closure, so concurrent calls of the same tool time themselves apart.
@@ -276,6 +278,10 @@ export function reduce(model: Model, action: Action): Model {
         },
       };
     }
+    case 'turn.stop':
+      // No turn under way: nothing to end (and no duration to compute).
+      if (model.turn.state !== 'busy') return model;
+      return { ...model, turn: { ...model.turn, state: 'idle', startedAt: null, runningTool: null } };
     case 'tool.start':
       return { ...model, turn: { ...model.turn, runningTool: { name: action.name, startedAt: action.at } } };
     case 'tool.end': {
