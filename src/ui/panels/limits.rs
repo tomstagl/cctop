@@ -56,8 +56,21 @@ impl Panel for LimitsPanel {
             }
             Line::from(spans)
         });
+        // The budget a `--max-budget-usd` run was given: one formatter, shared
+        // with the dashboard's limits cell.
+        let budget_line = crate::dashboard::budget_line(state).map(|(t, ratio, eta)| {
+            let mut spans = vec![Span::styled(
+                format!(" {t}"),
+                band_style(&state.theme, ratio, 0.6, 0.9),
+            )];
+            if let Some(e) = eta {
+                spans.push(Span::styled(format!(" · {e}"), dim));
+            }
+            Line::from(spans)
+        });
         let Some(l) = &state.limits else {
             let mut lines = vec![Line::from(Span::styled(" — run cctop install", dim))];
+            lines.extend(budget_line);
             if let Some(h) = hit_line {
                 lines.insert(0, h);
             }
@@ -120,6 +133,7 @@ impl Panel for LimitsPanel {
         }
         lines.push(Line::from(l2));
         lines.push(row("7 d", l.seven_day_pct, l.seven_day_resets_at_ms));
+        lines.extend(budget_line);
         // The 429 state when hit; else the spend limit and the other sessions.
         if let Some(h) = hit_line {
             lines.push(h);
@@ -251,6 +265,27 @@ mod tests {
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         app
+    }
+
+    #[test]
+    fn a_budget_row_shows_with_and_without_the_shim() {
+        let mut app = fixture_app();
+        app.state.open = Some(3);
+        assert!(!render_to_string(&app, 64, 60).contains("budget"));
+        app.state.budget_usd = Some((3.2, 5.0, 1.8));
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("budget $3.20 / $5.00"), "{out}");
+        let now = app.state.clock_ms();
+        app.state.limits = Some(Limits {
+            five_hour_pct: 62.0,
+            seven_day_pct: 23.0,
+            five_hour_resets_at_ms: Some(now + 6_480_000),
+            seven_day_resets_at_ms: None,
+            exhaustion_ms: None,
+            exhaustion_in_active_hours: None,
+        });
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("budget $3.20 / $5.00"), "{out}");
     }
 
     #[test]

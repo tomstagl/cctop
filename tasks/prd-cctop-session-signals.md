@@ -108,3 +108,7 @@ What each gives cctop:
 ## 8. Open questions
 
 - Does `via: subprocess` mean a session started by a `claude -p` call from another session's Bash? It is plausible from the name; verify on one case before the header says more than `subprocess`.
+
+## Follow-ups
+
+- Extend the outcome rule's `spend_limit` nudge (`advisor/rules/outcome.rs`) to `budget_usd` (US-003's last criterion: not in v1).

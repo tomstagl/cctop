@@ -62,6 +62,12 @@ pub fn summary(state: &State) -> Value {
             o.insert("team_cost".into(), team);
         }
     }
+    // The budget of a `--max-budget-usd` run, only when there is one.
+    if state.budget_usd.is_some() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("budget_usd".into(), budget_value(state));
+        }
+    }
     // The status line's extra facts only once a sample carried any, so a
     // session without a status line prints exactly what it did before.
     if state.status_facts != Default::default() {
@@ -684,6 +690,10 @@ pub fn dashboard(state: &State) -> Value {
         v["composition_source"] = json!(c.source);
         v["composition_metric_id"] = json!("context_composition");
     }
+    // Absent for a session without a `--max-budget-usd` budget.
+    if state.budget_usd.is_some() {
+        v["budget_usd"] = budget_value(state);
+    }
     // Absent until Claude Code (2.1.308+) drops thinking from a request.
     let td = &state.agg.thinking_dropped;
     if td.blocks > 0 || td.turns > 0 {
@@ -695,6 +705,23 @@ pub fn dashboard(state: &State) -> Value {
         });
     }
     v
+}
+
+/// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
+fn budget_value(state: &State) -> Value {
+    let (Some((used, total, remaining)), Some((text, ratio, eta))) =
+        (state.budget_usd, crate::dashboard::budget_line(state))
+    else {
+        return Value::Null;
+    };
+    json!({
+        "used": m(used, "USD", "budget_usd", false),
+        "total": m(total, "USD", "budget_usd", false),
+        "remaining": m(remaining, "USD", "budget_usd", false),
+        "ratio": ratio,
+        "text": text,
+        "halt_eta": eta.map(|e| json!({"text": e, "metric_id": "budget_halt_eta", "estimate": true})),
+    })
 }
 
 /// `cctop query coach --line`: the one-line form at `columns`.
@@ -1303,5 +1330,21 @@ mod tests {
         );
         // Absent where nothing was dropped.
         assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_reports_the_budget_on_fixture_s() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["budget_usd"]["total"]["value"], 12.0);
+        assert!(v["budget_usd"]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("budget $"));
+        assert_eq!(v["budget_usd"]["total"]["metric_id"], "budget_usd");
+        // Absent where the session has no budget.
+        assert!(dashboard(&state()).get("budget_usd").is_none());
     }
 }

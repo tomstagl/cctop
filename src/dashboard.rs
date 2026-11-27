@@ -1083,6 +1083,38 @@ pub fn spend_limit_text(facts: &crate::ui::state::StatusFacts) -> Option<String>
     Some(t)
 }
 
+/// The `--max-budget-usd` budget as one line for the limits panel and the
+/// dashboard's limits cell: the text (`budget $3.20 / $5.00`), the used ratio
+/// (0..=1, clamped; a zero total counts as spent) and, while money is left and
+/// the session is burning it, `halts in ~N min` when that is under an hour.
+pub fn budget_text(
+    used: f64,
+    total: f64,
+    burn_usd_per_ms: Option<f64>,
+) -> (String, f64, Option<String>) {
+    let text = format!("budget ${used:.2} / ${total:.2}");
+    let ratio = if total > 0.0 {
+        (used / total).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let remaining = total - used;
+    let eta = burn_usd_per_ms
+        .filter(|b| *b > 0.0 && remaining > 0.0)
+        .map(|b| remaining / b / 60_000.0)
+        .filter(|min| *min < 60.0)
+        .map(|min| format!("halts in ~{} min", min.round().max(1.0) as u64));
+    (text, ratio, eta)
+}
+
+/// The budget text for a state: burn from the trailing-window rate.
+pub fn budget_line(state: &State) -> Option<(String, f64, Option<String>)> {
+    let (used, total, _) = state.budget_usd?;
+    let rates = crate::metrics::cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
+    let burn = rates.usd_per_hour.map(|h| h / 3_600_000.0);
+    Some(budget_text(used, total, burn))
+}
+
 /// The limits body: the two windows as meters, then what the light says.
 fn body_limits(state: &State, c: &Coach) -> Body {
     let now = state.clock_ms();
@@ -1178,6 +1210,19 @@ fn body_limits(state: &State, c: &Coach) -> Body {
             ),
         };
         rows.push(vec![dim(label), fg(value)]);
+    }
+    if let Some((t, ratio, eta)) = budget_line(state) {
+        let mut row = vec![
+            dim("  budget "),
+            seg(
+                t.strip_prefix("budget ").unwrap_or(&t).to_string(),
+                if ratio >= 0.9 { Tone::Crit } else { Tone::Fg },
+            ),
+        ];
+        if let Some(e) = eta {
+            row.push(dim(format!(" · {e}")));
+        }
+        rows.push(row);
     }
     if state.other_live_sessions > 0 {
         rows.push(vec![dim(format!(
@@ -2562,5 +2607,53 @@ mod tests {
         assert!(crate::query::dashboard(&state_with_run())["header"]
             .get("workflow")
             .is_none());
+    }
+
+    #[test]
+    fn budget_text_normal() {
+        // $1.80 left at $0.10/min: 18 min.
+        let (t, ratio, eta) = budget_text(3.2, 5.0, Some(0.10 / 60_000.0));
+        assert_eq!(t, "budget $3.20 / $5.00");
+        assert!((ratio - 0.64).abs() < 1e-9);
+        assert_eq!(eta.as_deref(), Some("halts in ~18 min"));
+    }
+
+    #[test]
+    fn budget_text_total_zero_or_over() {
+        let (_, ratio, eta) = budget_text(1.0, 0.0, Some(1e-6));
+        assert_eq!((ratio, eta), (1.0, None));
+        let (t, ratio, eta) = budget_text(6.0, 5.0, Some(1e-6));
+        assert_eq!(t, "budget $6.00 / $5.00");
+        assert_eq!((ratio, eta), (1.0, None));
+    }
+
+    #[test]
+    fn budget_text_idle_no_eta() {
+        assert_eq!(budget_text(1.0, 5.0, None).2, None);
+        assert_eq!(budget_text(1.0, 5.0, Some(0.0)).2, None);
+    }
+
+    #[test]
+    fn budget_text_eta_over_an_hour_omitted() {
+        // $4 left at $0.01/min: 400 min.
+        assert_eq!(budget_text(1.0, 5.0, Some(0.01 / 60_000.0)).2, None);
+        // 59 min still shows.
+        assert_eq!(
+            budget_text(0.0, 5.9, Some(0.1 / 60_000.0)).2.as_deref(),
+            Some("halts in ~59 min")
+        );
+    }
+
+    #[test]
+    fn the_limits_body_carries_the_budget_beside_the_spend_limit() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(!text.contains("budget"), "{text}");
+        s.budget_usd = Some((3.2, 5.0, 1.8));
+        s.status_facts.spend_limit_pct = Some(40.0);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(text.contains("  budget $3.20 / $5.00"), "{text}");
+        assert!(text.contains("  spend limit 40 %"), "{text}");
     }
 }
