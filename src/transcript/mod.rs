@@ -54,6 +54,9 @@ pub enum Line {
     /// under another id.
     ContinuedIn(ContinuedIn),
     AgentSetting(AgentSetting),
+    /// Where a session came from (`/clear`, a subprocess, …), written near
+    /// the top of the transcript. Lines carry no version: seen by 2.1.332.
+    DerivedFrom(DerivedFrom),
     BridgeSession(BridgeSession),
     /// A `/loop` or cron wake-up (kept raw: the shape is not yet observed).
     ScheduledTaskFire(Value),
@@ -96,6 +99,7 @@ impl Line {
             "custom-title" => as_(&raw).map(Line::CustomTitle),
             "continued-in" => as_(&raw).map(Line::ContinuedIn),
             "agent-setting" => as_(&raw).map(Line::AgentSetting),
+            "derived-from" => as_(&raw).map(Line::DerivedFrom),
             "bridge-session" => as_(&raw).map(Line::BridgeSession),
             "scheduled_task_fire" | "scheduled-task-fire" => {
                 Some(Line::ScheduledTaskFire(raw.clone()))
@@ -148,6 +152,7 @@ impl Line {
             Line::CustomTitle(_) => "custom-title",
             Line::ContinuedIn(_) => "continued-in",
             Line::AgentSetting(_) => "agent-setting",
+            Line::DerivedFrom(_) => "derived-from",
             Line::BridgeSession(_) => "bridge-session",
             Line::ScheduledTaskFire(_) => "scheduled_task_fire",
             Line::ApiRequest(_) => "api-request",
@@ -1103,6 +1108,28 @@ pub struct PrLink {
     pub timestamp: Option<String>,
 }
 
+/// `derived-from`: the sessions this one was started from.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DerivedFrom {
+    #[serde(default, deserialize_with = "null_default")]
+    pub sessions: Vec<DerivedSession>,
+}
+
+/// One entry of a `derived-from` line (`type` is the entry's kind, e.g.
+/// `claude_code_session`; `via` how the new session began, e.g. `clear` or
+/// `subprocess`). Its other keys are not read.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DerivedSession {
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub via: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiTitle {
@@ -1754,5 +1781,68 @@ mod tests {
             "automode-blocked"
         );
         assert_eq!(DenialKind::parse("weird"), DenialKind::Other);
+    }
+
+    #[test]
+    fn derived_from_parses() {
+        let l = Line::parse(
+            r#"{"type":"derived-from","v":1,"sessionId":"s2","sessions":[{"type":"claude_code_session","id":"s1","via":"clear","started":"x"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(l.kind(), "derived-from");
+        match l {
+            Line::DerivedFrom(d) => {
+                assert_eq!(d.sessions.len(), 1);
+                assert_eq!(d.sessions[0].kind, "claude_code_session");
+                assert_eq!(d.sessions[0].id, "s1");
+                assert_eq!(d.sessions[0].via, "clear");
+            }
+            other => panic!("{other:?}"),
+        }
+        let none = Line::parse(r#"{"type":"derived-from","sessions":null}"#).unwrap();
+        assert!(matches!(none, Line::DerivedFrom(d) if d.sessions.is_empty()));
+    }
+
+    #[test]
+    fn fixtures_s_and_t_parse() {
+        use crate::transcript::attachment::AttachmentKind;
+        let kinds = |name: &str| -> Vec<AttachmentKind> {
+            fixture(name)
+                .into_iter()
+                .filter_map(|l| match l {
+                    Line::Attachment(a) => Some(a.kind()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let s = kinds("session-s");
+        assert!(s
+            .iter()
+            .any(|k| matches!(k, AttachmentKind::BudgetUsd { .. })));
+        let t = kinds("session-t");
+        assert!(t
+            .iter()
+            .any(|k| matches!(k, AttachmentKind::ThinkingDrop { .. })));
+        for name in ["session-s", "session-t"] {
+            for l in fixture(name) {
+                if let Line::Unknown(v) = &l {
+                    let ty = v["type"].as_str().unwrap_or("?");
+                    assert!(
+                        !["derived-from", "budget_usd", "thinking_drop"].contains(&ty),
+                        "{name}: {ty} fell through to Unknown"
+                    );
+                }
+            }
+        }
+        // The SDK run was started from a parent session.
+        let derived: Vec<_> = fixture("session-s")
+            .into_iter()
+            .filter_map(|l| match l {
+                Line::DerivedFrom(d) => Some(d),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(derived.len(), 1);
+        assert_eq!(derived[0].sessions[0].via, "subprocess");
     }
 }

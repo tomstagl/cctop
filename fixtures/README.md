@@ -117,6 +117,26 @@ Layout mirrors `~/.claude`:
   SHA-256 so equalities survive, and request ids (`id`, `base`, an assistant
   line's `requestRef`) with the UUID hash so the links agree.
 
+- `session-s.jsonl` — the budget fixture (320 lines, Claude Code 2.1.332):
+  one whole print / SDK session run with `--max-budget-usd 12`. Carries 317
+  `budget_usd` attachments (`used`, `total`, `remaining`, repeated every
+  turn, each with a `rendered` reminder block) and the `derived-from` line
+  on line 2 (`via: subprocess`; its `started` is the session's own id).
+  The anonymiser keeps the numbers and `via`, fills `rendered[].content`
+  with same-length filler and rewrites the ids with the session-id map.
+
+- `session-t.jsonl` — the thinking-drop fixture (1216 lines, 2.1.325): the
+  first 1216 lines of a team lead's session (the anonymiser's `--lines`, a
+  point in time; neither tool can cut a segment from the middle, and the
+  drop needs the lines before it) with `--team` so the team name follows the
+  lead's hashed id. Line 1211 is a `thinking_drop` attachment (ten blocks
+  dropped, `reason: prefix_mismatch`, `clientChange.kinds:
+  messagesHistoryChanged`). The anonymiser removes `blockHashes`,
+  `newlyDropped.first` / `last` and `clientChange.baseline` and keeps the
+  counts and Claude Code's own tokens; a plugin-qualified `agentType`
+  becomes `agent<N>` and an environment change's `from` / `to` directories
+  are rewritten like every path.
+
 - `session-w.jsonl` + `session-w/` — the workflow fixture (2.1.269): one
   real `Workflow` run, `wf_0aa065ff-0a0`, over six invocations (a launch
   stopped with `TaskStop`, then five resumes, the script edited from v2 to

@@ -76,6 +76,7 @@ const FALLBACK_RATIO: &[(&str, f64)] = &[
     ("goal_status", 0.5),
     ("todo_reminder", 0.3),
     ("invoked_skills", 1.0),
+    ("thinking_drop", 0.0),
     ("prompt_snapshot", 0.0),
     ("command_permissions", 0.0),
     ("deferred_tools_record", 0.0),
@@ -314,14 +315,75 @@ impl Attachment {
             "ultra_effort_enter" => AttachmentKind::UltraEffortEnter,
             "ultra_effort_exit" => AttachmentKind::UltraEffortExit,
             "directory" => AttachmentKind::Directory,
+            "thinking_drop" => {
+                let dropped = a.get("newlyDropped");
+                let count = |k: &str| {
+                    dropped
+                        .and_then(|d| d.get(k))
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0)
+                };
+                let change = a.get("clientChange");
+                AttachmentKind::ThinkingDrop {
+                    request_id: s("requestId"),
+                    blocks_sent: n("thinkingBlocksSent").unwrap_or(0),
+                    turns_sent: n("thinkingTurnsSent").unwrap_or(0),
+                    dropped_blocks: count("blockCount"),
+                    dropped_turns: count("turnCount"),
+                    reason: dropped
+                        .and_then(|d| d.get("reason"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    change_kinds: change
+                        .and_then(|c| c.get("kinds"))
+                        .and_then(Value::as_str)
+                        .map(|k| {
+                            k.split(',')
+                                .map(str::trim)
+                                .filter(|k| !k.is_empty() && *k != "none")
+                                .map(str::to_string)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    first_changed_message_index: change
+                        .and_then(|c| c.get("firstChangedMessageIndex"))
+                        .and_then(Value::as_u64),
+                }
+            }
+            "budget_usd" => AttachmentKind::BudgetUsd {
+                used: a.get("used").and_then(Value::as_f64).unwrap_or(0.0),
+                total: a.get("total").and_then(Value::as_f64).unwrap_or(0.0),
+                remaining: a.get("remaining").and_then(Value::as_f64).unwrap_or(0.0),
+            },
             other => AttachmentKind::Other(other.to_string()),
         }
     }
 }
 
 /// Attachment subtypes as cctop reads them; text is measured, never kept.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AttachmentKind {
+    /// Claude Code dropped thinking blocks from the request it was about to
+    /// send (a record: nothing was injected). `blockHashes`,
+    /// `newlyDropped.first` / `last` and `clientChange.baseline` are never
+    /// read; `clientChange.kinds` is a comma list, `"none"` meaning nothing.
+    ThinkingDrop {
+        request_id: Option<String>,
+        blocks_sent: u64,
+        turns_sent: u64,
+        dropped_blocks: u64,
+        dropped_turns: u64,
+        reason: Option<String>,
+        change_kinds: Vec<String>,
+        first_changed_message_index: Option<u64>,
+    },
+    /// The dollar budget an SDK / `--max-budget-usd` run was given, repeated
+    /// every turn (the model sees it in `rendered`); the latest wins.
+    BudgetUsd {
+        used: f64,
+        total: f64,
+        remaining: f64,
+    },
     /// The task list re-sent every few turns (up to ~5.6 k tokens).
     TaskReminder {
         item_count: u64,
@@ -660,5 +722,81 @@ mod tests {
         assert_eq!(counts["file"], 5, "the compaction's re-injections");
         assert!(rendered > 100, "{rendered}");
         assert!(tokens > 10_000 && tokens < 200_000, "{tokens}");
+    }
+
+    #[test]
+    fn thinking_drop_parses() {
+        let a = att(
+            r#"{"type":"attachment","attachment":{"type":"thinking_drop","requestId":"req_1","model":"m","querySource":"repl_main_thread","thinkingBlocksSent":10,"thinkingTurnsSent":4,"newlyDropped":{"blockCount":10,"turnCount":3,"reason":"prefix_mismatch","first":{"messageIndex":1,"blockIndex":0},"last":{"messageIndex":9,"blockIndex":0},"reasonCounts":{"prefix_mismatch":10}},"blockHashes":["deadbeefhash","cafef00dhash"],"firstReportForThreadInProcess":true,"clientChange":{"kinds":"messagesHistoryChanged,systemPromptChanged","firstChangedMessageIndex":7,"baseline":"basecafe","callNumber":2}},"timestamp":"t","version":"2.1.325"}"#,
+        );
+        let k = a.kind();
+        assert_eq!(
+            k,
+            AttachmentKind::ThinkingDrop {
+                request_id: Some("req_1".into()),
+                blocks_sent: 10,
+                turns_sent: 4,
+                dropped_blocks: 10,
+                dropped_turns: 3,
+                reason: Some("prefix_mismatch".into()),
+                change_kinds: vec![
+                    "messagesHistoryChanged".into(),
+                    "systemPromptChanged".into()
+                ],
+                first_changed_message_index: Some(7),
+            }
+        );
+        let dbg = format!("{k:?}");
+        assert!(
+            !dbg.contains("deadbeefhash") && !dbg.contains("basecafe"),
+            "{dbg}"
+        );
+        // A record, not an injection: it costs nothing.
+        assert_eq!(a.tokens_est(), (0, true));
+    }
+
+    #[test]
+    fn thinking_drop_without_client_change() {
+        let a = att(
+            r#"{"type":"attachment","attachment":{"type":"thinking_drop","thinkingBlocksSent":2,"thinkingTurnsSent":1,"newlyDropped":{"blockCount":2,"turnCount":1},"clientChange":{"kinds":"none"}},"timestamp":"t"}"#,
+        );
+        match a.kind() {
+            AttachmentKind::ThinkingDrop {
+                request_id,
+                reason,
+                change_kinds,
+                first_changed_message_index,
+                dropped_blocks,
+                ..
+            } => {
+                assert_eq!(request_id, None);
+                assert_eq!(reason, None);
+                assert!(change_kinds.is_empty());
+                assert_eq!(first_changed_message_index, None);
+                assert_eq!(dropped_blocks, 2);
+            }
+            other => panic!("{other:?}"),
+        }
+        let bare =
+            att(r#"{"type":"attachment","attachment":{"type":"thinking_drop"},"timestamp":"t"}"#);
+        assert!(
+            matches!(bare.kind(), AttachmentKind::ThinkingDrop { change_kinds, .. } if change_kinds.is_empty())
+        );
+    }
+
+    #[test]
+    fn budget_usd_parses() {
+        let a = att(
+            r#"{"type":"attachment","attachment":{"type":"budget_usd","used":1.25,"total":12,"remaining":10.75},"rendered":[{"content":"USD budget: $1.25/$12; $10.75 remaining"}],"renderedRole":"system","timestamp":"t","version":"2.1.332"}"#,
+        );
+        assert_eq!(
+            a.kind(),
+            AttachmentKind::BudgetUsd {
+                used: 1.25,
+                total: 12.0,
+                remaining: 10.75
+            }
+        );
+        assert_eq!(a.tokens_est(), (9, false));
     }
 }

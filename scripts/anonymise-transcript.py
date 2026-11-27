@@ -28,6 +28,13 @@ Shapes the parsers classify are preserved without their content:
 - Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
   17-hex strings Claude Code made up, so they stay as they are: the
   transcript file name, the launch result and the notification must agree.
+- A `thinking_drop` attachment keeps its counts, `reason`, `reasonCounts`,
+  `clientChange.kinds` (Claude Code's own words), `firstChangedMessageIndex`
+  and `callNumber`; `blockHashes`, `newlyDropped.first` / `last` and
+  `clientChange.baseline` are removed. A `budget_usd` attachment keeps its
+  numbers; `rendered[].content` is same-length filler. A `derived-from`
+  line keeps each entry's `type` and `via` and rewrites its `id` and
+  `started` (session ids) with the session-id map.
 - Team keys: `agentName` (a member's role) and `agentType` stay; the team
   name `session-<lead id8>` is rewritten to `session-<hid(lead)[:8]>` so it
   still equals the anonymised lead's id, wherever it appears (`teamName`,
@@ -83,7 +90,11 @@ KEEP_KEYS = {"type", "subtype", "role", "model", "id", "name", "tool_use_id", "r
              "spawnDepth", "runId", "workflowName", "canReadOutputFile",
              # team keys: roles and the team name (rewritten with the lead's id, see TEAM)
              "agentName", "teamName", "team_name", "teammate_id", "leadAgentId", "backendType",
-             "isActive", "joinedAt"}
+             "isActive", "joinedAt",
+             # the role of a rendered block, a derived-from entry's `via`
+             "renderedRole", "via"}
+# thinking_drop: values that are Claude Code's own words, read by the parsers.
+THINKING_DROP_KEEP = {"requestId", "model", "querySource", "reason", "kinds", "type"}
 ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid", "promptId",
            "leafUuid", "messageId", "snapshotMessageId", "sourceToolAssistantUUID", "toolUseID",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
@@ -492,6 +503,50 @@ def anon_text(s):
     return out
 
 
+def anon_thinking_drop(a):
+    """A thinking_drop attachment: counts and machine tokens, no hashes."""
+    a = dict(a)
+    a.pop("blockHashes", None)
+    drop = a.get("newlyDropped")
+    if isinstance(drop, dict):
+        a["newlyDropped"] = {k: x for k, x in drop.items() if k not in ("first", "last")}
+    change = a.get("clientChange")
+    if isinstance(change, dict):
+        a["clientChange"] = {k: x for k, x in change.items() if k != "baseline"}
+
+    def walk(v, key=None):
+        if isinstance(v, dict):
+            return {k: walk(x, k) for k, x in v.items()}
+        if isinstance(v, str):
+            return v if key in THINKING_DROP_KEEP else fill(min(len(v), MAX_STR))
+        return v
+
+    return walk(a)
+
+
+def anon_derived_from(o):
+    """A derived-from line: entries keep `type` and `via`; ids go through hid."""
+    out = anon({k: x for k, x in o.items() if k != "sessions"})
+    out["sessions"] = [
+        {k: (hid(x) if k in ("id", "started") and isinstance(x, str) else anon(x, k, e))
+         for k, x in e.items()}
+        for e in o.get("sessions") or [] if isinstance(e, dict)
+    ]
+    return out
+
+
+def anon_line(o):
+    if o.get("type") in REQUEST_TYPES:
+        return anon_request(o)
+    if o.get("type") == "derived-from":
+        return anon_derived_from(o)
+    a = o.get("attachment")
+    if o.get("type") == "attachment" and isinstance(a, dict) and a.get("type") == "thinking_drop":
+        o = dict(o, attachment=anon_thinking_drop(a))
+        return {k: (x if k == "attachment" else anon(x, k, o)) for k, x in o.items()}
+    return anon(o)
+
+
 def anon(v, key=None, parent=None):
     if isinstance(v, dict):
         if isinstance(v.get("name"), str) and "input_schema" in v:
@@ -508,6 +563,10 @@ def anon(v, key=None, parent=None):
             return agent_type(v)
         if key in ("skill", "attributionSkill", "commandName"):
             return skill_name(v)
+        if key in ("from", "to") and v.startswith("/"):
+            return anon_path(v)  # an environment change's old / new directory
+        if key == "agentType" and ":" in v:
+            return agent_type(v)  # a plugin's agent (`<plugin>:<agent>`) names the plugin
         if key in KEEP_KEYS:
             return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:
@@ -573,7 +632,7 @@ def main():
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            rows.append(anon_request(o) if o.get("type") in REQUEST_TYPES else anon(o))
+            rows.append(anon_line(o))
     if dst.endswith("/") or os.path.isdir(dst):
         # A teammate transcript is `<sessionId>.jsonl`: name the copy by
         # the anonymised id so the collector still finds it by its lines.
