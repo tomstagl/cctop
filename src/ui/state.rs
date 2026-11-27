@@ -350,6 +350,8 @@ pub struct State {
     pub session: SessionInfo,
     /// Claude Code's prompt-cache diagnosis (shim).
     pub cache: CacheState,
+    /// Main-thread requests paired with their responses; one located cause per cache miss.
+    pub requests: crate::requests::RequestChain,
     pub status_facts: StatusFacts,
     /// The previous session in this directory, from `~/.claude.json`.
     pub previous_session: Option<crate::claude_home::PreviousSession>,
@@ -1358,6 +1360,9 @@ impl State {
     pub fn apply(&mut self, line: &Line) {
         let turns_before = self.agg.turns.len();
         self.agg.push(line);
+        let ttl = self.cache_ttl_ms().max(0) as u64;
+        let turn = self.agg.current_turn().map(|t| t.number);
+        self.requests.apply(line, turn, ttl);
         if self.agg.turns.len() > turns_before {
             self.files.new_turn();
         }
