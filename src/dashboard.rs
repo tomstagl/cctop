@@ -865,6 +865,28 @@ fn body_context(state: &State, c: &Coach) -> Body {
 }
 
 /// The limits body: the two windows as meters, then what the light says.
+/// The spend limit as one line for the limits panel and the dashboard's
+/// limits cell: dollars with the period and the reset when the status line
+/// carries them, else the percentage alone.
+pub fn spend_limit_text(facts: &crate::ui::state::StatusFacts, _now_ms: i64) -> Option<String> {
+    let Some((used, limit)) = facts.spend_limit_usd else {
+        return facts
+            .spend_limit_pct
+            .map(|p| format!("spend limit {p:.0} %"));
+    };
+    let mut t = format!("spend ${used:.0}");
+    if let Some(l) = limit {
+        t.push_str(&format!(" / ${l:.0}"));
+    }
+    if let Some(p) = &facts.spend_limit_period {
+        t.push_str(&format!(" · {p}"));
+    }
+    if let Some(ms) = facts.spend_limit_resets_at_ms {
+        t.push_str(&format!(" · resets {}", fmt::day_month_local(ms)));
+    }
+    Some(t)
+}
+
 fn body_limits(state: &State, c: &Coach) -> Body {
     let now = state.clock_ms();
     let mut rows: Vec<Line> = Vec::new();
@@ -949,8 +971,8 @@ fn body_limits(state: &State, c: &Coach) -> Body {
             dim(" of usage was above 150k context"),
         ]);
     }
-    if let Some(p) = state.status_facts.spend_limit_pct {
-        rows.push(vec![dim("  spend limit "), fg(format!("{p:.0} %"))]);
+    if let Some(t) = spend_limit_text(&state.status_facts, state.now_ms) {
+        rows.push(vec![fg(format!("  {t}"))]);
     }
     if state.other_live_sessions > 0 {
         rows.push(vec![dim(format!(
@@ -1718,6 +1740,48 @@ fn body_events(state: &State, engine: &Engine) -> Body {
 mod tests {
     use super::*;
     use crate::metrics::Pricing;
+
+    fn spend_facts() -> crate::ui::state::StatusFacts {
+        crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            spend_limit_usd: Some((412.0, Some(500.0))),
+            spend_limit_period: Some("monthly".into()),
+            // 3 Dec 2026 12:00 UTC: the same local day in any time zone.
+            spend_limit_resets_at_ms: Some(1_796_299_200_000),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn spend_text_full() {
+        assert_eq!(
+            spend_limit_text(&spend_facts(), 0).as_deref(),
+            Some("spend $412 / $500 · monthly · resets 3 Dec")
+        );
+    }
+
+    #[test]
+    fn spend_text_no_limit() {
+        let mut f = spend_facts();
+        f.spend_limit_usd = Some((412.0, None));
+        assert_eq!(
+            spend_limit_text(&f, 0).as_deref(),
+            Some("spend $412 · monthly · resets 3 Dec")
+        );
+        f.spend_limit_period = None;
+        f.spend_limit_resets_at_ms = None;
+        assert_eq!(spend_limit_text(&f, 0).as_deref(), Some("spend $412"));
+    }
+
+    #[test]
+    fn spend_text_pct_only() {
+        let f = crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            ..Default::default()
+        };
+        assert_eq!(spend_limit_text(&f, 0).as_deref(), Some("spend limit 82 %"));
+        assert_eq!(spend_limit_text(&Default::default(), 0), None);
+    }
 
     fn fixture_b() -> (State, Engine) {
         fixture_at("b", usize::MAX)

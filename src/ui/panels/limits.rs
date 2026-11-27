@@ -127,12 +127,13 @@ impl Panel for LimitsPanel {
             return;
         }
         let mut l4: Vec<Span> = Vec::new();
-        if let Some(p) = state.status_facts.spend_limit_pct {
-            l4.push(Span::raw(" spend limit "));
-            l4.push(Span::styled(
-                format!("{p:.0} %"),
-                band_style(&state.theme, p / 100.0, 0.6, 0.85),
-            ));
+        if let Some(t) = crate::dashboard::spend_limit_text(&state.status_facts, now) {
+            let style = match state.status_facts.spend_limit_pct {
+                Some(p) => band_style(&state.theme, p / 100.0, 0.6, 0.85),
+                None => ratatui::style::Style::default(),
+            };
+            l4.push(Span::raw(" "));
+            l4.push(Span::styled(t, style));
         }
         if !state.other_sessions.is_empty() {
             let mut parts: Vec<String> = state
@@ -222,6 +223,16 @@ mod tests {
         let out = render_to_string(&app, 120, 70);
         assert!(
             out.contains("spend limit 40 %  others: pane-work idle 10:00"),
+            "{out}"
+        );
+        app.state.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        app.state.status_facts.spend_limit_period = Some("monthly".into());
+        app.state.status_facts.spend_limit_resets_at_ms = Some(1_796_299_200_000);
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains(
+                "spend $412 / $500 · monthly · resets 3 Dec  others: pane-work idle 10:00"
+            ),
             "{out}"
         );
     }

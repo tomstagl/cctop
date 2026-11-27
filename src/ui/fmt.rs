@@ -140,6 +140,18 @@ pub fn date_ymd(ms: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// Epoch ms → `D Mon` in this machine's local time (`3 Dec`).
+pub fn day_month_local(ms: i64) -> String {
+    let local = ms.div_euclid(1000) + local_offset_secs();
+    let ymd = date_ymd(local * 1000);
+    let m: usize = ymd[5..7].parse().unwrap_or(1);
+    let d: u32 = ymd[8..10].parse().unwrap_or(1);
+    const MON: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    format!("{d} {}", MON[m.clamp(1, 12) - 1])
+}
+
 /// Clip to `max` characters with an ellipsis.
 pub fn clip(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
