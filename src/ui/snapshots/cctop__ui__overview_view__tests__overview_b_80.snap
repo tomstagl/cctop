@@ -1,0 +1,72 @@
+---
+source: src/ui/overview_view.rs
+expression: text(&lines)
+---
+ Context window  142k of 1M · 14 %                         per /context, 2m ago
+ Good Plenty of room: 857k free.
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ■ context so far  ■ system + tools (now)  ■ auto-compact at 567k
+ ■ System prompt 10k  ■ System tools 31k  ■ Skills 4.8k  ■ Messages 42k
+ ■ free 877k  ■ buffer 33k
+ 1.00M
+
+                                                              ▄▄▄▄
+ 500k  ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀▄▀▀▀▀▀▀▀▀▀▄▀ ▀ ▀ ▀ ▀
+                                                     ▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄
+                                         ▄▄▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄▄
+         ▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄▀
+ 0     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+       turn 1                                                                 6
+ Turn 6 · 142k (−578k) · compacted
+ ──────────────────────────────────────────────────────────────────────────────
+ Spend  $18.75 · ≈ $19.76 in an hour
+ Good $0.02 a minute. Two jumps: a costly turn in turn 2 ($5.95) and a costly
+      turn in turn 4 ($9.26). Do: /clear between unrelated tasks to keep it
+      that way.
+ ■ spent  ■ forecast · $0.02 a minute
+ $22.17                                                                 ▄▄▄▄▄▄▄
+          ▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+          ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ $11.09  ▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+         ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ $0    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+       min 0                                                                626
+
+ Cost per turn  ≈ $2.07 typical
+ Good Turns cost about $2.07 each. Do: keep unrelated tasks apart with /clear;
+      turns get dearer as the context grows.
+ ■ a turn
+ $9.26          ▀▀
+                ▀▀
+                ▀▀
+ $4.63    ▀▀    ▀▀
+          ▀▀    ▀▀
+          ▀▀    ▀▀
+       ▀▀ ▀▀    ▀▀ ▄▄
+ $0    ▀▀ ▀▀ ▄▄ ▀▀ ▀▀ ▄▄
+       1  2  3  4  5  6
+ Turn 6 · $0.36. A normal turn.
+ ──────────────────────────────────────────────────────────────────────────────
+ Prompt cache  reused 99 %                              stays warm ≈ 60 minutes
+ Good Reused 99 %. Do: reply within 1 hour so the cache stays warm.
+ ■ reused  ■ first turn writes the cache
+ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀
+ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀
+ 1  2  3  4  5  6
+ stays warm ≈ 60 minutes ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+ Tool calls per turn  140 calls
+ Good 140 calls, 2 failed. Do: ask Claude to search (grep) before it reads
+      whole files.
+ ■ brighter = more calls  ■ failed
+         Bash ▀▀▀▀▀▀▀▀▀▀▀▀
+         Read ▀▀▀▀▀▀▀▀▀▀▀▀
+         Edit ▀▀▀▀▀▀▀▀▀▀▀▀
+ AskUserQues… ▀▀▀▀▀▀▀▀▀▀▀▀
+   TaskUpdate ▀▀▀▀▀▀▀▀▀▀▀▀
+        other ▀▀▀▀▀▀▀▀▀▀▀▀
+              1   3   5
+ ──────────────────────────────────────────────────────────────────────────────
+ spent so far $18.75 · what this session would cost at API prices

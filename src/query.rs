@@ -1398,7 +1398,7 @@ mod tests {
                 ["good", "watch", "act"].contains(&c["verdict"]["level"].as_str().unwrap()),
                 "{c}"
             );
-            assert!(c["spec"]["kind"].is_string() && c["fallback_cells"].is_array());
+            assert!(c["spec"]["kind"].is_string() && c["fallback_cells"]["cells"].is_string());
         }
         assert!(v["footer"].as_str().unwrap().contains("at API prices"));
     }

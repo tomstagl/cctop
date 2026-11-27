@@ -57,8 +57,57 @@ pub struct Chart {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub prevent: Vec<Prevent>,
     /// The cells drawn from `spec` at its default size, for a surface that
-    /// cannot run the renderer; filled once the renderer exists.
-    pub fallback_cells: Vec<Cell>,
+    /// cannot run the renderer (the pane when its wasm fails to compile).
+    pub fallback_cells: Raster,
+    /// The same for `bar`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bar_fallback_cells: Option<Raster>,
+}
+
+/// Cells as the pane's Raster element takes them: `cells` is the base64 of
+/// little-endian u32 triplets `[code point, fg, bg]` (a colour `0x00RRGGBB`,
+/// or `0x01000000` for the terminal's default), `cols * rows` of them.
+/// Encoded by `cctop_charts::encode_cells`, the code behind the wasm's
+/// `mode` 1, so the two are byte-identical.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Raster {
+    pub cols: u16,
+    pub rows: u16,
+    pub cells: String,
+}
+
+impl Raster {
+    /// `spec` drawn at `cols` × `rows`.
+    pub fn of(spec: &ChartSpec, cols: u16, rows: u16) -> Raster {
+        Raster {
+            cols,
+            rows,
+            cells: String::from_utf8(cctop_charts::encode_cells(&cctop_charts::render_cells(
+                spec, cols, rows,
+            )))
+            .unwrap_or_default(),
+        }
+    }
+
+    /// `spec` at its [`default_size`].
+    pub fn at_default(spec: &ChartSpec) -> Raster {
+        let (cols, rows) = default_size(spec);
+        Raster::of(spec, cols, rows)
+    }
+}
+
+/// The size a spec is drawn at when nothing says otherwise: the width of
+/// the pane's 103-column overview (the context chart across it, the others
+/// in half of it) and the rows POC 8 gives each kind.
+pub fn default_size(spec: &ChartSpec) -> (u16, u16) {
+    match spec.kind {
+        Kind::AreaForecast => (98, 8),
+        Kind::CumulativeForecast | Kind::Bars => (46, 8),
+        Kind::Pills => (46, 2),
+        Kind::Heat => (46, spec.series.len().clamp(1, 8) as u16),
+        Kind::StackedBar => (98, 1),
+        Kind::Progress => (30, 1),
+    }
 }
 
 /// What hovering (or selecting) a point says, at the point's `x`.
@@ -122,15 +171,20 @@ pub fn build_with(state: &State, opts: &Options) -> Overview {
         ),
         None => "spent so far — (no price for this model)".to_string(),
     };
+    let mut charts = vec![
+        context(state),
+        spend(state, opts.chain_usd),
+        cost_per_turn(state, &per_turn, label.clone()),
+        cache(state, &per_turn, label.clone()),
+        tool_calls(state, &per_turn, label),
+    ];
+    for c in &mut charts {
+        c.fallback_cells = Raster::at_default(&c.spec);
+        c.bar_fallback_cells = c.bar.as_ref().map(Raster::at_default);
+    }
     Overview {
         schema: 1,
-        charts: vec![
-            context(state),
-            spend(state, opts.chain_usd),
-            cost_per_turn(state, &per_turn, label.clone()),
-            cache(state, &per_turn, label.clone()),
-            tool_calls(state, &per_turn, label),
-        ],
+        charts,
         footer,
     }
 }
@@ -244,13 +298,16 @@ fn context(state: &State) -> Chart {
     });
     if prefix > 0 && !points.is_empty() {
         spec.series.push(Series {
-            name: "system + tools".into(),
+            name: "system + tools (now)".into(),
             role: Role::S0,
             points: points
                 .iter()
                 .map(|p| point(p.x, p.y.min(prefix as f64)))
                 .collect(),
         });
+        // The band is today's prefix size under every turn, not what each
+        // turn carried.
+        legend_rows.push(legend(Role::S0, "system + tools (now)"));
     }
     spec.forecast = forecast;
     if v.window > 0 {
@@ -347,7 +404,8 @@ fn context(state: &State) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
-        fallback_cells: Vec::new(),
+        fallback_cells: Raster::default(),
+        bar_fallback_cells: None,
     }
 }
 
@@ -536,7 +594,8 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
-        fallback_cells: Vec::new(),
+        fallback_cells: Raster::default(),
+        bar_fallback_cells: None,
     }
 }
 
@@ -784,7 +843,8 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
-        fallback_cells: Vec::new(),
+        fallback_cells: Raster::default(),
+        bar_fallback_cells: None,
     }
 }
 
@@ -942,7 +1002,8 @@ fn cache(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent,
-        fallback_cells: Vec::new(),
+        fallback_cells: Raster::default(),
+        bar_fallback_cells: None,
     }
 }
 
@@ -1099,7 +1160,8 @@ fn tool_calls(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
-        fallback_cells: Vec::new(),
+        fallback_cells: Raster::default(),
+        bar_fallback_cells: None,
     }
 }
 
@@ -1137,6 +1199,60 @@ mod tests {
                 "{}",
                 c.id
             );
+        }
+    }
+
+    /// `fallback_cells` is the spec drawn at its default size, as the
+    /// Raster takes it: decoded here by hand, not by the encoder's inverse.
+    #[test]
+    fn fallback_cells_decode_to_the_rendered_cells() {
+        fn decode(text: &str) -> Vec<u8> {
+            let a = |c: u8| match c {
+                b'A'..=b'Z' => c - b'A',
+                b'a'..=b'z' => c - b'a' + 26,
+                b'0'..=b'9' => c - b'0' + 52,
+                b'+' => 62,
+                _ => 63,
+            };
+            let mut out = Vec::new();
+            for q in text.as_bytes().chunks(4) {
+                let n = q.iter().filter(|c| **c != b'=').count();
+                let v = q
+                    .iter()
+                    .fold(0u32, |v, c| (v << 6) | (a(*c) as u32 * (*c != b'=') as u32));
+                for i in 0..n - 1 {
+                    out.push((v >> (16 - 8 * i)) as u8);
+                }
+            }
+            out
+        }
+        let o = build(&fixture("fixtures/session-b.jsonl"));
+        let mut rasters = Vec::new();
+        for c in &o.charts {
+            rasters.push((&c.spec, &c.fallback_cells));
+            if let (Some(b), Some(r)) = (&c.bar, &c.bar_fallback_cells) {
+                rasters.push((b, r));
+            }
+        }
+        assert!(rasters.len() >= 6, "five charts and the context's bar");
+        for (spec, r) in rasters {
+            assert_eq!((r.cols, r.rows), default_size(spec));
+            let raw = decode(&r.cells);
+            let cells = cctop_charts::render_cells(spec, r.cols, r.rows);
+            assert_eq!(raw.len(), cells.len() * 12);
+            let word = |i: usize| u32::from_le_bytes(raw[i * 4..i * 4 + 4].try_into().unwrap());
+            let colour = |c: Option<(u8, u8, u8)>| {
+                c.map_or(0x0100_0000, |(r, g, b)| {
+                    ((r as u32) << 16) | ((g as u32) << 8) | b as u32
+                })
+            };
+            for (i, c) in cells.iter().enumerate() {
+                assert_eq!(
+                    [word(3 * i), word(3 * i + 1), word(3 * i + 2)],
+                    [c.ch as u32, colour(c.fg), colour(c.bg)],
+                    "cell {i}"
+                );
+            }
         }
     }
 

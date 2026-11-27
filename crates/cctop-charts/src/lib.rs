@@ -11,10 +11,12 @@
 mod canvas;
 mod grid;
 mod kinds;
+mod raster;
 mod spec;
 mod theme;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+pub use raster::encode_cells;
 
 pub use grid::{LOWER_HALF, UPPER_HALF};
 pub use spec::{

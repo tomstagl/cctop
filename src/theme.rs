@@ -274,6 +274,14 @@ impl Theme {
         }
     }
 
+    /// A chart cell's colour (`None`: the terminal's default) as this
+    /// terminal can show it.
+    pub fn cell_color(&self, c: Option<(u8, u8, u8)>) -> Color {
+        c.map_or(Color::Reset, |(r, g, b)| {
+            Theme::reduce(self.caps, Color::Rgb(r, g, b))
+        })
+    }
+
     /// Reduce colours to what the terminal supports. The file's `bg` and
     /// `accent` are kept aside for `series`.
     pub fn for_caps(mut self, caps: Caps) -> Theme {

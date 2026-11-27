@@ -14,7 +14,7 @@
 //!   for the terminal's default. Anything that fails (bad JSON, a size over
 //!   the limits) returns `len` 0.
 
-use crate::{encode_png, render_cells, render_rgba, ChartSpec, Kind, Theme};
+use crate::{encode_cells, encode_png, render_cells, render_rgba, ChartSpec, Kind, Theme};
 
 /// The kinds by index, in the order of [`Kind`]'s variants.
 const KINDS: [Kind; 7] = [
@@ -26,8 +26,6 @@ const KINDS: [Kind; 7] = [
     Kind::StackedBar,
     Kind::Progress,
 ];
-
-const DEFAULT_COLOUR: u32 = 0x0100_0000;
 
 #[no_mangle]
 pub extern "C" fn alloc(len: usize) -> *mut u8 {
@@ -82,37 +80,7 @@ fn draw(kind: u32, json: &[u8], cols: u32, rows: u32, scale: u32, mode: u32) -> 
             let png = encode_png(&rgba, w, h);
             (!png.is_empty()).then_some(png)
         }
-        1 => {
-            let mut words = Vec::with_capacity(cols as usize * rows as usize * 12);
-            for cell in render_cells(&spec, c, r) {
-                let colour = |c: Option<(u8, u8, u8)>| {
-                    c.map_or(DEFAULT_COLOUR, |(r, g, b)| {
-                        (r as u32) << 16 | (g as u32) << 8 | b as u32
-                    })
-                };
-                for w in [cell.ch as u32, colour(cell.fg), colour(cell.bg)] {
-                    words.extend_from_slice(&w.to_le_bytes());
-                }
-            }
-            Some(base64(&words))
-        }
+        1 => Some(encode_cells(&render_cells(&spec, c, r))),
         _ => None,
     }
-}
-
-/// Standard padded base64.
-fn base64(data: &[u8]) -> Vec<u8> {
-    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = Vec::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let n = chunk.iter().fold(0u32, |n, b| n << 8 | *b as u32) << (8 * (3 - chunk.len()));
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(A[(n >> (18 - 6 * i) & 63) as usize]);
-            } else {
-                out.push(b'=');
-            }
-        }
-    }
-    out
 }

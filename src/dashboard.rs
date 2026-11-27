@@ -381,6 +381,11 @@ pub struct Dashboard {
     pub lines: coach::StatusLines,
     /// The session's whole spend (`cost_combined`), with its provenance.
     pub cost_combined: Option<crate::query::CostValue>,
+    /// The overview object (mod-pane): what the TUI draws in body 1,
+    /// charts included. Not part of `cctop query dashboard`; the pane reads
+    /// it through `cctop query overview`.
+    #[serde(skip)]
+    pub overview: Option<crate::overview::Overview>,
 }
 
 /// The eight bodies' ids, in key order (`1`–`6`, `a`, `0`).
@@ -424,6 +429,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Dashboard {
         cost_combined: state
             .cost_combined()
             .map(|c| crate::query::CostValue::new(c, "cost_combined")),
+        overview: Some(crate::overview::build(state)),
     }
 }
 
