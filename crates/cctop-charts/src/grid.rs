@@ -1,33 +1,34 @@
-//! The cell canvas: `cols` × `rows * 2` pixels, two per cell, cut into
-//! half-block cells (upper pixel in `fg`, lower in `bg`).
+//! The cell canvas: `cols` × `rows * 2` pixels, two per cell, each painted
+//! or left empty, cut into half-block cells (see [`Cell`] for the glyphs).
 
 use crate::spec::{Cell, Rgb};
 use crate::theme::xterm256;
 
-/// The upper half block: its foreground is the cell's upper pixel, its
-/// background the lower one.
-pub const HALF_BLOCK: char = '▀';
+/// The upper half block: `fg` paints the upper pixel, `bg` the lower.
+pub const UPPER_HALF: char = '▀';
+/// The lower half block: `fg` paints the lower pixel over an empty upper.
+pub const LOWER_HALF: char = '▄';
 
 pub(crate) struct Grid {
     pub w: usize,
     pub h: usize,
-    px: Vec<Rgb>,
+    px: Vec<Option<Rgb>>,
 }
 
 impl Grid {
-    pub fn new(cols: u16, rows: u16, bg: Rgb) -> Grid {
+    pub fn new(cols: u16, rows: u16) -> Grid {
         let (w, h) = (cols as usize, rows as usize * 2);
         Grid {
             w,
             h,
-            px: vec![bg; w * h],
+            px: vec![None; w * h],
         }
     }
 
     /// Paint one pixel; outside the canvas is a no-op.
     pub fn set(&mut self, x: usize, y: usize, c: Rgb) {
         if x < self.w && y < self.h {
-            self.px[y * self.w + x] = c;
+            self.px[y * self.w + x] = Some(c);
         }
     }
 
@@ -43,10 +44,24 @@ impl Grid {
         let mut out = Vec::with_capacity(self.w * self.h / 2);
         for row in 0..self.h / 2 {
             for x in 0..self.w {
-                out.push(Cell {
-                    ch: HALF_BLOCK,
-                    fg: xterm256(self.px[2 * row * self.w + x]),
-                    bg: xterm256(self.px[(2 * row + 1) * self.w + x]),
+                let upper = self.px[2 * row * self.w + x].map(xterm256);
+                let lower = self.px[(2 * row + 1) * self.w + x].map(xterm256);
+                out.push(match (upper, lower) {
+                    (Some(_), _) => Cell {
+                        ch: UPPER_HALF,
+                        fg: upper,
+                        bg: lower,
+                    },
+                    (None, Some(_)) => Cell {
+                        ch: LOWER_HALF,
+                        fg: lower,
+                        bg: None,
+                    },
+                    (None, None) => Cell {
+                        ch: ' ',
+                        fg: None,
+                        bg: None,
+                    },
                 });
             }
         }

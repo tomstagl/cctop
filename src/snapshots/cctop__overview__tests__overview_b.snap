@@ -58,6 +58,36 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
                 "y": 142482.0
               }
             ]
+          },
+          {
+            "name": "system + tools",
+            "role": "s0",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 41400.0
+              },
+              {
+                "x": 2.0,
+                "y": 41400.0
+              },
+              {
+                "x": 3.0,
+                "y": 41400.0
+              },
+              {
+                "x": 4.0,
+                "y": 41400.0
+              },
+              {
+                "x": 5.0,
+                "y": 41400.0
+              },
+              {
+                "x": 6.0,
+                "y": 41400.0
+              }
+            ]
           }
         ],
         "markers": [
@@ -79,14 +109,14 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           {
             "name": "auto-compact",
             "y": 567672.0,
-            "role": "crit"
+            "role": "warn"
           }
         ],
         "roles": [
           "accent",
+          "s0",
           "warn",
-          "fg",
-          "crit"
+          "fg"
         ]
       },
       "bar": {
@@ -154,7 +184,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           },
           {
             "name": "buffer",
-            "role": "warn",
+            "role": "crit",
             "points": [
               {
                 "x": 0.0,
@@ -171,7 +201,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "s1",
           "s2",
           "dim",
-          "warn"
+          "crit"
         ]
       },
       "readouts": [
@@ -206,7 +236,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "context so far"
         },
         {
-          "role": "crit",
+          "role": "warn",
           "text": "auto-compact at 567k"
         },
         {
@@ -230,7 +260,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "free 877k"
         },
         {
-          "role": "warn",
+          "role": "crit",
           "text": "buffer 33k"
         }
       ],
@@ -319,13 +349,12 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           },
           "low": 21.061534399999996,
           "high": 22.174606769463196,
-          "role": "dim"
+          "role": "accent"
         },
         "thresholds": [],
         "roles": [
           "accent",
-          "warn",
-          "dim"
+          "warn"
         ]
       },
       "readouts": [
@@ -348,7 +377,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "spent"
         },
         {
-          "role": "dim",
+          "role": "accent",
           "text": "forecast · $0.02 a minute"
         }
       ],

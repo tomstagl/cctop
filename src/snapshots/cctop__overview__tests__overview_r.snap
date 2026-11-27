@@ -78,20 +78,19 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           },
           "low": 162279.0,
           "high": 182179.0,
-          "role": "dim"
+          "role": "accent"
         },
         "thresholds": [
           {
             "name": "auto-compact",
             "y": 967000.0,
-            "role": "crit"
+            "role": "warn"
           }
         ],
         "roles": [
           "accent",
           "fg",
-          "dim",
-          "crit"
+          "warn"
         ]
       },
       "readouts": [
@@ -126,11 +125,11 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "context so far"
         },
         {
-          "role": "dim",
+          "role": "accent",
           "text": "forecast · +2.7k a turn"
         },
         {
-          "role": "crit",
+          "role": "warn",
           "text": "auto-compact at 967k"
         }
       ],
@@ -206,12 +205,11 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           },
           "low": 2.7202536760236007,
           "high": 27.3454243,
-          "role": "dim"
+          "role": "accent"
         },
         "thresholds": [],
         "roles": [
-          "accent",
-          "dim"
+          "accent"
         ]
       },
       "readouts": [],
@@ -221,7 +219,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "spent"
         },
         {
-          "role": "dim",
+          "role": "accent",
           "text": "forecast · $0.41 a minute"
         }
       ],

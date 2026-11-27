@@ -6,8 +6,9 @@ use crate::spec::{Rgb, Role};
 /// What a renderer resolves a spec's roles against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
-    /// What the chart sits on. Cells paint it; a picture leaves it
-    /// transparent and only mixes against it.
+    /// What the chart sits on. Neither rendering paints it (cells leave the
+    /// terminal's default, pictures are transparent); `dim` fills mix
+    /// against it.
     pub bg: Rgb,
     /// Tracks, the baseline, the midline: the parts of a chart with no data.
     pub track: Rgb,
@@ -20,6 +21,9 @@ pub struct Theme {
     pub s0: Rgb,
     pub s1: Rgb,
     pub s2: Rgb,
+    /// The heat map's four steps for an `accent` row, darkest first (other
+    /// roles scale their colour towards black).
+    pub heat: [Rgb; 4],
 }
 
 impl Theme {
@@ -36,6 +40,12 @@ impl Theme {
         s0: (0x7F, 0xA8, 0xC9),
         s1: (0xB4, 0x8C, 0xE0),
         s2: (0x4C, 0xC2, 0xC2),
+        heat: [
+            (0x1F, 0x4F, 0x55),
+            (0x2A, 0x7C, 0x7E),
+            (0x3F, 0xA9, 0xA9),
+            (0x6F, 0xE0, 0xDF),
+        ],
     };
 
     /// Cells: xterm 256-colour entries only, so a chart looks the same in
@@ -53,6 +63,12 @@ impl Theme {
         s0: (0x5F, 0x87, 0xAF),
         s1: (0xAF, 0x87, 0xD7),
         s2: (0x5F, 0xD7, 0xD7),
+        heat: [
+            (0x00, 0x5F, 0x5F),
+            (0x00, 0x87, 0x87),
+            (0x00, 0xAF, 0xAF),
+            (0x5F, 0xD7, 0xD7),
+        ],
     };
 
     pub fn role(&self, role: Role) -> Rgb {
@@ -70,13 +86,19 @@ impl Theme {
     }
 
     /// A filled mark's colour: `dim` is drawn at half strength over the
-    /// background (the first turn's pill, a forecast, free space), so it
+    /// background (the first turn's pill, a turn with no call), so it
     /// reads as "not data" rather than as grey data.
     pub(crate) fn fill(&self, role: Role) -> Rgb {
         match role {
             Role::Dim => mix(self.bg, self.dim, 0.5),
             r => self.role(r),
         }
+    }
+
+    /// A role's colour at 40 %, towards black: what stands behind the data
+    /// (the forecast's fill in cells, the buffer held back in the window).
+    pub(crate) fn deep(&self, role: Role) -> Rgb {
+        mix((0, 0, 0), self.role(role), 0.4)
     }
 
     /// An empty heat cell.
@@ -127,9 +149,10 @@ mod tests {
     #[test]
     fn the_cell_palette_is_xterm_entries() {
         let t = Theme::CELLS;
-        for c in [
+        let roles = [
             t.bg, t.track, t.fg, t.dim, t.accent, t.ok, t.warn, t.crit, t.s0, t.s1, t.s2,
-        ] {
+        ];
+        for c in roles.into_iter().chain(t.heat) {
             assert_eq!(xterm256(c), c, "{c:?}");
         }
     }
@@ -145,8 +168,12 @@ mod tests {
 
     #[test]
     fn hued_colours_keep_their_hue_in_the_palette() {
-        // The darkest heat step of the accent: a teal, not #444444.
-        assert_eq!(xterm256((38, 86, 86)), (0x00, 0x5F, 0x5F));
+        // The forecast's fill: a teal, not #444444; the buffer: a dark red.
+        assert_eq!(
+            xterm256(Theme::CELLS.deep(Role::Accent)),
+            (0x00, 0x5F, 0x5F)
+        );
+        assert_eq!(xterm256(Theme::CELLS.deep(Role::Crit)), (0x5F, 0x00, 0x00));
         // Near-neutral colours may land on the grey ramp: an empty heat cell.
         assert_eq!(xterm256(Theme::CELLS.empty()), (0x26, 0x26, 0x26));
     }

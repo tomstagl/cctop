@@ -87,7 +87,8 @@ impl Slots {
     /// The columns slot `i` marks in a grid `w` wide: its share of the
     /// width, less one column of gap once the share is three or more.
     fn cols(&self, i: usize, w: usize) -> std::ops::Range<usize> {
-        let edge = |k: usize| k * w / self.n;
+        // In u128: `k * w` must not overflow however many slots there are.
+        let edge = |k: usize| (k as u128 * w as u128 / self.n as u128) as usize;
         let (a, b) = (edge(i), edge(i + 1));
         if b - a >= 3 {
             a..b - 1
@@ -143,6 +144,9 @@ mod tests {
         assert_eq!(s.cols(0, 42), 0..2);
         assert_eq!(s.cols(13, 42), 39..41);
         assert_eq!(s.cols(0, 28), 0..2);
+        // A huge axis: slots far past usize::MAX / w do not overflow.
+        let huge = Slots::of(&axis(0.0, 1e300));
+        assert_eq!(huge.cols(usize::MAX - 1, 100), 99..100);
         assert_eq!(s.index(14.0), Some(13));
         assert_eq!(s.index(15.0), None);
         assert_eq!(s.index(0.0), None);

@@ -1,6 +1,7 @@
 //! Tool calls: one row per series, one cell per turn, brighter = more
-//! calls (four steps of the series' colour, darkest 40 %, relative to the
-//! y axis's top). A marker with a `row` (`failed`) paints that cell.
+//! calls (four steps relative to the y axis's top: the theme's fixed
+//! ramp for an `accent` row, else the row's colour scaled towards black).
+//! A marker with a `row` (`failed`) paints that cell.
 
 use super::{frac, Slots};
 use crate::canvas::{rounded, solid, Canvas};
@@ -8,9 +9,9 @@ use crate::grid::Grid;
 use crate::spec::{ChartSpec, Rgb, Role};
 use crate::theme::{mix, Theme};
 
-/// The steps scale the colour towards black rather than mix it with the
-/// empty cell: that keeps the hue, so the xterm palette has a teal for each
-/// step instead of greys.
+/// A role without a fixed ramp scales its colour towards black rather than
+/// mixing it with the empty cell: that keeps the hue, so the xterm palette
+/// has a hued entry for each step instead of greys.
 const STEPS: [f64; 4] = [0.4, 0.6, 0.8, 1.0];
 
 /// The cell colour of `v` calls in a row drawn with `role`.
@@ -24,7 +25,10 @@ fn shade(spec: &ChartSpec, t: &Theme, v: f64, role: Role) -> Rgb {
     } else {
         4
     };
-    mix((0, 0, 0), t.role(role), STEPS[step - 1])
+    match role {
+        Role::Accent => t.heat[step - 1],
+        r => mix((0, 0, 0), t.role(r), STEPS[step - 1]),
+    }
 }
 
 /// Every cell to paint: (row, slot, colour), markers last.
