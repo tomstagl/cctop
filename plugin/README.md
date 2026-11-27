@@ -76,8 +76,9 @@ lit and pressed as one area. It shows the same views as the TUI:
 | Advisor | 9 | The slot's occupant, then what is queued and what is snoozed |
 
 The Coach and Overview views draw `cctop query coach` and `cctop query
-dashboard` verbatim — the same objects the TUI draws — so the pane and the
-terminal show the same nudge at the same moment. The frames inside the other
+dashboard` verbatim, with the Overview's body 1 (its charts) drawn from
+`cctop query overview`. These are the same objects the TUI draws, so the
+pane and the terminal show the same nudge at the same moment. The frames inside the other
 views carry the TUI's panel digits (`╭5 Tools ─ 257 calls╮`), the same
 numbers the guide and `cctop query` use. A fix prompt or a command goes
 into an empty prompt box (`$.prompt.fill`, after `$.prompt.read`: a draft is
@@ -99,9 +100,9 @@ Terminal settings that make the pane look as designed:
 - **Ghostty**: `font-family = JetBrains Mono`, `font-size = 13`, `adjust-cell-height = 23%`.
 - **Terminal.app**: SF Mono Regular 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
 
-**Pictures or cells.** The Overview's charts are drawn as pictures (`Image`, rendered by the bundled `charts.wasm`) on kitty, Ghostty, WezTerm and iTerm2 3.5+, and in tmux only with passthrough on (`set -g allow-passthrough on`). Terminal.app and the VS Code terminal show cells (a `Raster`), the same characters the terminal view draws. `CCTOP_PANE_CHARTS=image|cells` forces one, and `[pane] charts = "auto" | "image" | "cells"` in `~/.cctop/config.toml` sets the default; the variable wins. There is no text inside any picture: labels are terminal text beside it.
+**Pictures or cells.** The Overview's charts are drawn as pictures (`Image`, rendered by the bundled `charts.wasm`) on kitty, Ghostty and iTerm2 3.5+, and in tmux only with passthrough and focus events on (`set -g allow-passthrough on` and `set -g focus-events on`). Terminal.app and the VS Code terminal show cells (a `Raster`), the same characters the terminal view draws. A terminal cctop does not recognise tries pictures first and falls back to cells if it refuses the first one. `CCTOP_PANE_CHARTS=image|cells` forces one, and `[pane] charts = "auto" | "image" | "cells"` in `~/.cctop/config.toml` sets the default; the variable wins. There is no text inside any picture: labels are terminal text beside it.
 
-**The act dialog, placed rows, fills.** `a` opens the act dialog (`$.ui.open`): the items on the left, the selected one's detail on the right; a settings change is shown as the line to add, copied and the file opened, never written. Notes and misses are placed in the transcript where they happened (`$.ui.place`, display only; they are gone after `--resume`). A fill (`$.prompt.fill`, after `$.prompt.read`) goes only into an empty prompt box: a draft is never replaced, and nothing is submitted.
+**The act dialog, placed rows, fills.** `a` opens the act dialog (`$.ui.open`): the items on the left, the selected one's detail on the right; a settings change is shown as the line to add, copied and the file opened, never written. Notes and misses are placed in the transcript where they happened (`$.ui.place`: display only and never written to the transcript, so they are gone after `--resume`). A fill (`$.prompt.fill`, after `$.prompt.read`) goes only into an empty prompt box: a draft is never replaced, and nothing is submitted.
 
 ### Switching views
 

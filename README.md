@@ -73,9 +73,9 @@ adjust-cell-height = 23%
 
 **Terminal.app**: SF Mono Regular, 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
 
-**Which terminals show pictures.** kitty, Ghostty, WezTerm and iTerm2 3.5+ show the pane's charts as images; inside tmux only with passthrough on (`set -g allow-passthrough on`). Terminal.app and the VS Code terminal show the same charts as cells, character for character what the terminal view draws. `CCTOP_PANE_CHARTS=image|cells` forces one or the other, and `charts = "auto" | "image" | "cells"` under `[pane]` in `~/.cctop/config.toml` sets the default (the environment variable wins). No chart carries text inside the picture: labels are terminal text beside it.
+**Which terminals show pictures.** kitty, Ghostty and iTerm2 3.5+ show the pane's charts as images; inside tmux only with passthrough and focus events on (`set -g allow-passthrough on` and `set -g focus-events on`). Terminal.app and the VS Code terminal show the same charts as cells, character for character what the terminal view draws. A terminal cctop does not recognise tries pictures first and falls back to cells if it refuses the first one. `CCTOP_PANE_CHARTS=image|cells` forces one or the other, and `charts = "auto" | "image" | "cells"` under `[pane]` in `~/.cctop/config.toml` sets the default (the environment variable wins). No chart carries text inside the picture: labels are terminal text beside it.
 
-In the pane, `a` opens the act dialog (the items on the left, the selected one's detail on the right), notes and misses are placed in the transcript where they happened for as long as the session runs, and a fix prompt only ever goes into an empty prompt box: it never replaces a draft and is never sent.
+In the pane, `a` opens the act dialog (the items on the left, the selected one's detail on the right), notes and misses are placed in the transcript where they happened (display only and never written to the transcript, so they are gone after `--resume`), and a fix prompt only ever goes into an empty prompt box: it never replaces a draft and is never sent.
 
 ## Two ways to see it
 
@@ -159,7 +159,7 @@ The nine panels of the terminal view collapse into eight bodies on Console; ever
 <!-- panels:start -->
 | key | Body | Answers | `Enter` opens |
 |---|---|---|---|
-| `1` | **context** | How full is the window, what it is made of and which part you can move, how many turns until autocompact | panel 1 Context |
+| `1` | **overview** | The five charts the pane draws (`cctop query overview`): context, spend, cost per turn, cache and tool calls, each with its verdict and the one thing to do | panel 1 Context |
 | `2` | **limits** | 5 h and 7 d usage as meters, reset countdown, the model's weight, will I run out before the reset | panel 3 Limits |
 | `3` | **cache** | The countdown while the entry is warm, misses, the hit ratio, the re-write at stake if it goes cold | panel 2 Tokens & Cost |
 | `4` | **cost** | The session's spend with its provenance (ledger, since, agents, team), the token mix, burn rate, the cost of continuing, who spent it | panel 2 Tokens & Cost |
