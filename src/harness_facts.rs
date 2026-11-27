@@ -62,6 +62,10 @@ pub mod first_seen {
     pub const PER_TURN_EFFORT: Version = Version(2, 1, 269);
     /// `continued-in` (what `/clear` leaves in the old transcript), `sessionKind`.
     pub const CONTINUED_IN: Version = Version(2, 1, 270);
+    /// `api-request`, `api-request-shape` and `api-request-blob` lines. The
+    /// oldest transcript on this machine that carries them is 2.1.302; the
+    /// version that introduced them is not known, so this is an upper bound.
+    pub const API_REQUEST: Version = Version(2, 1, 302);
     /// `usage.output_tokens_details.thinking_tokens` on every assistant
     /// line. The oldest transcript on this machine that carries it is
     /// 2.1.247 (fixture A, 30 922 thinking tokens over the session); the
