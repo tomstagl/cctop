@@ -29,10 +29,45 @@ pub fn fixture_path(session: &str) -> Option<PathBuf> {
     with_ext.is_file().then_some(with_ext)
 }
 
+/// What a transcript path the pane passes (`$.session.info().transcriptPath`)
+/// says of its session: the live registry entry whose id is the file's stem,
+/// else, for a file under `~/.claude/projects`, an ended session keeping that
+/// id (`SessionInfo::from_transcript`). `None` for anything else: a fixture.
+fn real_transcript_info(p: &Path) -> Option<SessionInfo> {
+    real_transcript_info_in(
+        p,
+        crate::registry::default_dir(),
+        crate::baseline::default_projects_dir(),
+    )
+}
+
+fn real_transcript_info_in(
+    p: &Path,
+    registry: Option<PathBuf>,
+    projects: Option<PathBuf>,
+) -> Option<SessionInfo> {
+    let stem = p.file_stem()?.to_str()?;
+    if let Some(dir) = registry {
+        let live = crate::registry::list(&dir)
+            .into_iter()
+            .filter(|s| s.session_id == stem && s.is_alive())
+            .max_by_key(|s| s.started_at);
+        if let Some(s) = live {
+            return Some(SessionInfo::from_registry(&s));
+        }
+    }
+    let projects = projects?;
+    let under = std::fs::canonicalize(p)
+        .ok()
+        .zip(std::fs::canonicalize(projects).ok())
+        .is_some_and(|(p, root)| p.starts_with(root));
+    under.then(|| SessionInfo::from_transcript(p))
+}
+
 /// Resolve the target to a transcript path and session info.
 pub fn resolve(t: &Target) -> Result<(PathBuf, SessionInfo), DiscoverError> {
     if let Some(p) = t.session.as_deref().and_then(fixture_path) {
-        let info = SessionInfo::from_fixture(&p);
+        let info = real_transcript_info(&p).unwrap_or_else(|| SessionInfo::from_fixture(&p));
         return Ok((p, info));
     }
     let q = Query::from_env(t.session.clone(), t.cwd.clone());
@@ -168,6 +203,7 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
             state.refresh_insights(&dir);
         }
     }
+    state.load_pane_facts();
     let mut hooks =
         crate::hooks::Watcher::new(&crate::status::cctop_dir(), &state.session.session_id);
     for ev in hooks.poll() {
@@ -262,6 +298,21 @@ mod tests {
     use super::*;
     use std::fs;
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn a_transcript_path_under_projects_keeps_its_session_id() {
+        let root = projects("path");
+        let p = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        let info = real_transcript_info_in(&p, None, Some(root.clone())).unwrap();
+        assert_eq!(info.session_id, A);
+        assert!(!info.alive);
+        // A fixture elsewhere stays a fixture.
+        let fixture = std::env::temp_dir().join("cctop-load-fixture.jsonl");
+        fs::write(&fixture, "{}\n").unwrap();
+        assert!(real_transcript_info_in(&fixture, None, Some(root)).is_none());
+        // No registry entry, no projects dir: nothing to say.
+        assert!(real_transcript_info_in(&p, None, None).is_none());
+    }
 
     const A: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
     const B: &str = "b34fc081-0000-4000-8000-000000000000";

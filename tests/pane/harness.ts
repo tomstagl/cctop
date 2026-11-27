@@ -32,6 +32,7 @@ import type {
   RenderInput,
   RenderNode,
   ResolveInput,
+  SessionInfo,
   SessionUsage,
   Timer,
 } from 'claude-code';
@@ -130,6 +131,8 @@ export type ScriptedSession = {
   turns: number;
   cwd: string;
   usage: SessionUsage;
+  /** What `$.session.info()` answers; an empty `transcriptPath` is a session that keeps none. */
+  info: SessionInfo;
 };
 
 export type FakeEngineOptions = {
@@ -239,6 +242,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     turns: 0,
     cwd: '/home/user/project',
     usage: { startedAt: 0, context: { window: 200000 }, rateLimits: [] },
+    info: { transcriptPath: '' },
     ...opts.session,
   };
   const env = { ...(opts.env ?? {}) };
@@ -306,6 +310,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       model: async () => scripted.model,
       turns: async () => scripted.turns,
       id: async () => scripted.id,
+      info: async () => JSON.parse(JSON.stringify(scripted.info)) as SessionInfo,
       repo: async () => null,
       surfaces: async () => ['terminal'] as const,
       surface: async () => 'terminal' as const,

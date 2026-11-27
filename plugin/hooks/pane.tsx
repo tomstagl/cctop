@@ -17,6 +17,7 @@ import {
   type Action,
   type Binary,
   type Model,
+  type SessionFacts,
   type View,
 } from './model';
 import { spoolText } from './breakdown';
@@ -365,7 +366,7 @@ export function selfCheckLine(version: string | null, check: SelfCheck): string 
 function announce($: EngineInterface, check: SelfCheck): Promise<void> {
   return readVersion($).then(() => {
     $.ui.log(selfCheckLine(model.version, check));
-    noteSession($);
+    return noteSession($);
   });
 }
 
@@ -446,8 +447,36 @@ function updateMarker($: EngineInterface): void {
 // Learns the session id after session.start; the poller's sync writes the
 // marker with `open: false`, so from then on `cctop pane status` can tell
 // that the hooks module runs in this session, before any pane was opened.
-function noteSession($: EngineInterface): void {
-  poller?.sync().catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
+function noteSession($: EngineInterface): Promise<void> {
+  return (poller?.sync() ?? Promise.resolve(false))
+    .then(() => readSessionInfo($))
+    .catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
+}
+
+// `$.session.info()`: the transcript path the poller queries by and the
+// data rules, platform and screen reader mode the marker carries. Read at
+// session.start and on every turn (`dataRules` and `isScreenReader` can
+// change: the d.ts says to read them at each use). A read that lands after
+// `/clear` rotated the id is dropped: its path is the old transcript's. A
+// change is written to the marker at once, so the header badge need not
+// wait for a tick.
+function readSessionInfo($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.session
+    .info()
+    .then((info) => {
+      if (model.sessionId !== sessionId) return;
+      const facts: SessionFacts = {};
+      if (typeof info.transcriptPath === 'string' && info.transcriptPath !== '') facts.transcriptPath = info.transcriptPath;
+      if (info.platform !== undefined) facts.platform = info.platform;
+      if (info.isScreenReader !== undefined) facts.isScreenReader = info.isScreenReader;
+      if (info.dataRules !== undefined) facts.dataRules = [...info.dataRules];
+      // Unchanged: no redraw, no marker write (every turn reads it again).
+      if (JSON.stringify(model.sessionFacts) === JSON.stringify(facts)) return;
+      apply($, { type: 'session.info', facts });
+      updateMarker($);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: session.info failed: ${String(err)}`));
 }
 
 // `/clear` gives the session a new id and fires no session.start (the d.ts:
@@ -458,9 +487,11 @@ function noteSession($: EngineInterface): void {
 function followSession($: EngineInterface): void {
   poller
     ?.sync()
-    .then((rotated) => {
+    .then(async (rotated) => {
       // A new session is a new spool: its first failure is worth one line too.
       if (rotated) breakdownFailureLogged = false;
+      // Before the first query of a rotated session: its transcript path.
+      await readSessionInfo($);
       if (!rotated || !model.open) return;
       readUsage($);
       void poller?.tick();

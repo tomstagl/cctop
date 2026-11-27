@@ -547,6 +547,9 @@ pub struct State {
     /// without a `cctop hook` entry in settings). Empty when nothing is
     /// installed, when the install is current, and for a fixture.
     pub hooks_missing: Vec<&'static str>,
+    /// The pane marker's `facts` (data rules, platform, screen reader, agent
+    /// limits); `None` while no pane has written one for this session.
+    pub pane_facts: Option<crate::pane::PaneFacts>,
     pub prefix: crate::prefix::Prefix,
     /// The pane's latest breakdown spool, raw: anchored and checked against
     /// compactions when read, since the transcript may lag it.
@@ -2465,6 +2468,11 @@ impl State {
         self.hooks_missing = crate::install::hooks_missing_of_install(
             &crate::install::read_settings(&crate::install::settings_path()),
         );
+    }
+
+    /// Read the pane marker's `facts` for this session (a fixture has none).
+    pub fn load_pane_facts(&mut self) {
+        self.pane_facts = crate::pane::read_facts(&self.session.session_id);
     }
 
     /// Read the autocompact overrides for a live session: settings.json and

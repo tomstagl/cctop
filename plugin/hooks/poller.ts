@@ -68,6 +68,18 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
   return QUERY_VERBS.filter((verb) => found.has(verb));
 }
 
+// The marker's `facts` (cctop's header badges read them), without the
+// transcript path: the binary is told that by the poller's argv, not the marker.
+function markerFacts(model: Model): Record<string, unknown> | undefined {
+  const f = model.sessionFacts;
+  if (f === null) return undefined;
+  const out: Record<string, unknown> = {};
+  if (f.dataRules !== undefined) out.dataRules = f.dataRules;
+  if (f.platform !== undefined) out.platform = f.platform;
+  if (f.isScreenReader !== undefined) out.isScreenReader = f.isScreenReader;
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 // The marker other cctop processes read to learn what the pane is doing in
 // this session: `cctop split` refuses a second dashboard while it is open
 // (US-009) and `cctop pane status` reports it. Written once the module knows
@@ -99,6 +111,7 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
     placement: model.placement,
     bodyColumns: model.bodyColumns,
     viewportColumns: model.viewportColumns,
+    facts: markerFacts(model),
   };
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
 }
@@ -134,11 +147,15 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     }
   };
 
+  // The transcript path the engine named, else the id: the path says
+  // exactly which transcript to read, the id is looked up in the registry.
+  const queryKey = (sessionId: string): string => getModel().sessionFacts?.transcriptPath || sessionId;
+
   const query = async (verb: QueryVerb, sessionId: string): Promise<boolean> => {
     try {
       // `--surface pane`: a fire the binary promotes for this pane (no
       // dashboard running) is recorded as shown here.
-      const argv = ['cctop', 'query', verb, '--session', sessionId, '--surface', 'pane'];
+      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane'];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.

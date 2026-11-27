@@ -57,6 +57,15 @@ export type Turn = {
   toolMs: number;
 };
 
+/** What `$.session.info()` said that cctop uses; `transcriptPath` is absent when the engine keeps none. */
+export type SessionFacts = {
+  transcriptPath?: string;
+  platform?: string;
+  isScreenReader?: boolean;
+  /** Absent: not known; the d.ts says to treat that, and a name not known, as a rule in force. */
+  dataRules?: string[];
+};
+
 export type Model = {
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
@@ -73,6 +82,10 @@ export type Model = {
    * poller tick: `/clear` rotates it in place (a new transcript, the registry
    * entry rewritten) and no session.start says so. */
   sessionId: string | null;
+  /** `$.session.info()`, read after session.start and on every turn: the
+   * transcript path the poller queries by, and the facts the marker carries.
+   * Null before the first read and after `/clear` rotated the id. */
+  sessionFacts: SessionFacts | null;
   // Precedence between the two sources: the Context and Limits rows come
   // from `usage` (engine-native, live) when it is present, else from
   // `query.summary`; every other figure (tokens & cost breakdown, burn rate,
@@ -140,6 +153,7 @@ export type Action =
   | { type: 'session.model'; name: string }
   | { type: 'binary'; binary: Binary }
   | { type: 'session.id'; id: string }
+  | { type: 'session.info'; facts: SessionFacts }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
@@ -183,6 +197,7 @@ export function initialModel(): Model {
     compactions: 0,
     binary: 'unknown',
     sessionId: null,
+    sessionFacts: null,
     query: {},
     queryAt: null,
     verbs: null,
@@ -274,6 +289,8 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, modelName: action.name };
     case 'binary':
       return { ...model, binary: action.binary };
+    case 'session.info':
+      return JSON.stringify(model.sessionFacts) === JSON.stringify(action.facts) ? model : { ...model, sessionFacts: action.facts };
     case 'session.id':
       if (model.sessionId === action.id) return model;
       if (model.sessionId === null) return { ...model, sessionId: action.id };
@@ -285,6 +302,8 @@ export function reduce(model: Model, action: Action): Model {
       return {
         ...model,
         sessionId: action.id,
+        // The old transcript's path and rules: the next read is the new session's.
+        sessionFacts: null,
         usage: null,
         usageAt: null,
         lastBreakdownAt: null,
