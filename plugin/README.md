@@ -216,12 +216,19 @@ the pane raises a native notification, through the channel your
 `preferredNotifChannel` names, for two moments only:
 
 - a coach nudge of urgency NOW taking the slot: its headline, once per fire
-  (NEXT and LATER nudges never notify); snoozing it or acting on it takes the
-  notification back;
+  (NEXT and LATER nudges never notify); snoozing it or acting on it asks to
+  take the notification back;
 - a five-hour or seven-day rate-limit window at 90 % or more: `rate limit
-  resets now`, booked for the window's reset time and delivered only if you
-  have left the session by then (`untilBack`); a new reset time replaces the
-  booking.
+  resets now`, sent when the window's reset time arrives (the pane waits on
+  its own timer; a new reset time replaces the wait, and dropping below 90 %
+  cancels it).
+
+Notifications are sent only while the pane module is running in the session:
+a reset is not announced after you quit Claude Code. A terminal (iTerm2,
+kitty, Ghostty, the bell) raises a notification the moment it is sent and
+has nothing to take back, so on a terminal "taken back" does nothing once
+shown; `untilBack` (drop it if you have returned) and held delivery apply
+only on clients that implement them.
 
 With no notification channel (or `notifications_disabled`) the pane stops
 asking after the first answer and logs it once. Your own `Notification`

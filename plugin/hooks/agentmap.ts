@@ -36,7 +36,9 @@ export function mapAgents(rows: AgentRow[], live: LiveAgent[]): Map<string, stri
     return n;
   };
   const running = rows.filter((r) => r.running);
-  const rowPairs = count(running.map(pair));
+  // Every row's pair, finished ones too: a finished row whose agent is still
+  // listed must not leave its pair to a new running row.
+  const rowPairs = count(rows.map(pair));
   const free = live.filter((l) => !taken.has(l.id));
   const livePairs = count(free.map(pair));
   for (const r of running) {

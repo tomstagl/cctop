@@ -84,3 +84,34 @@ test('a row the engine does not list is no Button', async () => {
   assert.ok(!$.ui.presses.has(`agent-${agentRow.id}`));
   assert.deepEqual($.ui.views, []);
 });
+
+test('a running row that appears mid-turn reads $.agent.list once; the same row on the next poll does not', async () => {
+  const { $, dispatch, render } = await boot();
+  let reads = 0;
+  const list = $.agent.list;
+  $.agent.list = async () => {
+    reads++;
+    return list();
+  };
+  await dispatch('turn.start', { text: 'hi', turnId: 't1' }, () => ({ turnId: 't1' }));
+  await settle();
+  const before = reads;
+  // The agent starts after the turn did: the engine lists it, cctop's rows show it running.
+  $.agent.live.push(live(agentRow.id));
+  const agents = fixture<{ agents: Array<Record<string, unknown>> }>('agents');
+  const running = { ...agents, agents: agents.agents.map((a, i) => (i === 0 ? { ...a, state: 'running' } : a)) };
+  $.process.script[`cctop query agents --session ${SESSION} --surface pane`] = ok(JSON.stringify(running));
+  $.clock.tick(10_000);
+  await settle();
+  await settle();
+  assert.equal(reads - before, 1);
+  await render();
+  $.ui.press(`agent-${agentRow.id}`);
+  await settle();
+  assert.deepEqual($.ui.views, [{ agentId: agentRow.id }], 'the row became a Button');
+  $.process.script[`cctop query agents --session ${SESSION} --surface pane`] = ok(JSON.stringify(JSON.parse(JSON.stringify(running))));
+  $.clock.tick(10_000);
+  await settle();
+  await settle();
+  assert.equal(reads - before, 1, 'the same row again: no second read');
+});

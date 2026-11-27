@@ -714,6 +714,18 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+45. **Notifications on a real terminal: a NOW nudge once, a reset at the
+    reset time** (the pane-APIs PRD, notifications).
+    Setup: `CCTOP_PANE_NOTIFY=1` in the environment Claude Code starts in,
+    a terminal with a notification channel (iTerm2, kitty, Ghostty), the
+    pane open; a window at 90 % or more with a `resets_at` a few minutes
+    ahead.
+    Expected: a NOW nudge taking the slot notifies once; the reset
+    notification `rate limit resets now` arrives at the reset time, not
+    before (nothing when the window first crosses 90 %).
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

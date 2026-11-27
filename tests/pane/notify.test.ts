@@ -141,16 +141,55 @@ test('on: a NOW nudge notifies once, a NEXT one not at all, and a snooze cancels
   assert.deepEqual(next.$.ui.notifies, []);
 });
 
-test('on: a window at 90 % books "rate limit resets now" with untilBack, once', async () => {
-  const at = Date.UTC(2026, 8, 12, 15, 0, 0);
-  const usage = { startedAt: 0, context: { window: 200000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(at).toISOString() }] } as unknown as SessionUsage;
-  const { $, dispatch } = await boot(nowCoach('LATER', 1), { CCTOP_PANE_NOTIFY: '1' }, usage);
+const rl = (pct: number, at: number) =>
+  ({ startedAt: 0, context: { window: 200000 }, rateLimits: [{ kind: 'five_hour', percentUsed: pct, resetsAt: new Date(at).toISOString() }] }) as unknown as SessionUsage;
+const turn = async (dispatch: Awaited<ReturnType<typeof boot>>['dispatch']) => {
   await dispatch('turn.start', {}, () => ({}));
   await dispatch('turn.complete', { durationMs: 1, reason: 'end_turn' }, () => ({}));
   await settle();
   await settle();
-  await dispatch('turn.complete', { durationMs: 1, reason: 'end_turn' }, () => ({}));
+};
+const NOTIFY = { CCTOP_PANE_NOTIFY: '1' };
+
+test('on: a reset at 90 % sends nothing when booked, once at the reset time, with untilBack and no `at`', async () => {
+  const at = Date.UTC(2026, 8, 12, 15, 0, 0);
+  const { $, dispatch } = await boot(nowCoach('LATER', 1), NOTIFY, rl(93, at));
+  await turn(dispatch);
+  await turn(dispatch);
+  assert.deepEqual($.ui.notifies, [], 'a terminal raises at once: nothing is sent before the reset');
+  $.clock.tick(3 * 3600_000 - 1000);
+  assert.deepEqual($.ui.notifies, []);
+  $.clock.tick(1000);
   await settle();
+  assert.deepEqual($.ui.notifies, [{ text: 'rate limit resets now', options: { title: 'cctop', key: 'reset-5h', untilBack: true } }]);
+  $.clock.tick(3600_000);
+  assert.equal($.ui.notifies.length, 1, 'once');
+});
+
+test('a new resets_at replaces the booking; below 90 % cancels it and takes the key back', async () => {
+  const at = Date.UTC(2026, 8, 12, 15, 0, 0);
+  const { $, dispatch } = await boot(nowCoach('LATER', 1), NOTIFY, rl(93, at));
+  await turn(dispatch);
+  $.session.scripted.usage = rl(94, at + 3600_000);
+  await turn(dispatch);
+  $.clock.tick(3 * 3600_000 + 1000);
+  assert.deepEqual($.ui.notifies, [], 'the old reset time no longer fires');
+  $.clock.tick(3600_000);
   await settle();
-  assert.deepEqual($.ui.notifies, [{ text: 'rate limit resets now', options: { title: 'cctop', key: 'reset-5h', at, untilBack: true } }]);
+  assert.equal($.ui.notifies.length, 1, 'the new one does');
+  const second = await boot(nowCoach('LATER', 1), NOTIFY, rl(93, at));
+  await turn(second.dispatch);
+  second.$.session.scripted.usage = rl(40, at);
+  await turn(second.dispatch);
+  assert.deepEqual(second.$.ui.cancels, ['reset-5h']);
+  second.$.clock.tick(4 * 3600_000);
+  await settle();
+  assert.deepEqual(second.$.ui.notifies, []);
+});
+
+test('a NOW nudge with no fire time is not notified', async () => {
+  const c = nowCoach('NOW', 1);
+  const { fired_at_ms: _drop, ...bare } = c.nudge;
+  const { $ } = await boot({ ...c, nudge: bare }, NOTIFY);
+  assert.deepEqual($.ui.notifies, []);
 });

@@ -48,3 +48,8 @@ test('no match, or a row that cannot be compared: no entry', () => {
   assert.equal(mapAgents([{ id: 'x', running: true }], [live('y', 'b')]).size, 0);
   assert.equal(mapAgents([row('x', 'a')], []).size, 0);
 });
+
+test('a finished row with the same pair counts: its still-listed agent is not claimed by a new running row', () => {
+  const m = mapAgents([row('old', 'same', false), row('new', 'same')], [live('l0', 'same')]);
+  assert.equal(m.size, 0);
+});

@@ -100,6 +100,10 @@ let statusPinned = false;
 // and what has been sent so far.
 let notifyOn = false;
 let notifyState: NotifyState = initialNotifyState();
+// One pane-side timer per booked rate-limit reset (key `reset-5h` / `reset-7d`):
+// a terminal ignores `at` and raises a notification at once, so the wait is
+// ours and the notification is sent only when the reset arrives.
+const resetTimers = new Map<string, Timer>();
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -230,6 +234,29 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
+  if (model.sessionId !== before.sessionId) agentsAsked.clear();
+  if (model.query.agents !== before.query.agents) agentsPolled($);
+}
+
+// Ids already asked of `$.agent.list()` because a poll showed them running
+// and unmapped; each is asked once (a session change forgets them).
+const agentsAsked = new Set<string>();
+
+// An agent that starts mid-turn is not in `liveAgents` (read on turn.start /
+// turn.complete / the agents view opening): a running row whose id is neither
+// there nor already asked for reads the list once.
+function agentsPolled($: EngineInterface): void {
+  const agents = (model.query.agents as { agents?: unknown } | null | undefined)?.agents;
+  if (!Array.isArray(agents)) return;
+  const known = new Set(model.liveAgents.map((a) => a.id));
+  let ask = false;
+  for (const a of agents as { id?: unknown; state?: unknown }[]) {
+    if (a === null || typeof a !== 'object' || a.state !== 'running' || typeof a.id !== 'string') continue;
+    if (known.has(a.id) || agentsAsked.has(a.id)) continue;
+    agentsAsked.add(a.id);
+    ask = true;
+  }
+  if (ask) void readAgents($);
 }
 
 // The coach's own surfaces beyond the pane, kept from the last `cctop
@@ -338,18 +365,22 @@ function sendNotify($: EngineInterface, text: string, key: string, options: { at
 // taken back.
 function notifyNudge($: EngineInterface, c: NonNullable<ReturnType<typeof coachOf>>): void {
   if (!notifyOn) return;
-  const n = c.nudge;
+  // Without a fire time there is no fire identity to notify once per: none.
+  const n = c.nudge !== null && c.nudge.firedAt !== null ? c.nudge : null;
+  const fire = n === null ? null : String(n.firedAt);
   const todo = nudgeActions(
     notifyState,
-    n === null ? null : { ruleId: n.id, fireId: String(n.firedAt ?? 0), urgency: n.cls === 'NOW' || n.cls === 'NEXT' ? n.cls : 'LATER', headline: n.line1 },
-    settledRules(model.query.coach, notifyState, n === null ? null : { ruleId: n.id, fireId: String(n.firedAt ?? 0) }),
+    n === null || fire === null ? null : { ruleId: n.id, fireId: fire, urgency: n.cls === 'NOW' || n.cls === 'NEXT' ? n.cls : 'LATER', headline: n.line1 },
+    settledRules(model.query.coach, notifyState, n === null || fire === null ? null : { ruleId: n.id, fireId: fire }),
   );
   for (const key of todo.cancel) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
   for (const item of todo.notify) sendNotify($, item.text, item.key);
 }
 
-// A window at 90 % or more books its reset: `at` its resets_at, `untilBack`
-// so only someone who left hears it; a new resets_at replaces the booking.
+// A window at 90 % or more books its reset: a timer here for the wait to its
+// resets_at, and the notification (`untilBack`, no `at`) sent when it fires.
+// A new resets_at replaces the timer; a window that fell below the threshold
+// cancels it (and the key, in case a host queued one).
 function notifyResets($: EngineInterface, usage: SessionUsage, now: number): void {
   if (!notifyOn) return;
   const windows: { key: 'reset-5h' | 'reset-7d'; usedPct: number; resetsAtMs: number }[] = [];
@@ -358,14 +389,34 @@ function notifyResets($: EngineInterface, usage: SessionUsage, now: number): voi
     const resetsAtMs = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt);
     if (key !== null && Number.isFinite(resetsAtMs)) windows.push({ key, usedPct: l.percentUsed, resetsAtMs });
   }
-  for (const key of resetCancels(notifyState, windows)) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
-  for (const item of resetActions(notifyState, windows, now)) sendNotify($, item.text, item.key, { at: item.at, untilBack: true });
+  for (const key of resetCancels(notifyState, windows)) {
+    clearResetTimer(key);
+    $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
+  }
+  for (const item of resetActions(notifyState, windows, now)) bookReset($, item.text, item.key, Math.max(1, item.at - now));
 }
 
-// What the coach view's Buttons do: `fill` writes a prompt- or slash-class
-// action into the prompt box (never submits it), `snooze` asks the binary
-// (queued for the TUI while it runs) and re-polls, `why` and `light` are
-// view state.
+function bookReset($: EngineInterface, text: string, key: string, waitMs: number): void {
+  clearResetTimer(key);
+  resetTimers.set(
+    key,
+    $.clock.after(waitMs, () => {
+      resetTimers.delete(key);
+      sendNotify($, text, key, { untilBack: true });
+    }),
+  );
+}
+
+function clearResetTimer(key: string): void {
+  resetTimers.get(key)?.cancel();
+  resetTimers.delete(key);
+}
+
+function clearResetTimers(): void {
+  for (const t of resetTimers.values()) t.cancel();
+  resetTimers.clear();
+}
+
 // The person's Stop: the running turn ends now rather than at the next poll,
 // and a round runs at once (turn.complete may not follow an interrupt).
 function noteStop($: EngineInterface): void {
@@ -375,6 +426,10 @@ function noteStop($: EngineInterface): void {
   poller?.pollNow();
 }
 
+// What the coach view's Buttons do: `fill` writes a prompt- or slash-class
+// action into the prompt box (never submits it), `snooze` asks the binary
+// (queued for the TUI while it runs) and re-polls, `why` and `light` are
+// view state.
 function coachActions($: EngineInterface): CoachActions {
   return {
     fill: (text) => {
@@ -613,7 +668,12 @@ function followSession($: EngineInterface): void {
     ?.sync()
     .then(async (rotated) => {
       // A new session is a new spool: its first failure is worth one line too.
-      if (rotated) breakdownFailureLogged = false;
+      if (rotated) {
+        breakdownFailureLogged = false;
+        // The old session's bookings: the next usage read books afresh.
+        clearResetTimers();
+        notifyState.scheduledReset.clear();
+      }
       // Before the first query of a rotated session: its transcript path
       // and the limits the model dropped with the old session.
       await readSessionInfo($);
@@ -894,6 +954,8 @@ export const register: Register = (on) => {
   statusPinned = false;
   notifyOn = false;
   notifyState = initialNotifyState();
+  clearResetTimers();
+  agentsAsked.clear();
   invalidatedAt = null;
   renderPending = false;
   poller?.stop();

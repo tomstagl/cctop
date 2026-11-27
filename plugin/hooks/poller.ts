@@ -76,6 +76,8 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
 
 // The marker's `facts` (cctop's header badges read them), without the
 // transcript path: the binary is told that by the poller's argv, not the marker.
+// `dataRules` is what the engine says now: each marker write reflects the
+// current value, so it is rewritten when it changes (the d.ts: "do not keep it").
 function markerFacts(model: Model): Record<string, unknown> | undefined {
   const f = model.sessionFacts ?? {};
   const out: Record<string, unknown> = {};
