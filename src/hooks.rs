@@ -130,18 +130,19 @@ impl HookEvent {
                 }
             }
             o.remove("transcript_path");
-            // MCP prompts: measured, never kept.
-            if let Some(Value::String(text)) = o.remove("message") {
-                if event == "Elicitation" {
+            // MCP prompts: measured, never kept. Other events' `message`
+            // (a Notification's own text) is not the person's and stays.
+            if event == "Elicitation" {
+                if let Some(Value::String(text)) = o.remove("message") {
                     o.insert("message_chars".into(), Value::from(text.chars().count()));
                 }
-            }
-            if let Some(schema) = o.remove("requested_schema") {
-                let n = schema
-                    .get("properties")
-                    .and_then(Value::as_object)
-                    .map_or(0, |p| p.len());
-                o.insert("schema_fields".into(), Value::from(n));
+                if let Some(schema) = o.remove("requested_schema") {
+                    let n = schema
+                        .get("properties")
+                        .and_then(Value::as_object)
+                        .map_or(0, |p| p.len());
+                    o.insert("schema_fields".into(), Value::from(n));
+                }
             }
             if event == "ElicitationResult" {
                 let n = o
@@ -498,6 +499,28 @@ mod tests {
                 assert_eq!(&ev.payload[k], val, "{name}.{k} kept");
             }
         }
+    }
+
+    #[test]
+    fn only_elicitation_loses_its_message() {
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"Notification","notification_type":"permission_prompt","message":"Claude needs your permission to use Bash"
+        })).unwrap();
+        assert_eq!(
+            ev.payload["message"],
+            "Claude needs your permission to use Bash"
+        );
+        assert!(ev.payload.get("message_chars").is_none());
+        assert!(ev.payload.get("schema_fields").is_none());
+        let ev = HookEvent::from_stdin(
+            1,
+            serde_json::json!({
+                "session_id":"s","hook_event_name":"Elicitation","mcp_server_name":"srv"
+            }),
+        )
+        .unwrap();
+        assert!(ev.payload.get("message_chars").is_none());
+        assert!(ev.payload.get("schema_fields").is_none());
     }
 
     #[test]
