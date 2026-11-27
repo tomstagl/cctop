@@ -38,6 +38,7 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     app.sources.clear();
     app.tick_hooks.clear();
     app.state = fresh_state(&app.state, info);
+    app.state.transcript = Some(transcript.to_path_buf());
     let session_dir = transcript.with_extension("");
 
     // Liveness + git every 5 s.

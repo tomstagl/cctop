@@ -43,7 +43,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
     {
       "id": "context",
       "key": "1",
-      "keys": "Enter panel",
+      "keys": "j k PgUp PgDn scroll  ·  Enter panel",
       "rows": [
         [
           {

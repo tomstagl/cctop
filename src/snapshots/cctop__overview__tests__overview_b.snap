@@ -242,7 +242,9 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         {
           "role": "warn",
           "text": "auto-compact at 567k"
-        },
+        }
+      ],
+      "bar_legend": [
         {
           "role": "s0",
           "text": "System prompt 10k"

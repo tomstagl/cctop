@@ -717,6 +717,37 @@ mod fixture_b_snapshots {
         app
     }
 
+    /// The overview scrolls with j/k (a row) and PgUp/PgDn (ten), stops at
+    /// the last row, and starts at the top again when the body changes.
+    #[test]
+    fn the_overview_scrolls_and_stops_at_its_ends() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+        let mut app = app();
+        app.state.console_body = Some(0);
+        let _ = render_to_string(&app, 85, 24);
+        let max = app.state.console_offset_max.get();
+        assert!(max > 20, "{max}");
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.state.console_offset, 1);
+        app.handle_key(key(KeyCode::PageDown));
+        assert_eq!(app.state.console_offset, 11);
+        app.handle_key(key(KeyCode::Char('k')));
+        app.handle_key(key(KeyCode::PageUp));
+        assert_eq!(app.state.console_offset, 0);
+        for _ in 0..10 {
+            app.handle_key(key(KeyCode::PageDown));
+        }
+        assert_eq!(app.state.console_offset, max);
+        let out = render_to_string(&app, 85, 24);
+        assert!(out.contains("↑ "), "{out}");
+        assert!(!out.contains('↓'), "the bottom is shown: {out}");
+        app.handle_key(key(KeyCode::Char('3')));
+        assert_eq!(app.state.console_offset, 0);
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.state.console_offset, 0, "only body 1 scrolls");
+    }
+
     /// Console at the widths the dock gives (PRD dashboard-v2 §3.6: 35,
     /// 54, 67, 85) and the standalone terminal (122), every body's rows
     /// measured before render — a `TestBackend` buffer is `width` cells by
@@ -753,6 +784,13 @@ mod fixture_b_snapshots {
             "fixture_b_console_context_85x24",
             render_to_string(&app, 85, 24)
         );
+        // Scrolled to the cache section: the hints name what is cut.
+        app.state.console_offset = 44;
+        insta::assert_snapshot!(
+            "fixture_b_console_context_scrolled_85x24",
+            render_to_string(&app, 85, 24)
+        );
+        app.state.console_offset = 0;
         app.state.console_body = Some(3);
         insta::assert_snapshot!(
             "fixture_b_console_cost_85x24",

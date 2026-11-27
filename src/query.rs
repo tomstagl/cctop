@@ -772,12 +772,13 @@ pub fn overview(state: &State, max_turns: usize, transcript: Option<&std::path::
         &crate::overview::Options {
             max_turns,
             chain_usd,
+            fallback_cells: true,
         },
     );
     serde_json::to_value(o).unwrap_or(Value::Null)
 }
 
-fn lineage_cost(path: &std::path::Path) -> f64 {
+pub(crate) fn lineage_cost(path: &std::path::Path) -> f64 {
     let root = crate::baseline::default_projects_dir().unwrap_or_default();
     crate::lineage::chain(path, &root).chain_cost_usd
 }
