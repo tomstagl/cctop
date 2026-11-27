@@ -55,6 +55,14 @@ pub struct Limit {
     pub used_percentage: f64,
     /// Unix seconds (as Claude Code writes it).
     pub resets_at: Option<f64>,
+    /// Spend limit only, and only for gateway accounts with an overage.
+    #[serde(default)]
+    pub used_usd: Option<f64>,
+    #[serde(default)]
+    pub limit_usd: Option<f64>,
+    /// `monthly`, `weekly`…
+    #[serde(default)]
+    pub period: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -107,6 +115,14 @@ pub struct PromptCache {
 pub struct MissCause {
     #[serde(default)]
     pub causes: Vec<String>,
+    /// Tools the request carried that the previous one did not.
+    #[serde(default)]
+    pub tools_added: Option<u64>,
+    #[serde(default)]
+    pub tools_removed: Option<u64>,
+    /// Characters the system prompt grew (negative: shrank).
+    #[serde(default)]
+    pub system_char_delta: Option<i64>,
 }
 
 impl PromptCache {
@@ -154,6 +170,38 @@ pub struct CostInfo {
     pub total_lines_removed: Option<u64>,
 }
 
+/// `workspace.repo`.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Repo {
+    pub host: Option<String>,
+    pub owner: Option<String>,
+    pub name: Option<String>,
+}
+
+/// Where the session runs. `cloud_dir` is parsed and never shown.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Workspace {
+    pub current_dir: Option<String>,
+    pub project_dir: Option<String>,
+    #[serde(default)]
+    pub added_dirs: Vec<String>,
+    pub git_worktree: Option<String>,
+    #[serde(default)]
+    pub repo: Option<Repo>,
+    pub cloud_dir: Option<String>,
+}
+
+/// `output_style` and `agent`: an object with a name.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct Named {
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct RemoteInfo {
+    pub session_id: Option<String>,
+}
+
 /// One status-line payload. Unknown fields are ignored.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub struct Sample {
@@ -186,6 +234,14 @@ pub struct Sample {
     /// Worktree facts (`name`, `path`, `branch`…), kept raw.
     #[serde(default)]
     pub worktree: Option<serde_json::Value>,
+    #[serde(default)]
+    pub workspace: Option<Workspace>,
+    #[serde(default)]
+    pub output_style: Option<Named>,
+    #[serde(default)]
+    pub agent: Option<Named>,
+    #[serde(default)]
+    pub remote: Option<RemoteInfo>,
     /// Filled by the watcher: epoch ms the file was written.
     #[serde(skip)]
     pub at_ms: i64,
@@ -207,6 +263,14 @@ impl Sample {
     /// `pr.number`, when the payload carries a PR.
     pub fn pr_number(&self) -> Option<u64> {
         self.pr.as_ref()?.get("number")?.as_u64()
+    }
+
+    pub fn pr_url(&self) -> Option<&str> {
+        self.pr.as_ref()?.get("url")?.as_str()
+    }
+
+    pub fn pr_kind(&self) -> Option<&str> {
+        self.pr.as_ref()?.get("kind")?.as_str()
     }
 
     pub fn pr_review_state(&self) -> Option<&str> {
@@ -332,7 +396,7 @@ mod tests {
 
     const PAYLOAD: &str = r#"{"session_id":"abc-123","model":{"id":"claude-opus-5","display_name":"Opus 5"},"workspace":{"current_dir":"/x"},"context_window":{"total_input_tokens":134000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":62,"resets_at":1789158000},"seven_day":{"used_percentage":23,"resets_at":1789500000}},"cost":{"total_cost_usd":4.37}}"#;
 
-    const FULL: &str = r#"{"session_id":"50658b8f","prompt_id":"9434b2e9","effort":{"level":"max"},"session_name":"coach","model":{"id":"claude-opus-5","display_name":"Opus 5"},"version":"2.1.270","cost":{"total_cost_usd":7.99,"total_duration_ms":565680,"total_api_duration_ms":363788,"total_lines_added":196,"total_lines_removed":0},"context_window":{"total_input_tokens":291664,"total_output_tokens":633,"context_window_size":1000000,"current_usage":{"input_tokens":2,"output_tokens":633,"cache_creation_input_tokens":4595,"cache_read_input_tokens":287067},"used_percentage":29,"remaining_percentage":71},"exceeds_200k_tokens":true,"prompt_cache":{"warm":true,"caching_observed":true,"ttl":"1h","expires_at":1789405956,"requests":49,"misses":2,"expected_rebuilds":0,"hit_ratio":0.9735,"cache_write_tokens":257729,"miss_recache_tokens":95700,"last_miss_at":1789223965,"last_miss_cause":{"causes":["model_changed","betas_changed"]},"miss_causes":{"model_changed":1,"ttl_expired_1h":1},"recache_tokens_if_cold":291664},"fast_mode":false,"thinking":{"enabled":true},"rate_limits":{"five_hour":{"used_percentage":11,"resets_at":1789411800},"seven_day":{"used_percentage":13,"resets_at":1789812000},"spend_limit":{"used_percentage":40}},"pr":{"number":142,"review_state":"approved"},"worktree":{"name":"feat"}}"#;
+    const FULL: &str = r#"{"session_id":"50658b8f","prompt_id":"9434b2e9","effort":{"level":"max"},"session_name":"coach","model":{"id":"claude-opus-5","display_name":"Opus 5"},"version":"2.1.270","cost":{"total_cost_usd":7.99,"total_duration_ms":565680,"total_api_duration_ms":363788,"total_lines_added":196,"total_lines_removed":0},"context_window":{"total_input_tokens":291664,"total_output_tokens":633,"context_window_size":1000000,"current_usage":{"input_tokens":2,"output_tokens":633,"cache_creation_input_tokens":4595,"cache_read_input_tokens":287067},"used_percentage":29,"remaining_percentage":71},"exceeds_200k_tokens":true,"prompt_cache":{"warm":true,"caching_observed":true,"ttl":"1h","expires_at":1789405956,"requests":49,"misses":2,"expected_rebuilds":0,"hit_ratio":0.9735,"cache_write_tokens":257729,"miss_recache_tokens":95700,"last_miss_at":1789223965,"last_miss_cause":{"causes":["model_changed","betas_changed"],"tools_added":2,"tools_removed":0,"system_char_delta":1200},"miss_causes":{"model_changed":1,"ttl_expired_1h":1},"recache_tokens_if_cold":291664},"fast_mode":false,"thinking":{"enabled":true},"rate_limits":{"five_hour":{"used_percentage":11,"resets_at":1789411800},"seven_day":{"used_percentage":13,"resets_at":1789812000},"spend_limit":{"used_percentage":40,"resets_at":1790000000,"used_usd":412.0,"limit_usd":500.0,"period":"monthly"}},"pr":{"number":142,"review_state":"approved","url":"https://github.com/acme/shop/pull/142","kind":"github"},"worktree":{"name":"feat"},"workspace":{"current_dir":"/w","project_dir":"/p","added_dirs":["/x/y"],"git_worktree":"feat","repo":{"host":"github.com","owner":"acme","name":"shop"},"cloud_dir":"/c"},"output_style":{"name":"Concise"},"agent":{"name":"reviewer"},"remote":{"session_id":"r-1"}}"#;
 
     #[test]
     fn full_payload_of_2_1_270() {
@@ -376,8 +440,47 @@ mod tests {
         assert_eq!(s.version.as_deref(), Some("2.1.270"));
         assert_eq!(s.pr_number(), Some(142));
         assert_eq!(s.pr_review_state(), Some("approved"));
+        let mc = pc.last_miss_cause.as_ref().unwrap();
+        assert_eq!(mc.tools_added, Some(2));
+        assert_eq!(mc.tools_removed, Some(0));
+        assert_eq!(mc.system_char_delta, Some(1200));
+        let sl = s
+            .rate_limits
+            .as_ref()
+            .unwrap()
+            .spend_limit
+            .as_ref()
+            .unwrap();
+        assert_eq!(sl.resets_at, Some(1_790_000_000.0));
+        assert_eq!(sl.used_usd, Some(412.0));
+        assert_eq!(sl.limit_usd, Some(500.0));
+        assert_eq!(sl.period.as_deref(), Some("monthly"));
+        let ws = s.workspace.as_ref().unwrap();
+        assert_eq!(ws.current_dir.as_deref(), Some("/w"));
+        assert_eq!(ws.project_dir.as_deref(), Some("/p"));
+        assert_eq!(ws.added_dirs, vec!["/x/y".to_string()]);
+        assert_eq!(ws.git_worktree.as_deref(), Some("feat"));
+        assert_eq!(ws.cloud_dir.as_deref(), Some("/c"));
+        let repo = ws.repo.as_ref().unwrap();
+        assert_eq!(repo.host.as_deref(), Some("github.com"));
+        assert_eq!(repo.owner.as_deref(), Some("acme"));
+        assert_eq!(repo.name.as_deref(), Some("shop"));
+        assert_eq!(
+            s.output_style.as_ref().unwrap().name.as_deref(),
+            Some("Concise")
+        );
+        assert_eq!(s.agent.as_ref().unwrap().name.as_deref(), Some("reviewer"));
+        assert_eq!(
+            s.remote.as_ref().unwrap().session_id.as_deref(),
+            Some("r-1")
+        );
+        assert_eq!(s.pr_url(), Some("https://github.com/acme/shop/pull/142"));
+        assert_eq!(s.pr_kind(), Some("github"));
         // The old, smaller payload still parses; nothing new is required.
         let old = Sample::parse(PAYLOAD).unwrap();
+        assert!(old.agent.is_none() && old.output_style.is_none() && old.remote.is_none());
+        assert_eq!(old.pr_url(), None);
+        assert_eq!(old.pr_kind(), None);
         assert!(old.prompt_cache.is_none());
         assert_eq!(old.effort_level(), None);
         assert_eq!(old.pr_number(), None);
