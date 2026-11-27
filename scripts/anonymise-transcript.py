@@ -89,7 +89,9 @@ ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
            "ownerOrganizationUuid", "parentSessionId", "parentLastUuid",
            "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid",
-           "prompt_id", "leadSessionId"}
+           "prompt_id", "leadSessionId",
+           # an assistant line's pointer at its `api-request`, and a request's at the previous one
+           "requestRef", "base"}
 PATH_KEYS = {"file_path", "filePath", "path", "notebook_path", "file", "filename", "trackingPath",
              "changedFiles", "displayPath", "planFilePath", "realParentDir", "outputFile",
              "persistedOutputPath", "transcriptDir", "scriptPath", "agent_transcript_path"}
@@ -163,6 +165,82 @@ def fill(n):
 def hid(s):
     h = hashlib.sha1(s.encode()).hexdigest()
     return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
+REQUEST_TYPES = ("api-request", "api-request-shape", "api-request-blob")
+# Keys whose string value in a message block or a schema node is structure, not prose.
+MCP_NAMES = {}  # (kind, original) -> renamed, stable across every shape line
+BLOCK_KEEP = {"type", "role", "name", "tool_use_id", "media_type", "format", "required"}
+
+
+def h64(s):
+    """A stable keyed 64-hex digest: the same input gives the same output, so
+    `shapeHash`, `tail[]`, `hash` and `requestDigest` keep their equalities."""
+    return hashlib.sha256(("cctop-fixture:" + s).encode()).hexdigest()
+
+
+def exact_fill(v, key=None):
+    """Same-length filler for every string under `v` (no MAX_STR cap: the
+    request lines are read for their sizes), keeping BLOCK_KEEP keys' strings."""
+    if isinstance(v, dict):
+        return {k: exact_fill(x, k) for k, x in v.items()}
+    if isinstance(v, list):
+        return [exact_fill(x, key) for x in v]
+    if isinstance(v, str):
+        return v if key in BLOCK_KEEP else fill(len(v))
+    return v
+
+
+def anon_request(o):
+    """`api-request`, `-shape` and `-blob` lines. Settings (`params`,
+    `cacheControl`, `querySource`) are Claude Code's own words and stay; the
+    shape's and blob's prose becomes same-length filler; hashes and ids are
+    rewritten consistently."""
+    out = {}
+    for k, v in o.items():
+        if k in ("params", "cacheControl", "querySource", "type", "timestamp", "version", "keep"):
+            out[k] = v
+        elif k in ("shapeHash", "hash", "requestDigest") and isinstance(v, str):
+            out[k] = h64(v)
+        elif k == "tail" and isinstance(v, list):
+            out[k] = [h64(x) if isinstance(x, str) else x for x in v]
+        elif k in ("id", "base", "requestRef", "sessionId") and isinstance(v, str):
+            out[k] = hid(v)
+        elif k == "shape" and isinstance(v, dict):
+            out[k] = anon_shape(v)
+        elif k == "message" and isinstance(v, dict):
+            out[k] = exact_fill(v)
+        elif isinstance(v, str):
+            out[k] = fill(len(v))
+        else:
+            out[k] = v
+    return out
+
+
+def anon_shape(shape):
+    def tool_name(n):
+        if not n.startswith("mcp__"):
+            return n
+        parts = n.split("__", 2)
+        server = MCP_NAMES.setdefault(("s", parts[1]), "server%d" % (len([k for k in MCP_NAMES if k[0] == "s"]) + 1))
+        tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (len([k for k in MCP_NAMES if k[0] == "t"]) + 1))
+        return f"mcp__{server}__{tool}"
+
+    out = {}
+    for k, v in shape.items():
+        if k == "system" and isinstance(v, list):
+            out[k] = [exact_fill(b) for b in v]
+        elif k == "tools" and isinstance(v, list):
+            tools = []
+            for t in v:
+                nt = {}
+                for tk, tv in t.items():
+                    nt[tk] = tool_name(tv) if tk == "name" and isinstance(tv, str) else exact_fill(tv, tk)
+                tools.append(nt)
+            out[k] = tools
+        else:
+            out[k] = exact_fill(v, k)
+    return out
 
 
 def anon_path(p):
@@ -352,7 +430,7 @@ def main():
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            rows.append(anon(o))
+            rows.append(anon_request(o) if o.get("type") in REQUEST_TYPES else anon(o))
     if dst.endswith("/") or os.path.isdir(dst):
         # A teammate transcript is `<sessionId>.jsonl`: name the copy by
         # the anonymised id so the collector still finds it by its lines.

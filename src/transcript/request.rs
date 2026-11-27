@@ -321,4 +321,34 @@ mod tests {
             Line::Unknown(_)
         ));
     }
+
+    #[test]
+    fn fixture_r_parses_request_lines() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/fixtures/session-r.jsonl"
+        ))
+        .unwrap();
+        let (mut requests, mut shapes, mut blobs) = (0, 0, 0);
+        for (n, raw) in text.lines().enumerate() {
+            let kind = serde_json::from_str::<serde_json::Value>(raw).unwrap()["type"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned();
+            let line = Line::parse(raw).unwrap_or_else(|e| panic!("line {}: {e}", n + 1));
+            match (kind.as_str(), &line) {
+                ("api-request", Line::ApiRequest(_)) => requests += 1,
+                ("api-request-shape", Line::ApiRequestShape(_)) => shapes += 1,
+                ("api-request-blob", Line::ApiRequestBlob(_)) => blobs += 1,
+                ("api-request" | "api-request-shape" | "api-request-blob", other) => {
+                    panic!("line {} ({kind}) parsed as {}", n + 1, other.kind())
+                }
+                _ => {}
+            }
+        }
+        assert!(
+            requests >= 1 && shapes >= 1 && blobs >= 1,
+            "{requests} {shapes} {blobs}"
+        );
+    }
 }

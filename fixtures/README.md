@@ -94,6 +94,23 @@ Layout mirrors `~/.claude`:
   `--lines 20` it is the closed attempt, at `--lines 27` the first response
   that reopens the turn.
 
+- `session-r.jsonl` — the request-ledger fixture (431 lines, Claude Code
+  2.1.326): a whole short session whose transcript carries the three request
+  lines (26 `api-request`, 2 `api-request-shape`, 13 `api-request-blob`). Two
+  events the ledger locates are in it: a main-thread `shapeHash` change at
+  line 85 (`api-request` whose shape, line 81, differs from the one lines 36
+  and 66 used) and a `keep` drop at line 256 (`keep`
+  48 where the previous request, line 250, had `keep 47` + 3 new messages = 50:
+  a prefix rewritten from message 48 of 50). The anonymiser fills the
+  shapes' `system[].text`, tool `description` and `input_schema` strings and
+  the blobs' content with same-length filler (uncapped, because the lines are
+  read for their sizes; `--max-str` still caps the rest of the transcript),
+  keeps built-in tool names (`mcp__` names become `mcp__server<N>__tool<M>`),
+  keeps `params`, `cacheControl` and `querySource` (Claude Code's own words),
+  and rewrites `shapeHash`, `hash`, `tail[]`, `requestDigest` with one keyed
+  SHA-256 so equalities survive, and request ids (`id`, `base`, an assistant
+  line's `requestRef`) with the UUID hash so the links agree.
+
 - `session-w.jsonl` + `session-w/` — the workflow fixture (2.1.269): one
   real `Workflow` run, `wf_0aa065ff-0a0`, over six invocations (a launch
   stopped with `TaskStop`, then five resumes, the script edited from v2 to
@@ -176,6 +193,14 @@ a `/login` between them is the shape):
 
 ```
 python3 scripts/anonymise-transcript.py <session> fixtures/session-e.jsonl --max-str 2000 --lines 66
+```
+
+To rebuild `session-r.jsonl` (the source is any session of 2.1.302 or later
+with a main-thread `shapeHash` change and a `keep` drop; this one is the
+smallest of the sessions that had both):
+
+```
+python3 scripts/anonymise-transcript.py <session>.jsonl fixtures/session-r.jsonl --max-str 2000
 ```
 
 To rebuild `session-w` and its live cut (the source is the session whose
