@@ -317,7 +317,12 @@ fn located_misses(state: &State) -> Value {
                     "message_id": l.message_id,
                     "tokens": m(l.tokens, "tokens", "cache_write", false),
                     "api_reason": l.api_reason,
-                    "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
+                    // `words`: the overview's own phrasing, which the pane's placed row uses too.
+                    "located": {
+                        "kind": l.cause.kind(),
+                        "detail": l.cause.short(),
+                        "words": crate::overview::cause_words(&l.cause).trim_start_matches("of "),
+                    },
                 });
                 // What re-writing those tokens cost at the cache-write price
                 // (the price A01 and the overview use); absent when unpriced.
@@ -326,7 +331,7 @@ fn located_misses(state: &State) -> Value {
                     l.tokens,
                     crate::advisor::rules::PriceKind::CacheWrite,
                 ) {
-                    row["cost"] = m(usd, "USD", "cache_miss_located", true);
+                    row["cost"] = m(usd, "USD", "cache_miss_cost", true);
                 }
                 // The `ConfigChange` source this request followed (PRD 5).
                 if let Some(src) = &l.after_config_change {
@@ -1101,8 +1106,17 @@ mod tests {
         // Priced at the cache-write price when the model is known.
         if let Some(usd) = first["cost"]["value"].as_f64() {
             assert!(usd > 0.0);
-            assert_eq!(first["cost"]["metric_id"], "cache_miss_located");
+            assert_eq!(first["cost"]["metric_id"], "cache_miss_cost");
+            assert_eq!(
+                crate::metrics::registry::get("cache_miss_cost").map(|m| m.unit),
+                Some("USD")
+            );
         }
+        // The overview's phrasing of the cause, which the pane's placed row uses.
+        assert!(first["located"]["words"]
+            .as_str()
+            .unwrap()
+            .starts_with("a new "));
         assert!(first.get("after_config_change").is_none());
     }
 

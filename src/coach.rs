@@ -174,6 +174,8 @@ pub struct StateLine {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Coach {
+    /// 2 since a nudge's `evidence` became rows (`string[]`; schema 1's one
+    /// string is `line3`) and `actions[]` was added.
     pub schema: u32,
     pub session: String,
     pub model: String,
@@ -369,7 +371,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         .filter(|r| now - r.shown_at_ms <= 3_600_000)
         .count();
     let mut c = Coach {
-        schema: 1,
+        schema: 2,
         session: state.session.name.clone(),
         model: state.model().unwrap_or("—").to_string(),
         turn,
@@ -1463,7 +1465,7 @@ mod tests {
             );
         }
         let v = serde_json::to_value(&c).unwrap();
-        assert_eq!(v["schema"], 1);
+        assert_eq!(v["schema"], 2);
         assert_eq!(v["lights"].as_array().unwrap().len(), 4);
         assert_eq!(v["lights"][0]["id"], "context");
         assert_eq!(v["nudge"]["id"], "A10");

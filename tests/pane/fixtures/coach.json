@@ -134,7 +134,7 @@
   "queued": 2,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-a",
   "session_mode": "interactive",
   "snoozed": [],

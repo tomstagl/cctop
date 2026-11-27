@@ -82,7 +82,7 @@
   "queued": 0,
   "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-c",
   "session_mode": "machine",
   "snoozed": [],
