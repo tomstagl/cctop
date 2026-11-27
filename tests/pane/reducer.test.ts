@@ -343,3 +343,51 @@ test('turn.complete and session.compact write the breakdown spool, once per debo
   await settle();
   assert.deepEqual(reads.breakdowns, ['summary', 'summary']);
 });
+
+// A breakdown read that fails (the spool cannot be written): one log line per
+// session, the debounce starts all the same, and a turn 15 s later tries again.
+test('a failed breakdown write logs once, still debounces, retries after 15 s; a rotated session logs afresh', async () => {
+  const usage = {
+    startedAt: 0,
+    context: {
+      window: 200000,
+      breakdown: { categories: [], totalTokens: 10, rawMaxTokens: 200000, model: 'm', memoryFiles: [], mcpTools: [], agents: [], isAutoCompactEnabled: true },
+    },
+    rateLimits: [],
+  } as unknown as SessionUsage;
+  const { $, dispatch, reads, start, turnStart, turnComplete, settle } = boot(usage);
+  $.env.values.HOME = '/home/u';
+  const write = $.fs.write;
+  $.fs.write = async (path: string, text: string) => {
+    if (path.includes('/.cctop/context/')) throw new Error('disk full');
+    return write(path, text);
+  };
+  const failures = () => $.ui.logs.filter((l) => l.startsWith('cctop: context breakdown spool failed')).length;
+  await start();
+  await settle();
+  await $.session.id();
+  await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
+  await settle();
+  await turnStart();
+  await turnComplete();
+  await settle();
+  assert.equal(failures(), 1);
+  assert.equal(reads.breakdowns.length, 1);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 1, 'the failed read still started the debounce');
+  $.clock.tick(15_000);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 2, 'a turn after 15 s tries again');
+  assert.equal(failures(), 1, 'the second failure is not logged again');
+  // /clear: a new id, so the next failure is the new session's first.
+  $.session.scripted.id = 'rotated-session';
+  await turnStart();
+  await settle();
+  $.clock.tick(15_000);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 3);
+  assert.equal(failures(), 2, 'a rotated session id resets the once-per-session log');
+});

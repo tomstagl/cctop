@@ -65,6 +65,30 @@ test('spoolText leaves out what the session lacks', () => {
   assert.equal('autocompact_threshold' in parsed, false);
 });
 
+test('spoolText rounds every count and the time to whole numbers', () => {
+  const fractional = {
+    ...BREAKDOWN,
+    categories: [{ name: 'Messages', tokens: 84600.6, color: 'x', isDeferred: false, kind: 'used' }],
+    totalTokens: 88700.4,
+    rawMaxTokens: 999999.5,
+    autoCompactThreshold: 967000.2,
+    memoryFiles: [{ path: '/p/CLAUDE.md', type: 'Project', tokens: 2100.5 }],
+    mcpTools: [{ name: 'm', serverName: 'x', tokens: 900.4, isLoaded: true }],
+    agents: [{ agentType: 'Explore', source: 'plugin', tokens: 299.5 }],
+    skills: { totalSkills: 14, includedSkills: 11.6, tokens: 1400.4, skillFrontmatter: [] },
+  };
+  const s = JSON.parse(spoolText(usage(fractional), 1764170000000.4) ?? '{}') as Record<string, unknown>;
+  assert.equal(s.at, 1764170000000);
+  assert.equal(s.tokens, 88700);
+  assert.equal(s.window, 1000000);
+  assert.equal(s.autocompact_threshold, 967000);
+  assert.deepEqual(s.categories, [{ name: 'Messages', tokens: 84601, kind: 'used' }]);
+  assert.deepEqual(s.memory_files, [{ path: '/p/CLAUDE.md', tokens: 2101 }]);
+  assert.deepEqual(s.mcp_tools, [{ name: 'm', tokens: 900 }]);
+  assert.deepEqual(s.agents, [{ name: 'Explore', tokens: 300 }]);
+  assert.deepEqual(s.skills, { count: 12, tokens: 1400 });
+});
+
 test('spoolText is null without a breakdown', () => {
   assert.equal(spoolText(usage(), 1), null);
 });

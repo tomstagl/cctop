@@ -459,6 +459,8 @@ function followSession($: EngineInterface): void {
   poller
     ?.sync()
     .then((rotated) => {
+      // A new session is a new spool: its first failure is worth one line too.
+      if (rotated) breakdownFailureLogged = false;
       if (!rotated || !model.open) return;
       readUsage($);
       void poller?.tick();
