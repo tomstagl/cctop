@@ -90,11 +90,11 @@ fn turn_calls(state: &State) -> Vec<&Call> {
         .collect()
 }
 
-/// The shape of a call for the one-line forms and the retry counting: the
-/// tool name, or for Bash the command's argv0 (leading `VAR=…` dropped, a
-/// path reduced to its name) and its word-like subcommands (`gh pr view`,
-/// `git push`, `rm`). The full words use [`call_shape`] (one subcommand).
-pub(crate) fn prefix(c: &Call) -> String {
+/// The key retries and blocks are counted by (`gh pr view` and `gh pr
+/// create` are different commands): the tool name, or argv0 and up to two
+/// word-like subcommands. Internal only: every word the coach shows names
+/// a command by [`call_shape`].
+fn retry_key(c: &Call) -> String {
     if c.name != "Bash" {
         return fmt::clip(&c.name, 40);
     }
@@ -285,6 +285,25 @@ pub fn error_words_for(
         .iter()
         .find(|w| w.id == id)
         .unwrap_or(&ERROR_WORDS[ERROR_WORDS.len() - 1])
+}
+
+/// A destructive git match as an operation, never its paths or refs:
+/// `git`, its subcommand, then its flags (`--hard`, `-f`, `--`, `.`).
+fn destructive_label(what: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    let mut words = what.split_whitespace().peekable();
+    while let Some(w) = words.next() {
+        if w == "-C" {
+            words.next(); // `-C <dir>`
+        } else if out.len() < 2 {
+            out.push(w);
+        } else if w.starts_with('-') || w == "." {
+            out.push(w.split('=').next().unwrap_or(w));
+        } else {
+            break;
+        }
+    }
+    out.join(" ")
 }
 
 /// `a`, `a and b`, `a, b and c`.
@@ -776,14 +795,19 @@ impl Rule for FailureCascade {
         if run.iter().any(|c| c.class == ToolClass::Implement) {
             return None;
         }
-        let mut by_prefix: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut by_key: std::collections::BTreeMap<String, usize> = Default::default();
         for c in &run {
-            *by_prefix.entry(prefix(c)).or_default() += 1;
+            *by_key.entry(retry_key(c)).or_default() += 1;
         }
-        if !by_prefix.values().any(|n| *n >= 2) {
+        if !by_key.values().any(|n| *n >= 2) {
             return None;
         }
-        let parts: Vec<String> = by_prefix
+        // Shown by shape, never the command's words.
+        let mut by_shape: std::collections::BTreeMap<String, usize> = Default::default();
+        for c in &run {
+            *by_shape.entry(call_shape(c)).or_default() += 1;
+        }
+        let parts: Vec<String> = by_shape
             .iter()
             .map(|(p, n)| {
                 if *n > 1 {
@@ -843,14 +867,14 @@ impl Rule for FailureCascade {
         let failing: Vec<String> = turn_calls(state)
             .iter()
             .filter(|c| c.is_error)
-            .map(|c| prefix(c))
+            .map(|c| retry_key(c))
             .collect();
         state
             .tools
             .calls
             .iter()
             .skip(fired.mark as usize)
-            .any(|c| c.finished_at.is_some() && !c.is_error && failing.contains(&prefix(c)))
+            .any(|c| c.finished_at.is_some() && !c.is_error && failing.contains(&retry_key(c)))
     }
 }
 
@@ -1209,17 +1233,16 @@ impl Rule for DestructiveGit {
             return None;
         }
         let calls = turn_calls(state);
-        let (i, c, what) = calls.iter().enumerate().rev().find_map(|(i, c)| {
+        let (i, what) = calls.iter().enumerate().rev().find_map(|(i, c)| {
             (c.name == "Bash")
-                .then(|| crate::phase::destructive_git(&c.input_summary).map(|w| (i, *c, w)))
+                .then(|| crate::phase::destructive_git(&c.input_summary).map(|w| (i, w)))
                 .flatten()
         })?;
         let mut a = Advice::new("A43", "destructive-git", Urgency::Now);
+        // The operation, never its paths or refs: `git checkout --`.
+        let what = destructive_label(&what);
         a.headline = format!("Claude ran {what} (#{}) on a dirty tree", i + 1);
-        a.evidence = format!(
-            "`{}` · rewind covers Edit/Write only",
-            fmt::clip(&c.input_summary, 30)
-        );
+        a.evidence = "rewind covers Edit/Write only, not shell commands".into();
         a.action = "rewind can't undo bash: check git reflog / stash list".into();
         a.action_kind = ActionKind::Advice;
         a.hole("what", what.clone());
@@ -1361,7 +1384,7 @@ impl Rule for DenialStreak {
             .find(|c| c.denial == Some(DenialKind::PermissionRule) && c.turn == turn)
         {
             let mut a = Advice::new("A45", "denial-streak", Urgency::Now);
-            a.headline = format!("{} is denied by your rules", fmt::clip(&prefix(c), 30));
+            a.headline = format!("{} is denied by your rules", call_shape(c));
             a.evidence = "a permissions.deny rule in settings".into();
             a.action = "tell Claude the alternative — it cannot run this".into();
             a.action_text = format!(
@@ -1386,15 +1409,16 @@ impl Rule for DenialStreak {
                 )
             })
             .collect();
-        let mut by_prefix: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut by_key: std::collections::BTreeMap<String, usize> = Default::default();
         for c in &blocked {
-            *by_prefix.entry(prefix(c)).or_default() += 1;
+            *by_key.entry(retry_key(c)).or_default() += 1;
         }
-        let (p, n) = by_prefix
+        let (k, n) = by_key
             .into_iter()
             .filter(|(_, n)| *n >= 2)
             .max_by_key(|(_, n)| *n)?;
-        let last = blocked.iter().rev().find(|c| prefix(c) == p)?;
+        let last = blocked.iter().rev().find(|c| retry_key(c) == k)?;
+        let p = call_shape(last);
         // The rule: Claude Code's own suggestion when the spool carried it,
         // else the prefix; never bare `Bash`, never a rule already allowed.
         let key = crate::ui::state::permission_key(
@@ -1408,8 +1432,10 @@ impl Rule for DenialStreak {
             .and_then(|a| a.rule.clone())
             .filter(|r| r.contains('('))
             .unwrap_or_else(|| {
-                if key.starts_with("Bash(") {
-                    format!("{}:*)", key.trim_end_matches(')'))
+                if key.starts_with("Bash(") && !p.is_empty() {
+                    format!("Bash({p}:*)")
+                } else if key.starts_with("Bash(") {
+                    "Bash".to_string()
                 } else {
                     key.clone()
                 }
@@ -1452,7 +1478,9 @@ impl Rule for DenialStreak {
                     && !c.is_error
                     && c.denial.is_none()
                     && (if c.name == "Bash" {
-                        prefix(c) == shape || command_core(&c.input_summary).starts_with(&shape)
+                        call_shape(c) == shape
+                            || retry_key(c) == shape
+                            || command_core(&c.input_summary).starts_with(&shape)
                     } else {
                         c.name == shape
                     })
@@ -2239,6 +2267,27 @@ mod tests {
     }
 
     #[test]
+    fn destructive_git_is_named_by_its_operation_not_its_paths() {
+        for (m, label) in [
+            ("git reset --hard", "git reset --hard"),
+            ("git checkout -- src/secret_x.rs", "git checkout --"),
+            ("git checkout .", "git checkout ."),
+            ("git -C /repo/secret clean -fd", "git clean -fd"),
+            (
+                "git restore --source abc123 src/x.rs",
+                "git restore --source",
+            ),
+            (
+                "git push --force-with-lease=origin/x",
+                "git push --force-with-lease",
+            ),
+            ("git stash", "git stash"),
+        ] {
+            assert_eq!(destructive_label(m), label, "{m}");
+        }
+    }
+
+    #[test]
     fn every_error_class_has_words() {
         use crate::tools::{ErrorClass, Failure};
         assert_eq!(
@@ -2332,7 +2381,7 @@ mod tests {
         let a = FailureCascade
             .evaluate(&s)
             .expect("three fails, two of one shape");
-        assert_eq!(a.headline, "3 fails in a row: gh pr view ×2, git push");
+        assert_eq!(a.headline, "3 fails in a row: gh pr ×2, git push");
         assert!(a.evidence.starts_with("this turn"), "{}", a.evidence);
         assert_eq!(a.urgency, Urgency::Now);
         assert!(!FailureCascade.acted(&s, &a));

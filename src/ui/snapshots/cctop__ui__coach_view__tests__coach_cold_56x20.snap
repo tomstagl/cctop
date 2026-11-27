@@ -18,7 +18,7 @@ expression: "render_to_string(&app, 56, 20)"
 │ system prompt, CLAUDE.md, tool schemas, skills and   │
 │ … e shows the whole advice                           │
 │                                                      │
-│ next     long-foreground → when the slot frees · `c… │
+│ next     long-foreground → when the slot frees · A … │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
  c dashboard  Enter act  x snooze  e why  1-4 light  q

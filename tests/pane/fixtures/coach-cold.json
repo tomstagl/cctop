@@ -90,13 +90,13 @@
     "family": "long-foreground",
     "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
     "foot": "goes away when Claude backgrounds a command, or after three turns",
-    "headline": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+    "headline": "A shell command blocked the turn for 9:09",
     "id": "A10",
     "name": "A long command blocked the turn",
     "promotes": "when the slot frees",
-    "row": "next     long-foreground → when the slot frees · `c…"
+    "row": "next     long-foreground → when the slot frees · A …"
   },
-  "next_row": "next     long-foreground → when the slot frees · `c…",
+  "next_row": "next     long-foreground → when the slot frees · A …",
   "nudge": {
     "acting": false,
     "action_kind": "slash",

@@ -2,7 +2,7 @@
 source: src/theme.rs
 expression: "render_to_string(&app, 80, 30)"
 ---
-┌ LATER A10 — `cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09  (Esc ┐
+┌ LATER A10 — A shell command blocked the turn for 9:09  (Esc back) ───────────┐
 │ Evidence  a foreground Bash call longer than a minute; Claude waited for it  │
 │ Action    queue: 'run builds and test suites longer than a minute in the     │
 │background'                                                                   │

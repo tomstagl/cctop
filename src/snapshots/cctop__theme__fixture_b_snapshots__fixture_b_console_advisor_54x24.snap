@@ -6,9 +6,9 @@ expression: "render_to_string(&app, 54, 24)"
  1: ctx 14%                2: 5h —
  3: cache 59m≈             4: spend $18.7
  5: ✓ python3 -… 9h01      6: 140c 6 err
- ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…
+ ▸ A shell command blocked the turn for 9:09
 ─── advisor ─────────────────── 0: home  ·  ? keys ───
-  ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…
+  ▸ A shell command blocked the turn for 9:09
     queue: 'run builds and test suites longer than a …
     LATER · since turn 6 · +0 queued
     saves ~9:09/turn
