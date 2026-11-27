@@ -14,7 +14,7 @@ cctop is a read-only, btop-style dashboard for a running Claude Code session. Tw
 Rust (this is what CI runs):
 
 ```
-make check                       # cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+make check                       # cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo test <name>                # one test / module, e.g. cargo test advisor::rules::outcome
 cargo build --release            # target/release/cctop
 make check-types                 # d.ts + harness_facts version vs installed `claude` (skips if no claude)

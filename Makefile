@@ -9,7 +9,7 @@ demo: build
 	./scripts/build-site.sh
 	python3 scripts/build-guide.py
 check:
-	cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
+	cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 check-types:
 	@if command -v claude >/dev/null 2>&1; then \
 		./scripts/check-plugin-types.sh; \
