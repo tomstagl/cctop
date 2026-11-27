@@ -69,7 +69,7 @@
     }
   ],
   "lines": {
-    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test, fix failures' or /goal",
     "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },
@@ -100,12 +100,12 @@
   "nudge": {
     "acting": false,
     "action_kind": "prompt",
-    "action_text": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+    "action_text": "Run cargo test and fix any failures before continuing.",
     "actions": [
       {
         "kind": "prompt",
         "label": "Put the fix prompt in the box",
-        "payload": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing."
+        "payload": "Run cargo test and fix any failures before continuing."
       }
     ],
     "body": "Claude edited 1 source file 17 minutes ago (1 edit over 29 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
@@ -116,12 +116,12 @@
     "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
     "family": "verify-gap",
     "fired_at_ms": 1789225485845,
-    "fix_prompt": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+    "fix_prompt": "Run cargo test and fix any failures before continuing.",
     "foot": "goes away after a test run or a read of an edited file",
     "headline": "Edited 1 src file, no test/build run yet",
     "id": "A32",
     "line1": "▸ Edited 1 src file, no test/build run yet",
-    "line2": "  queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "line2": "  queue: 'run cargo test, fix failures' or /goal",
     "line3": "  NEXT · since turn 8 · +2 queued (n)",
     "name": "Edits not tested yet",
     "queued": 2,

@@ -84,16 +84,16 @@
       {
         "kind": "prompt",
         "label": "Put the fix prompt in the box",
-        "payload": "Before you change anything else, tell me in two lines what you think I want, and wait for my answer."
+        "payload": "Before you change anything, tell me in two lines what you think I want, and wait for my answer."
       }
     ],
-    "body": "You corrected Claude 2 times in a row (refusal, Esc) on the same work: its picture of the task has drifted and each steer patches it. Esc Esc (or /rewind) restores the conversation and the files to turn 5, so a restated prompt starts clean.",
+    "body": "You corrected Claude 2 times in a row (refusal, Esc) on the same work: its picture of the task has drifted and each steer patches it. Rewind with Esc Esc (or /rewind) to turn 5, which restores the conversation and the files, then send the prompt below so Claude states the task back before changing anything.",
     "class": "NOW",
     "evidence": [
       "rewind: 0 checkpoints since #5"
     ],
     "family": "correction-streak",
-    "fix_prompt": "Before you change anything else, tell me in two lines what you think I want, and wait for my answer.",
+    "fix_prompt": "Before you change anything, tell me in two lines what you think I want, and wait for my answer.",
     "foot": "goes away after a /rewind",
     "headline": "2 corrections in a row (refusal, then Esc)",
     "id": "A36",

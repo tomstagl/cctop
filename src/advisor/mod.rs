@@ -157,13 +157,10 @@ impl Action {
     fn primary(kind: ActionKind, text: &str) -> Action {
         let shown = text.trim();
         match kind {
-            _ if shown.is_empty() && kind != ActionKind::Setting => {
-                Action::new(ActionKind::Advice, "Got it", "")
-            }
+            _ if shown.is_empty() => Action::new(ActionKind::Advice, "Got it", ""),
             ActionKind::Prompt => Action::new(kind, "Put the prompt in the box", text),
             ActionKind::Slash => Action::new(kind, format!("Put {shown} in the box"), text),
             ActionKind::AllowRule => Action::new(kind, "Copy the rule", text),
-            ActionKind::Setting if shown.is_empty() => Action::new(kind, "Open settings.json", ""),
             ActionKind::Setting => Action::new(kind, "Copy the setting", text),
             ActionKind::Key => {
                 let label = match shown {
@@ -181,9 +178,14 @@ impl Action {
 
 /// A rule's words (mod-pane PRD US-001, spec §5.6): templates whose
 /// `{holes}` the rule fills from structural facts only — counts, sizes,
-/// prices, durations, command shapes, file names, fixed labels — never
-/// from what the person or the model wrote. One entry per `variant`; a
-/// rule picks one with [`Advice::variant`] (`""` is the default).
+/// prices, durations, fixed labels — never from what the person or the
+/// model wrote. A command appears only as its shape
+/// ([`crate::tools::command_shape`]: argv0's name plus one subcommand for
+/// the tools that have them, no arguments, no `VAR=…`). Structural names —
+/// a file's basename, an MCP server, hook, plugin, agent type or tool
+/// name — are allowed, cut at 40 cells (`rules::ident`). One entry per
+/// `variant`; a rule picks one with [`Advice::variant`] (`""` is the
+/// default).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Words {
     pub variant: &'static str,
@@ -348,6 +350,13 @@ impl Advice {
             (_, None) => v.push(primary),
         }
         v.extend(extras);
+        // Something to fill, copy or press for every kind but `read`.
+        debug_assert!(
+            v.iter()
+                .all(|x| (x.kind == ActionKind::Advice) == x.payload.trim().is_empty()),
+            "{}: an action's payload does not fit its kind: {v:?}",
+            self.rule
+        );
         self.actions = v;
     }
 
@@ -2359,7 +2368,11 @@ mod tests {
             kinds(&mk(ActionKind::AllowRule, "Bash(gh pr view:*)", "bare")),
             ["allow_rule"]
         );
-        assert_eq!(kinds(&mk(ActionKind::Setting, "", "bare")), ["setting"]);
+        assert_eq!(
+            kinds(&mk(ActionKind::Setting, "\"async\": true", "bare")),
+            ["setting"]
+        );
+        assert_eq!(kinds(&mk(ActionKind::Setting, "", "bare")), ["read"]);
         assert_eq!(
             kinds(&mk(ActionKind::Slash, "/compact ", "bare")),
             ["slash"]

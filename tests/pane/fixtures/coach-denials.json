@@ -82,7 +82,7 @@
         "payload": "/compact "
       }
     ],
-    "body": "At 720k tokens every call re-reads the whole context: about $0.37 a call and $5.61 a turn at this session's 15 calls per turn, against $0.96 a turn at 100k. The next 30 calls cost about $11.2. At the next clean stop, /compact with a focus, or a hand-off note and /clear, brings it back down.",
+    "body": "At 720k tokens every call re-reads the whole context: about $0.37 a call and $5.61 a turn at this session's 15 calls per turn, against $0.96 a turn at 100k. The next 30 calls cost about $11.2. At the next clean stop: /compact with a focus, or a hand-off note and /clear, brings it back down.",
     "class": "NEXT",
     "evidence": [
       "15 calls per turn on this session · next 30 calls ≈$11"

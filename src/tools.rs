@@ -224,37 +224,113 @@ pub enum Failure {
     CommandNotFound,
     /// git outside a repository.
     NotARepo,
+    /// git over SSH: the key was refused.
+    PublicKeyRefused,
 }
 
 impl Failure {
-    /// Classify a failed result's text; `None` when no marker matches.
-    pub fn classify(text: &str) -> Option<Failure> {
+    /// Classify a failed shell call's text by the command that ran
+    /// (`shape`, [`command_shape`]): gh's and git's markers only on gh and
+    /// git; `None` when no marker matches.
+    pub fn classify(text: &str, shape: &str) -> Option<Failure> {
         let t = text.to_ascii_lowercase();
         let has = |m: &[&str]| m.iter().any(|m| t.contains(m));
+        let argv0 = shape.split(' ').next().unwrap_or("");
+        let (gh, git) = (argv0 == "gh", argv0 == "git");
         Some(
-            if has(&["no pull requests found", "no open pull requests"]) {
+            if gh && has(&["no pull requests found", "no open pull requests"]) {
                 Failure::NoPr
-            } else if has(&["non-fast-forward", "fetch first", "updates were rejected"]) {
+            } else if git && has(&["non-fast-forward", "fetch first", "updates were rejected"]) {
                 Failure::RejectedNonFf
-            } else if has(&["has no upstream branch", "no upstream configured"]) {
+            } else if git && has(&["has no upstream branch", "no upstream configured"]) {
                 Failure::NoUpstream
-            } else if has(&["merge conflict", "conflict (", "fix conflicts and"]) {
+            } else if git && has(&["merge conflict", "conflict (", "fix conflicts and"]) {
                 Failure::MergeConflict
-            } else if has(&[
-                "gh auth login",
-                "authentication failed",
-                "not logged in",
-                "permission denied (publickey)",
-            ]) {
+            } else if git && has(&["permission denied (publickey)"]) {
+                Failure::PublicKeyRefused
+            } else if (gh || git)
+                && has(&["gh auth login", "authentication failed", "not logged in"])
+            {
                 Failure::NotLoggedIn
+            } else if (gh || git) && has(&["not a git repository"]) {
+                Failure::NotARepo
             } else if has(&["command not found"]) {
                 Failure::CommandNotFound
-            } else if has(&["not a git repository"]) {
-                Failure::NotARepo
             } else {
                 return None;
             },
         )
+    }
+}
+
+/// The command a shell line is about: the first `&&` segment that is not
+/// a `cd`, cut at the first `;` or `|`.
+pub fn command_core(cmd: &str) -> &str {
+    let seg = cmd
+        .split(" && ")
+        .map(str::trim)
+        .find(|s| !s.starts_with("cd ") && !s.is_empty())
+        .unwrap_or(cmd.trim());
+    seg.split([';', '|']).next().unwrap_or(seg).trim()
+}
+
+/// `TOKEN=…`: a leading environment assignment, never part of a shape.
+pub fn is_env_assignment(w: &str) -> bool {
+    w.split_once('=').is_some_and(|(k, _)| {
+        k.chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// A word that names a subcommand (`pr`, `push`, `run-tests`), not an
+/// argument: lowercase letters and dashes, not a flag, short.
+pub fn is_subcommand(w: &str) -> bool {
+    !w.is_empty()
+        && w.len() <= 20
+        && !w.starts_with('-')
+        && w.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+}
+
+/// argv0 as a name: a path reduced to its last part, cut at 24 cells.
+pub fn argv0_name(w: &str) -> String {
+    crate::ui::fmt::clip(w.rsplit('/').next().unwrap_or(w), 24)
+}
+
+/// Tools whose first word after argv0 names the command they run.
+const SUBCOMMAND_TOOLS: &[&str] = &[
+    "git", "gh", "cargo", "npm", "pnpm", "yarn", "docker", "kubectl", "go", "make", "uv", "pip",
+    "bun", "deno",
+];
+
+/// A shell command's shape for the coach's full words (mod-pane spec
+/// §5.6): argv0 as a name, leading `VAR=…` assignments dropped, plus one
+/// subcommand for the tools that have them (`gh pr`, `cargo test`,
+/// `make check`); never an argument.
+pub fn command_shape(cmd: &str) -> String {
+    let mut words = command_core(cmd)
+        .split_whitespace()
+        .skip_while(|w| is_env_assignment(w));
+    let Some(argv0) = words.next() else {
+        return String::new();
+    };
+    let name = argv0_name(argv0);
+    match words.next() {
+        Some(w) if SUBCOMMAND_TOOLS.contains(&name.as_str()) && is_subcommand(w) => {
+            format!("{name} {w}")
+        }
+        _ => name,
+    }
+}
+
+/// A call's shape for the full words: [`command_shape`] for Bash, else the
+/// tool's name (cut at 40).
+pub fn call_shape(c: &Call) -> String {
+    if c.name == "Bash" {
+        command_shape(&c.input_summary)
+    } else {
+        crate::ui::fmt::clip(&c.name, 40)
     }
 }
 
@@ -425,7 +501,9 @@ impl Stats {
                     if r.is_error {
                         c.error_class =
                             Some(ErrorClass::classify(&text, u.tool_denial_kind.is_some()));
-                        c.failure = Failure::classify(&text);
+                        c.failure = (c.name == "Bash")
+                            .then(|| Failure::classify(&text, &command_shape(&c.input_summary)))
+                            .flatten();
                     }
                     if text.contains("<persisted-output>") || text.contains("Output too large") {
                         c.truncated = true;
@@ -753,6 +831,36 @@ mod tests {
 
     fn fixture() -> Vec<Line> {
         parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl")).unwrap()
+    }
+
+    #[test]
+    fn command_shapes_keep_no_argument_and_no_assignment() {
+        for (cmd, shape) in [
+            ("gh pr view 24 --json url", "gh pr"),
+            ("TOKEN=s3cr3t API_KEY=x gh pr view SECRET-ARG", "gh pr"),
+            (
+                "cd /repo && cargo test --lib lorem_i 2>&1 | tail",
+                "cargo test",
+            ),
+            ("make check", "make check"),
+            ("npm test -- --watch", "npm test"),
+            ("/usr/local/bin/python3 -m pytest tests/", "python3"),
+            ("./scripts/release.sh v1.2.3", "release.sh"),
+            ("rm -rf build", "rm"),
+            ("git push origin HEAD", "git push"),
+            ("git -C /repo status", "git"),
+            ("FOO=1", ""),
+            ("", ""),
+        ] {
+            assert_eq!(command_shape(cmd), shape, "{cmd}");
+        }
+        // A long argv0 is cut, a long word is not a subcommand.
+        let long = format!("/opt/{} run", "x".repeat(60));
+        assert_eq!(command_shape(&long).chars().count(), 24);
+        assert_eq!(command_shape(&format!("cargo {}", "a".repeat(30))), "cargo");
+        assert!(
+            is_env_assignment("A_1=b") && !is_env_assignment("=b") && !is_env_assignment("1A=b")
+        );
     }
 
     #[test]

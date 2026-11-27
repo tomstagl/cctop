@@ -223,11 +223,13 @@ impl Rule for PermissionWaits {
             "allow {rule} (permissions.allow in settings), or approve it once with 'always'"
         );
         a.hole("count", count(ask.count, "time", "times"));
+        // The command's shape, never its arguments or an env assignment.
         a.hole(
             "shape",
-            key.trim_start_matches("Bash(")
-                .trim_end_matches(')')
-                .to_string(),
+            match key.strip_prefix("Bash(") {
+                Some(inner) => crate::tools::command_shape(inner.trim_end_matches(')')),
+                None => super::ident(key),
+            },
         );
         a.hole("wait", spoken(wait_ms));
         a.hole("rule", rule.clone());
@@ -304,7 +306,7 @@ impl Rule for LongForeground {
         a.window_turns = 5;
         a.mark = background_calls(state);
         // The command's shape, never its arguments; a bare `cd` says nothing.
-        let shape = super::outcome::prefix(call);
+        let shape = crate::tools::call_shape(call);
         a.hole(
             "what",
             if shape.is_empty() || shape == "cd" {
