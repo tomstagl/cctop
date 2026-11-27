@@ -32,8 +32,16 @@ toml = "0.8"
 
 [dev-dependencies]
 insta = "1"
+sha2 = "0.10"
 
 [profile.release]
 lto = true
 codegen-units = 1
 strip = true
+
+# plugin/hooks/charts.wasm (make wasm): small before fast, and no unwinding
+# machinery. A separate profile so the native binary is unchanged.
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+panic = "abort"
