@@ -86,6 +86,23 @@ test('every kind renders cells the Raster takes: base64 of u32 triplets, painted
   }
 });
 
+// Row identity with the TUI: Rust draws every overview chart of fixture B with
+// render_cells (the TUI's cells) and writes them in the Raster's encoding
+// (scripts/pane-fixtures.sh); the wasm's mode 1 must give the same bytes for
+// the same spec and size.
+test('the wasm draws the overview cells of fixture B exactly as the Rust side wrote them', () => {
+  const cells: { name: string; cols: number; rows: number; spec: { kind: string }; cells: string }[] = JSON.parse(
+    readFileSync(join(root, 'tests', 'pane', 'fixtures', 'overview-cells-b.json'), 'utf8'),
+  );
+  assert.ok(cells.length >= 6, 'five charts and the context bar');
+  assert.deepEqual([...new Set(cells.map((c) => c.name.split('.')[0]))].sort(), ['cache', 'context', 'cost_per_turn', 'spend', 'tool_calls']);
+  for (const c of cells) {
+    const text = ascii(render({ name: c.name, cols: c.cols, rows: c.rows, spec: c.spec }, 1, 1));
+    assert.equal(text.length, c.cells.length, `${c.name}: length`);
+    assert.equal(text, c.cells, `${c.name}: cells differ from the Rust render_cells`);
+  }
+});
+
 test('a bad spec, kind or size is refused with an empty result', () => {
   const f = fixtures[0]!;
   assert.equal(render({ ...f, cols: 0 }, 1, 0).length, 0);

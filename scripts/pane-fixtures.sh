@@ -45,6 +45,28 @@ with open(path) as f:
 EOF
 }
 
+# The overview's charts as Rust draws them (`fallback_cells`: the cells of
+# cctop_charts::render_cells at the spec's default size, in the Raster's
+# encoding), with the specs, for fixture B: tests/pane compares the wasm's
+# Raster cells for the same specs and sizes against these (row identity with
+# the TUI, which draws the same render_cells).
+if [[ "$session" == fixtures/session-b.jsonl ]]; then
+  cargo run -q -- query overview --session "$session" | python3 -c '
+import json, sys
+o = json.load(sys.stdin)
+out = []
+for c in o["charts"]:
+    r = c["fallback_cells"]
+    out.append({"name": c["id"], "spec": c["spec"], "cols": r["cols"], "rows": r["rows"], "cells": r["cells"]})
+    if "bar" in c:
+        r = c["bar_fallback_cells"]
+        out.append({"name": c["id"] + ".bar", "spec": c["bar"], "cols": r["cols"], "rows": r["rows"], "cells": r["cells"]})
+json.dump(out, sys.stdout, indent=1)
+print()
+' > "$out/overview-cells-b.json"
+  echo "$out/overview-cells-b.json"
+fi
+
 # The six moments of fixture B: name, line count, seconds after that line.
 if [[ "$session" == fixtures/session-b.jsonl ]]; then
   for moment in explore:214:0 edits:300:0 denials:761:0 waiting:788:240 cold:789:0 idle:738:240; do

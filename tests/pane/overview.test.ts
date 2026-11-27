@@ -344,8 +344,11 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
 
 // The window's composition (PRD 3): the context body's row, from the dashboard
 // object, is the TUI's row character for character; the label names the source.
+// The TUI's own body 1 is now the overview (charts); this reads the snapshot of
+// the rows it draws when the dashboard object has no overview, which is what the
+// pane still draws until the pane draws the overview (mod-pane Task 7).
 test('the context body draws the composition row identically to the TUI at 85 columns', () => {
-  const snap = readFileSync(join(repo, 'src', 'snapshots', 'cctop__theme__fixture_b_snapshots__fixture_b_console_context_85x24.snap'), 'utf8');
+  const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__console_context_rows_85x24.snap'), 'utf8');
   const tuiRow = snap.split('\n').find((l) => l.startsWith('  per /context'));
   assert.ok(tuiRow !== undefined, 'the TUI snapshot has the composition row');
   const pane = raw(build({ dashboard: fixture('dashboard-b'), body: 'context' }), 85).map((l) => l.replace(/\s+$/, ''));
