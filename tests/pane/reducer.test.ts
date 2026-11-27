@@ -411,3 +411,30 @@ test('turn.stop ends a running turn with no duration; on an idle pane it changes
   assert.equal(stopped.turn.lastReason, 'answer');
   assert.equal(reduce(done, { type: 'turn.stop', at: T0 + 5000 }), done, 'no turn running: no state change, no negative duration');
 });
+
+test('the coach view opens lights and "Up next" rows in place and remembers a fill until the next turn', () => {
+  let m = run([{ type: 'session.start', at: T0 }]);
+  assert.equal(m.coachLight, null, 'the highest light until one is pressed');
+  m = reduce(m, { type: 'coach.light', light: 'cache' });
+  assert.equal(m.coachLight, 'cache');
+  m = reduce(m, { type: 'coach.light', light: 'none' });
+  assert.equal(m.coachLight, 'none', 'every light closed');
+  assert.equal(reduce(m, { type: 'coach.light', light: 'none' }), m, 'no change, the same model');
+  // An "Up next" row toggles: open, then closed by a second press; another row takes its place.
+  m = reduce(m, { type: 'coach.next', id: 'A36' });
+  assert.equal(m.coachNext, 'A36');
+  assert.equal(reduce(m, { type: 'coach.next', id: 'A36' }).coachNext, null);
+  m = reduce(m, { type: 'coach.next', id: 'A23' });
+  assert.equal(m.coachNext, 'A23');
+  // A fill that took: kept for the card's line, gone with the next turn.
+  m = reduce(m, { type: 'coach.filled', text: '/compact ' });
+  assert.equal(m.coachFilled, '/compact ');
+  const next = reduce(m, { type: 'turn.start', at: T0 + 1000 });
+  assert.equal(next.coachFilled, null);
+  assert.equal(next.coachNext, 'A23', 'the open row stays');
+  // `/clear` rotated the session: the old nudges' state goes.
+  const a = reduce(m, { type: 'session.id', id: 's1' });
+  const rotated = reduce(a, { type: 'session.id', id: 's2' });
+  assert.equal(rotated.coachNext, null);
+  assert.equal(rotated.coachFilled, null);
+});

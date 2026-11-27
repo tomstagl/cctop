@@ -25,7 +25,7 @@ import { spoolText } from './breakdown';
 import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode, type Picture } from './charts';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
-import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
+import { coachOf, copiedText, openerFor, settingsPath, settingsScope, statusLine, type CoachActions, type LightId, type SettingsKind } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
 import { maxTurnsFor, overviewOf, pictureJobs, type Pictures } from './views/overview-charts';
@@ -678,36 +678,88 @@ function noteStop($: EngineInterface): void {
   poller?.pollNow();
 }
 
-// What the coach view's Buttons do: `fill` writes a prompt- or slash-class
-// action into the prompt box (never submits it), `snooze` asks the binary
-// (queued for the TUI while it runs) and re-polls, `why` and `light` are
-// view state.
+// What the coach view's Buttons do. None of it acts on the session: `fill`
+// drafts in the prompt box (never submits; the card then says nothing was
+// sent), `copy` puts a rule or a setting on the clipboard and says which
+// settings.json it belongs in, `openSettings` opens that file in the
+// person's editor (cctop never writes it), `snooze` and `gotIt` ask the
+// binary (queued for the TUI while it runs) and take its answer; `agents`,
+// `light` and `next` are view state.
 function coachActions($: EngineInterface): CoachActions {
   return {
-    fill: (text) => {
-      $.prompt
-        .fill({ text })
-        .then(({ isFilled }) => {
-          if (!isFilled) $.ui.toast('cctop: the prompt box is busy — the action was not filled');
-        })
-        .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
-    },
-    snooze: (rule) => {
-      const id = model.sessionId;
-      if (id === null) return;
-      $.process
-        .run(['cctop', 'query', 'coach', '--snooze', rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
-        .then((result) => {
-          if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
-          const answer = JSON.parse(result.stdout) as { snooze?: unknown };
-          if (typeof answer.snooze === 'string') $.ui.toast(`cctop: ${answer.snooze}`);
-          apply($, { type: 'query', verb: 'coach', data: answer });
-        })
-        .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
-    },
-    why: () => apply($, { type: 'coach.why', why: !model.coachWhy }),
-    light: (light: LightId) => apply($, { type: 'coach.light', light }),
+    fill: (text) => fillPrompt($, text),
+    copy: (text, kind) => copySetting($, text, kind),
+    openSettings: (kind) => openSettings($, kind),
+    snooze: (rule) => snoozeRule($, rule, '--snooze'),
+    gotIt: (rule) => snoozeRule($, rule, '--snooze-session'),
+    agents: () => selectView($, 'agents'),
+    light: (light: LightId | 'none') => apply($, { type: 'coach.light', light }),
+    next: (id) => apply($, { type: 'coach.next', id }),
   };
+}
+
+function fillPrompt($: EngineInterface, text: string): void {
+  $.prompt
+    .fill({ text })
+    .then(({ isFilled }) => {
+      if (!isFilled) {
+        $.ui.toast('cctop: the prompt box is busy — the action was not filled');
+        return;
+      }
+      apply($, { type: 'coach.filled', text });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
+}
+
+// The settings.json an action concerns: the project's for an allow rule, the
+// person's own for a setting. Read when pressed (`/cd` moves the root).
+async function settingsFile($: EngineInterface, kind: SettingsKind): Promise<string> {
+  if (settingsScope(kind) === 'project') return settingsPath('project', await $.session.root(), '');
+  const home = await $.env.get('HOME');
+  return settingsPath('user', '', typeof home === 'string' ? home : '~');
+}
+
+function copySetting($: EngineInterface, text: string, kind: SettingsKind): void {
+  Promise.all([$.ui.copy({ text }), settingsFile($, kind)])
+    .then(([copied, path]) => {
+      $.ui.toast(copied.isCopied ? copiedText(text, kind, path) : `cctop: nothing was copied (${copied.reason})`);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: copy failed: ${String(err)}`));
+}
+
+// `open` on macOS, `xdg-open` on Linux: the person's editor shows the file,
+// and what they change there is theirs. A file that is not there yet is not
+// created: the toast says so.
+function openSettings($: EngineInterface, kind: SettingsKind): void {
+  settingsFile($, kind)
+    .then(async (path) => {
+      const opener = openerFor(model.sessionFacts?.platform);
+      if (opener === null) {
+        $.ui.toast(`cctop: open ${path} in your editor`);
+        return;
+      }
+      const result = await $.process.run([opener, path], { timeoutMs: 5000 });
+      $.ui.toast(
+        result.exitCode === 0
+          ? `cctop: opened ${path} in your editor. cctop never edits it`
+          : `cctop: could not open ${path} (is it there?): open it in your editor`,
+      );
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: opening settings.json failed: ${String(err)}`));
+}
+
+function snoozeRule($: EngineInterface, rule: string, flag: '--snooze' | '--snooze-session'): void {
+  const id = model.sessionId;
+  if (id === null) return;
+  $.process
+    .run(['cctop', 'query', 'coach', flag, rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
+    .then((result) => {
+      if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
+      const answer = JSON.parse(result.stdout) as { snooze?: unknown };
+      if (typeof answer.snooze === 'string') $.ui.toast(`cctop: ${answer.snooze}`);
+      apply($, { type: 'query', verb: 'coach', data: answer });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
 }
 
 function apply($: EngineInterface, action: Action): void {

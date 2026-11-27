@@ -798,6 +798,34 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+50. **The coach card's fix prompt: fill, then Enter** (US-008).
+    Setup: the pane docked on the Coach view during a session where a
+    nudge with a fix prompt holds the slot (a failing retry loop gives
+    A38, three foreground builds of a minute A10); also one whose
+    actions are an allow rule (approve the same `gh` command three times:
+    A09) and one with a key step (A38 or A36).
+    Expected: the NOW card shows the plain name, the age and the dim rule
+    id, the headline, the body and the evidence wrapped, nothing cut
+    mid-word, also with the pane narrowed to 59 columns. Clicking any line
+    of the fix-prompt card puts the prompt in the prompt box and nothing is
+    sent: the card then says `It's in your prompt box. Nothing has been
+    sent`, and the turn starts only when you press Enter (the line goes
+    with it). With a draft or a dialog open the fill is refused with a
+    toast and the card says nothing. A key-kind card shows `1  Press Esc to
+    stop the turn` as text before its Buttons: there is no stop Button, and
+    Esc itself stops the turn. An allow rule's `Copy the rule` puts the
+    rule on the clipboard (paste it somewhere to check), `Open
+    settings.json` opens the project's `.claude/settings.json` in your
+    editor without changing it (`git diff` stays clean; a missing file is
+    reported, not created), `Put /permissions in the box` fills
+    `/permissions`. A tip's `Got it` silences it for the session. An "Up
+    next" row and each light open in place on a click and close on a
+    second; the context light shows what fills the window with its age
+    (`per Claude Code, 12s ago` once a turn has written the spool) and the
+    residency rows.
+    Claude Code version:
+    Result: pending
+
 54. **Hover readouts on the per-turn charts** (US-007).
     Setup: as item 47 or 48, body 1 open, a session with five or more
     turns.

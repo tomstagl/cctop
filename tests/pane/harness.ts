@@ -42,6 +42,8 @@ import type {
   Timer,
   UiBlitArgs,
   UiBlitResult,
+  UiCopyArgs,
+  UiCopyResult,
   UiNotifyResult,
   UiViewResult,
 } from 'claude-code';
@@ -213,6 +215,9 @@ export type FakeExtras = {
     /** Every `$.ui.blit` argument, in order; the next calls answer `blitAnswer`. */
     blits: UiBlitArgs[];
     blitAnswer: UiBlitResult;
+    /** Every `$.ui.copy` text, in order; the next calls answer `copyAnswer`. */
+    copies: string[];
+    copyAnswer: { current: UiCopyResult };
   };
   /** Every path `$.wasm.compile` was asked for, in order. */
   wasm: { compiles: string[] };
@@ -309,6 +314,8 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const viewAnswer: UiViewResult = {};
   const blits: UiBlitArgs[] = [];
   const blitAnswer: UiBlitResult = {};
+  const copies: string[] = [];
+  const copyAnswer: { current: UiCopyResult } = { current: { isCopied: true } };
   const compiles: string[] = [];
   const live: AgentInfo[] = [];
 
@@ -350,6 +357,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       blit: async (args: UiBlitArgs): Promise<UiBlitResult> => {
         blits.push(args);
         return { ...blitAnswer };
+      },
+      copies,
+      copyAnswer,
+      copy: async ({ text }: UiCopyArgs): Promise<UiCopyResult> => {
+        copies.push(text);
+        return { ...copyAnswer.current };
       },
       views,
       viewAnswer,
@@ -393,6 +406,8 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       scripted,
       messages: async () => [],
       cwd: async () => scripted.cwd,
+      // The project root: the session's directory here.
+      root: async () => scripted.cwd,
       model: async () => scripted.model,
       turns: async () => scripted.turns,
       id: async () => scripted.id,

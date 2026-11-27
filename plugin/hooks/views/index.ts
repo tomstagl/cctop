@@ -25,7 +25,7 @@ export function renderView(
   if (placement !== 'dock') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
     case 'coach':
-      return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach);
+      return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach, now);
     case 'tools':
       return renderTools(model, el, columns, now);
     case 'agents':

@@ -171,14 +171,7 @@ pub fn build_with(state: &State, opts: &Options) -> Overview {
         n => format!("last {n} turns"),
     });
     let per_turn = PerTurn::of(state, shown);
-    let footer = match state.cost_combined() {
-        Some(c) => format!(
-            "spent so far {}{} · what this session would cost at API prices",
-            if c.approx { "≈" } else { "" },
-            money(c.usd)
-        ),
-        None => "spent so far — (no price for this model)".to_string(),
-    };
+    let footer = spend_footer(state);
     let mut charts = vec![
         context(state),
         spend(state, opts.chain_usd),
@@ -194,6 +187,19 @@ pub fn build_with(state: &State, opts: &Options) -> Overview {
         schema: 1,
         charts,
         footer,
+    }
+}
+
+/// `spent so far $14.82 · what this session would cost at API prices`: the
+/// footer of the overview and of the coach, one sentence on both.
+pub fn spend_footer(state: &State) -> String {
+    match state.cost_combined() {
+        Some(c) => format!(
+            "spent so far {}{} · what this session would cost at API prices",
+            if c.approx { "≈" } else { "" },
+            money(c.usd)
+        ),
+        None => "spent so far — (no price for this model)".to_string(),
     }
 }
 
@@ -366,20 +372,9 @@ fn context(state: &State) -> Chart {
         prev = Some(p.y);
     }
     // The composition from Claude Code's own count (PRD 3), with its age.
-    let mut note = None;
+    let note = crate::dashboard::composition_note(state);
     let mut bar_legend = Vec::new();
     let bar = crate::dashboard::Composition::of(state).map(|c| {
-        if let Some((_, _, _, at)) = state.current_context_capture() {
-            note = Some(if at > 0 {
-                format!(
-                    "{}, {} ago",
-                    c.source,
-                    crate::coach::ago(state.clock_ms().saturating_sub(at))
-                )
-            } else {
-                c.source.to_string()
-            });
-        }
         let mut bar = ChartSpec::new(
             Kind::StackedBar,
             axis(0.0, v.window as f64, "tokens"),
@@ -1511,7 +1506,11 @@ mod tests {
 
     #[test]
     fn footer_names_the_spend_at_api_prices() {
-        let o = build(&fixture("fixtures/session-b.jsonl"));
+        let s = fixture("fixtures/session-b.jsonl");
+        let o = build(&s);
+        // The coach carries the same sentence for the pane's coach card.
+        let e = crate::advisor::Engine::for_state(&s);
+        assert_eq!(crate::coach::snapshot(&s, &e).footer, o.footer);
         assert!(
             o.footer.starts_with("spent so far $")
                 && o.footer

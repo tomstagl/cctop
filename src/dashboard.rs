@@ -316,6 +316,23 @@ impl Composition {
     }
 }
 
+/// Where the composition was read and how long ago (`per Claude Code, 12s
+/// ago`), the label every surface draws it with (PRD 3); `None` without a
+/// capture.
+pub fn composition_note(state: &State) -> Option<String> {
+    let c = Composition::of(state)?;
+    let (_, _, _, at) = state.current_context_capture()?;
+    Some(if at > 0 {
+        format!(
+            "{}, {} ago",
+            c.source,
+            coach::ago(state.clock_ms().saturating_sub(at))
+        )
+    } else {
+        c.source.to_string()
+    })
+}
+
 /// The act line: the coach's slot, whole. A pending wait pre-empts the
 /// nudge; with neither, the state line's tokens; with nothing running,
 /// the first turn's start line or the quiet row.
@@ -2539,6 +2556,19 @@ mod tests {
         );
         assert_eq!(c.line, "per Claude Code sys 8.0k msgs 60k free 850k …");
         assert!(c.line.chars().count() <= coach::WIDTH);
+        // Its age labels it on every surface (PRD 3): the dashboard query
+        // carries the same note the overview's context chart draws.
+        s.clock_override = true;
+        s.now_ms = at + 12_000;
+        assert_eq!(
+            composition_note(&s).as_deref(),
+            Some("per Claude Code, 12s ago")
+        );
+        assert_eq!(
+            crate::query::dashboard(&s)["composition_note"],
+            "per Claude Code, 12s ago"
+        );
+        assert!(composition_note(&fixture_at("a", usize::MAX).0).is_none());
     }
 
     /// Deferred tools are not in the window: a spool's `deferred` row is in

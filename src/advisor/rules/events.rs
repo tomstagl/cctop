@@ -225,6 +225,22 @@ impl Rule for PermissionWaits {
             "{} permission prompts this session; the model idles while it waits",
             waits
         );
+        // With traces (PRD 7): who decided every wait, so the card shows how
+        // many were the person's own.
+        if let Some((all, groups)) = state.permission_split() {
+            let mut split: Vec<String> = groups.iter().map(|(g, n)| format!("{g} {n}")).collect();
+            // Waits no span has joined (yet): not known, and counted as the
+            // person's own above.
+            let known: usize = groups.iter().map(|(_, n)| n).sum();
+            if all > known {
+                split.push(format!("not known {}", all - known));
+            }
+            a.evidence_rows.push(format!(
+                "who decided the {}: {}",
+                count(all, "permission wait", "permission waits"),
+                split.join(" · ")
+            ));
+        }
         a.action = format!(
             "allow {rule} (permissions.allow in settings), or approve it once with 'always'"
         );

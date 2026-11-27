@@ -718,6 +718,7 @@ pub fn dashboard(state: &State) -> Value {
             .map(|(name, tokens)| json!({"name": name, "tokens": tokens}))
             .collect();
         v["composition_source"] = json!(c.source);
+        v["composition_note"] = json!(crate::dashboard::composition_note(state));
         v["composition_metric_id"] = json!("context_composition");
     }
     // Absent for a session without a `--max-budget-usd` budget.

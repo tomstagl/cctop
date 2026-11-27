@@ -2757,6 +2757,7 @@
     }
   ],
   "composition_metric_id": "context_composition",
+  "composition_note": "per /context, 2m ago",
   "composition_source": "per /context",
   "cost_combined": {
     "approx": false,
