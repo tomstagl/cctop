@@ -298,6 +298,13 @@ test('an allow rule copies, opens settings.json and fills /permissions; the card
   ]);
 });
 
+test('the permission card shows who decided only when the object carries the split (PRD 7)', () => {
+  const none = { ...A09, evidence: [A09.evidence[0]] };
+  const text = flat(card(draw(build(withNudge(none)), 72).rows));
+  assert.ok(text.includes('5 permission prompts this session'), text);
+  assert.ok(!text.includes('who decided'), text);
+});
+
 test('an MCP elicitation is a NOW card naming the server (PRD 5)', () => {
   // A41's words for an open elicitation (src/advisor/rules/outcome.rs a41_names_the_mcp_server_that_is_asking).
   const raw = withNudge({

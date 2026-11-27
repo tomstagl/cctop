@@ -370,6 +370,16 @@ test('a status-bearing header renders row-identical on both surfaces at 80, 120 
   assert.doesNotMatch(rows.get(120) ?? '', /remote/);
 });
 
+// Lineage (PRD 4): `from <id8> · <via>` rides in the object's header line and
+// is drawn with it; a session that started fresh has no such words.
+test('the lineage words are in the header when the object carries them, and absent without', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 200)[0], /from [0-9a-f]{8}/);
+  dash.header.from = 'from 65b51d4c · subprocess';
+  dash.header.line = dash.header.line.replace(' · v2.1.270', ' · from 65b51d4c · subprocess · v2.1.270');
+  assert.match(raw(build({ dashboard: dash }), 200)[0], /from 65b51d4c · subprocess/);
+});
+
 // The hooks badge (PRD 5): an old `cctop install` lacks events, the object's
 // `header.hooks` is `hooks: 7 new`, and both surfaces draw it between the
 // facts and the phase cell. The TUI's insta snapshot is the reference row.

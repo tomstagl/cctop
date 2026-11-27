@@ -1519,4 +1519,265 @@ mod tests {
             o.footer
         );
     }
+
+    // -- PRD 1–7 contributions, present and absent (US-011) ------------------
+    //
+    // Every element below is drawn from the overview object by both surfaces,
+    // so the object is where "present when its data is, gone when it is not"
+    // is pinned; src/ui/overview_view.rs and tests/pane/overview-charts.test.ts
+    // check that each surface draws what the object carries.
+
+    fn legends(c: &Chart) -> Vec<&str> {
+        c.legend.iter().map(|l| l.text.as_str()).collect()
+    }
+
+    fn markers<'a>(c: &'a Chart, kind: &str) -> Vec<&'a cctop_charts::Marker> {
+        c.spec.markers.iter().filter(|m| m.kind == kind).collect()
+    }
+
+    fn first_turn_ms(s: &State) -> i64 {
+        crate::metrics::cost::parse_ts_ms(s.agg.turns[0].started_at.as_deref().unwrap()).unwrap()
+    }
+
+    /// PRD 1: the located cause in the cache readouts, `prevent[]`, and the
+    /// placed rows' source — gone on a session with no located miss.
+    #[test]
+    fn sweep_prd1_located_cause_and_prevent() {
+        let o = build(&fixture("fixtures/session-r.jsonl"));
+        let c = chart(&o, "cache");
+        assert!(!c.prevent.is_empty());
+        assert!(c
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("rebuilt because")));
+        let cost = chart(&o, "cost_per_turn");
+        assert!(cost
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("The cache was rebuilt: ")));
+        let plain = build(&fixture("fixtures/session-b.jsonl"));
+        let c = chart(&plain, "cache");
+        assert!(c.prevent.is_empty());
+        assert!(!c
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("rebuilt because")));
+        assert!(!chart(&plain, "cost_per_turn")
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("The cache was rebuilt: ")));
+    }
+
+    /// PRD 2: the `>200k` marker on cost per turn needs the status line's
+    /// flag; without it no marker, legend row or sentence.
+    #[test]
+    fn sweep_prd2_over_200k_marker() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        let c = build(&s);
+        let cost = chart(&c, "cost_per_turn");
+        assert!(markers(cost, "over_200k").is_empty());
+        assert!(!legends(cost).contains(&"past 200k"));
+        assert!(!cost.readouts.iter().any(|r| r.text.contains("past 200k")));
+        s.status_facts.exceeds_200k_tokens = true;
+        let o = build(&s);
+        let cost = chart(&o, "cost_per_turn");
+        assert!(!markers(cost, "over_200k").is_empty());
+        assert!(legends(cost).contains(&"past 200k"));
+        assert!(cost
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("of context, past 200k.")));
+    }
+
+    /// PRD 3: the composition bar needs a `/context` capture (fixture D has
+    /// one), and carries its age in the note.
+    #[test]
+    fn sweep_prd3_composition_bar() {
+        let o = build(&fixture("fixtures/session-d.jsonl"));
+        let c = chart(&o, "context");
+        assert!(c.bar.is_some() && c.bar_fallback_cells.is_some());
+        assert!(!c.bar_legend.is_empty());
+        assert!(c
+            .note
+            .as_deref()
+            .is_some_and(|n| n.starts_with("per /context")));
+        let none = build(&fixture("fixtures/session-a.jsonl"));
+        let c = chart(&none, "context");
+        assert!(c.bar.is_none() && c.bar_fallback_cells.is_none());
+        assert!(c.bar_legend.is_empty() && c.note.is_none());
+    }
+
+    /// PRD 4: thinking drops on the cache strip, the budget line with its
+    /// halt ETA, the chain total.
+    #[test]
+    fn sweep_prd4_thinking_budget_and_chain() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        let o = build(&s);
+        assert!(markers(chart(&o, "cache"), "thinking_dropped").is_empty());
+        assert!(!legends(chart(&o, "cache")).contains(&"thinking dropped"));
+        let spend = chart(&o, "spend");
+        assert!(spend.spec.thresholds.iter().all(|t| t.name != "budget"));
+        assert!(!legends(spend).iter().any(|l| l.starts_with("budget")));
+        assert!(!spend
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("sessions it came from")));
+
+        let last = s.agg.turns.last().unwrap().number;
+        s.agg.turns.last_mut().unwrap().thinking_dropped_blocks = 3;
+        s.budget_usd = Some((10.0, 25.0, 15.0));
+        let o = build_with(
+            &s,
+            &Options {
+                max_turns: 50,
+                chain_usd: Some(99.0),
+                fallback_cells: false,
+            },
+        );
+        let cache = chart(&o, "cache");
+        assert_eq!(markers(cache, "thinking_dropped").len(), 1);
+        assert_eq!(markers(cache, "thinking_dropped")[0].x, last as f64);
+        assert!(legends(cache).contains(&"thinking dropped"));
+        assert!(cache
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("Thinking dropped: 3 blocks.")));
+        let spend = chart(&o, "spend");
+        assert!(spend
+            .spec
+            .thresholds
+            .iter()
+            .any(|t| t.name == "budget" && t.y == 25.0));
+        assert!(legends(spend).iter().any(|l| l.starts_with("budget $25")));
+        assert!(spend
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("with the sessions it came from")));
+    }
+
+    /// PRD 4: a session on a budget says when it halts at its rate; gone without one.
+    #[test]
+    fn sweep_prd4_halt_eta() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        s.budget_usd = Some((10.0, 25.0, 15.0));
+        let spend_legends = |s: &State| {
+            legends(chart(&build(s), "spend"))
+                .iter()
+                .map(|l| l.to_string())
+                .collect::<Vec<_>>()
+        };
+        let with_rate = spend_legends(&s);
+        let halts = with_rate.iter().find(|l| l.starts_with("budget")).unwrap();
+        assert!(halts.starts_with("budget $25.00 · halts in ~"), "{halts}");
+        s.budget_usd = None;
+        assert!(!spend_legends(&s).iter().any(|l| l.contains("halts in")));
+    }
+
+    /// PRD 5: "after a settings change" on the miss that followed one.
+    #[test]
+    fn sweep_prd5_settings_change_mark() {
+        let mut s = fixture("fixtures/session-r.jsonl");
+        assert!(!chart(&build(&s), "cache")
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("after a settings change")));
+        s.requests.misses_mut()[0].after_config_change = Some("project_settings".into());
+        let o = build(&s);
+        assert!(chart(&o, "cache")
+            .readouts
+            .iter()
+            .any(|r| r.text.contains(", after a settings change")));
+    }
+
+    /// PRD 5: skill shell commands as their own heat-map row.
+    #[test]
+    fn sweep_prd5_skill_shell_row() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        let none = build(&s);
+        let tools = chart(&none, "tool_calls");
+        assert!(tools.spec.series.iter().all(|r| r.name != "skill shell"));
+        assert!(!legends(tools).contains(&"skill shell commands"));
+        let at = first_turn_ms(&s) + 5_000;
+        let mut ev = crate::hooks::HookEvent {
+            at,
+            event: "PreSkillShellCommand".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"command_name": "review", "tool_input": {"command": "git diff"}}),
+        };
+        s.apply_hook(&ev);
+        ev.at += 1;
+        s.apply_hook(&ev);
+        let o = build(&s);
+        let tools = chart(&o, "tool_calls");
+        assert!(tools.spec.series.iter().any(|r| r.name == "skill shell"));
+        assert!(legends(tools).contains(&"skill shell commands"));
+        assert!(tools
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("2 skill shell")));
+    }
+
+    /// PRD 7: retries in the cost-per-turn readouts, from the trace spans.
+    #[test]
+    fn sweep_prd7_retries() {
+        use crate::ui::state::tests_support::llm_span;
+        let mut s = fixture("fixtures/session-b.jsonl");
+        assert!(!chart(&build(&s), "cost_per_turn")
+            .readouts
+            .iter()
+            .any(|r| r.text.contains("retr")));
+        let turn = s
+            .agg
+            .turns
+            .iter()
+            .find(|t| !t.request_ids.is_empty())
+            .unwrap()
+            .clone();
+        s.apply_otel(&crate::otel::SessionData {
+            spans: vec![llm_span(&turn.request_ids[0], 3, 16)].into(),
+            ..Default::default()
+        });
+        let o = build(&s);
+        let r = chart(&o, "cost_per_turn")
+            .readouts
+            .iter()
+            .find(|r| r.x == turn.number as f64)
+            .unwrap();
+        assert!(r.text.contains(" 2 retries, +3.0 s."), "{}", r.text);
+    }
+
+    /// PRD 7: a hook overhead over 500 ms a turn is the tool-calls verdict.
+    #[test]
+    fn sweep_prd7_hook_overhead_verdict() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        assert!(!chart(&build(&s), "tool_calls")
+            .verdict
+            .text
+            .contains("Hooks add"));
+        let start_ns = ((first_turn_ms(&s) + 1_000) as u64) * 1_000_000;
+        s.apply_otel(&crate::otel::SessionData {
+            spans: vec![crate::otel::Span::Hook {
+                ids: crate::otel::SpanIds {
+                    trace_id: "tr".into(),
+                    span_id: "h1".into(),
+                    parent_span_id: None,
+                    start_ns,
+                    end_ns: start_ns + 900_000_000,
+                },
+                hook_event: Some("Stop".into()),
+                hook_name: None,
+                num_hooks: Some(1),
+                duration_ms: Some(900),
+                num_blocking: None,
+            }]
+            .into(),
+            ..Default::default()
+        });
+        let o = build(&s);
+        let v = &chart(&o, "tool_calls").verdict;
+        assert_eq!(v.level, verdict::Level::Watch, "{v:?}");
+        assert!(v.text.starts_with("Hooks add 0.9 s"), "{}", v.text);
+    }
 }
