@@ -79,7 +79,13 @@ impl Panel for TurnPanel {
                 dim,
             ));
         }
-        if let Some(c) = &state.cost.authoritative {
+        let traced_retries = turn.and_then(|t| state.turn_retries(t));
+        if let Some((n, ms)) = traced_retries {
+            l1.push(Span::styled(
+                format!(" · retries {n} (+{})", fmt::added_s(ms)),
+                amber,
+            ));
+        } else if let Some(c) = &state.cost.authoritative {
             let retry = c
                 .total_api_duration
                 .saturating_sub(c.total_api_duration_without_retries);
@@ -439,5 +445,26 @@ mod tests {
         early.state.open = Some(4);
         let out = render_to_string(&early, 64, 60);
         assert!(out.contains("hooks 1 runs · 60ms"), "{out}");
+    }
+
+    #[test]
+    fn turn_panel_shows_traced_retries_and_the_added_time() {
+        let mut app = fixture_app();
+        app.state.open = Some(4);
+        let before = render_to_string(&app, 100, 60);
+        assert!(before.contains("retries 0:02"), "{before}");
+        let t = app.state.agg.current_turn().unwrap().clone();
+        let rid = t
+            .request_ids
+            .first()
+            .cloned()
+            .expect("fixture has requestIds");
+        app.state.apply_otel(&crate::otel::SessionData {
+            spans: vec![crate::ui::state::tests_support::llm_span(&rid, 3, 16)].into(),
+            ..Default::default()
+        });
+        let out = render_to_string(&app, 100, 60);
+        assert!(out.contains("retries 2 (+13 s)"), "{out}");
+        assert!(!out.contains("retries 0:02"), "{out}");
     }
 }

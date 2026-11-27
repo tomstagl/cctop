@@ -59,6 +59,15 @@ pub fn duration_ms(ms: i64) -> String {
     }
 }
 
+/// Added time in seconds: `14 s`, `2.4 s`.
+pub fn added_s(ms: u64) -> String {
+    if ms < 10_000 {
+        format!("{:.1} s", ms as f64 / 1000.0)
+    } else {
+        format!("{} s", (ms + 500) / 1000)
+    }
+}
+
 /// Short duration for tables: `38ms`, `1.4s`, `2:05`.
 pub fn short_ms(ms: u64) -> String {
     if ms < 1_000 {

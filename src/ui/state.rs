@@ -1504,6 +1504,33 @@ impl State {
         }
     }
 
+    /// Retries in a turn, from `llm_request` spans joined to the turn's
+    /// responses by `requestId` (= `gen_ai.response.id`): the extra attempts
+    /// and the time they added (request end − its last attempt event).
+    /// `None` without traces or when nothing was retried.
+    pub fn turn_retries(&self, turn: &crate::metrics::usage::Turn) -> Option<(u32, u64)> {
+        let o = self.otel.as_ref()?;
+        let (mut n, mut ns) = (0u32, 0u64);
+        for sp in &o.spans {
+            if let crate::otel::Span::LlmRequest {
+                ids,
+                response_id: Some(r),
+                attempts,
+                attempt_times_ns,
+                ..
+            } = sp
+            {
+                if *attempts > 1 && turn.request_ids.iter().any(|q| q == r) {
+                    n += attempts - 1;
+                    if let Some(last) = attempt_times_ns.last() {
+                        ns += ids.end_ns.saturating_sub(*last);
+                    }
+                }
+            }
+        }
+        (n > 0).then_some((n, ns / 1_000_000))
+    }
+
     /// Who decided the permission waits: `(waits, [(group, count)])`, zero
     /// groups omitted. `None` without trace spans (every surface then reads
     /// as before). With hooks, waits are the measured records that a span
@@ -2709,6 +2736,30 @@ pub mod tests_support {
         s
     }
 
+    /// An `llm_request` span for `response_id` with `attempts` attempt events
+    /// at 1 s, 2 s, … after a start of 0, ending at `end_s`.
+    pub fn llm_span(response_id: &str, attempts: u32, end_s: u64) -> crate::otel::Span {
+        crate::otel::Span::LlmRequest {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("llm-{response_id}"),
+                parent_span_id: None,
+                start_ns: 0,
+                end_ns: end_s * 1_000_000_000,
+            },
+            model: None,
+            query_source: None,
+            response_id: Some(response_id.into()),
+            attempts,
+            attempt_times_ns: (1..=attempts as u64).map(|i| i * 1_000_000_000).collect(),
+            ttft_ms: None,
+            first_content_ms: None,
+            status_code: None,
+            success: Some(true),
+            duration_ms: None,
+        }
+    }
+
     /// Tool span `tool-i` (carrying `t{i}`) with a permission span under it.
     pub fn trace_spans(sources: &[&str]) -> Vec<crate::otel::Span> {
         use crate::otel::{Span, SpanIds};
@@ -3262,17 +3313,13 @@ mod tests {
         // The auto-allowed call (config, zero duration) is not a wait.
         for sp in &mut spans {
             if let Span::Permission {
-                ids,
-                duration_ms,
-                source,
-                ..
+                ids, duration_ms, ..
             } = sp
             {
                 if ids.span_id == "perm-1" {
                     ids.end_ns = ids.start_ns;
                     *duration_ms = Some(0);
                 }
-                let _ = source;
             }
         }
         s.apply_otel(&crate::otel::SessionData {
@@ -3283,6 +3330,86 @@ mod tests {
         assert_eq!(
             s.permission_split(),
             Some((2, vec![("you", 1), ("rule", 1)]))
+        );
+    }
+
+    fn two_responses() -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(
+            &Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:00Z","message":{"role":"user","content":"go"}}"#)
+                .unwrap(),
+        );
+        for (id, req) in [("m1", "req_1"), ("m2", "req_2")] {
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","requestId":"{req}","message":{{"id":"{id}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":1}}}}}}"#
+            ))
+            .unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn retries_join_by_request_id_and_sum_the_time_they_added() {
+        use super::tests_support::llm_span;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        assert_eq!(turn.request_ids, ["req_1", "req_2"]);
+        assert_eq!(s.turn_retries(&turn), None, "no traces: nothing");
+        let spans = vec![
+            llm_span("req_1", 3, 20), // 2 retries; last attempt at 3 s → +17 s
+            llm_span("req_2", 2, 12), // 1 retry; last attempt at 2 s → +10 s
+            llm_span("req_9", 4, 99), // another turn's request: ignored
+        ];
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+        assert_eq!(s.turn_retries(&turn), Some((3, 27_000)));
+    }
+
+    #[test]
+    fn a_request_with_zero_attempt_events_is_one_attempt_and_no_retry() {
+        use super::tests_support::llm_span;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        let mut zero = llm_span("req_1", 1, 5);
+        if let crate::otel::Span::LlmRequest {
+            attempts,
+            attempt_times_ns,
+            ..
+        } = &mut zero
+        {
+            *attempts = 1;
+            attempt_times_ns.clear();
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: vec![zero, llm_span("req_2", 1, 5)].into(),
+            ..Default::default()
+        });
+        assert_eq!(s.turn_retries(&turn), None);
+    }
+
+    #[test]
+    fn unjoined_user_keyed_waits_still_count_as_the_persons_own() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        use crate::advisor::rules::events::PermissionWaits;
+        use crate::advisor::Rule;
+        let mut s = state_with_waits(3);
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert_eq!(
+            s.session
+                .permission_records
+                .iter()
+                .filter(|r| r.source.is_some())
+                .count(),
+            1
+        );
+        assert!(
+            PermissionWaits.evaluate(&s).is_some(),
+            "3 waits, only 1 joined"
         );
     }
 }
