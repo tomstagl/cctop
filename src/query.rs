@@ -585,7 +585,7 @@ pub fn agents(state: &State) -> Value {
             .map(|l| json!({
                 "concurrent": m(l.concurrent, "count", "agent_limits", false),
                 "depth": m(l.depth, "count", "agent_limits", false),
-                "background": m(l.is_background_enabled, "bool", "agent_limits", false),
+                "background": l.is_background_enabled,
                 "line": crate::ui::agents_view::limits_text(totals.running, l),
             })),
         "workflows": workflows,
@@ -1159,8 +1159,7 @@ mod tests {
         assert_eq!(l["concurrent"]["value"], 10);
         assert_eq!(l["concurrent"]["metric_id"], "agent_limits");
         assert_eq!(l["depth"]["value"], 2);
-        assert_eq!(l["background"]["value"], false);
-        assert_eq!(l["background"]["metric_id"], "agent_limits");
+        assert_eq!(l["background"], false, "a plain bool, no metric tag");
         let running = agents(&st)["agents"]
             .as_array()
             .unwrap()

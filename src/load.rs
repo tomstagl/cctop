@@ -29,6 +29,20 @@ pub fn fixture_path(session: &str) -> Option<PathBuf> {
     with_ext.is_file().then_some(with_ext)
 }
 
+/// The discover key of a `--session` value. A `.jsonl` path that is not an
+/// existing file (the pane passes the transcript path of a session whose
+/// first line is not written yet) names its session by the file stem, so the
+/// registry still resolves it; anything else is the key as given.
+fn session_key(session: &str) -> String {
+    let p = Path::new(session);
+    if p.extension().is_some_and(|x| x == "jsonl") && !p.is_file() {
+        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+            return stem.to_string();
+        }
+    }
+    session.to_string()
+}
+
 /// What a transcript path the pane passes (`$.session.info().transcriptPath`)
 /// says of its session: the live registry entry whose id is the file's stem,
 /// else, for a file under `~/.claude/projects`, an ended session keeping that
@@ -70,7 +84,7 @@ pub fn resolve(t: &Target) -> Result<(PathBuf, SessionInfo), DiscoverError> {
         let info = real_transcript_info(&p).unwrap_or_else(|| SessionInfo::from_fixture(&p));
         return Ok((p, info));
     }
-    let q = Query::from_env(t.session.clone(), t.cwd.clone());
+    let q = Query::from_env(t.session.as_deref().map(session_key), t.cwd.clone());
     match discover::resolve_system(&q, t.wait) {
         Ok(s) => Ok((crate::transcript_path(&s), SessionInfo::from_registry(&s))),
         // The key names no live session, but its transcript may still be on
@@ -345,6 +359,48 @@ mod tests {
         assert!(real_transcript_info_in(&dead, Some(reg.clone()), None).is_none());
         let ended = real_transcript_info_in(&dead, Some(reg), Some(root)).unwrap();
         assert!(!ended.alive);
+    }
+
+    #[test]
+    fn a_missing_transcript_path_resolves_by_its_stem_through_the_registry() {
+        struct NoEnv;
+        impl discover::Env for NoEnv {
+            fn tmux_panes(&self) -> Vec<(String, u32)> {
+                Vec::new()
+            }
+            fn tty_of(&self, _: u32) -> Option<String> {
+                None
+            }
+            fn is_alive(&self, _: &crate::registry::Session) -> bool {
+                true
+            }
+        }
+        let root = projects("missing");
+        let reg = root.join("sessions");
+        fs::create_dir_all(&reg).unwrap();
+        fs::write(
+            reg.join("4194001.json"),
+            format!(r#"{{"pid":4194001,"sessionId":"{A}","cwd":"/tmp/fresh","startedAt":1}}"#),
+        )
+        .unwrap();
+        // The transcript is not written yet: the file does not exist.
+        let p = root.join("-x").join(format!("{A}.jsonl"));
+        assert!(!p.exists());
+        let key = session_key(p.to_str().unwrap());
+        assert_eq!(key, A);
+        let q = Query {
+            session: Some(key),
+            ..Query::default()
+        };
+        let s = discover::resolve(&crate::registry::list(&reg), &q, &NoEnv).unwrap();
+        assert_eq!(s.session_id, A);
+        // An existing file and a plain id are left alone.
+        let there = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        assert_eq!(
+            session_key(there.to_str().unwrap()),
+            there.to_str().unwrap()
+        );
+        assert_eq!(session_key(A), A);
     }
 
     const A: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
