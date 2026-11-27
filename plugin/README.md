@@ -135,11 +135,9 @@ Code version the module's contract was generated from (`2.1.332` for plugin
 0.11.0; 2.1.273 added a `vscode` render surface, 2.1.274 `$.agent.register`
 and absolute `Box` placement, 2.1.278 an `Image` element, `$.prompt.read()`
 and a bytes form of `$.fs.read`, 2.1.284 `$.process.spawn` and a placement
-result from `$.ui.open`, 2.1.332 a `widget`
-placement — none moved anything the pane calls).
-Update with
-`claude plugin marketplace update cctop && claude plugin update
-cctop@cctop`, then restart Claude Code.
+result from `$.ui.open`, 2.1.332 a `widget` placement — none moved
+anything the pane calls). Update with `claude plugin marketplace update
+cctop && claude plugin update cctop@cctop`, then restart Claude Code.
 
 ### When the contract moves
 

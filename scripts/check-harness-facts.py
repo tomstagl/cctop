@@ -191,40 +191,66 @@ def declared(text: str, name: str, before: int) -> str | None:
     return ms[-1].group(1) if ms else None
 
 
+def const_value(text: str, name: str) -> str | None:
+    """The numeric literal a minified `var …,name=VALUE` assigns anywhere in
+    the bundle (the first such declaration; these names are unique)."""
+    m = re.search(r"(?<![A-Za-z0-9_$.])" + re.escape(name) + r"=([0-9.e]+)(?=[,;])", text)
+    return m.group(1) if m else None
+
+
 def probe_autocompact(text: str, facts: str, r: Report) -> None:
     want = rust_consts(facts, "autocompact")
-    # `var X=13000;var Y=3000,Z=0.2;function W(e){return typeof e==="number"
-    # &&Number.isFinite(e)&&e>=0&&e<1?e:null}` — the buffer, the block
-    # margin and the precompute buffer fraction, declared together.
-    m = re.search(
-        rf"var {ID}=(\d+);var {ID}=(\d+),{ID}=(0\.\d+);"
-        rf'function {ID}\(({ID})\)\{{return typeof \4==="number"&&Number\.isFinite\(\4\)&&\4>=0&&\4<1',
-        text,
-    )
-    r.add("autocompact::BUFFER_TOKENS", num(want["BUFFER_TOKENS"]), num(m.group(1)) if m else None, "the threshold is effective − this")
-    r.add("autocompact::BLOCK_TOKENS", num(want["BLOCK_TOKENS"]), num(m.group(2)) if m else None, "blocked at window − this")
+    guard = rf'function {ID}\(({ID})\)\{{return typeof \%d==="number"&&Number\.isFinite\(\%d\)&&\%d>=0&&\%d<1'
+    # Up to 2.1.284: `var X=13000;var Y=3000,Z=0.2;function W(e){return
+    # typeof e==="number"&&…&&e<1` — the buffer, the block margin and the
+    # precompute buffer fraction, declared together. From 2.1.332 the warn
+    # band joins them: `var X=13000,Y=20000,Z=3000,F=0.2;function W(e){…`.
+    buffer = block = fraction = warn = None
+    m = re.search(rf"var {ID}=(\d+);var {ID}=(\d+),{ID}=(0\.\d+);" + guard.replace("\\%d", "\\4").replace("%d", "4"), text)
+    if m:
+        buffer, block, fraction = m.group(1), m.group(2), m.group(3)
+    else:
+        m = re.search(rf"var {ID}=(\d+),{ID}=(\d+),{ID}=(\d+),{ID}=(0\.\d+);" + guard.replace("\\%d", "\\5").replace("%d", "5"), text)
+        if m:
+            buffer, warn, block, fraction = m.group(1), m.group(2), m.group(3), m.group(4)
+    r.add("autocompact::BUFFER_TOKENS", num(want["BUFFER_TOKENS"]), num(buffer) if buffer else None, "the threshold is effective − this")
+    r.add("autocompact::BLOCK_TOKENS", num(want["BLOCK_TOKENS"]), num(block) if block else None, "blocked at window − this")
     r.add(
         "autocompact::PRECOMPUTE_RATIO",
         num(want["PRECOMPUTE_RATIO"]),
-        round(1 - num(m.group(3)), 6) if m else None,
+        round(1 - num(fraction), 6) if fraction else None,
         "1 − the default precomputeBufferFraction; a per-window table can override it",
     )
-    # The level function: `b=y-20000` is the warn band under the threshold.
-    m = re.search(rf"={ID}-(\d+),{ID}={ID}\.testBlockingOverride", text)
-    r.add("autocompact::WARN_TOKENS", num(want["WARN_TOKENS"]), num(m.group(1)) if m else None, "warn at threshold − this")
-    # `{let r=e-13000,s=n.testPctOverride` — the threshold itself.
-    m = re.search(rf"\{{let {ID}={ID}-(\d+),{ID}={ID}\.testPctOverride", text)
-    r.add("autocompact threshold = effective − BUFFER", num(want["BUFFER_TOKENS"]), num(m.group(1)) if m else None)
-    # The effective window: `window − min(maxOutputTokens, CAP)`; the cap is
-    # a `var` near the level function. The lookup's argument is a bare name
-    # up to 2.1.278 and `e.model` from 2.1.284.
+    # The level function: `b=y-20000` is the warn band under the threshold; in
+    # 2.1.332 it subtracts a named constant (declared with the buffer above).
+    m = re.search(rf"={ID}-(\d+|{ID}),{ID}={ID}\.testBlockingOverride", text)
+    if m and not m.group(1).isdigit():
+        warn = const_value(text, m.group(1)) or warn
+    else:
+        warn = m.group(1) if m else None
+    r.add("autocompact::WARN_TOKENS", num(want["WARN_TOKENS"]), num(warn) if warn else None, "warn at threshold − this")
+    # The threshold itself: `{let r=e-13000,s=n.testPctOverride`, the 13000 a
+    # named constant from 2.1.332 (`let r=e-VUe,g=n.testPctOverride`).
+    m = re.search(rf"\{{let {ID}={ID}-(\d+|{ID}),{ID}={ID}\.testPctOverride", text)
+    thr = None
+    if m:
+        thr = m.group(1) if m.group(1).isdigit() else const_value(text, m.group(1))
+    r.add("autocompact threshold = effective − BUFFER", num(want["BUFFER_TOKENS"]), num(thr) if thr else None)
+    # The effective window: `window − min(maxOutputTokens, CAP)`. The lookup's
+    # argument is a bare name up to 2.1.278 and `e.model` from 2.1.284; from
+    # 2.1.332 the shape is `let r=Math.min(e.maxOutputTokens,CAP),g=…,{window:h}=…;return h-r`.
     m = re.search(
         rf"\{{let {ID}=Math\.min\({ID}\({ID}(?:\.{ID})?\),({ID})\),{ID}={ID}\(\)\?{ID}:void 0,\{{window:{ID}\}}={ID}\({ID},{ID}\);return {ID}-{ID}\}}",
+        text,
+    ) or re.search(
+        rf"\{{let {ID}=Math\.min\({ID}\.maxOutputTokens,({ID})\),{ID}={ID}\(\)\?{ID}:void 0,\{{window:{ID}\}}={ID}\({ID},{ID}\);return {ID}-{ID}\}}",
         text,
     )
     cap = None
     if m:
-        v = re.search(r"var " + re.escape(m.group(1)) + r"=(\d+)", text)
+        v = re.search(r"var " + re.escape(m.group(1)) + r"=(\d+)", text) or re.search(
+            r"(?<![A-Za-z0-9_$.])" + re.escape(m.group(1)) + r"=(\d+)(?=[,;])", text
+        )
         cap = num(v.group(1)) if v else None
     r.add(
         "autocompact::OUTPUT_RESERVE_TOKENS",

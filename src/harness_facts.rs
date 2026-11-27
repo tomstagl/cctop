@@ -273,8 +273,8 @@ pub mod context_suggestions {
     pub const CONTEXT_SHARE: f64 = 0.80;
 }
 
-/// `effort_cost_index` per model in Claude Code's catalog (2.1.332; the
-/// 5.0 rows as read from 2.1.273): what a level costs relative to `high`, as
+/// `effort_cost_index` per model in Claude Code's catalog (2.1.332, every row
+/// verified by `scripts/check-harness-facts.py`): what a level costs relative to `high`, as
 /// `[low, medium, high, xhigh, max]`. Models without an entry there (Haiku
 /// 4.5, Sonnet ≤ 4.6, Opus ≤ 4.7, Mythos 5) have none here either. Matched
 /// by the longest id contained in the model name, so `claude-fable-5-1`
