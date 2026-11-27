@@ -206,20 +206,34 @@ pub struct Composition {
     pub source: &'static str,
     /// The used categories in `/context`'s order, then `free`, then
     /// `buffer` where the capture has them.
+    #[serde(serialize_with = "items_as_objects")]
     pub items: Vec<(String, u64)>,
     /// The row's text, cut whole item by whole item at [`coach::WIDTH`].
     pub line: String,
 }
 
-/// A category's name for the row: Claude Code's two `System …` rows are
-/// told apart, the rest by their first word. Display only; nothing branches
-/// on it.
+fn items_as_objects<S: serde::Serializer>(
+    items: &[(String, u64)],
+    ser: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeSeq;
+    let mut seq = ser.serialize_seq(Some(items.len()))?;
+    for (name, tokens) in items {
+        seq.serialize_element(&serde_json::json!({"name": name, "tokens": tokens}))?;
+    }
+    seq.end()
+}
+
+/// A category's name for the row. Display only; nothing branches on it.
 fn short_category(name: &str) -> String {
-    let lower = name.to_lowercase();
-    match lower.as_str() {
+    match name.to_lowercase().as_str() {
         "system prompt" => "sys".into(),
         "system tools" => "tools".into(),
-        _ => lower.split_whitespace().next().unwrap_or("").to_string(),
+        "mcp tools" => "mcp".into(),
+        "memory files" => "mem".into(),
+        "messages" => "msgs".into(),
+        "custom agents" => "agents".into(),
+        _ => name.to_string(),
     }
 }
 
@@ -231,6 +245,7 @@ impl Composition {
         if items.is_empty() {
             return None;
         }
+        let used = items.len();
         if let Some(f) = cap.free_tokens {
             items.push(("free".into(), f));
         }
@@ -241,19 +256,42 @@ impl Composition {
             CaptureSource::Transcript => "per /context",
             CaptureSource::Spool => "per Claude Code",
         };
-        let mut line = source.to_string();
-        let mut cut = false;
-        for (name, tokens) in &items {
-            let part = format!("  {} {}", short_category(name), fmt::tokens(*tokens));
-            // Keep a column for the ellipsis.
-            if line.chars().count() + part.chars().count() > coach::WIDTH - 2 {
-                cut = true;
+        // What goes first when the line is too long: the buffer, then the
+        // smallest used categories other than Messages. The rest keep
+        // /context's order.
+        let mut order: Vec<usize> = Vec::new();
+        if cap.autocompact_buffer.is_some() {
+            order.push(items.len() - 1);
+        }
+        let mut small: Vec<usize> = (0..used)
+            .filter(|&i| short_category(&items[i].0) != "msgs")
+            .collect();
+        small.sort_by_key(|&i| (items[i].1, std::cmp::Reverse(i)));
+        order.extend(small);
+        let render = |keep: &[bool]| {
+            let mut line = source.to_string();
+            for (i, (name, tokens)) in items.iter().enumerate() {
+                if keep[i] {
+                    line.push_str(&format!(
+                        " {} {}",
+                        short_category(name),
+                        fmt::tokens(*tokens)
+                    ));
+                }
+            }
+            if keep.iter().any(|k| !k) {
+                line.push_str(" …");
+            }
+            line
+        };
+        let mut keep = vec![true; items.len()];
+        let mut line = render(&keep);
+        for i in order {
+            if line.chars().count() <= coach::WIDTH {
                 break;
             }
-            line.push_str(&part);
-        }
-        if cut {
-            line.push_str(" …");
+            keep[i] = false;
+            line = render(&keep);
         }
         Some(Composition {
             source,
@@ -889,10 +927,11 @@ fn body_context(state: &State, c: &Coach) -> Body {
     rows.push(top);
     // The window by category as Claude Code counted it, when a `/context`
     // table or the pane's spool exists: the same line on both surfaces.
-    if let Some(comp) = Composition::of(state) {
-        rows.push(vec![dim(format!("  {}", comp.line))]);
+    // It takes the blank row's place, so a short dock keeps its last row.
+    match Composition::of(state) {
+        Some(comp) => rows.push(vec![dim(format!("  {}", comp.line))]),
+        None => rows.push(Vec::new()),
     }
-    rows.push(Vec::new());
     let slices = vec![
         Slice {
             label: "prefix",
@@ -2317,10 +2356,14 @@ mod tests {
         let d = snapshot(&s, &e);
         let c = composition_of(&d).expect("fixture D has the table");
         assert_eq!(c.source, "per /context");
-        assert!(c.line.starts_with("per /context  "), "{}", c.line);
+        assert!(c.line.starts_with("per /context "), "{}", c.line);
         assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
         let cap = s.prefix.context_capture.as_ref().unwrap();
         assert_eq!(c.items[0].0, cap.categories[0].0);
+        assert_eq!(
+            serde_json::to_value(&d).unwrap()["cells"][0]["composition"]["items"][0]["name"],
+            c.items[0].0.as_str()
+        );
         if let Some(f) = cap.free_tokens {
             assert!(c.items.iter().any(|(n, t)| n == "free" && *t == f));
         }
@@ -2356,11 +2399,51 @@ mod tests {
             c.items.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
             ["System prompt", "Messages", "free", "buffer"]
         );
-        assert_eq!(
-            c.line,
-            "per Claude Code  sys 8.0k  messages 60k  free 850k …"
-        );
+        assert_eq!(c.line, "per Claude Code sys 8.0k msgs 60k free 850k …");
         assert!(c.line.chars().count() <= coach::WIDTH);
+    }
+
+    /// Deferred tools are not in the window: a spool's `deferred` row is in
+    /// neither the row nor `composition[]`.
+    #[test]
+    fn a_deferred_row_is_left_out() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        let json = format!(
+            r#"{{"v":1,"at":{at},"tokens":100000,"window":1000000,"categories":[{{"name":"System prompt","tokens":8000,"kind":"used"}},{{"name":"MCP tools (deferred)","tokens":900,"kind":"deferred"}},{{"name":"Messages","tokens":60000,"kind":"used"}},{{"name":"Free space","tokens":850000,"kind":"free"}}]}}"#
+        );
+        s.apply_context_spool(crate::context_spool::parse(&json).unwrap());
+        let c = Composition::of(&s).unwrap();
+        assert!(
+            !c.line.contains("deferred") && !c.line.contains("mcp"),
+            "{}",
+            c.line
+        );
+        assert!(c.items.iter().all(|(n, _)| !n.contains("deferred")));
+        let q = crate::query::dashboard(&s);
+        assert!(q["composition"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| !i["name"].as_str().unwrap().contains("deferred")));
+    }
+
+    /// At 52 cells the lever (Messages) and the free space stay; the
+    /// smallest other used categories go first, the order is /context's.
+    #[test]
+    fn the_cut_keeps_messages_and_free() {
+        let (s, e) = fixture_at("b", usize::MAX);
+        let d = snapshot(&s, &e);
+        let c = composition_of(&d).expect("fixture B has the table");
+        assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
+        assert!(
+            c.line.contains(" msgs ") && c.line.contains(" free "),
+            "{}",
+            c.line
+        );
+        let pos = |k: &str| c.line.find(k);
+        assert!(pos(" msgs ") < pos(" free "));
+        insta::assert_snapshot!("composition_row_b", c.line);
     }
 
     #[test]

@@ -77,6 +77,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             ", calibrated {} ago",
             crate::coach::short_duration(state.clock_ms() - at)
         ),
+        // A table without a timestamp is still a calibration.
+        (Mode::Calibrated { .. }, _) => ", calibrated".to_string(),
         _ => String::new(),
     };
     let title = if state.sources_files {
@@ -397,5 +399,26 @@ mod tests {
         assert!(out.contains("since model switch (−"), "{out}");
         assert!(out.contains("the compaction summary"), "{out}");
         insta::assert_snapshot!("sources_b_162x30", out);
+    }
+
+    /// A calibrated prefix says how old its `/context` table is; a table
+    /// with no timestamp is still called calibrated.
+    #[test]
+    fn a_calibrated_title_says_how_long_ago() {
+        let mut app = app_on("session-d");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated ") && title.contains(" ago"),
+            "{title}"
+        );
+        app.state.prefix.context_capture_at_ms = None;
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated") && !title.contains(" ago"),
+            "{title}"
+        );
     }
 }

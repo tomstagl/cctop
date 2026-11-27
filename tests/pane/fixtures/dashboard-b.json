@@ -81,11 +81,10 @@
         ],
         [
           {
-            "text": "  per /context  sys 10k  tools 31k  skills 4.8k …",
+            "text": "  per /context sys 10k tools 31k msgs 42k free 877k …",
             "tone": "dim"
           }
         ],
-        [],
         [
           {
             "text": "  ",
@@ -2421,32 +2420,32 @@
     {
       "composition": {
         "items": [
-          [
-            "System prompt",
-            10200
-          ],
-          [
-            "System tools",
-            31200
-          ],
-          [
-            "Skills",
-            4800
-          ],
-          [
-            "Messages",
-            42900
-          ],
-          [
-            "free",
-            877900
-          ],
-          [
-            "buffer",
-            33000
-          ]
+          {
+            "name": "System prompt",
+            "tokens": 10200
+          },
+          {
+            "name": "System tools",
+            "tokens": 31200
+          },
+          {
+            "name": "Skills",
+            "tokens": 4800
+          },
+          {
+            "name": "Messages",
+            "tokens": 42900
+          },
+          {
+            "name": "free",
+            "tokens": 877900
+          },
+          {
+            "name": "buffer",
+            "tokens": 33000
+          }
         ],
-        "line": "per /context  sys 10k  tools 31k  skills 4.8k …",
+        "line": "per /context sys 10k tools 31k msgs 42k free 877k …",
         "source": "per /context"
       },
       "id": "context",

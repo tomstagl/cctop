@@ -72,7 +72,7 @@ pub fn parse(text: &str) -> Option<SpoolCapture> {
         categories: s
             .categories
             .iter()
-            .filter(|c| c.kind == "used" || c.kind == "deferred")
+            .filter(|c| c.kind == "used")
             .map(|c| (c.name.clone(), c.tokens))
             .collect(),
         free_tokens: sum("free"),
@@ -154,9 +154,12 @@ mod tests {
             [
                 ("System prompt", 6000),
                 ("System tools", 12000),
-                ("MCP tools (deferred)", 900),
                 ("Messages", 70000)
             ]
+        );
+        assert!(
+            !names.iter().any(|(n, _)| n.contains("deferred")),
+            "deferred tools are not in the window"
         );
         assert_eq!(c.free_tokens, Some(850_000));
         assert_eq!(c.autocompact_buffer, Some(33_000));
