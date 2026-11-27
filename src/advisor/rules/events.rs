@@ -515,6 +515,7 @@ impl Rule for HookOverhead {
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{prompt, response, tool};
+    use super::super::witness;
     use super::*;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
@@ -523,17 +524,7 @@ mod tests {
     #[test]
     fn a06_post_compaction_exact_boundary_and_retrigger() {
         // 2.1.270: only compact_boundary lines count, never a drop.
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","version":"2.1.270","message":{"id":"a","model":"claude-opus-5","content":[],"usage":{"input_tokens":900000}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","version":"2.1.270","message":{"id":"b","model":"claude-opus-5","content":[],"usage":{"input_tokens":200000}}}"#).unwrap());
-        assert!(
-            PostCompaction.evaluate(&s).is_none(),
-            "a drop is not a compaction on 2.1.270"
-        );
-        // One exact compaction that left the context near the threshold.
-        s.apply(&Line::parse(r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00:00:03Z","version":"2.1.270","compactMetadata":{"trigger":"auto","preTokens":960000,"postTokens":955000,"durationMs":80000}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:04Z","version":"2.1.270","message":{"id":"c","model":"claude-opus-5","content":[],"usage":{"input_tokens":955000}}}"#).unwrap());
+        let mut s = witness::a06_retrigger();
         let a = PostCompaction.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline, "Compaction will re-trigger: 955k left after it, threshold 960k",
@@ -546,12 +537,7 @@ mod tests {
         s.apply(&Line::parse(r#"{"type":"continued-in","timestamp":"2026-01-01T00:00:05Z","continuedInSessionId":"next"}"#).unwrap());
         assert!(PostCompaction.acted(&s, &a));
         // Two compactions that left plenty of room still fire (second time).
-        let mut two = State::new(Pricing::bundled());
-        for i in 0..2 {
-            two.apply(&prompt("2026-01-01T00:00:00Z"));
-            two.apply(&Line::parse(&format!(r#"{{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00:0{i}:03Z","version":"2.1.270","compactMetadata":{{"trigger":"auto","preTokens":960000,"postTokens":230000,"durationMs":80000}}}}"#)).unwrap());
-            two.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:0{i}:04Z","version":"2.1.270","message":{{"id":"c{i}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":230000}}}}}}"#)).unwrap());
-        }
+        let two = witness::a06_two();
         let a = PostCompaction.evaluate(&two).expect("fires");
         assert_eq!(a.headline, "2 compactions this session (960k → 230k last)");
         // Fixture B: one exact compaction (567k → 230k on 1M): quiet.
@@ -569,21 +555,7 @@ mod tests {
 
     #[test]
     fn a09_permission_waits_use_claude_codes_rule_and_never_bare_bash() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        let ask = |s: &mut State, cmd: &str, suggestion: Option<&str>| {
-            let mut payload = serde_json::json!({"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":cmd}});
-            if let Some(r) = suggestion {
-                payload["permission_suggestions"] = serde_json::json!([{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":r}]}]);
-            }
-            s.apply_hook(&crate::hooks::HookEvent::from_stdin(0, payload).unwrap());
-        };
-        ask(&mut s, "gh api repos/x", None);
-        ask(&mut s, "gh api repos/y --jq .id", Some("gh api:*"));
-        assert!(PermissionWaits.evaluate(&s).is_none(), "two asks");
-        ask(&mut s, "gh api graphql", None);
-        s.session.permission_waits = 3;
-        s.session.permission_wait_ms = 45_000;
+        let mut s = witness::a09();
         let a = PermissionWaits.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "You've approved gh api 3 times (0:45 waiting)");
         assert_eq!(
@@ -609,7 +581,7 @@ mod tests {
         // command never yields `Bash`.
         let mut t = State::new(Pricing::bundled());
         for _ in 0..3 {
-            ask(&mut t, "cargo test --lib", None);
+            witness::permission_ask(&mut t, "cargo test --lib", None);
         }
         assert_eq!(
             PermissionWaits.evaluate(&t).unwrap().action_text,
@@ -631,9 +603,7 @@ mod tests {
 
     #[test]
     fn a10_long_foreground_skips_backgrounded_calls() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"b1","model":"m","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"cargo build --release"}}],"usage":{"output_tokens":1}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:01:58Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ok"}]}}"#).unwrap());
+        let mut s = witness::a10();
         let a = LongForeground.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "`cargo build` blocked the turn for 1:58");
         assert_eq!(a.saving, Saving::Seconds(118));
@@ -655,19 +625,7 @@ mod tests {
 
     #[test]
     fn a13_rate_limit_pacing_leaves_the_429_to_a47() {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.now_ms = 1_000_000;
-        s.limits = Some(crate::ui::state::Limits {
-            five_hour_pct: 80.0,
-            seven_day_pct: 10.0,
-            five_hour_resets_at_ms: Some(2_000_000),
-            seven_day_resets_at_ms: None,
-            exhaustion_ms: Some(1_500_000),
-            exhaustion_in_active_hours: None,
-        });
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&response("m", "2026-01-01T00:00:01Z", 10, 0, 1000));
+        let mut s = witness::a13();
         let a = RateLimitPacing.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -715,19 +673,7 @@ mod tests {
 
     #[test]
     fn a16_hook_overhead_names_the_slow_hook_and_ignores_cctop() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..3 {
-            s.apply(&prompt("2026-01-01T00:00:00Z"));
-            s.apply(&response(
-                &format!("h{i}"),
-                "2026-01-01T00:00:01Z",
-                10,
-                0,
-                100,
-            ));
-            s.apply(&Line::parse(r#"{"type":"system","subtype":"stop_hook_summary","timestamp":"2026-01-01T00:00:02Z","hookInfos":[{"command":"lint","durationMs":1400},{"command":"cctop hook","durationMs":5}],"hookErrors":[]}"#).unwrap());
-            s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:00:02Z","durationMs":8000}"#).unwrap());
-        }
+        let s = witness::a16();
         let a = HookOverhead.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "Hooks add 1.4s per turn (18 % of turn time)");
         assert!(

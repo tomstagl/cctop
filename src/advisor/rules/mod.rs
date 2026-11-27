@@ -7,6 +7,7 @@
 pub mod events;
 pub mod outcome;
 pub mod token;
+pub mod witness;
 
 use super::Rule;
 use crate::metrics::Turn;
@@ -261,7 +262,6 @@ pub(crate) fn percent(v: f64) -> String {
     format!("{v:.0} %")
 }
 
-#[cfg(test)]
 pub(crate) mod fixtures {
     //! Transcript lines the rule tests share.
     use crate::transcript::Line;

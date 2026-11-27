@@ -1424,6 +1424,7 @@ impl Rule for BigPrefix {
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{prompt, response, tool};
+    use super::super::witness::{self, *};
     use super::*;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
@@ -2181,18 +2182,7 @@ mod tests {
 
     #[test]
     fn a04_rereads_and_edit_reread_edit_churn() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..3 {
-            for l in tool(
-                &format!("r{i}"),
-                "2026-01-01T00:00:00Z",
-                "Read",
-                "/p/src/render.rs",
-                8_000,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let mut s = a04_reads();
         let a = Rereads.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "render.rs was read 3× with no edit in between");
         assert_eq!(a.saving, Saving::Tokens(2_000));
@@ -2201,26 +2191,7 @@ mod tests {
         }
         assert!(Rereads.evaluate(&s).is_none(), "an edit resets the run");
         // edit → re-read → edit, twice: the churn headline.
-        for i in 0..2 {
-            for l in tool(
-                &format!("rr{i}"),
-                "2026-01-01T00:00:00Z",
-                "Read",
-                "/p/src/render.rs",
-                8_000,
-            ) {
-                s.apply(&l);
-            }
-            for l in tool(
-                &format!("ee{i}"),
-                "2026-01-01T00:00:00Z",
-                "Edit",
-                "/p/src/render.rs",
-                10,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let s = a04_churn();
         let a = Rereads.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "render.rs: edit → re-read → edit ×2");
         assert_eq!(a.action_kind, ActionKind::Prompt);
@@ -2229,23 +2200,7 @@ mod tests {
 
     #[test]
     fn a25_explore_run_is_bash_aware_and_retires_on_an_agent_spawn() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..8 {
-            let (name, input) = if i % 2 == 0 {
-                ("Read", "/p/f.rs")
-            } else {
-                ("Bash", "rg -n todo src")
-            };
-            for l in tool(
-                &format!("g{i}"),
-                "2026-01-01T00:00:00Z",
-                name,
-                input,
-                12_000,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let mut s = a25();
         let a = ExploreRun.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "EXPLORING ×8 · +24k ctx this run");
         assert_eq!(a.urgency, Urgency::Next);
@@ -2293,12 +2248,7 @@ mod tests {
 
     #[test]
     fn a07_idle_mcp_and_unused_plugin() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&Line::from_value(serde_json::json!({"type":"attachment","attachment":{"type":"deferred_tools_delta","addedNames":["mcp__playwright__click","mcp__playwright__snapshot"],"addedLines":["x".repeat(6000),"y".repeat(6000)]}})));
-        s.session.alive = true;
-        let t0 = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:00Z").unwrap();
-        s.now_ms = t0 + 25 * 60_000;
+        let mut s = a07_mcp();
         let a = IdleMcp.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "mcp:playwright idle for 25:00");
         assert!(
@@ -2319,13 +2269,7 @@ mod tests {
         }
         assert!(IdleMcp.evaluate(&s).is_none());
         // An enabled plugin unused for 38 startups with 4k always-on tokens.
-        let mut p = State::new(Pricing::bundled());
-        p.prefix.scan_plugins(
-            &serde_json::json!({"enabledPlugins": {"frontend-design@claude-plugins-official": true}}),
-            Some(&serde_json::json!({"catalog": [{"plugin": "frontend-design", "tokens": {"claude-opus-5": {"always_on": 4100}}}]})),
-            Some(&serde_json::json!({"numStartups": 438, "pluginUsage": {"frontend-design@claude-plugins-official": {"lastUsedNumStartups": 400}}})),
-            "claude-opus-5",
-        );
+        let p = a07_plugin();
         let a = IdleMcp.evaluate(&p).expect("fires");
         assert_eq!(
             a.headline,
@@ -2336,23 +2280,10 @@ mod tests {
 
     #[test]
     fn a08_thinking_share_on_edit_heavy_turns_prices_the_effort_step() {
-        let think = |id: &str, out: u64, thinking: u64| -> Line {
-            Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","perTurnEffort":"high","message":{{"id":"{id}","model":"claude-sonnet-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"output_tokens":{out},"output_tokens_details":{{"thinking_tokens":{thinking}}}}}}}}}"#)).unwrap()
+        let think = |id: &str, out: u64, thinking: u64| {
+            witness::think(id, "claude-sonnet-5", out, thinking)
         };
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..5 {
-            s.apply(&prompt("2026-01-01T00:00:00Z"));
-            for l in tool(
-                &format!("e{i}"),
-                "2026-01-01T00:00:00Z",
-                "Edit",
-                "/p/a.rs",
-                10,
-            ) {
-                s.apply(&l);
-            }
-            s.apply(&think(&format!("t{i}"), 1_000, 600));
-        }
+        let mut s = a08_sonnet();
         let a = ThinkingShare.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -2391,9 +2322,7 @@ mod tests {
 
     #[test]
     fn a11_fresh_input_uses_the_first_call_only() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&response("f1", "2026-01-01T00:00:01Z", 6_000, 0, 50_000));
+        let s = a11_input();
         let a = FreshInputSpike.evaluate(&s).expect("fires");
         assert!(
             a.headline
@@ -2426,14 +2355,7 @@ mod tests {
         // before the transcript line): it is the turn's. On a cached session
         // the first call shows it as a cache write, not as input_tokens, so
         // the size comes from the history and the headline names the paste.
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&response("f1", "2026-01-01T00:00:01Z", 2, 9_800, 50_000));
-        s.history.pastes.push(Paste {
-            at_ms: t("2026-01-01T00:00:00Z") - 300,
-            chars: 38_000,
-            lines: 412,
-        });
+        let s = a11_paste();
         let a = FreshInputSpike.evaluate(&s).expect("fires");
         assert!(
             a.headline
@@ -2524,19 +2446,7 @@ mod tests {
 
     #[test]
     fn a12_chatty_turns_counts_human_prompts_only() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..25 {
-            s.apply(&Line::parse(&format!(r#"{{"type":"user","timestamp":"2026-01-01T00:{i:02}:00Z","promptSource":"typed","message":{{"role":"user","content":"ok go"}}}}"#)).unwrap());
-            s.apply(&response(
-                &format!("c{i}"),
-                &format!("2026-01-01T00:{i:02}:01Z"),
-                10,
-                0,
-                100_000,
-            ));
-        }
-        s.session.alive = true;
-        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T00:30:00Z").unwrap();
+        let s = a12();
         let a = ChattyTurns.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "25 prompts in the last hour, median 5 chars");
         // Task notifications are machine turns and never count.
@@ -2562,47 +2472,8 @@ mod tests {
 
     #[test]
     fn a48_agents_waste_fires_on_two_classified_agents_over_a_dollar_and_a_quarter() {
-        let mut s = State::new(Pricing::bundled());
-        // Four opus agents at ≈$1.25 each (1.5 M cache read at $0.50/M,
-        // 20 k output at $25/M).
-        let mk = |id: &str| {
-            let mut a = crate::agents::Agent::new(
-                id,
-                crate::agents::Meta {
-                    agent_type: "Explore".into(),
-                    ..Default::default()
-                },
-            );
-            a.model = "claude-opus-5".into();
-            a.usage.cache_read = 1_500_000;
-            a.usage.output = 20_000;
-            a
-        };
-        let notify = |s: &mut State, id: &str, status: &str, result: &str| {
-            let text = format!(
-                "<task-notification><task-id>{id}</task-id><status>{status}</status><summary>s</summary><result>{result}</result></task-notification>"
-            );
-            s.apply(&Line::parse(&format!(
-                r#"{{"type":"user","timestamp":"2026-01-01T00:10:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
-                serde_json::to_string(&text).unwrap()
-            )).unwrap());
-        };
-        for id in [
-            "0000000000000000a",
-            "0000000000000000b",
-            "0000000000000000c",
-            "0000000000000000d",
-        ] {
-            s.agents.insert(id.into(), mk(id));
-        }
-        for id in [
-            "0000000000000000a",
-            "0000000000000000b",
-            "0000000000000000c",
-            "0000000000000000d",
-        ] {
-            notify(&mut s, id, "completed", &"r".repeat(800));
-        }
+        let mut s = a48_returned();
+        let mk = costly_agent;
         assert!(AgentsWaste.evaluate(&s).is_none(), "nothing wasted");
         // One failed agent: ≈$1.25 of ≈$5 is 25 %, but one classified.
         notify(&mut s, "0000000000000000a", "failed", "");
@@ -2678,25 +2549,8 @@ mod tests {
 
     #[test]
     fn a14_subagent_model_reads_tool_stats_not_descriptions() {
-        let mut s = State::new(Pricing::bundled());
-        let mk = |id: &str, kind: &str, tools: &[(&str, usize)]| {
-            let mut a = crate::agents::Agent::new(
-                id,
-                crate::agents::Meta {
-                    agent_type: kind.into(),
-                    ..Default::default()
-                },
-            );
-            a.model = "claude-opus-5".into();
-            a.usage.cache_read = 400_000;
-            a.usage.output = 5_000;
-            for (t, n) in tools {
-                a.tools_by_name.insert((*t).into(), *n);
-            }
-            a
-        };
-        s.agents
-            .insert("x".into(), mk("x", "Explore", &[("Grep", 4), ("Read", 3)]));
+        let mut s = a14();
+        let mk = search_agent;
         let adv = SubagentModel.evaluate(&s).expect("fires");
         assert_eq!(
             adv.headline,
@@ -3423,24 +3277,10 @@ impl Rule for ColdResume {
 #[cfg(test)]
 mod phase5_tests {
     use super::super::fixtures::{prompt, response};
+    use super::super::witness::*;
     use super::*;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
-
-    fn t(ts: &str) -> i64 {
-        crate::metrics::cost::parse_ts_ms(ts).unwrap()
-    }
-
-    /// A session of one turn with a 150k context, the cache written at
-    /// 10:00:05 on the 5 m TTL, a question pending since 10:00:06.
-    fn asked() -> State {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":150000,"cache_read_input_tokens":0,"output_tokens":10}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:06Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"tool_use","id":"q","name":"AskUserQuestion","input":{"questions":[]}}],"usage":{"input_tokens":2,"cache_read_input_tokens":150000,"output_tokens":10}}}"#).unwrap());
-        s
-    }
 
     #[test]
     fn a19_cache_countdown_in_the_band_while_asked() {
@@ -3450,7 +3290,7 @@ mod phase5_tests {
             CacheCountdown.evaluate(&s).is_none(),
             "outside the 2-minute band of a 5 m TTL"
         );
-        s.now_ms = t("2026-01-01T10:03:30Z"); // 1:36 left
+        let mut s = a19(); // 1:36 left
         let a = CacheCountdown.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -3490,7 +3330,7 @@ mod phase5_tests {
         s.now_ms = t("2026-01-01T10:01:00Z");
         assert!(SwitchWindow.evaluate(&s).is_none());
         // The hook: a warm switch on 150k.
-        s.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:50Z"), serde_json::json!({"hook_event_name":"PreModelSwitch","from_model":"claude-opus-5","to_model":"claude-sonnet-5","source":"command","prompt_cache_warm":true,"context_tokens":150000,"estimated_cache_write_usd":0.9})).unwrap());
+        let mut s = a21();
         let a = SwitchWindow.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "Switch re-reads 150k uncached (≈$.90)");
         assert!(
@@ -3523,9 +3363,7 @@ mod phase5_tests {
             a.evidence
         );
         // Cold and a switching project: the free-moment hint.
-        let mut cold = asked();
-        cold.now_ms = t("2026-01-01T10:20:00Z");
-        cold.history.project_switches = 4;
+        let mut cold = a21b();
         let c = ColdSwitch.evaluate(&cold).expect("cold hint");
         assert_eq!(
             c.headline,
@@ -3589,11 +3427,10 @@ mod phase5_tests {
 
     #[test]
     fn a27_loop_armed_on_a_large_context_once() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 180_000));
+        let mut s = a27();
+        s.session.session_crons = 0;
         assert!(LoopArmed.evaluate(&s).is_none(), "nothing armed");
-        s.session.session_crons = 1;
+        let s = a27();
         let a = LoopArmed.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -3624,11 +3461,7 @@ mod phase5_tests {
 
     #[test]
     fn a30_cold_resume_from_the_idle_gap_or_the_resume_hook() {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T10:00:06Z","durationMs":6000}"#).unwrap());
+        let mut s = a30_idle();
         s.now_ms = t("2026-01-01T10:03:00Z");
         assert!(ColdResume.evaluate(&s).is_none(), "still warm");
         s.now_ms = t("2026-01-01T12:14:06Z");
@@ -3649,12 +3482,7 @@ mod phase5_tests {
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T12:15:05Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
         assert!(ColdResume.acted(&s, &a));
         // The resume hook's own verdict.
-        let mut r = State::new(Pricing::bundled());
-        r.session.alive = true;
-        r.apply(&prompt("2026-01-01T10:00:00Z"));
-        r.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 150_000));
-        r.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:10Z"), serde_json::json!({"hook_event_name":"SessionStart","source":"resume","seconds_since_last_response":7200,"context_tokens":150000,"prompt_cache_likely_expired":true,"estimated_cache_write_usd":1.1})).unwrap());
-        r.now_ms = t("2026-01-01T10:00:20Z");
+        let r = a30_resume();
         let a = ColdResume.evaluate(&r).expect("fires");
         assert!(
             a.evidence

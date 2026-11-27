@@ -64,6 +64,32 @@ pub fn fired_examples() -> std::collections::BTreeMap<(String, String), Fired> {
             }
         }
     }
+    let fixture_keys: std::collections::BTreeSet<(String, String)> = out.keys().cloned().collect();
+    // The witnesses (what the rules' own tests build) fill what the fixtures
+    // do not reach; a fixture firing wins when both exist.
+    for (_, mut s) in rules::witness::all() {
+        if s.now_ms != 0 {
+            s.clock_override = true;
+        }
+        for r in &rules {
+            let Some(a) = r.evaluate(&s) else { continue };
+            let key = (r.id().to_string(), a.variant.to_string());
+            if fixture_keys.contains(&key) {
+                continue;
+            }
+            let e = out.entry(key).or_insert_with(|| Fired {
+                headline: a.headline.clone(),
+                evidence: a.evidence.clone(),
+                actions: Vec::new(),
+            });
+            for x in &a.actions {
+                let (k, l) = (x.kind.id().to_string(), x.label.clone());
+                if !e.actions.iter().any(|(k2, l2, _)| *k2 == k && *l2 == l) {
+                    e.actions.push((k, l, x.payload.clone()));
+                }
+            }
+        }
+    }
     out
 }
 

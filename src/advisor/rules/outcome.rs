@@ -1784,67 +1784,11 @@ impl Rule for TurnDied {
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{prompt, response};
+    use super::super::witness::{self, bash, call, call_ctx, edit, fresh, t};
     use super::*;
     use crate::advisor::Engine;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
-
-    fn t(ts: &str) -> i64 {
-        crate::metrics::cost::parse_ts_ms(ts).unwrap()
-    }
-
-    /// A tool call and its result: `extra` is spliced into the result's
-    /// top-level object (`"is_error":true` goes into the block).
-    fn call(s: &mut State, id: &str, ts: &str, name: &str, input: &str, result: &str, extra: &str) {
-        call_ctx(s, id, ts, name, input, result, extra, 50_000);
-    }
-
-    /// [`call`] on a context of `ctx` tokens.
-    #[allow(clippy::too_many_arguments)]
-    fn call_ctx(
-        s: &mut State,
-        id: &str,
-        ts: &str,
-        name: &str,
-        input: &str,
-        result: &str,
-        extra: &str,
-        ctx: u64,
-    ) {
-        s.apply(&Line::parse(&format!(
-            r#"{{"type":"assistant","timestamp":"{ts}","message":{{"id":"{id}","model":"claude-opus-5","content":[{{"type":"tool_use","id":"{id}","name":"{name}","input":{input}}}],"usage":{{"input_tokens":2,"cache_read_input_tokens":{ctx},"output_tokens":10}}}}}}"#
-        )).unwrap());
-        s.apply(&Line::parse(&format!(
-            r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{id}","content":"{result}"{}}}]}}{extra}}}"#,
-            if extra.contains("\"is_error\"") { r#","is_error":true"# } else { "" }
-        )).unwrap());
-    }
-
-    fn edit(s: &mut State, id: &str, ts: &str, path: &str) {
-        call(
-            s,
-            id,
-            ts,
-            "Edit",
-            &format!(r#"{{"file_path":"{path}","old_string":"a","new_string":"b"}}"#),
-            "ok",
-            "",
-        );
-    }
-
-    fn bash(s: &mut State, id: &str, ts: &str, cmd: &str, stdout: &str, extra: &str) {
-        call(
-            s,
-            id,
-            ts,
-            "Bash",
-            &format!(r#"{{"command":"{cmd}"}}"#),
-            stdout,
-            &format!(
-                r#","toolUseResult":{{"stdout":"{stdout}","stderr":"","interrupted":false{extra}}}"#
-            ),
-        );
-    }
 
     fn turn_end(s: &mut State, ts: &str) {
         s.apply(&Line::parse(&format!(
@@ -1856,15 +1800,6 @@ mod tests {
         s.apply(&Line::parse(&format!(
             r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":[{{"type":"text","text":"[Request interrupted by user for tool use]"}}]}}}}"#
         )).unwrap());
-    }
-
-    fn fresh() -> State {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&response("m0", "2026-01-01T10:00:01Z", 2, 50_000, 0));
-        s.now_ms = t("2026-01-01T10:00:02Z");
-        s
     }
 
     #[test]
@@ -1962,19 +1897,7 @@ mod tests {
                 ),
             )
         };
-        let mut s = fresh();
-        bash(
-            &mut s,
-            "t0",
-            "2026-01-01T10:00:30Z",
-            "npm test",
-            "12 passed in 0.4s",
-            "",
-        );
-        edit(&mut s, "e1", "2026-01-01T10:01:00Z", "/p/src/a.ts");
-        edit(&mut s, "e2", "2026-01-01T10:02:00Z", "/p/src/b.ts");
-        commit(&mut s, "c1", "2026-01-01T10:03:00Z", "a1b2c3d4e");
-        s.now_ms = t("2026-01-01T10:03:01Z");
+        let mut s = witness::a33();
         let a = CommitUnchecked
             .evaluate(&s)
             .expect("fires on the commit result");
@@ -2000,16 +1923,7 @@ mod tests {
         );
         assert!(CommitUnchecked.acted(&s, &a));
         // A failed test in the window escalates.
-        edit(&mut s, "e4", "2026-01-01T10:07:00Z", "/p/src/d.ts");
-        bash(
-            &mut s,
-            "t2",
-            "2026-01-01T10:08:00Z",
-            "npm test",
-            "1 failed, 12 passed in 0.4s",
-            "",
-        );
-        commit(&mut s, "c3", "2026-01-01T10:09:00Z", "c3d4e5f6a");
+        let s = witness::a33_failed();
         let a = CommitUnchecked.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -2203,27 +2117,7 @@ mod tests {
 
     #[test]
     fn a38_names_each_error_class_in_fixed_words_never_the_output() {
-        let mut s = fresh();
-        let no_pr = "no pull requests found for branch SECRET-OUTPUT-abc";
-        let rejected = "! [rejected] SECRET-OUTPUT-abc (non-fast-forward)";
-        for (i, (cmd, out)) in [
-            ("gh pr view 24", no_pr),
-            ("gh pr view --json url", no_pr),
-            ("git push", rejected),
-        ]
-        .iter()
-        .enumerate()
-        {
-            bash(
-                &mut s,
-                &format!("f{i}"),
-                &format!("2026-01-01T10:0{}:00Z", i + 1),
-                cmd,
-                out,
-                r#","is_error":true"#,
-            );
-        }
-        s.now_ms = t("2026-01-01T10:04:00Z");
+        let s = witness::a38_with("SECRET-OUTPUT-abc");
         let a = FailureCascade.evaluate(&s).expect("fires");
         assert_eq!(a.name, "Claude is stuck retrying");
         assert_eq!(
@@ -2473,18 +2367,7 @@ mod tests {
 
     #[test]
     fn a40_review_before_merge_once_per_pr_with_a_real_diff() {
-        let mut s = fresh();
-        s.status_facts.pr_number = Some(142);
-        edit(&mut s, "e1", "2026-01-01T10:00:30Z", "/p/src/a.rs");
-        edit(&mut s, "e2", "2026-01-01T10:00:40Z", "/p/README.md");
-        bash(
-            &mut s,
-            "p",
-            "2026-01-01T10:01:00Z",
-            "git push -u origin feat",
-            "ok",
-            r#","gitOperation":{"push":{"branch":"feat"}}"#,
-        );
+        let mut s = witness::a40_pushed();
         assert!(
             ReviewBeforeMerge.evaluate(&s).is_none(),
             "no diff figures yet"
@@ -2567,27 +2450,11 @@ mod tests {
 
     #[test]
     fn a42_checkpoint_at_a_boundary_on_a_large_context() {
-        let big = |ctx: u64| -> State {
-            let mut s = State::new(Pricing::bundled());
-            s.session.alive = true;
-            s.apply(&prompt("2026-01-01T10:00:00Z"));
-            s.apply(&response("m0", "2026-01-01T10:00:01Z", 2, ctx, 0));
-            s.now_ms = t("2026-01-01T10:00:02Z");
-            s
-        };
-        let done = r#","toolUseResult":{"taskId":"1","updatedFields":["status"],"statusChange":{"from":"in_progress","to":"completed"},"success":true}"#;
+        let big = witness::big;
+        let done = witness::TASK_DONE;
         let mut s = big(312_000);
         assert!(Checkpoint.evaluate(&s).is_none(), "no boundary");
-        call_ctx(
-            &mut s,
-            "tu",
-            "2026-01-01T10:01:00Z",
-            "TaskUpdate",
-            r#"{"taskId":"1","status":"completed"}"#,
-            "ok",
-            done,
-            312_000,
-        );
+        witness::task_done(&mut s, 312_000);
         let a = Checkpoint.evaluate(&s).expect("a task completed");
         assert_eq!(a.headline, "checkpoint · ctx 312k · next task unrelated?");
         assert!(
@@ -2657,15 +2524,7 @@ mod tests {
 
     #[test]
     fn a43_destructive_git_nudges_on_a_dirty_tree_only() {
-        let mut s = fresh();
-        bash(
-            &mut s,
-            "g",
-            "2026-01-01T10:01:00Z",
-            "git reset --hard HEAD~1",
-            "ok",
-            "",
-        );
+        let mut s = witness::a43_clean();
         assert!(
             DestructiveGit.evaluate(&s).is_none(),
             "clean tree: an event only"
@@ -2733,17 +2592,7 @@ mod tests {
 
     #[test]
     fn a45_denial_streak_prints_claude_codes_rule_and_never_bare_bash() {
-        let blocked = |s: &mut State, id: &str, ts: &str, cmd: &str| {
-            call(
-                s,
-                id,
-                ts,
-                "Bash",
-                &format!(r#"{{"command":"{cmd}"}}"#),
-                "blocked",
-                r#","is_error":true,"toolDenialKind":"automode-blocked""#,
-            );
-        };
+        let blocked = witness::automode_blocked;
         let mut s = fresh();
         blocked(&mut s, "d1", "2026-01-01T10:01:00Z", "gh api repos/x/y");
         assert!(DenialStreak.evaluate(&s).is_none(), "one block");
@@ -2888,14 +2737,10 @@ mod tests {
 
     #[test]
     fn a47_names_the_limit_in_words_and_offers_a_switch_only_for_a_model_limit() {
-        let line = |kind: &str| {
-            Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T10:01:00Z","message":{{"id":"e1","model":"<synthetic>","content":[{{"type":"text","text":"Rate limit hit"}}],"stop_reason":"stop_sequence","usage":{{"input_tokens":0,"output_tokens":0}}}},"quotaLimits":{{"status":"rejected"{kind}}},"error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429}}"#)).unwrap()
-        };
         let fire = |kind: &str| {
-            let mut s = fresh();
-            s.apply(&line(kind));
-            s.now_ms = t("2026-01-01T10:01:30Z");
-            TurnDied.evaluate(&s).expect("a confirmed 429")
+            TurnDied
+                .evaluate(&witness::a47_rate(kind))
+                .expect("a confirmed 429")
         };
         let opus = fire(r#","rateLimitType":"seven_day_opus""#);
         assert_eq!(opus.headline, "Rate limit (weekly Opus)");
@@ -2923,12 +2768,7 @@ mod tests {
 
     #[test]
     fn a47_turn_died_branches_on_the_error_and_ignores_synthetic_text() {
-        let rate = |s: &mut State| {
-            s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:01:00Z","message":{"id":"e1","model":"<synthetic>","content":[{"type":"text","text":"Rate limit hit"}],"stop_reason":"stop_sequence","usage":{"input_tokens":0,"output_tokens":0}},"quotaLimits":{"status":"rejected","resetsAt":1767265200,"rateLimitType":"five_hour","lowPriorityRetryAfterSeconds":20},"error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429}"#).unwrap());
-        };
-        let mut s = fresh();
-        rate(&mut s);
-        s.now_ms = t("2026-01-01T10:01:30Z");
+        let mut s = witness::a47_five_hour();
         let a = TurnDied.evaluate(&s).expect("a confirmed 429");
         assert_eq!(a.headline, "Rate limit (session) · resets 11:00 (in 58m)");
         assert_eq!(
@@ -2954,12 +2794,7 @@ mod tests {
         assert!(TurnDied.acted(&s, &a), "a successful call");
         assert!(TurnDied.evaluate(&s).is_none());
         // Branches: spend, auth, prompt too long, server.
-        let err = |error: &str, status: u16| -> State {
-            let mut s = fresh();
-            s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T10:01:00Z","message":{{"id":"e1","model":"<synthetic>","content":[{{"type":"text","text":"x"}}],"stop_reason":"stop_sequence","usage":{{"input_tokens":0,"output_tokens":0}}}},"error":"{error}","isApiErrorMessage":true,"apiErrorStatus":{status}}}"#)).unwrap());
-            s.now_ms = t("2026-01-01T10:01:30Z");
-            s
-        };
+        let err = witness::a47_error;
         assert_eq!(
             TurnDied
                 .evaluate(&err("spend_limit", 402))
