@@ -391,4 +391,11 @@ test('the hooks badge renders row-identical on both surfaces and is absent witho
   const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__header_hooks_missing_120.snap'), 'utf8');
   const tui = snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
   assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), tui);
+  // Too narrow: the badge goes before the phase cell does, on both surfaces.
+  const snap40 = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__header_hooks_missing_40.snap'), 'utf8');
+  const tui40 = snap40.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
+  assert.doesNotMatch(pane40, /hooks:/);
+  assert.match(pane40, /COMMITTING/);
+  assert.equal(pane40, tui40);
 });

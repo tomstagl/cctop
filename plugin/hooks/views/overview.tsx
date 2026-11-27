@@ -249,13 +249,18 @@ export function fitWorkspace(facts: string, items: string[], room: number): stri
   return facts;
 }
 
+/** The facts keep at least this many cells for the hooks badge to show (the TUI's `MIN_FACTS_WITH_BADGE`). */
+const MIN_FACTS_WITH_BADGE = 12;
+
 /** Row 1: ` cctop`, the session facts dim, the phase cell right-aligned in its colour. */
 function headerLine(d: Dashboard, columns: number): Line {
   const facts = d.headerLine.replace(/^cctop\s+/, '');
   const phaseText = clip(`${d.phase.glyph} ${d.phase.word} ${d.phase.elapsed}`, Math.min(40, Math.max(0, columns - 10)));
-  const badge = d.hooksBadge ?? '';
+  const roomFor = (b: string): number => columns - 8 - width(phaseText) - 2 - (b === '' ? 0 : width(b) + 2);
+  // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge goes first, the phase cell stays.
+  const badge = d.hooksBadge !== null && roomFor(d.hooksBadge) >= MIN_FACTS_WITH_BADGE ? d.hooksBadge : '';
   const badgeRoom = badge === '' ? 0 : width(badge) + 2;
-  const factsRoom = Math.max(0, columns - 8 - width(phaseText) - 2 - badgeRoom);
+  const factsRoom = Math.max(0, roomFor(badge));
   const factsText = clip(fitWorkspace(facts, d.workspace, factsRoom), factsRoom);
   const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText) - badgeRoom);
   const phaseStyle: Omit<Seg, 'text'> =

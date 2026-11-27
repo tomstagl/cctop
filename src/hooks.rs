@@ -803,6 +803,26 @@ mod state_tests {
     }
 
     #[test]
+    fn settings_row_names_the_file_and_source_on_either_separator() {
+        let mut s = State::new(Pricing::bundled());
+        for (at, path) in [
+            (1_000, "/p/.claude/settings.json"),
+            (2_000, r"C:\p\.claude\settings.local.json"),
+        ] {
+            s.apply_hook(&with(
+                "ConfigChange",
+                at,
+                "",
+                serde_json::json!({"source": "project_settings", "file_path": path}),
+            ));
+        }
+        let rows: Vec<&str> = s.events.iter().map(|e| e.text.as_str()).collect();
+        assert!(rows.contains(&"settings changed · settings.json (project_settings)"));
+        assert!(rows.contains(&"settings changed · settings.local.json (project_settings)"));
+        assert!(rows.iter().all(|r| !r.contains(".claude")), "{rows:?}");
+    }
+
+    #[test]
     fn teammate_idle_with_an_agent_id_still_reaches_the_arm() {
         let mut s = State::new(Pricing::bundled());
         s.apply_hook(&with(

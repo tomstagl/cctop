@@ -62,6 +62,9 @@ fn cells_of(spans: &[Span]) -> usize {
     spans.iter().map(|s| s.content.chars().count()).sum()
 }
 
+/// The facts keep at least this many cells for the hooks badge to show.
+pub const MIN_FACTS_WITH_BADGE: usize = 12;
+
 /// Row 1: ` cctop` bold, the session facts dim, the phase cell
 /// (`● WORKING 52:11`) right-aligned in its colour.
 fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
@@ -72,13 +75,25 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
     // The hooks badge sits between the facts and the phase cell.
-    let badge = d.header.hooks.clone().unwrap_or_default();
-    let badge_room = if badge.is_empty() {
-        0
-    } else {
-        badge.chars().count() + 2
+    let mut badge = d.header.hooks.clone().unwrap_or_default();
+    let room_for = |badge: &str| {
+        let badge_room = if badge.is_empty() {
+            0
+        } else {
+            badge.chars().count() + 2
+        };
+        (
+            badge_room,
+            width as i64 - (8 + phase.chars().count() + 2 + badge_room) as i64,
+        )
     };
-    let facts_room = width.saturating_sub(8 + phase.chars().count() + 2 + badge_room);
+    // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge
+    // goes first, the phase cell stays.
+    if room_for(&badge).1 < MIN_FACTS_WITH_BADGE as i64 {
+        badge.clear();
+    }
+    let (badge_room, facts_room) = room_for(&badge);
+    let facts_room = facts_room.max(0) as usize;
     let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
     let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count() + badge_room);
@@ -456,6 +471,12 @@ mod tests {
         assert_eq!(row.chars().count(), 120, "{row}");
         assert!(row.contains("hooks: 7 new  ● "), "{row}");
         insta::assert_snapshot!("header_hooks_missing_120", row);
+        // Too narrow for the facts to keep a dozen cells: the badge goes
+        // before the phase cell does.
+        let narrow = header_row(&app, &d, 40);
+        assert!(!narrow.contains("hooks:"), "{narrow}");
+        assert!(narrow.contains(&d.header.phase.word), "{narrow}");
+        insta::assert_snapshot!("header_hooks_missing_40", narrow);
     }
 
     #[test]

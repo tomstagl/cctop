@@ -1254,7 +1254,7 @@ mod tests {
         assert!(s
             .events
             .iter()
-            .any(|e| e.text == "settings changed · settings.json"));
+            .any(|e| e.text == "settings changed · settings.json (project_settings)"));
         let a = CacheMiss.evaluate(&s).expect("fires");
         // The tail is never cut, and the headline stays inside the coach width.
         assert!(

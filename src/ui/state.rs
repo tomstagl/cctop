@@ -771,6 +771,15 @@ fn merge_dirs(facts: &mut StatusFacts, dirs: &[String]) {
     }
 }
 
+/// The last path segment, whichever separator the host uses (`\` on
+/// Windows); `None` for an empty path.
+fn last_segment(path: &str) -> Option<&str> {
+    path.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|s| !s.is_empty())
+}
+
 impl State {
     pub fn new(pricing: Pricing) -> State {
         State {
@@ -1223,16 +1232,16 @@ impl State {
                 let source = pstr("source").unwrap_or_else(|| "settings".into());
                 let file = pstr("file_path")
                     .as_deref()
-                    .and_then(|f| f.rsplit('/').next())
-                    .filter(|f| !f.is_empty())
+                    .and_then(last_segment)
                     .map(str::to_string)
-                    .unwrap_or_else(|| source.clone());
+                    .unwrap_or_else(|| "settings".into());
+                let text = format!("settings changed · {file} ({source})");
                 self.config_changes.push((at, source));
                 self.mark_config_changes();
                 self.events.push(crate::events::Event {
                     at,
                     kind: Kind::Hook,
-                    text: format!("settings changed · {file}"),
+                    text,
                 });
             }
             "CwdChanged" => {
@@ -1244,8 +1253,7 @@ impl State {
                 let name = |k: &str| {
                     pstr(k)
                         .as_deref()
-                        .and_then(|c| c.trim_end_matches('/').rsplit('/').next())
-                        .filter(|c| !c.is_empty())
+                        .and_then(last_segment)
                         .map(str::to_string)
                 };
                 self.events.push(crate::events::Event {
@@ -1268,13 +1276,7 @@ impl State {
                 self.events.push(crate::events::Event {
                     at,
                     kind: Kind::Hook,
-                    text: format!(
-                        "dir added · {}",
-                        dir.rsplit('/')
-                            .next()
-                            .filter(|d| !d.is_empty())
-                            .unwrap_or(&dir)
-                    ),
+                    text: format!("dir added · {}", last_segment(&dir).unwrap_or(&dir)),
                 });
             }
             "TeammateIdle" => {
