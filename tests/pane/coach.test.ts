@@ -9,6 +9,7 @@ import { fixture } from './fixture';
 import { initialModel, reduce, type Action, type Model } from '../../plugin/hooks/model';
 import { register } from '../../plugin/hooks/pane';
 import {
+  DRAFT_KEPT,
   FILLED_FIX,
   coachOf,
   compositionCells,
@@ -269,7 +270,7 @@ test('a slash action fills the command; a tip is "Got it"; an agents key opens t
 test('an allow rule copies, opens settings.json and fills /permissions; the card shows who decided the waits (PRD 7)', () => {
   const { actions, calls } = recorder();
   const { tree, rows } = draw(build(withNudge(A09)), 72, actions);
-  assert.deepEqual(labels(tree, 'coach-now-'), ['1 Copy the rule', '2 Open settings.json', '3 Put /permissions in the box', '4 Snooze']);
+  assert.deepEqual(labels(tree, 'coach-now-'), ['1 Copy the rule', '2 Open settings.local.json', '3 Put /permissions in the box', '4 Snooze']);
   press(tree, 'coach-now-0-copy');
   press(tree, 'coach-now-0-open');
   press(tree, 'coach-now-0-permissions');
@@ -329,7 +330,7 @@ test('at 59 columns (Review Focus 4): nothing overflows and nothing in the card 
   }
 });
 
-test('"Up next" opens in place: its words, its fix prompt and its Buttons, numbered after the card\'s', () => {
+test('"Up next" opens in place: its words, its fix prompt and its Buttons, which take no digit', () => {
   const raw = moment('waiting');
   const next = raw.next!;
   const { actions, calls } = recorder();
@@ -350,9 +351,15 @@ test('"Up next" opens in place: its words, its fix prompt and its Buttons, numbe
   const otext = flat(open.rows);
   for (const s of [next.body, next.fix_prompt, next.foot, ...(next.evidence as string[])]) assert.ok(otext.includes(norm(String(s))), `${s}\n${otext}`);
   assert.ok(body(open.rows).some((r) => r.startsWith('NOW   Claude keeps needing correction') && r.endsWith('▾')));
-  // The card took 1 Got it and 2 Snooze: step 3 is the rewind, then 4 and 5.
-  assert.ok(body(open.rows).includes('3  Press Esc twice to rewind'), JSON.stringify(body(open.rows)));
-  assert.deepEqual(labels(open.tree, 'coach-next-A36-').filter((l) => !l.includes('-fix-') && !l.startsWith('- ')), ['4 Put the fix prompt in the box', '5 Snooze']);
+  // Its own numbering, its step first; its Buttons take no digit, so the
+  // card's 1 Got it and 2 Snooze stay where they are.
+  assert.ok(body(open.rows).includes('1  Press Esc twice to rewind'), JSON.stringify(body(open.rows)));
+  const nextButtons = buttons(open.tree).filter((b) => /^coach-next-A36-(\d+-|snooze)/.test(String(b.props?.key)));
+  assert.deepEqual(
+    nextButtons.map((b) => `${b.props?.hotkey ?? '-'} ${b.props?.label}`),
+    ['- Put the fix prompt in the box', '- Snooze'],
+  );
+  assert.deepEqual(labels(open.tree, 'coach-now-'), ['1 Got it', '2 Snooze']);
   press(open.tree, 'coach-next-A36-fix-0');
   press(open.tree, 'coach-next-A36-snooze');
   assert.deepEqual(r2.calls, [
@@ -412,7 +419,7 @@ test('the context light opens into the composition (PRD 3), labelled with its ag
 test('the pure parts: settings paths, the opener, the bar cells, the fill lines', () => {
   assert.equal(settingsScope('allow_rule'), 'project');
   assert.equal(settingsScope('setting'), 'user');
-  assert.equal(settingsPath('project', '/home/user/project/', '/home/user'), '/home/user/project/.claude/settings.json');
+  assert.equal(settingsPath('project', '/home/user/project/', '/home/user'), '/home/user/project/.claude/settings.local.json');
   assert.equal(settingsPath('user', '/home/user/project', '/home/user'), '/home/user/.claude/settings.json');
   assert.equal(openerFor('macos'), 'open');
   assert.equal(openerFor('linux'), 'xdg-open');
@@ -442,7 +449,7 @@ const ok = (stdout: string): ProcessRunResult => ({ exitCode: 0, stdout, stderr:
 const HELP = `Commands:\n${['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events'].map((v) => `  ${v}  x`).join('\n')}\n\nOptions:\n`;
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-async function boot(coach: unknown, platform: string | null = 'macos') {
+async function boot(coach: unknown, platform: string | null = 'macos', env: Record<string, string> = { HOME: '/home/user' }) {
   const script: Record<string, ProcessRunResult> = {
     'cctop --version': ok('cctop 0.2.0\n'),
     'cctop query --help': ok(HELP),
@@ -453,7 +460,7 @@ async function boot(coach: unknown, platform: string | null = 'macos') {
   }
   const $ = fakeEngine({
     process: script,
-    env: { HOME: '/home/user' },
+    env,
     session: { info: { transcriptPath: '', ...(platform === null ? {} : { platform: platform as 'macos' }) } },
   });
   const { on, dispatch } = fakeOn($, { surface: { columns: 160, bodyColumns: 72 } });
@@ -487,9 +494,11 @@ test('the Coach tab: the status line once per change, the fix card fills and nev
   const after = await render(72);
   assert.ok(flat(after.rows).includes(norm(FILLED_FIX)), JSON.stringify(after.rows));
   // The next turn (the person pressed Enter): the line goes.
+  $.prompt.draft = '';
   await dispatch('turn.start', {}, () => ({}));
   assert.ok(!flat((await render(72)).rows).includes("It's in your prompt box"));
   // A busy box: a toast, and no line saying it is there.
+  $.prompt.draft = '';
   $.prompt.filled = false;
   $.ui.press('coach-now-1-fill');
   await settle();
@@ -499,7 +508,7 @@ test('the Coach tab: the status line once per change, the fix card fills and nev
 
 test('copy and open settings.json go through $.ui.copy and `open`/`xdg-open`; nothing writes the file', async () => {
   const { $ } = await boot(withNudge(A09));
-  const project = '/home/user/project/.claude/settings.json';
+  const project = '/home/user/project/.claude/settings.local.json';
   $.ui.press('coach-now-0-copy');
   await settle();
   assert.deepEqual($.ui.copies, ['Bash(gh api:*)']);
@@ -534,6 +543,62 @@ test('copy and open settings.json go through $.ui.copy and `open`/`xdg-open`; no
   await settle();
   assert.ok(other.$.ui.toasts.includes(`cctop: open ${user} in your editor`), JSON.stringify(other.$.ui.toasts));
   assert.ok(!other.$.process.calls.some((a) => a[0] === 'open' || a[0] === 'xdg-open'));
+  // HOME unset: nothing is handed `~/…` (no shell expands it); the toast names the file.
+  const homeless = await boot(withNudge(A16), 'macos', {});
+  homeless.$.ui.press('coach-now-0-open');
+  await settle();
+  await settle();
+  assert.ok(homeless.$.ui.toasts.includes('cctop: HOME is not set: open ~/.claude/settings.json in your editor'), JSON.stringify(homeless.$.ui.toasts));
+  assert.ok(!homeless.$.process.calls.some((a) => a[0] === 'open' || a[0] === 'xdg-open'));
+  homeless.$.ui.press('coach-now-0-copy');
+  await settle();
+  assert.ok(homeless.$.ui.toasts.includes('cctop: copied "async": true. Paste it into ~/.claude/settings.json'), JSON.stringify(homeless.$.ui.toasts));
+});
+
+test('a fill never replaces a draft: only an empty box is filled; a draft or an unreadable box keeps it', async () => {
+  const raw = withNudge(A38);
+  const { $, render } = await boot(raw);
+  await render(72);
+  // A draft in the box: no fill call, the toast, the card unchanged.
+  $.prompt.draft = 'half a sentence I am typ';
+  const before = (await render(72)).rows;
+  $.ui.press('coach-now-fix-0');
+  await settle();
+  await settle();
+  assert.deepEqual($.prompt.fills, [], 'no fill over a draft');
+  assert.ok($.ui.toasts.includes(DRAFT_KEPT), JSON.stringify($.ui.toasts));
+  assert.equal(DRAFT_KEPT, 'cctop: Your draft is kept — clear the prompt box, then press again');
+  assert.equal($.prompt.draft, 'half a sentence I am typ');
+  assert.deepEqual((await render(72)).rows, before, 'the card is unchanged');
+  // A box that cannot be read: refused the same way.
+  $.prompt.draft = '';
+  $.prompt.readFails = true;
+  $.ui.press('coach-now-1-fill');
+  await settle();
+  await settle();
+  assert.deepEqual($.prompt.fills, []);
+  assert.equal($.ui.toasts.filter((t) => t === DRAFT_KEPT).length, 2);
+  // An empty box: filled, and the card says nothing has been sent.
+  $.prompt.readFails = false;
+  $.ui.press('coach-now-fix-0');
+  await settle();
+  await settle();
+  assert.deepEqual($.prompt.fills, [A38.fix_prompt]);
+  assert.ok(flat((await render(72)).rows).includes(norm(FILLED_FIX)));
+  // The person empties the box: the next poll sees it and the line goes, before any turn.
+  $.prompt.draft = '';
+  $.clock.tick(10_000);
+  await settle();
+  await settle();
+  assert.ok(!flat((await render(72)).rows).includes("It's in your prompt box"));
+});
+
+test('the "is in your prompt box" line is said once, even when two cards fill the same command', () => {
+  const raw = withNudge(A09);
+  const twin = { ...A09, id: 'A99', class: 'LATER', name: 'Another rule to allow' };
+  const both = { ...raw, next: { ...twin, promotes: 'next prompt', row: 'next     A99' } };
+  const text = flat(draw(build(both, { coachNext: 'A99', coachFilled: '/permissions' }), 72).rows);
+  assert.equal(text.split('is in your prompt box').length, 2, text);
 });
 
 test('snooze and Got it ask the binary and take its answer; the lights and Up next switch in place', async () => {

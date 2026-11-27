@@ -30,6 +30,7 @@ import type {
   PaneCloseArgs,
   PaneOpenArgs,
   ProcessRunResult,
+  PromptBox,
   PromptFillArgs,
   PromptFilled,
   RenderElement,
@@ -188,6 +189,10 @@ export type FakeExtras = {
     fills: string[];
     /** What the next fills answer (`isFilled`). */
     filled: boolean;
+    /** The prompt box's draft: what `$.prompt.read()` answers; a fill that took replaces it. */
+    draft: string;
+    /** When true, `$.prompt.read()` rejects. */
+    readFails: boolean;
   };
   ui: {
     /** `$.ui.invalidate` calls, counted per event name. */
@@ -495,12 +500,19 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     prompt: {
       fills,
       filled: true,
+      draft: '',
+      readFails: false,
+      read: async (): Promise<PromptBox> => {
+        if (engine.prompt.readFails) throw new Error('fakeEngine: prompt.read failed');
+        return { text: engine.prompt.draft, cursor: engine.prompt.draft.length };
+      },
       // The return type is spelled so the body may read `engine` back (a
       // literal under `satisfies` cannot otherwise name itself). Since 2.1.278
       // the result carries the box after the fill and the cursor (PromptFilled).
       fill: async ({ text }: PromptFillArgs): Promise<PromptFilled> => {
         fills.push(text);
         const isFilled = engine.prompt.filled;
+        if (isFilled) engine.prompt.draft = text;
         return { isFilled, text: isFilled ? text : '', cursor: isFilled ? text.length : 0 };
       },
       submit: async () => {

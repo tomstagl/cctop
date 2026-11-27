@@ -79,10 +79,11 @@ dashboard` verbatim — the same objects the TUI draws — so the pane and the
 terminal show the same nudge at the same moment. The frames inside the other
 views carry the TUI's panel digits (`╭5 Tools ─ 257 calls╮`), the same
 numbers the guide and `cctop query` use. A fix prompt or a command goes
-into the prompt box (`$.prompt.fill`) and is never submitted; a rule or a
-setting is copied (`$.ui.copy`) and settings.json is opened in your editor,
-never written; a key-kind nudge (stop the turn) is a step you take with Esc;
-the
+into an empty prompt box (`$.prompt.fill`, after `$.prompt.read`: a draft is
+never replaced) and is never submitted; a rule is copied (`$.ui.copy`) and
+the project's `.claude/settings.local.json` opened in your editor, a setting
+copied and `~/.claude/settings.json` opened, neither ever written; a
+key-kind nudge (stop the turn) is a step you take with Esc; the
 coach's one-line form sits under the prompt (`$.ui.status`) and changes only
 when a light's level or the nudge changes.
 

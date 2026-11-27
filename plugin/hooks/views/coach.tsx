@@ -15,8 +15,9 @@
 // The one-line strings (the state line, the light rows) are the binary's,
 // cut at 52 cells there, so the TUI and the pane show the same characters;
 // the full words are uncut and wrapped here. Nothing here acts on the
-// session: a fill only drafts, a copy only copies, settings.json is only
-// opened, and "press Esc to stop the turn" is a step the person takes.
+// session: a fill only drafts into an empty box, a copy only copies, a
+// settings file is only opened, and "press Esc to stop the turn" is a step
+// the person takes.
 import type { ElementTable, RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { at, formatAgo, formatTokensTui, stringAt } from './format';
@@ -225,7 +226,7 @@ export function lightText(l: Light, columns: number): string {
 
 // ------------------------------------------------------------ the actions
 
-/** Which settings file an action concerns: an allow rule the project's, a setting the person's own. */
+/** Which settings file an action concerns: an allow rule the project's local one, a setting the person's own. */
 export type SettingsKind = 'allow_rule' | 'setting';
 export type SettingsScope = 'project' | 'user';
 
@@ -233,10 +234,20 @@ export function settingsScope(kind: SettingsKind): SettingsScope {
   return kind === 'allow_rule' ? 'project' : 'user';
 }
 
-/** The settings.json an action points at: `<project>/.claude/settings.json` or `~/.claude/settings.json`. */
+/**
+ * The settings file an action points at: an allow rule the project's
+ * personal, uncommitted `<project>/.claude/settings.local.json` (where Claude
+ * Code's own "don't ask again" writes), a setting `~/.claude/settings.json`.
+ */
 export function settingsPath(scope: SettingsScope, root: string, home: string): string {
-  return `${(scope === 'project' ? root : home).replace(/\/+$/, '')}/.claude/settings.json`;
+  return scope === 'project' ? `${root.replace(/\/+$/, '')}/.claude/settings.local.json` : `${home.replace(/\/+$/, '')}/.claude/settings.json`;
 }
+
+/** How the person's own settings file is named when HOME is unknown: for them to open by hand, never for a command (no shell expands `~`). */
+export const USER_SETTINGS = '~/.claude/settings.json';
+
+/** What a press that would fill says when the box holds a draft (or cctop cannot tell): the draft is never replaced. */
+export const DRAFT_KEPT = 'cctop: Your draft is kept — clear the prompt box, then press again';
 
 /** The command that opens a file in the person's editor on `platform` (`$.session.info()`), or null where cctop knows none. */
 export function openerFor(platform: string | undefined): 'open' | 'xdg-open' | null {
@@ -274,11 +285,11 @@ export type CoachElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'But
 
 /** What the pane may do on a press; built in pane.tsx over `$`. None of it acts on the session. */
 export type CoachActions = {
-  /** Draft `text` in the prompt box (`$.prompt.fill`); never sends. */
+  /** Draft `text` in an empty prompt box (`$.prompt.fill`); never sends, never replaces a draft. */
   fill(text: string): void;
-  /** Put `text` on the clipboard (`$.ui.copy`) and say which settings.json it belongs in. */
+  /** Put `text` on the clipboard (`$.ui.copy`) and say which settings file it belongs in. */
   copy(text: string, kind: SettingsKind): void;
-  /** Open that settings.json in the person's editor; cctop never writes it. */
+  /** Open that settings file in the person's editor; cctop never writes it. */
   openSettings(kind: SettingsKind): void;
   /** Five turns' quiet for the rule (`cctop query coach --snooze`). */
   snooze(rule: string): void;
@@ -335,11 +346,23 @@ function headRows(a: Advice, right: string, inner: number): FrameRow[] {
   return [{ line: left }, { line: [dim(right)] }];
 }
 
-/** Hotkeys for the view's Buttons, 1 to 9 in drawing order; later ones go without. */
-type Counter = { n: number };
+/**
+ * One card's numbering: its steps and Buttons 1, 2, … in drawing order, and
+ * the digit as the Button's hotkey on the NOW card only (Up next goes
+ * without, so the card's digits stay put across polls). `said` is shared by
+ * the whole view: the "is in your prompt box" line is drawn once.
+ */
+type Counter = { n: number; hotkeys: boolean; said: { filled: boolean } };
 function hotkey(counter: Counter): string | undefined {
   const n = counter.n++;
-  return n <= 9 ? String(n) : undefined;
+  return counter.hotkeys && n <= 9 ? String(n) : undefined;
+}
+
+/** The "is in your prompt box" line, the first time the view draws it. */
+function filledRows(counter: Counter, line: string, inner: number): FrameRow[] {
+  if (counter.said.filled) return [];
+  counter.said.filled = true;
+  return wrapped(line, inner, { color: OK });
 }
 
 /** Buttons packed greedily into rows `inner` wide, BUTTON_GAP apart. */
@@ -373,7 +396,7 @@ function fillTexts(a: Advice): string[] {
 
 // An advice's actions, by kind and in the binary's order: a key is a step
 // the person takes (shown first, numbered with the Buttons); prompt and
-// slash fill the box; an allow rule copies, opens settings.json and fills
+// slash fill the box; an allow rule copies, opens settings.local.json and fills
 // /permissions; a setting copies and opens; a tip is "Got it". Snooze last.
 // Then the line saying a fill took and nothing was sent.
 function actionRows(a: Advice, where: string, inner: number, actions: CoachActions, counter: Counter, model: Model, fixShown: boolean): FrameRow[] {
@@ -400,7 +423,7 @@ function actionRows(a: Advice, where: string, inner: number, actions: CoachActio
         break;
       case 'allow_rule':
         button(`${i}-copy`, x.label, () => actions.copy(x.payload, 'allow_rule'));
-        button(`${i}-open`, 'Open settings.json', () => actions.openSettings('allow_rule'));
+        button(`${i}-open`, 'Open settings.local.json', () => actions.openSettings('allow_rule'));
         button(`${i}-permissions`, 'Put /permissions in the box', () => actions.fill('/permissions'));
         break;
       case 'setting':
@@ -416,7 +439,7 @@ function actionRows(a: Advice, where: string, inner: number, actions: CoachActio
   rows.push(...packButtons(buttons, inner));
   const filled = model.coachFilled;
   if (filled !== null && fillTexts(a).includes(filled) && !(fixShown && filled === a.fixPrompt)) {
-    rows.push(...wrapped(filledText(filled), inner, { color: OK }));
+    rows.push(...filledRows(counter, filledText(filled), inner));
   }
   return rows;
 }
@@ -437,7 +460,7 @@ function fullRows(a: Advice, where: string, inner: number, actions: CoachActions
     wrapWords(fix, inner - 2).forEach((t, i) => {
       rows.push({ line: [seg(i === 0 ? '↵ ' : '  ', { color: ACCENT }), seg(t)], press: { key: `coach-${where}-fix-${i}`, onPress: () => actions.fill(fix), dimColor: false } });
     });
-    if (model.coachFilled === fix) rows.push(...wrapped(FILLED_FIX, inner, { color: OK }));
+    if (model.coachFilled === fix) rows.push(...filledRows(counter, FILLED_FIX, inner));
   }
   rows.push(blank(), ...actionRows(a, where, inner, actions, counter, model, fix !== null));
   if (a.foot !== '') rows.push(...wrapped(a.foot, inner, { dim: true }));
@@ -469,7 +492,7 @@ function toggleRow(text: string, open: boolean, inner: number, key: string, onPr
 }
 
 // "Up next": the queued nudge as rows that open in place, then the snoozed.
-function upNext(c: Coach, model: Model, columns: number, actions: CoachActions, counter: Counter, el: CoachElements): RenderElement {
+function upNext(c: Coach, model: Model, columns: number, actions: CoachActions, said: Counter['said'], el: CoachElements): RenderElement {
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = [];
   const x = c.next;
@@ -484,7 +507,7 @@ function upNext(c: Coach, model: Model, columns: number, actions: CoachActions, 
     wrapWords(x.headline, inner - 6).forEach((t, i) => {
       rows.push({ line: [seg(`      ${t}`)], press: { key: `coach-next-${x.id}-${i + 1}`, onPress: press, dimColor: false } });
     });
-    if (open) rows.push(...fullRows(x, `next-${x.id}`, inner, actions, counter, model));
+    if (open) rows.push(...fullRows(x, `next-${x.id}`, inner, actions, { n: 1, hotkeys: false, said }, model));
   }
   if (c.snoozed > 0) rows.push(line(c.snoozedRow));
   return panel({ title: 'Up next', summary: 'click a row to open it' }, rows, columns, el);
@@ -625,12 +648,12 @@ export function renderCoach(model: Model, el: CoachElements, columns: number, ac
   const p = { title: 'coach', summary: c === null ? undefined : `${c.model.replace(/^claude-/, '')} · turn ${c.turn}` };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'advice_saving' })], columns, el);
   if (c === null) return panel(p, [line('waiting for cctop query coach…', { key: 'advice_saving' })], columns, el);
-  const counter: Counter = { n: 1 };
+  const counter: Counter = { n: 1, hotkeys: true, said: { filled: false } };
   const footer = c.footer === '' ? [] : wrapWords(c.footer, columns).map((t) => textRow([dim(t)], el));
   return (
     <Box flexDirection="column">
       {nowCard(c, model, columns, now, actions, counter, el)}
-      {upNext(c, model, columns, actions, counter, el)}
+      {upNext(c, model, columns, actions, counter.said, el)}
       {lightsFrame(c, model, columns, actions, el)}
       {footer}
     </Box>
