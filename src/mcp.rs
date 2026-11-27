@@ -95,12 +95,9 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
                     .ok_or_else(|| format!("max_turns {v}: expected a positive integer"))?
                     as usize,
             };
-            let state = state_for(args)?;
-            let path = match state.agg.derived_from {
-                Some(_) => crate::load::resolve(&target_of(args)).ok().map(|(p, _)| p),
-                None => None,
-            };
-            Ok(query::overview(&state, max_turns, path.as_deref()))
+            let mut state = state_for(args)?;
+            state.refresh_lineage();
+            Ok(query::overview(&state, max_turns))
         }
         "cctop_prefix" => {
             let state = state_for(args)?;
@@ -108,10 +105,7 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
             v["sources"] = query::sources(&state);
             Ok(v)
         }
-        "cctop_lineage" => {
-            let (path, _) = crate::load::resolve(&target_of(args)).map_err(|e| e.to_string())?;
-            Ok(query::lineage(&path))
-        }
+        "cctop_lineage" => Ok(query::lineage(&state_for(args)?)),
         "cctop_events" => {
             let since = match args.get("since").and_then(Value::as_str) {
                 Some(s) => Some(
@@ -294,7 +288,7 @@ mod tests {
             3
         );
         let state = state_for(&json!({"session":fixture})).unwrap();
-        assert_eq!(v, query::overview(&state, 3, None));
+        assert_eq!(v, query::overview(&state, 3));
         let e = call("cctop_overview", &json!({"session":fixture,"max_turns":0})).unwrap_err();
         assert!(e.contains("max_turns"), "{e}");
     }

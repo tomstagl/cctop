@@ -570,7 +570,9 @@ pub struct State {
     pub console_offset_max: std::cell::Cell<usize>,
     /// The session's transcript, for the lineage chain's cost.
     pub transcript: Option<std::path::PathBuf>,
-    chain_usd: std::cell::OnceCell<Option<f64>>,
+    /// The ancestors' finished cost (PRD 4), with the parent id it was read
+    /// for: `chain_usd` adds this session's live cost to it.
+    pub ancestors_usd: Option<(String, f64)>,
     /// A view the open panel owns on top of itself (`Enter`: a ledger, a
     /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,
@@ -1997,16 +1999,56 @@ impl State {
         self.cache_clock().map(|c| (c.remaining_ms > 0, c.approx))
     }
 
-    /// Console's open body: the index a key set, else events (home).
-    /// The cost of this session and the ones it came from (PRD 4), read
-    /// once; `None` for a session that was not derived from another.
+    /// The cost of this session and the ones it came from (PRD 4): the
+    /// ancestors' cost read for the current parent, plus this session's
+    /// live cost. `None` for a session not derived from another, or until
+    /// the ancestors were read ([`State::lineage_due`]).
     pub fn chain_usd(&self) -> Option<f64> {
-        self.agg.derived_from.as_ref()?;
-        *self
-            .chain_usd
-            .get_or_init(|| self.transcript.as_deref().map(crate::query::lineage_cost))
+        let (parent, _) = self.agg.derived_from.as_ref()?;
+        let (_, ancestors) = self.ancestors_usd.as_ref().filter(|(p, _)| p == parent)?;
+        Some(crate::lineage::chain_usd(*ancestors, self))
     }
 
+    /// What to read the ancestors' cost from, when the session is derived
+    /// and they were not read for its current parent yet.
+    pub fn lineage_due(&self) -> Option<crate::lineage::Ask> {
+        let (parent, _) = self.agg.derived_from.as_ref()?;
+        if self
+            .ancestors_usd
+            .as_ref()
+            .is_some_and(|(p, _)| p == parent)
+        {
+            return None;
+        }
+        Some(crate::lineage::Ask::of(self))
+    }
+
+    /// Read the ancestors' cost now, when due (through
+    /// `~/.cctop/lineage-cache.json`). For one-shot callers (`cctop query`,
+    /// MCP); the TUI reads it on a thread of its own.
+    pub fn refresh_lineage(&mut self) {
+        if self.lineage_due().is_none() {
+            return;
+        }
+        let root = crate::baseline::default_projects_dir().unwrap_or_default();
+        let mut cache = crate::lineage::Cache::open(crate::lineage::default_cache_file());
+        self.refresh_lineage_with(&root, &mut cache);
+    }
+
+    /// [`State::refresh_lineage`] with the projects directory and cache given.
+    pub fn refresh_lineage_with(
+        &mut self,
+        projects_root: &std::path::Path,
+        cache: &mut crate::lineage::Cache,
+    ) {
+        let Some(ask) = self.lineage_due() else {
+            return;
+        };
+        let usd = crate::lineage::ancestors_usd(&ask, projects_root, cache);
+        self.ancestors_usd = ask.parent.map(|p| (p, usd));
+    }
+
+    /// Console's open body: the index a key set, else events (home).
     pub fn console_body(&self) -> usize {
         self.console_body.unwrap_or(crate::dashboard::EVENTS_BODY)
     }

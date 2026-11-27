@@ -87,6 +87,42 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         return;
     }
 
+    // The lineage chain's ancestors (PRD 4): read on a thread of their own
+    // whenever the parent changes (at attach, for a derived session), never
+    // on the draw path. Their cost is finished; `State::chain_usd` adds
+    // this session's live cost to it on every frame.
+    let mut reading: Option<(String, std::sync::mpsc::Receiver<f64>)> = None;
+    let mut failed: Option<String> = None;
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        use std::sync::mpsc::TryRecvError;
+        if let Some((parent, rx)) = &reading {
+            match rx.try_recv() {
+                Ok(usd) => state.ancestors_usd = Some((parent.clone(), usd)),
+                Err(TryRecvError::Empty) => return,
+                Err(TryRecvError::Disconnected) => failed = Some(parent.clone()),
+            }
+            reading = None;
+        }
+        let Some(ask) = state.lineage_due() else {
+            return;
+        };
+        let Some(parent) = ask.parent.clone().filter(|p| failed.as_ref() != Some(p)) else {
+            return;
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let spawned = std::thread::Builder::new()
+            .name("cctop-lineage".into())
+            .spawn(move || {
+                let root = crate::baseline::default_projects_dir().unwrap_or_default();
+                let mut cache = crate::lineage::Cache::open(crate::lineage::default_cache_file());
+                let _ = tx.send(crate::lineage::ancestors_usd(&ask, &root, &mut cache));
+            });
+        match spawned {
+            Ok(_) => reading = Some((parent, rx)),
+            Err(_) => failed = Some(parent),
+        }
+    }));
+
     // Process tree once a second.
     if let Some(pid) = app.state.session.pid {
         let configs = crate::procs::mcp_configs(&app.state.session.cwd);

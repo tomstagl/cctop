@@ -775,27 +775,19 @@ pub fn dashboard(state: &State) -> Value {
 
 /// `cctop query overview`: the overview object (mod-pane US-002) — per
 /// chart its title, figure, verdict, chart spec, readouts and legend; the
-/// per-turn charts keep the last `max_turns` turns. `transcript` is the
-/// session's file: when the session was derived from another, the chain's
-/// cost is read from the transcripts beside it (PRD 4).
-pub fn overview(state: &State, max_turns: usize, transcript: Option<&std::path::Path>) -> Value {
-    let chain_usd = transcript
-        .filter(|_| state.agg.derived_from.is_some())
-        .map(lineage_cost);
+/// per-turn charts keep the last `max_turns` turns. A derived session's
+/// chain cost (PRD 4) is [`State::chain_usd`]: the caller reads the
+/// ancestors first ([`State::refresh_lineage`]).
+pub fn overview(state: &State, max_turns: usize) -> Value {
     let o = crate::overview::build_with(
         state,
         &crate::overview::Options {
             max_turns,
-            chain_usd,
+            chain_usd: state.chain_usd(),
             fallback_cells: true,
         },
     );
     serde_json::to_value(o).unwrap_or(Value::Null)
-}
-
-pub(crate) fn lineage_cost(path: &std::path::Path) -> f64 {
-    let root = crate::baseline::default_projects_dir().unwrap_or_default();
-    crate::lineage::chain(path, &root).chain_cost_usd
 }
 
 /// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
@@ -844,11 +836,13 @@ pub fn advice_of(engine: &advisor::Engine) -> Value {
     })
 }
 
-/// The session's chain: ancestors, descendants and the chain's cost, from
-/// the transcript at `path` and the transcripts under `~/.claude/projects`.
-pub fn lineage(path: &std::path::Path) -> Value {
+/// The session's chain: ancestors, descendants and the chain's cost. This
+/// session from `state` (live), its relatives from the transcripts under
+/// `~/.claude/projects` through `~/.cctop/lineage-cache.json`.
+pub fn lineage(state: &State) -> Value {
     let root = crate::baseline::default_projects_dir().unwrap_or_default();
-    serde_json::to_value(crate::lineage::chain(path, &root)).unwrap_or(Value::Null)
+    let mut cache = crate::lineage::Cache::open(crate::lineage::default_cache_file());
+    serde_json::to_value(crate::lineage::chain(state, &root, &mut cache)).unwrap_or(Value::Null)
 }
 
 pub fn prefix(state: &State) -> Value {
@@ -1414,7 +1408,7 @@ mod tests {
     #[test]
     fn overview_carries_five_charts_with_registered_verdicts() {
         let s = state_b();
-        let v = overview(&s, 50, None);
+        let v = overview(&s, 50);
         assert_eq!(v["schema"], 1);
         let charts = v["charts"].as_array().unwrap();
         assert_eq!(charts.len(), 5);

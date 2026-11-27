@@ -717,16 +717,7 @@ fn query(q: QueryArgs) {
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
         QueryWhat::Config => qy::config(&cctop::config::Config::load()),
-        QueryWhat::Lineage => {
-            let (path, _) = match cctop::load::resolve(&target(&q.attach)) {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("cctop: {e}");
-                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                }
-            };
-            qy::lineage(&path)
-        }
+        QueryWhat::Lineage => qy::lineage(&load_state(&q.attach)),
         QueryWhat::Coach {
             line: true,
             columns,
@@ -750,14 +741,8 @@ fn query(q: QueryArgs) {
                 QueryWhat::Advice => qy::advice(&state),
                 QueryWhat::Dashboard => qy::dashboard(&state),
                 QueryWhat::Overview { max_turns } => {
-                    // The transcript only matters for a derived session's chain.
-                    let path = state
-                        .agg
-                        .derived_from
-                        .as_ref()
-                        .and_then(|_| cctop::load::resolve(&target(&q.attach)).ok())
-                        .map(|(p, _)| p);
-                    qy::overview(&state, *max_turns as usize, path.as_deref())
+                    state.refresh_lineage();
+                    qy::overview(&state, *max_turns as usize)
                 }
                 QueryWhat::Coach {
                     snooze,
