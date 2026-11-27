@@ -169,6 +169,8 @@ enum QueryWhat {
     },
     /// Definition of a metric id (see docs/metrics.md).
     Explain { metric_id: String },
+    /// The settings the pane reads from config.toml (`[pane] charts`).
+    Config,
     /// Medians over your last 7 days of sessions.
     Baseline,
 }
@@ -714,6 +716,7 @@ fn query(q: QueryArgs) {
     }
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
+        QueryWhat::Config => qy::config(&cctop::config::Config::load()),
         QueryWhat::Lineage => {
             let (path, _) = match cctop::load::resolve(&target(&q.attach)) {
                 Ok(r) => r,
@@ -783,7 +786,9 @@ fn query(q: QueryArgs) {
                     };
                     qy::events(&state, since_ms)
                 }
-                QueryWhat::Explain { .. } | QueryWhat::Lineage => unreachable!(),
+                QueryWhat::Explain { .. } | QueryWhat::Config | QueryWhat::Lineage => {
+                    unreachable!()
+                }
             }
         }
     };

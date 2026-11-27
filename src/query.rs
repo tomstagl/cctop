@@ -924,6 +924,11 @@ pub fn baseline(b: Option<&crate::baseline::Baseline>) -> Value {
     }
 }
 
+/// `cctop query config`: the config the pane reads (`[pane] charts`).
+pub fn config(config: &crate::config::Config) -> Value {
+    json!({"schema": 1, "pane": {"charts": config.pane.charts}})
+}
+
 pub fn explain(metric_id: &str) -> Value {
     match registry::get(metric_id) {
         Some(mt) => {
