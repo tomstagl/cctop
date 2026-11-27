@@ -15,6 +15,8 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D2c
 | **Plan** <a id="plan_tier"></a> `plan_tier` | enum | `oauthAccount.userRateLimitTier` (else `organizationRateLimitTier`) from `~/.claude.json` | D12 | The status line never carries a plan; keys are read, never the account's names | never |
 | **CPU** <a id="process_cpu"></a> `process_cpu` | % | CPU share of the `claude` process over the last sample interval | D5 | — | never |
 | **Memory** <a id="process_rss"></a> `process_rss` | bytes | Resident set size of the `claude` process | D5 | — | never |
+| **Added directories** <a id="workspace_added_dirs"></a> `workspace_added_dirs` | count | `workspace.added_dirs.length` from the status line (`--add-dir`, `/add-dir`) | D3 | The header and `cctop query` carry the count only; the paths are shown in the sources view and nowhere else | never |
+| **Output style** <a id="output_style"></a> `output_style` | enum | `output_style.name` from the status line; `default` is not drawn in the header | D3 | — | never |
 
 ## Context
 
@@ -62,6 +64,7 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D2c
 | **Behaviour flags** <a id="behaviour_flags"></a> `behaviour_flags` | % | `/usage`'s five flags as shares of the weighted usage: cache_miss (requests with > 100 k uncached tokens), long_context (> 150 k context), subagent_heavy, high_parallel (≥ 4 live sessions), cron (active ≥ 8 h); shown with Claude Code's own tip text at ≥ 10 % | D2 D1 D12 | — | never |
 | **Burn rate** <a id="burn_rate"></a> `burn_rate` | USD/h | Cost of turns active in the trailing 15 minutes, scaled to an hour over the part of the window they cover | D2 D9 | A turn counts from its start (clamped to the window) to its last line; windows shorter than 1 minute are treated as 1 minute | ≈ (always priced from the table) |
 | **Input rate** <a id="input_rate"></a> `input_rate` | tokens/min | Total input tokens of turns started in the trailing 15 minutes ÷ window | D2 | — | never |
+| **Long-context flag** <a id="exceeds_200k_tokens"></a> `exceeds_200k_tokens` | bool | `exceeds_200k_tokens` from the status line: the session's context passed 200 k tokens | D3 | Claude Code prices a request above 200 k tokens at its long-context rates, so the dollars past this point rise faster than the token counts; `long_context_pct` (above 150 k) is a separate, transcript-derived share | never |
 
 ## Limits
 
@@ -72,6 +75,7 @@ Sources: D1 session registry · D2 transcript · D2a subagent transcripts · D2c
 | **Resets in** <a id="limit_reset"></a> `limit_reset` | duration | `resets_at` − now | D3 | — | never |
 | **Rate limited** <a id="limit_hit"></a> `limit_hit` | enum | The newest API-error line with `error: rate_limit` (or status 429): `quotaLimits.rateLimitType`, `resetsAt`, `lowPriorityRetryAfterSeconds` — cleared by the next successful call | D2 | Exact without the shim: Claude Code writes the 429 into the transcript | never |
 | **Spend limit** <a id="spend_limit"></a> `spend_limit` | % | `rate_limits.spend_limit.used_percentage` from the status line, for accounts with a monthly limit | D3 | — | never |
+| **Spend limit (USD)** <a id="spend_limit_usd"></a> `spend_limit_usd` | usd | `rate_limits.spend_limit.used_usd` and `limit_usd` from the status line, with its `period` and `resets_at`; follows the latest sample | D3 | Gateway accounts with an overage only: absent on every other account, so nothing may assume it | never |
 | **Other sessions** <a id="other_sessions"></a> `other_sessions` | list | Live registry entries other than this one: busy/idle and how long (`statusUpdatedAt`) | D1 | They share the rate limit | never |
 | **Projected exhaustion** <a id="limit_exhaustion"></a> `limit_exhaustion` | duration | Least-squares slope of used_percentage samples over the last 30 min, extrapolated to 100 % | D3 | Needs ≥ 3 samples; rate-limit units are plan-specific, so tokens are not used | ≈ always |
 

@@ -62,6 +62,13 @@ pub fn summary(state: &State) -> Value {
             o.insert("team_cost".into(), team);
         }
     }
+    // The status line's extra facts only once a sample carried any, so a
+    // session without a status line prints exactly what it did before.
+    if state.status_facts != Default::default() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("status".into(), status_object(state));
+        }
+    }
     v
 }
 
@@ -187,6 +194,38 @@ fn summary_object(state: &State) -> Value {
             }),
             None => missing("run cctop with --otlp and export telemetry (cctop install --otel)"),
         },
+    })
+}
+
+/// What the status line carries beyond the numbers: the workspace (the
+/// added directories as a count, never paths; the remote id never), the spend
+/// limit in dollars (gateway accounts with an overage) and the long-context
+/// flag. Absent facts are `null`.
+fn status_object(state: &State) -> Value {
+    let f = &state.status_facts;
+    let w = f.workspace.as_ref();
+    let repo = w
+        .and_then(|w| w.repo.as_ref())
+        .and_then(|r| Some(format!("{}/{}", r.owner.as_deref()?, r.name.as_deref()?)));
+    let spend = f.spend_limit_usd.map(|(used, limit)| {
+        json!({
+            "used_usd": m(used, "usd", "spend_limit_usd", false),
+            "limit_usd": limit.map(|l| m(l, "usd", "spend_limit_usd", false)),
+            "period": f.spend_limit_period,
+            "resets_at_ms": f.spend_limit_resets_at_ms,
+        })
+    });
+    json!({
+        "workspace": {
+            "repo": repo,
+            "worktree": w.and_then(|w| w.git_worktree.clone()),
+            "added_dirs": w.map(|w| m(w.added_dirs.len(), "count", "workspace_added_dirs", false)),
+            "output_style": f.output_style.as_ref().map(|s| m(s.clone(), "enum", "output_style", false)),
+            "agent": f.agent_name,
+            "remote": f.remote_session_id.is_some(),
+        },
+        "spend_limit": spend,
+        "exceeds_200k_tokens": m(f.exceeds_200k_tokens, "bool", "exceeds_200k_tokens", false),
     })
 }
 
@@ -792,6 +831,66 @@ mod tests {
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
         assert_eq!(first["tokens"]["metric_id"], "cache_write");
+    }
+
+    #[test]
+    fn query_summary_status_keys() {
+        // No status sample: no key, nothing moves.
+        let s = state_b();
+        assert!(summary(&s).get("status").is_none());
+        let mut s = s;
+        s.status_facts.workspace = Some(crate::status::Workspace {
+            added_dirs: vec!["/secret/a".into(), "/secret/b".into()],
+            git_worktree: Some("feat".into()),
+            repo: Some(crate::status::Repo {
+                host: None,
+                owner: Some("acme".into()),
+                name: Some("shop".into()),
+            }),
+            ..Default::default()
+        });
+        s.status_facts.output_style = Some("Concise".into());
+        s.status_facts.agent_name = Some("reviewer".into());
+        s.status_facts.remote_session_id = Some("r-secret".into());
+        s.status_facts.exceeds_200k_tokens = true;
+        s.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        s.status_facts.spend_limit_period = Some("monthly".into());
+        s.status_facts.spend_limit_resets_at_ms = Some(1_790_000_000_000);
+        let v = summary(&s);
+        let st = &v["status"];
+        assert_eq!(st["workspace"]["repo"], "acme/shop");
+        assert_eq!(st["workspace"]["worktree"], "feat");
+        assert_eq!(st["workspace"]["added_dirs"]["value"], 2);
+        assert_eq!(
+            st["workspace"]["added_dirs"]["metric_id"],
+            "workspace_added_dirs"
+        );
+        assert_eq!(st["workspace"]["output_style"]["value"], "Concise");
+        assert_eq!(st["workspace"]["output_style"]["metric_id"], "output_style");
+        assert_eq!(st["workspace"]["agent"], "reviewer");
+        assert_eq!(st["workspace"]["remote"], true);
+        assert_eq!(st["spend_limit"]["used_usd"]["value"], 412.0);
+        assert_eq!(
+            st["spend_limit"]["used_usd"]["metric_id"],
+            "spend_limit_usd"
+        );
+        assert_eq!(st["spend_limit"]["limit_usd"]["value"], 500.0);
+        assert_eq!(st["spend_limit"]["period"], "monthly");
+        assert_eq!(st["spend_limit"]["resets_at_ms"], 1_790_000_000_000i64);
+        assert_eq!(st["exceeds_200k_tokens"]["value"], true);
+        assert_eq!(
+            st["exceeds_200k_tokens"]["metric_id"],
+            "exceeds_200k_tokens"
+        );
+        // Paths and the remote id are never in the object.
+        let text = v.to_string();
+        assert!(
+            !text.contains("/secret/") && !text.contains("r-secret"),
+            "{text}"
+        );
+        // Without spend, the key is null.
+        s.status_facts.spend_limit_usd = None;
+        assert!(summary(&s)["status"]["spend_limit"].is_null());
     }
 
     #[test]

@@ -208,7 +208,40 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         ),
         dim,
     )));
+    lines.extend(workspace_lines(state, w));
     frame.render_widget(Paragraph::new(lines), inner);
+}
+
+/// The workspace the status line reports: the repo, the worktree and the
+/// added directories' paths (the header carries only their count).
+fn workspace_lines<'a>(state: &State, width: usize) -> Vec<Line<'a>> {
+    let Some(w) = &state.status_facts.workspace else {
+        return Vec::new();
+    };
+    let dim = state.theme.dim();
+    let mut rows: Vec<String> = Vec::new();
+    if let Some(crate::status::Repo {
+        host,
+        owner: Some(o),
+        name: Some(n),
+    }) = &w.repo
+    {
+        let host = host.as_deref().map(|h| format!("{h}/")).unwrap_or_default();
+        rows.push(format!(" repo       {host}{o}/{n}"));
+    }
+    if let Some(t) = w.git_worktree.as_deref().filter(|t| !t.is_empty()) {
+        rows.push(format!(" worktree   {t}"));
+    }
+    for (i, d) in w.added_dirs.iter().enumerate() {
+        let label = if i == 0 { " added dirs" } else { "           " };
+        rows.push(format!("{label} {d}"));
+    }
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    let mut out = vec![Line::from(Span::styled(" ── workspace ──", dim))];
+    out.extend(rows.into_iter().map(|r| Line::from(fmt::clip(&r, width))));
+    out
 }
 
 fn render_files(lines: &mut Vec<Line>, r: &Residency, state: &State, width: usize) {
@@ -313,6 +346,31 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
         assert_eq!(app.state.context_view, ContextView::Prefix);
         assert_eq!(app.state.inspector_opens, 2);
+    }
+
+    #[test]
+    fn sources_view_lists_added_dirs() {
+        let mut app = app_on("session-a");
+        app.state.status_facts.workspace = Some(crate::status::Workspace {
+            added_dirs: vec!["/x/lib".into(), "/y/docs".into()],
+            git_worktree: Some("feat".into()),
+            repo: Some(crate::status::Repo {
+                host: Some("github.com".into()),
+                owner: Some("acme".into()),
+                name: Some("shop".into()),
+            }),
+            ..Default::default()
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 110, 40);
+        assert!(out.contains("github.com/acme/shop"), "{out}");
+        assert!(out.contains("/x/lib") && out.contains("/y/docs"), "{out}");
+        assert!(out.contains("worktree   feat"), "{out}");
+        // Absent without the fact.
+        let app = app_on("session-a");
+        let mut app = app;
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 40).contains("── workspace"));
     }
 
     #[test]

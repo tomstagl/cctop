@@ -127,7 +127,7 @@ impl Panel for LimitsPanel {
             return;
         }
         let mut l4: Vec<Span> = Vec::new();
-        if let Some(t) = crate::dashboard::spend_limit_text(&state.status_facts, now) {
+        if let Some(t) = crate::dashboard::spend_limit_text(&state.status_facts) {
             let style = match state.status_facts.spend_limit_pct {
                 Some(p) => band_style(&state.theme, p / 100.0, 0.6, 0.85),
                 None => ratatui::style::Style::default(),
