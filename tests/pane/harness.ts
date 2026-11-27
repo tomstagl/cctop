@@ -18,6 +18,7 @@ import type {
   AgentInfo,
   CommandSpec,
   Elements,
+  NotifyOptions,
   ElementTable,
   EngineInterface,
   FsReadCall,
@@ -37,6 +38,7 @@ import type {
   SessionUsage,
   SiteView,
   Timer,
+  UiNotifyResult,
   UiViewResult,
 } from 'claude-code';
 
@@ -166,6 +168,11 @@ export type FakeExtras = {
     invalidates: Record<string, number>;
     logs: string[];
     toasts: string[];
+    /** Every `$.ui.notify` call, in order; the next calls answer `notifyAnswer`. */
+    notifies: { text: string; options: NotifyOptions | undefined }[];
+    notifyAnswer: { current: UiNotifyResult };
+    /** Every `$.ui.cancelNotify` key, in order. */
+    cancels: string[];
     statuses: (string | undefined)[];
     opens: PaneOpenArgs[];
     closes: PaneCloseArgs[];
@@ -261,6 +268,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const registered: CommandSpec[] = [];
   const logs: string[] = [];
   const toasts: string[] = [];
+  const notifies: { text: string; options: NotifyOptions | undefined }[] = [];
+  const notifyAnswer: { current: UiNotifyResult } = { current: { isSent: true, channel: 'iterm2' } };
+  const cancels: string[] = [];
   const statuses: (string | undefined)[] = [];
   const opens: PaneOpenArgs[] = [];
   const closes: PaneCloseArgs[] = [];
@@ -276,6 +286,17 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       invalidates,
       logs,
       toasts,
+      notifies,
+      notifyAnswer,
+      cancels,
+      notify: async (text: string, options?: NotifyOptions): Promise<UiNotifyResult> => {
+        notifies.push({ text, options });
+        return notifyAnswer.current;
+      },
+      cancelNotify: async (key: string) => {
+        cancels.push(key);
+        return { isSent: true };
+      },
       statuses,
       opens,
       closes,

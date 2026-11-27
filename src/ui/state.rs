@@ -971,6 +971,10 @@ impl State {
                 kind: Kind::Agent,
                 text: ev.event.trim_start_matches("Subagent").to_lowercase(),
             }),
+            // A Notification raised by a plugin's `$.ui.notify` (cctop's own
+            // opt-in pane notifications included) carries `plugin_notification`;
+            // it says nothing of Claude Code waiting on the person.
+            "Notification" if p.get("plugin_notification").is_some_and(|v| !v.is_null()) => {}
             "Notification" => {
                 let kind = pstr("notification_type").unwrap_or_else(|| "notification".into());
                 let msg = ev
@@ -3002,5 +3006,34 @@ mod tests {
             machine: false,
         });
         assert_eq!(s.context_capture().unwrap().1, 2);
+    }
+
+    #[test]
+    fn a_plugin_notification_is_not_claude_codes_attention_request() {
+        let mut s = State::new(Pricing::bundled());
+        let ev = |payload: serde_json::Value| crate::hooks::HookEvent {
+            at: 5_000,
+            event: "Notification".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload,
+        };
+        // What `$.ui.notify` raises: the person's Notification hooks see it,
+        // marked by `plugin_notification`, and it changes nothing here.
+        s.apply_hook(&ev(serde_json::json!({
+            "notification_type": "permission_prompt",
+            "message": "▸ Rate limit",
+            "plugin_notification": {"plugin": "cctop"}
+        })));
+        assert!(!s.session.permission_pending);
+        assert!(s.session.notification.is_none());
+        assert!(s.events.is_empty());
+        // Claude Code's own still counts.
+        s.apply_hook(&ev(
+            serde_json::json!({"notification_type": "permission_prompt", "message": "needs you"}),
+        ));
+        assert!(s.session.permission_pending);
+        assert!(s.session.notification.is_some());
     }
 }

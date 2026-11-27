@@ -208,6 +208,26 @@ the general case, a Claude Code the module has not been tested against. The
 table ships with the cctop binary, so the line is only as current as
 `brew upgrade cctop`.
 
+## Notifications (`CCTOP_PANE_NOTIFY`)
+
+Off by default. Set `CCTOP_PANE_NOTIFY=1` in the environment Claude Code
+starts in (or the `env` block of `~/.claude/settings.json`) and restart, and
+the pane raises a native notification, through the channel your
+`preferredNotifChannel` names, for two moments only:
+
+- a coach nudge of urgency NOW taking the slot: its headline, once per fire
+  (NEXT and LATER nudges never notify); snoozing it or acting on it takes the
+  notification back;
+- a five-hour or seven-day rate-limit window at 90 % or more: `rate limit
+  resets now`, booked for the window's reset time and delivered only if you
+  have left the session by then (`untilBack`); a new reset time replaces the
+  booking.
+
+With no notification channel (or `notifications_disabled`) the pane stops
+asking after the first answer and logs it once. Your own `Notification`
+hooks run on these too; cctop's hook ignores them, so they never count as
+Claude Code waiting for you.
+
 ## Enabling function hooks
 
 Function hooks are early access. Put the flag where every session sees it —

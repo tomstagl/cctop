@@ -4,7 +4,7 @@
 // the engine's own events (model.ts) and, when the binary is installed, from
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
-import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
+import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, SessionUsage, Timer, ToolCallResult } from 'claude-code';
 import {
   breakdownDue,
   HIDDEN_STATUS,
@@ -22,6 +22,7 @@ import {
 } from './model';
 import { spoolText } from './breakdown';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
+import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, settledRules, type NotifyState } from './notify';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
@@ -95,6 +96,10 @@ let hiddenTimer: Timer | null = null;
 let renderWaiters: (() => void)[] = [];
 // Whether HIDDEN_STATUS is pinned under the prompt right now.
 let statusPinned = false;
+// Opt-in native notifications (CCTOP_PANE_NOTIFY=1, read at session.start)
+// and what has been sent so far.
+let notifyOn = false;
+let notifyState: NotifyState = initialNotifyState();
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -244,6 +249,7 @@ function coachChanged($: EngineInterface): void {
       model = reduce(model, { type: 'coach.status', status });
     }
   }
+  notifyNudge($, c);
   const n = c.nudge;
   if (n !== null && n.cls === 'NOW') {
     const key = `${n.id}:${n.firedAt ?? 0}`;
@@ -302,6 +308,57 @@ function readAgents($: EngineInterface): Promise<void> {
       });
     })
     .catch((err: unknown) => $.ui.log(`cctop: agent.list failed: ${String(err)}`));
+}
+
+// `CCTOP_PANE_NOTIFY=1` turns the notifications on; anything else leaves
+// them off. Read once per session.start.
+function readNotifyEnv($: EngineInterface): Promise<void> {
+  return $.env
+    .get("CCTOP_PANE_NOTIFY")
+    .then((value) => {
+      notifyOn = value === '1';
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: env read failed: ${String(err)}`));
+}
+
+function sendNotify($: EngineInterface, text: string, key: string, options: { at?: number; untilBack?: boolean } = {}): void {
+  $.ui
+    .notify(text, { title: 'cctop', key, ...options })
+    .then((result) => {
+      const line = noteResult(notifyState, key, result);
+      if (line !== null) $.ui.log(line);
+    })
+    .catch((err: unknown) => {
+      const line = noteFailure(notifyState, key, err);
+      if (line !== null) $.ui.log(line);
+    });
+}
+
+// A NOW nudge notifies once per fire; one that was snoozed or acted on is
+// taken back.
+function notifyNudge($: EngineInterface, c: NonNullable<ReturnType<typeof coachOf>>): void {
+  if (!notifyOn) return;
+  const n = c.nudge;
+  const todo = nudgeActions(
+    notifyState,
+    n === null ? null : { ruleId: n.id, fireId: String(n.firedAt ?? 0), urgency: n.cls === 'NOW' || n.cls === 'NEXT' ? n.cls : 'LATER', headline: n.line1 },
+    settledRules(model.query.coach, notifyState),
+  );
+  for (const key of todo.cancel) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
+  for (const item of todo.notify) sendNotify($, item.text, item.key);
+}
+
+// A window at 90 % or more books its reset: `at` its resets_at, `untilBack`
+// so only someone who left hears it; a new resets_at replaces the booking.
+function notifyResets($: EngineInterface, usage: SessionUsage, now: number): void {
+  if (!notifyOn) return;
+  const windows: { key: 'reset-5h' | 'reset-7d'; usedPct: number; resetsAtMs: number }[] = [];
+  for (const l of usage.rateLimits) {
+    const key = l.kind === 'five_hour' ? 'reset-5h' : l.kind === 'seven_day' ? 'reset-7d' : null;
+    const resetsAtMs = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt);
+    if (key !== null && Number.isFinite(resetsAtMs)) windows.push({ key, usedPct: l.percentUsed, resetsAtMs });
+  }
+  for (const item of resetActions(notifyState, windows, now)) sendNotify($, item.text, item.key, { at: item.at, untilBack: true });
 }
 
 // What the coach view's Buttons do: `fill` writes a prompt- or slash-class
@@ -560,7 +617,10 @@ function followSession($: EngineInterface): void {
 
 function readUsage($: EngineInterface): void {
   Promise.all([$.session.usage(), clockNow($)])
-    .then(([usage, at]) => apply($, { type: 'usage', usage, at }))
+    .then(([usage, at]) => {
+      apply($, { type: 'usage', usage, at });
+      notifyResets($, usage, at);
+    })
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
 }
 
@@ -822,6 +882,8 @@ export const register: Register = (on) => {
   stopHiddenTimer();
   renderWaiters = [];
   statusPinned = false;
+  notifyOn = false;
+  notifyState = initialNotifyState();
   invalidatedAt = null;
   renderPending = false;
   poller?.stop();
@@ -836,6 +898,7 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const check = await selfCheck($);
     breakdownFailureLogged = false;
+    await readNotifyEnv($);
     apply($, { type: 'session.start', at: check.now, selfCheck: check.problems.length === 0 ? 'ok' : check.problems.join('; ') });
     poller = makePoller($);
     await $.command.register({
