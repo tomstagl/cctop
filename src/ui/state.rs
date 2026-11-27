@@ -244,6 +244,8 @@ pub struct CacheState {
     pub misses: u64,
     pub expected_rebuilds: u64,
     pub last_miss_cause: Option<String>,
+    /// Every cause the shim listed for the last miss, in its order.
+    pub last_miss_causes: Vec<String>,
     pub miss_causes: std::collections::BTreeMap<String, u64>,
     pub hit_ratio: Option<f64>,
     /// Tools the last miss added / removed, and the system prompt's change in
@@ -254,6 +256,7 @@ pub struct CacheState {
     /// When Claude Code recorded that miss (epoch ms), if it said.
     pub last_miss_at_ms: Option<i64>,
     pub requests: u64,
+    pub cache_write_tokens: u64,
     pub miss_recache_tokens: u64,
     /// When the status file that carried this was written (epoch ms).
     pub sample_at_ms: i64,
@@ -1138,6 +1141,11 @@ impl State {
                 misses: pc.misses,
                 expected_rebuilds: pc.expected_rebuilds,
                 last_miss_cause: pc.last_cause().map(str::to_string),
+                last_miss_causes: pc
+                    .last_miss_cause
+                    .as_ref()
+                    .map(|c| c.causes.clone())
+                    .unwrap_or_default(),
                 miss_causes: pc.miss_causes.clone(),
                 hit_ratio: pc.hit_ratio,
                 last_miss_tools_added: pc.last_miss_cause.as_ref().and_then(|c| c.tools_added),
@@ -1148,6 +1156,7 @@ impl State {
                     .and_then(|c| c.system_char_delta),
                 last_miss_at_ms: pc.last_miss_at.map(|t| (t * 1000.0) as i64),
                 requests: pc.requests,
+                cache_write_tokens: pc.cache_write_tokens,
                 miss_recache_tokens: pc.miss_recache_tokens,
                 sample_at_ms: s.at_ms,
             };

@@ -162,13 +162,23 @@ impl Rule for CacheMiss {
 /// The status line's own deltas for its last miss (`tools_added`,
 /// `tools_removed`, `system_char_delta`), used when the transcript's request
 /// ledger could not locate the cause. They describe the status line's *last*
-/// miss, so they apply only when that is the miss A01 describes: the same
-/// kind (`tools_changed`, the only cause that carries these deltas), and
-/// within two minutes by the clocks when both have one, else A01's miss being
-/// the newest named one.
-fn shim_deltas(state: &State, miss: &crate::metrics::usage::CacheMissRecord) -> Option<String> {
+/// miss, so they apply only when that is the miss `miss` describes: within
+/// two minutes by the clocks when both have one, else `miss` being the newest
+/// named one; and only to the delta its cause list explains. The tools
+/// delta needs `tools_changed` in the shim's causes and as `miss.kind`; the
+/// system delta needs `system_prompt_changed` (or `tools_changed`) in the
+/// shim's causes and `miss.kind` of `messages_changed` or `tools_changed`
+/// (the transcript sees a system change as a changed prefix).
+pub(crate) fn shim_deltas(
+    state: &State,
+    miss: &crate::metrics::usage::CacheMissRecord,
+) -> Option<String> {
     let c = &state.cache;
-    if miss.kind != "tools_changed" || c.last_miss_cause.as_deref() != Some("tools_changed") {
+    let has = |k: &str| c.last_miss_causes.iter().any(|x| x == k);
+    let tools_ok = has("tools_changed") && miss.kind == "tools_changed";
+    let system_ok = (has("system_prompt_changed") || has("tools_changed"))
+        && matches!(miss.kind.as_str(), "messages_changed" | "tools_changed");
+    if !tools_ok && !system_ok {
         return None;
     }
     let miss_ms = miss
@@ -187,14 +197,15 @@ fn shim_deltas(state: &State, miss: &crate::metrics::usage::CacheMissRecord) -> 
         return None;
     }
     let mut parts = Vec::new();
-    if c.last_miss_tools_added.unwrap_or(0) + c.last_miss_tools_removed.unwrap_or(0) > 0 {
+    if tools_ok && c.last_miss_tools_added.unwrap_or(0) + c.last_miss_tools_removed.unwrap_or(0) > 0
+    {
         parts.push(format!(
             "tools +{} −{}",
             c.last_miss_tools_added.unwrap_or(0),
             c.last_miss_tools_removed.unwrap_or(0)
         ));
     }
-    if let Some(d) = c.last_miss_system_delta.filter(|d| *d != 0) {
+    if let Some(d) = c.last_miss_system_delta.filter(|d| system_ok && *d != 0) {
         parts.push(format!(
             "system {} chars",
             crate::requests::signed(d).replacen('-', "−", 1)
@@ -1223,6 +1234,44 @@ mod tests {
     fn shim_miss(s: &mut State, cause: &str) {
         s.cache.from_shim = true;
         s.cache.last_miss_cause = Some(cause.to_string());
+        s.cache.last_miss_causes = vec![cause.to_string()];
+    }
+
+    #[test]
+    fn a01_shim_cause_list_gates_each_delta() {
+        // Two causes: the shim's first is not the one that matters.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_causes = vec!["system_prompt_changed".into(), "tools_changed".into()];
+        s.cache.last_miss_tools_added = Some(1);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +1 −0"), "{}", a.headline);
+        // system_prompt_changed alone: the system delta on a messages_changed
+        // miss, never tool counts.
+        let mut s = unlocated_miss("messages_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_tools_added = Some(3);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        assert!(!a.headline.contains("tools +3"), "{}", a.headline);
+        // The same cause on a tools_changed miss: no tools delta (the shim
+        // did not name tools_changed), the system one still applies.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_tools_added = Some(3);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("tools +3"), "{}", a.headline);
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        // A model change takes neither.
+        let mut s = unlocated_miss("model_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("system −800"), "{}", a.headline);
     }
 
     #[test]
