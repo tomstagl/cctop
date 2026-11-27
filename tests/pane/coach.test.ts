@@ -52,7 +52,7 @@ function recorder(): { actions: CoachActions; calls: Call[] } {
     agents: () => calls.push(['agents']),
     light: (id) => calls.push(['light', id]),
     next: (id) => calls.push(['next', id]),
-    act: (id) => calls.push(["act", id]),
+    act: (id) => calls.push(['act', id]),
   };
   return { actions, calls };
 }

@@ -171,7 +171,10 @@ test('an allow rule shows its settings diff as Code format="diff", the rule, and
   assert.equal(code[0]?.props?.format, 'diff');
   assert.equal(code[0]?.props?.source, allowDiff('Bash(gh api:*)'));
   assert.match(String(code[0]?.props?.source), /^\+ {6}"Bash\(gh api:\*\)",$/m);
-  assert.ok(flat(rows).includes('never edits your settings'), flat(rows));
+  assert.ok(!/@@|^ /m.test(String(code[0]?.props?.source)), 'no invented hunk header or context');
+  assert.equal(allowDiff('Bash(gh api:*)').split('\n').length, 3, 'two file headers and the one line');
+  assert.ok(flat(rows).replace(/\s+/g, ' ').includes("the line to add under permissions.allow — cctop doesn't read your file"), flat(rows));
+  assert.ok(flat(rows).replace(/\s+/g, ' ').includes('never edits your settings'), flat(rows));
   const labels = find(tree, 'Button').map((b) => `${b.props?.hotkey ?? '-'} ${b.props?.label}`);
   assert.ok(labels.includes('1 Copy the rule') && labels.includes('2 Open settings.local.json') && labels.includes('3 Put /permissions in the box'), JSON.stringify(labels));
   assert.ok(labels.some((l) => l.endsWith('Snooze')));
@@ -192,6 +195,13 @@ test('a setting shows the line to add; a fix prompt shows its exact text, a pres
   assert.deepEqual(r.calls, [['fill', A38.fix_prompt]]);
   // The same text under the fix Button is shown once.
   assert.equal(flat(f.rows).split('↵ Stop retrying.').length, 2);
+});
+
+test('when the dialog does not hold the keyboard it claims no Esc or walking keys', () => {
+  const rows = renderToText(renderAct(build(coach(A38)), el, 100, recorder().actions, false), 100);
+  assert.ok(!flat(rows).includes('Esc closes'), flat(rows));
+  assert.ok(!flat(rows).includes('Esc closes this dialog first'), flat(rows));
+  assert.ok(flat(rows).includes('1  Press Esc to stop the turn'), 'the step stays');
 });
 
 test('the list presses select; the selected row is not a Button', () => {
@@ -278,6 +288,7 @@ test('copy stays in the dialog and says so there (toasts are held); open setting
   const shown = flat((await dialog()).rows).replace(/\s+/g, ' ');
   assert.ok(shown.includes(note), shown);
   assert.deepEqual($.ui.closes, [], 'a copy does not close the dialog');
+  assert.deepEqual($.ui.toasts, [], 'no toast while the dialog is open: held toasts would reappear after it closes');
   $.process.script[`open ${project}`] = ok('');
   $.ui.press('coach-act-0-open');
   await settle();

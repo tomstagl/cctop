@@ -746,10 +746,11 @@ function closeAct($: EngineInterface): Promise<void> {
   });
 }
 
-// A toast, and the same words in the dialog while it is open (toasts wait for it).
+// A toast; while the dialog is open the words are drawn in it instead (toasts
+// are held while it is open and would reappear after it closes).
 function notice($: EngineInterface, text: string): void {
-  $.ui.toast(text);
   if (model.actOpen) apply($, { type: 'act.note', text });
+  else $.ui.toast(text);
 }
 
 // A fill never replaces what the person is typing: the box is read first,
@@ -836,7 +837,8 @@ function openSettings($: EngineInterface, kind: SettingsKind): void {
         return;
       }
       const result = await $.process.run([opener, path], { timeoutMs: 5000 });
-      notice($, 
+      notice(
+        $,
         result.exitCode === 0
           ? `cctop: opened ${path} in your editor. cctop never edits it`
           : `cctop: could not open ${path} (is it there?): open it in your editor`,
@@ -1264,7 +1266,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
 // the dialog's own width. It is not the pane: nothing of the pane's render
 // bookkeeping (visibility, the width the status line follows) is touched.
 function buildAct($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
-  return renderAct(model, $.ui.resolve(e), e.props.bodyColumns, actActions($));
+  return renderAct(model, $.ui.resolve(e), e.props.bodyColumns, actActions($), e.props.isFocused);
 }
 
 // The view bar, the pane's first row: `cctop  Overview  Tools  …`. The
