@@ -192,6 +192,13 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             }
         }
     }));
+    // The pane's context-breakdown spool.
+    let mut spool = crate::context_spool::Watcher::new(&app.state.session.session_id);
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if let Some(s) = spool.poll() {
+            state.apply_context_spool(s);
+        }
+    }));
     // Background tasks every 2 s.
     if let Some(dir) = crate::tasks::dir_for(&app.state.session.session_id) {
         let mut last = Instant::now() - Duration::from_secs(5);

@@ -367,6 +367,13 @@ pub struct AgentLink {
     pub sync_result_chars: Option<usize>,
 }
 
+/// Where [`State::context_capture`] read its table from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureSource {
+    Transcript,
+    Spool,
+}
+
 #[derive(Debug, Default)]
 pub struct State {
     // -- collectors
@@ -502,6 +509,9 @@ pub struct State {
     /// The sources inspector shows its per-file list.
     pub sources_files: bool,
     pub prefix: crate::prefix::Prefix,
+    /// The pane's breakdown spool as a capture: `(capture, turn it is
+    /// anchored to, epoch ms the pane read it)`.
+    pub context_spool: Option<(crate::transcript::ContextCapture, usize, i64)>,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
     /// OpenTelemetry data for this session, when the receiver is running.
@@ -1544,12 +1554,18 @@ impl State {
             .unwrap_or(1)
     }
 
-    /// What is in the window right now and what put it there: the per-call
-    /// model behind the bar (PRD context-residency §4).
-    pub fn residency(&self) -> crate::metrics::context::Residency {
-        let v = self.context();
-        let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
-        let capture = self.prefix.context_capture.as_ref().map(|c| {
+    /// The newer of the `/context` table in the transcript and the pane's
+    /// spool, with the turn it is anchored to, where it came from and its
+    /// time (epoch ms). A spool wins a tie: it is the fresher read.
+    pub fn context_capture(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let transcript = self.prefix.context_capture.as_ref().map(|c| {
             let turn = self
                 .agg
                 .slash_commands
@@ -1558,8 +1574,58 @@ impl State {
                 .find(|(_, cmd)| cmd == "/context")
                 .map(|(t, _)| *t)
                 .unwrap_or(0);
-            (c, turn)
+            let at = self.prefix.context_capture_at_ms.unwrap_or(0);
+            (c, turn, CaptureSource::Transcript, at)
         });
+        let spool = self
+            .context_spool
+            .as_ref()
+            .map(|(c, turn, at)| (c, *turn, CaptureSource::Spool, *at));
+        match (transcript, spool) {
+            (Some(t), Some(s)) => Some(if s.3 >= t.3 { s } else { t }),
+            (t, s) => t.or(s),
+        }
+    }
+
+    /// Take the pane's spool: anchor it to the turn of the last API call at
+    /// or before its time. Ignored when no call precedes it, or when it
+    /// predates the last compaction (it describes a window that is gone).
+    pub fn apply_context_spool(&mut self, s: crate::context_spool::SpoolCapture) {
+        let compacted_at = self
+            .agg
+            .boundaries
+            .iter()
+            .rev()
+            .find(|b| {
+                matches!(
+                    b.kind,
+                    crate::metrics::usage::BoundaryKind::Compact
+                        | crate::metrics::usage::BoundaryKind::Microcompact
+                )
+            })
+            .and_then(|b| b.at.as_deref())
+            .and_then(crate::metrics::cost::parse_ts_ms);
+        if compacted_at.is_some_and(|c| s.at_ms < c) {
+            return;
+        }
+        let turn = self
+            .agg
+            .calls
+            .iter()
+            .rev()
+            .find(|c| c.at_ms.is_some_and(|t| t <= s.at_ms))
+            .map(|c| c.turn);
+        if let Some(turn) = turn {
+            self.context_spool = Some((s.capture, turn, s.at_ms));
+        }
+    }
+
+    /// What is in the window right now and what put it there: the per-call
+    /// model behind the bar (PRD context-residency §4).
+    pub fn residency(&self) -> crate::metrics::context::Residency {
+        let v = self.context();
+        let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
+        let capture = self.context_capture().map(|(c, turn, _, _)| (c, turn));
         crate::metrics::context::residency(&self.agg, &self.tools, v.prefix, v.size, cwd, capture)
     }
 
@@ -2445,5 +2511,90 @@ mod tests {
             "keyed like the notification, at the line's time"
         );
         assert!(s.agents.is_empty(), "a workflow run is not an agent");
+    }
+
+    fn spool_at(at_ms: i64, tokens: u64) -> crate::context_spool::SpoolCapture {
+        crate::context_spool::SpoolCapture {
+            at_ms,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: tokens,
+                window_tokens: 1_000_000,
+                ..Default::default()
+            },
+        }
+    }
+
+    fn with_calls(times: &[(usize, i64)]) -> State {
+        let mut s = State::new(Pricing::default());
+        for (turn, at) in times {
+            s.agg.calls.push(crate::metrics::usage::CallRecord {
+                turn: *turn,
+                at_ms: Some(*at),
+                model: "m".into(),
+                usage: Default::default(),
+                machine: false,
+            });
+        }
+        s
+    }
+
+    #[test]
+    fn anchors_to_previous_call() {
+        let mut s = with_calls(&[(1, 1000), (2, 2000), (3, 3000)]);
+        s.apply_context_spool(spool_at(2500, 50_000));
+        let (c, turn, src, at) = s.context_capture().unwrap();
+        assert_eq!(
+            (c.used_tokens, turn, src, at),
+            (50_000, 2, CaptureSource::Spool, 2500)
+        );
+    }
+
+    #[test]
+    fn before_first_call() {
+        let mut s = with_calls(&[(1, 1000)]);
+        s.apply_context_spool(spool_at(500, 1));
+        assert!(s.context_capture().is_none());
+        State::new(Pricing::default()).apply_context_spool(spool_at(500, 1));
+    }
+
+    #[test]
+    fn newer_wins_both_orders() {
+        let mut s = with_calls(&[(1, 1000), (2, 5000)]);
+        s.prefix.context_capture = Some(crate::transcript::ContextCapture {
+            used_tokens: 7,
+            ..Default::default()
+        });
+        s.prefix.context_capture_at_ms = Some(3000);
+        s.apply_context_spool(spool_at(4000, 9));
+        assert_eq!(s.context_capture().unwrap().2, CaptureSource::Spool);
+        s.prefix.context_capture_at_ms = Some(4500);
+        let (c, _, src, at) = s.context_capture().unwrap();
+        assert_eq!(
+            (c.used_tokens, src, at),
+            (7, CaptureSource::Transcript, 4500)
+        );
+    }
+
+    #[test]
+    fn stale_after_compaction_ignored() {
+        let mut s = with_calls(&[(1, 1_000), (2, 1_785_000_000_000)]);
+        s.agg.boundaries.push(crate::metrics::usage::Boundary {
+            at: Some("2026-08-01T00:00:00.000Z".into()),
+            turn: 2,
+            kind: crate::metrics::usage::BoundaryKind::Compact,
+        });
+        let boundary = crate::metrics::cost::parse_ts_ms("2026-08-01T00:00:00.000Z").unwrap();
+        s.apply_context_spool(spool_at(boundary - 1, 1));
+        assert!(s.context_capture().is_none());
+        // Written just after the compaction: counts.
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 2,
+            at_ms: Some(boundary + 500),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        s.apply_context_spool(spool_at(boundary + 1000, 2));
+        assert_eq!(s.context_capture().unwrap().0.used_tokens, 2);
     }
 }
