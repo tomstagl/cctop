@@ -1212,15 +1212,18 @@ fn body_limits(state: &State, c: &Coach) -> Body {
         rows.push(vec![dim(label), fg(value)]);
     }
     if let Some((t, ratio, eta)) = budget_line(state) {
+        let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Ok };
         let mut row = vec![
             dim("  budget "),
             seg(
                 t.strip_prefix("budget ").unwrap_or(&t).to_string(),
                 if ratio >= 0.9 { Tone::Crit } else { Tone::Fg },
             ),
+            dim("  "),
         ];
+        row.extend(bar(ratio * 100.0, 10, tone));
         if let Some(e) = eta {
-            row.push(dim(format!(" · {e}")));
+            row.push(dim(format!("  {e}")));
         }
         rows.push(row);
     }
@@ -2653,7 +2656,23 @@ mod tests {
         s.budget_usd = Some((3.2, 5.0, 1.8));
         s.status_facts.spend_limit_pct = Some(40.0);
         let text = body_text(&body_limits(&s, &c)).join("\n");
-        assert!(text.contains("  budget $3.20 / $5.00"), "{text}");
+        assert!(text.contains("  budget $3.20 / $5.00  ▇▇▇▇▇▇"), "{text}");
         assert!(text.contains("  spend limit 40 %"), "{text}");
+    }
+
+    #[test]
+    fn the_budget_bar_is_red_from_ninety_percent() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        for (used, tone) in [(4.4, Tone::Ok), (4.5, Tone::Crit)] {
+            s.budget_usd = Some((used, 5.0, 5.0 - used));
+            let rows = body_limits(&s, &c).rows;
+            let row = rows
+                .iter()
+                .find(|r| r.iter().any(|g| g.text.contains("budget")))
+                .unwrap();
+            let bar_seg = row.iter().find(|g| g.text.starts_with('▇')).unwrap();
+            assert_eq!(bar_seg.tone, tone, "{used}");
+        }
     }
 }

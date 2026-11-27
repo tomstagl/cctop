@@ -59,12 +59,11 @@ impl Panel for LimitsPanel {
         // The budget a `--max-budget-usd` run was given: one formatter, shared
         // with the dashboard's limits cell.
         let budget_line = crate::dashboard::budget_line(state).map(|(t, ratio, eta)| {
-            let mut spans = vec![Span::styled(
-                format!(" {t}"),
-                band_style(&state.theme, ratio, 0.6, 0.9),
-            )];
+            let style = band_style(&state.theme, ratio, 0.6, 0.9);
+            let mut spans = vec![Span::styled(format!(" {t}  "), style)];
+            spans.extend(gauge(&state.theme, ratio, 10, style));
             if let Some(e) = eta {
-                spans.push(Span::styled(format!(" · {e}"), dim));
+                spans.push(Span::styled(format!("  {e}"), dim));
             }
             Line::from(spans)
         });
@@ -274,7 +273,7 @@ mod tests {
         assert!(!render_to_string(&app, 64, 60).contains("budget"));
         app.state.budget_usd = Some((3.2, 5.0, 1.8));
         let out = render_to_string(&app, 64, 60);
-        assert!(out.contains("budget $3.20 / $5.00"), "{out}");
+        assert!(out.contains("budget $3.20 / $5.00  ▇"), "{out}");
         let now = app.state.clock_ms();
         app.state.limits = Some(Limits {
             five_hour_pct: 62.0,
@@ -285,7 +284,16 @@ mod tests {
             exhaustion_in_active_hours: None,
         });
         let out = render_to_string(&app, 64, 60);
-        assert!(out.contains("budget $3.20 / $5.00"), "{out}");
+        assert!(out.contains("budget $3.20 / $5.00  ▇"), "{out}");
+    }
+
+    #[test]
+    fn the_budget_bar_is_red_from_ninety_percent() {
+        use crate::ui::widgets::band_style;
+        let app = fixture_app();
+        let t = &app.state.theme;
+        assert_eq!(band_style(t, 0.9, 0.6, 0.9), t.crit());
+        assert_ne!(band_style(t, 0.89, 0.6, 0.9), t.crit());
     }
 
     #[test]
