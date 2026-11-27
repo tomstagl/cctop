@@ -52,6 +52,10 @@ pub struct Chart {
     pub bar: Option<ChartSpec>,
     pub readouts: Vec<Readout>,
     pub legend: Vec<Legend>,
+    /// The composition bar's own legend (context only): one entry per
+    /// category, in the bar's order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub bar_legend: Vec<Legend>,
     /// The cache chart's "How to avoid each rebuild": one row per located
     /// rebuild of the turns shown that a habit avoids.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -142,6 +146,9 @@ pub struct Options {
     pub max_turns: usize,
     /// The chain's cost (this session and the ones it came from), PRD 4.
     pub chain_usd: Option<f64>,
+    /// Fill each chart's `fallback_cells` (what `cctop query overview`
+    /// serves the pane); the TUI draws the cells itself and skips them.
+    pub fallback_cells: bool,
 }
 
 pub fn build(state: &State) -> Overview {
@@ -150,6 +157,7 @@ pub fn build(state: &State) -> Overview {
         &Options {
             max_turns: DEFAULT_MAX_TURNS,
             chain_usd: None,
+            fallback_cells: true,
         },
     )
 }
@@ -178,7 +186,7 @@ pub fn build_with(state: &State, opts: &Options) -> Overview {
         cache(state, &per_turn, label.clone()),
         tool_calls(state, &per_turn, label),
     ];
-    for c in &mut charts {
+    for c in charts.iter_mut().filter(|_| opts.fallback_cells) {
         c.fallback_cells = Raster::at_default(&c.spec);
         c.bar_fallback_cells = c.bar.as_ref().map(Raster::at_default);
     }
@@ -359,6 +367,7 @@ fn context(state: &State) -> Chart {
     }
     // The composition from Claude Code's own count (PRD 3), with its age.
     let mut note = None;
+    let mut bar_legend = Vec::new();
     let bar = crate::dashboard::Composition::of(state).map(|c| {
         if let Some((_, _, _, at)) = state.current_context_capture() {
             note = Some(if at > 0 {
@@ -383,7 +392,7 @@ fn context(state: &State) -> Chart {
                 role,
                 points: vec![point(0.0, *tokens as f64)],
             });
-            legend_rows.push(legend(role, format!("{} {}", name, fmt::tokens(*tokens))));
+            bar_legend.push(legend(role, format!("{} {}", name, fmt::tokens(*tokens))));
         }
         bar.finish()
     });
@@ -404,6 +413,7 @@ fn context(state: &State) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
+        bar_legend,
         fallback_cells: Raster::default(),
         bar_fallback_cells: None,
     }
@@ -594,6 +604,7 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
+        bar_legend: Vec::new(),
         fallback_cells: Raster::default(),
         bar_fallback_cells: None,
     }
@@ -843,6 +854,7 @@ fn cost_per_turn(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
+        bar_legend: Vec::new(),
         fallback_cells: Raster::default(),
         bar_fallback_cells: None,
     }
@@ -1002,6 +1014,7 @@ fn cache(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent,
+        bar_legend: Vec::new(),
         fallback_cells: Raster::default(),
         bar_fallback_cells: None,
     }
@@ -1160,6 +1173,7 @@ fn tool_calls(state: &State, pt: &PerTurn, label: Option<String>) -> Chart {
         readouts,
         legend: legend_rows,
         prevent: Vec::new(),
+        bar_legend: Vec::new(),
         fallback_cells: Raster::default(),
         bar_fallback_cells: None,
     }
@@ -1320,6 +1334,7 @@ mod tests {
             &Options {
                 max_turns: 40,
                 chain_usd: None,
+                fallback_cells: false,
             },
         );
         sane(&o);
@@ -1488,6 +1503,7 @@ mod tests {
             &Options {
                 max_turns: 1,
                 chain_usd: None,
+                fallback_cells: false,
             },
         );
         assert_eq!(chart(&o, "cache").label.as_deref(), Some("last 1 turn"));

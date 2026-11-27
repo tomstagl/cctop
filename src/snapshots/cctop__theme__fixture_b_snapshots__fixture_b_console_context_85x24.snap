@@ -11,9 +11,9 @@ expression: "render_to_string(&app, 85, 24)"
  Context window  142k of 1M · 14 %                              per /context, 2m ago
  Good Plenty of room: 857k free.
  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
- ■ context so far  ■ system + tools (now)  ■ auto-compact at 567k
  ■ System prompt 10k  ■ System tools 31k  ■ Skills 4.8k  ■ Messages 42k  ■ free 877k
  ■ buffer 33k
+ ■ context so far  ■ system + tools (now)  ■ auto-compact at 567k
  1.00M
 
                                                                   ▄▄▄▄
@@ -25,4 +25,4 @@ expression: "render_to_string(&app, 85, 24)"
        turn 1                                                                      6
  Turn 6 · 142k (−578k) · compacted
  ───────────────────────────────────────────────────────────────────────────────────
- Spend  $18.75 · ≈ $19.76 in an hour
+ ↓ 50 more

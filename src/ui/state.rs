@@ -562,6 +562,15 @@ pub struct State {
     pub console_body: Option<usize>,
     /// Console's rule line expanded into the open body's key map (`?`).
     pub console_keys: bool,
+    /// Rows the open body is scrolled down (body 1, the overview, is taller
+    /// than the screen); reset when the body changes.
+    pub console_offset: usize,
+    /// The furthest `console_offset` the last frame allowed, written by the
+    /// render so the keys can stop there.
+    pub console_offset_max: std::cell::Cell<usize>,
+    /// The session's transcript, for the lineage chain's cost.
+    pub transcript: Option<std::path::PathBuf>,
+    chain_usd: std::cell::OnceCell<Option<f64>>,
     /// A view the open panel owns on top of itself (`Enter`: a ledger, a
     /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,
@@ -1989,6 +1998,15 @@ impl State {
     }
 
     /// Console's open body: the index a key set, else events (home).
+    /// The cost of this session and the ones it came from (PRD 4), read
+    /// once; `None` for a session that was not derived from another.
+    pub fn chain_usd(&self) -> Option<f64> {
+        self.agg.derived_from.as_ref()?;
+        *self
+            .chain_usd
+            .get_or_init(|| self.transcript.as_deref().map(crate::query::lineage_cost))
+    }
+
     pub fn console_body(&self) -> usize {
         self.console_body.unwrap_or(crate::dashboard::EVENTS_BODY)
     }
