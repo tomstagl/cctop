@@ -31,6 +31,7 @@ pub mod load;
 pub mod mcp;
 pub mod metrics;
 pub mod otel;
+pub mod overview;
 pub mod pane;
 pub mod phase;
 pub mod prefix;
@@ -51,6 +52,7 @@ pub mod theme;
 pub mod tools;
 pub mod transcript;
 pub mod ui;
+pub mod verdict;
 pub mod workflow_runs;
 pub mod workflow_script;
 

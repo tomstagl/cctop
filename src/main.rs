@@ -117,6 +117,13 @@ enum QueryWhat {
     Advice,
     /// The Console object: header, six cells, the act line, eight bodies.
     Dashboard,
+    /// The overview: per chart a title, figure, verdict, chart spec,
+    /// readouts and legend.
+    Overview {
+        /// Per-turn charts keep this many of the latest turns.
+        #[arg(long, default_value_t = cctop::overview::DEFAULT_MAX_TURNS)]
+        max_turns: usize,
+    },
     /// The coach object: state line, four lights, the nudge, next, snoozed.
     Coach {
         /// Print the one-line status form instead of JSON.
@@ -709,6 +716,16 @@ fn query(q: QueryArgs) {
                 QueryWhat::Agents => qy::agents(&state),
                 QueryWhat::Advice => qy::advice(&state),
                 QueryWhat::Dashboard => qy::dashboard(&state),
+                QueryWhat::Overview { max_turns } => {
+                    // The transcript only matters for a derived session's chain.
+                    let path = state
+                        .agg
+                        .derived_from
+                        .as_ref()
+                        .and_then(|_| cctop::load::resolve(&target(&q.attach)).ok())
+                        .map(|(p, _)| p);
+                    qy::overview(&state, *max_turns, path.as_deref())
+                }
                 QueryWhat::Coach {
                     snooze,
                     snooze_session,

@@ -1,0 +1,741 @@
+---
+source: src/overview.rs
+expression: "serde_json::to_string_pretty(&o).unwrap()"
+---
+{
+  "schema": 1,
+  "charts": [
+    {
+      "id": "context",
+      "title": "Context window",
+      "figure": "147k of 1M · 15 %",
+      "verdict": {
+        "level": "good",
+        "text": "Plenty of room: about 308 more turns before Claude Code compacts on its own.",
+        "todo": "Do: /compact when you finish this task, not mid-way.",
+        "metric_id": "verdict_context"
+      },
+      "spec": {
+        "kind": "area_forecast",
+        "x": {
+          "from": 1.0,
+          "to": 17.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1000000.0,
+          "unit": "tokens"
+        },
+        "series": [
+          {
+            "name": "context",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 135978.0
+              },
+              {
+                "x": 2.0,
+                "y": 139407.0
+              },
+              {
+                "x": 3.0,
+                "y": 140846.0
+              },
+              {
+                "x": 4.0,
+                "y": 143122.0
+              },
+              {
+                "x": 6.0,
+                "y": 146408.0
+              },
+              {
+                "x": 7.0,
+                "y": 147889.0
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "kind": "now",
+            "x": 7.0,
+            "y": 147889.0,
+            "role": "fg"
+          }
+        ],
+        "forecast": {
+          "from": {
+            "x": 7.0,
+            "y": 147889.0
+          },
+          "to": {
+            "x": 17.0,
+            "y": 174540.6
+          },
+          "low": 162279.0,
+          "high": 182179.0,
+          "role": "dim"
+        },
+        "thresholds": [
+          {
+            "name": "auto-compact",
+            "y": 967000.0,
+            "role": "crit"
+          }
+        ],
+        "roles": [
+          "accent",
+          "fg",
+          "dim",
+          "crit"
+        ]
+      },
+      "readouts": [
+        {
+          "x": 1.0,
+          "text": "Turn 1 · 135k"
+        },
+        {
+          "x": 2.0,
+          "text": "Turn 2 · 139k (+3.4k)"
+        },
+        {
+          "x": 3.0,
+          "text": "Turn 3 · 140k (+1.4k)"
+        },
+        {
+          "x": 4.0,
+          "text": "Turn 4 · 143k (+2.3k)"
+        },
+        {
+          "x": 6.0,
+          "text": "Turn 6 · 146k (+3.3k)"
+        },
+        {
+          "x": 7.0,
+          "text": "Turn 7 · 147k (+1.5k)"
+        }
+      ],
+      "legend": [
+        {
+          "role": "accent",
+          "text": "context so far"
+        },
+        {
+          "role": "dim",
+          "text": "forecast · +2.7k a turn"
+        },
+        {
+          "role": "crit",
+          "text": "auto-compact at 967k"
+        }
+      ],
+      "fallback_cells": []
+    },
+    {
+      "id": "spend",
+      "title": "Spend",
+      "figure": "$2.70 · ≈ $27.3 in an hour",
+      "verdict": {
+        "level": "watch",
+        "text": "$0.41 a minute. One jump: a cache rebuild in turn 1 ($1.53).",
+        "todo": "Do: /clear between unrelated tasks; a smaller context makes every turn cheaper.",
+        "metric_id": "verdict_spend"
+      },
+      "spec": {
+        "kind": "cumulative_forecast",
+        "x": {
+          "from": 0.0,
+          "to": 8288.665066666666,
+          "unit": "min"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 27.345424299999998,
+          "unit": "USD"
+        },
+        "series": [
+          {
+            "name": "spend",
+            "role": "accent",
+            "points": [
+              {
+                "x": 0.0,
+                "y": 0.0
+              },
+              {
+                "x": 26.55855,
+                "y": 1.5298689999999997
+              },
+              {
+                "x": 55.17216666666667,
+                "y": 1.6482867999999997
+              },
+              {
+                "x": 58.38308333333333,
+                "y": 1.7181639999999998
+              },
+              {
+                "x": 59.86541666666667,
+                "y": 1.8559313999999998
+              },
+              {
+                "x": 8200.6289,
+                "y": 2.2898145999999997
+              },
+              {
+                "x": 8228.665066666666,
+                "y": 2.7005622999999996
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "kind": "jump",
+            "x": 26.55855,
+            "y": 1.5298689999999997,
+            "role": "crit"
+          }
+        ],
+        "forecast": {
+          "from": {
+            "x": 8228.665066666666,
+            "y": 2.7005622999999996
+          },
+          "to": {
+            "x": 8288.665066666666,
+            "y": 27.345424299999998
+          },
+          "low": 2.7202536760236002,
+          "high": 27.345424299999998,
+          "role": "dim"
+        },
+        "thresholds": [],
+        "roles": [
+          "accent",
+          "crit",
+          "dim"
+        ]
+      },
+      "readouts": [
+        {
+          "x": 26.55855,
+          "text": "turn 1 · cache rebuild $1.53"
+        }
+      ],
+      "legend": [
+        {
+          "role": "accent",
+          "text": "spent"
+        },
+        {
+          "role": "dim",
+          "text": "forecast · $0.41 a minute"
+        }
+      ],
+      "fallback_cells": []
+    },
+    {
+      "id": "cost_per_turn",
+      "title": "Cost per turn",
+      "figure": "≈ $0.27 typical",
+      "verdict": {
+        "level": "good",
+        "text": "Turns cost about $0.27 each.",
+        "todo": "Do: keep unrelated tasks apart with /clear; turns get dearer as the context grows.",
+        "metric_id": "verdict_cost_per_turn"
+      },
+      "spec": {
+        "kind": "bars",
+        "x": {
+          "from": 1.0,
+          "to": 7.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.529869,
+          "unit": "USD"
+        },
+        "series": [
+          {
+            "name": "cost",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 1.529869,
+                "role": "crit"
+              },
+              {
+                "x": 2.0,
+                "y": 0.1184178
+              },
+              {
+                "x": 3.0,
+                "y": 0.06987720000000001
+              },
+              {
+                "x": 4.0,
+                "y": 0.1377674
+              },
+              {
+                "x": 5.0,
+                "y": 0.0
+              },
+              {
+                "x": 6.0,
+                "y": 0.4338832,
+                "role": "crit"
+              },
+              {
+                "x": 7.0,
+                "y": 0.4107477,
+                "role": "crit"
+              }
+            ]
+          }
+        ],
+        "markers": [],
+        "forecast": null,
+        "thresholds": [],
+        "roles": [
+          "accent",
+          "crit"
+        ]
+      },
+      "readouts": [
+        {
+          "x": 1.0,
+          "text": "Turn 1 · $1.53. The cache was rebuilt: a new tool loaded (EnterWorktree)."
+        },
+        {
+          "x": 2.0,
+          "text": "Turn 2 · $0.12. A normal turn."
+        },
+        {
+          "x": 3.0,
+          "text": "Turn 3 · $0.07. A normal turn."
+        },
+        {
+          "x": 4.0,
+          "text": "Turn 4 · $0.14. A normal turn."
+        },
+        {
+          "x": 5.0,
+          "text": "Turn 5 · no API call."
+        },
+        {
+          "x": 6.0,
+          "text": "Turn 6 · $0.43. The cache was rebuilt: the cache expired after 135 hours 40 minutes idle."
+        },
+        {
+          "x": 7.0,
+          "text": "Turn 7 · $0.41. The cache was rebuilt: the cache expired after 28 minutes idle."
+        }
+      ],
+      "legend": [
+        {
+          "role": "accent",
+          "text": "a turn"
+        },
+        {
+          "role": "crit",
+          "text": "cache rebuilt"
+        }
+      ],
+      "fallback_cells": []
+    },
+    {
+      "id": "cache",
+      "title": "Prompt cache",
+      "figure": "reused 91 %",
+      "verdict": {
+        "level": "good",
+        "text": "Reused 91 %. But all 3 rebuilds (362k tokens, about $0.91) were avoidable. How, below.",
+        "todo": "Do: reply before the cache expires, or /clear before a long break.",
+        "metric_id": "verdict_cache"
+      },
+      "note": "stays warm ≈ 5 minutes",
+      "spec": {
+        "kind": "pills",
+        "x": {
+          "from": 1.0,
+          "to": 7.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.0,
+          "unit": "turn"
+        },
+        "series": [
+          {
+            "name": "turns",
+            "role": "ok",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 1.0,
+                "role": "crit"
+              },
+              {
+                "x": 2.0,
+                "y": 1.0
+              },
+              {
+                "x": 3.0,
+                "y": 1.0
+              },
+              {
+                "x": 4.0,
+                "y": 1.0
+              },
+              {
+                "x": 5.0,
+                "y": 1.0,
+                "role": "dim"
+              },
+              {
+                "x": 6.0,
+                "y": 1.0,
+                "role": "crit"
+              },
+              {
+                "x": 7.0,
+                "y": 1.0,
+                "role": "crit"
+              }
+            ]
+          }
+        ],
+        "markers": [],
+        "forecast": null,
+        "thresholds": [],
+        "roles": [
+          "ok",
+          "crit",
+          "dim"
+        ]
+      },
+      "bar": {
+        "kind": "progress",
+        "x": {
+          "from": 0.0,
+          "to": 300000.0,
+          "unit": "ms"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.0,
+          "unit": "ms"
+        },
+        "series": [
+          {
+            "name": "warm",
+            "role": "ok",
+            "points": [
+              {
+                "x": 299936.0,
+                "y": 1.0
+              }
+            ]
+          }
+        ],
+        "markers": [],
+        "forecast": null,
+        "thresholds": [],
+        "roles": [
+          "ok"
+        ]
+      },
+      "readouts": [
+        {
+          "x": 1.0,
+          "text": "Turn 1: rebuilt because a new tool loaded (EnterWorktree) · 70k rebuilt."
+        },
+        {
+          "x": 2.0,
+          "text": "Turn 2: the cache was reused."
+        },
+        {
+          "x": 3.0,
+          "text": "Turn 3: the cache was reused."
+        },
+        {
+          "x": 4.0,
+          "text": "Turn 4: the cache was reused."
+        },
+        {
+          "x": 5.0,
+          "text": "Turn 5: no API call."
+        },
+        {
+          "x": 6.0,
+          "text": "Turn 6: rebuilt because the cache expired after 135 hours 40 minutes idle · 144k rebuilt."
+        },
+        {
+          "x": 7.0,
+          "text": "Turn 7: rebuilt because the cache expired after 28 minutes idle · 147k rebuilt."
+        }
+      ],
+      "legend": [
+        {
+          "role": "ok",
+          "text": "reused"
+        },
+        {
+          "role": "crit",
+          "text": "rebuilt"
+        }
+      ],
+      "prevent": [
+        {
+          "turn": 1,
+          "kind": "tools_changed",
+          "cause": "a new tool loaded (EnterWorktree)",
+          "tokens": 70709,
+          "habit": "Connect the MCP servers you need before your first prompt."
+        },
+        {
+          "turn": 6,
+          "kind": "expired",
+          "cause": "the cache expired after 135 hours 40 minutes idle",
+          "tokens": 144332,
+          "habit": "Reply before the cache expires, or /clear before a long break."
+        },
+        {
+          "turn": 7,
+          "kind": "expired",
+          "cause": "the cache expired after 28 minutes idle",
+          "tokens": 147211,
+          "habit": "Reply before the cache expires, or /clear before a long break."
+        }
+      ],
+      "fallback_cells": []
+    },
+    {
+      "id": "tool_calls",
+      "title": "Tool calls per turn",
+      "figure": "34 calls",
+      "verdict": {
+        "level": "good",
+        "text": "34 calls, 1 failed.",
+        "todo": "Do: ask Claude to search (grep) before it reads whole files.",
+        "metric_id": "verdict_tool_calls"
+      },
+      "spec": {
+        "kind": "heat",
+        "x": {
+          "from": 1.0,
+          "to": 7.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 17.0,
+          "unit": "calls"
+        },
+        "series": [
+          {
+            "name": "Bash",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 17.0
+              },
+              {
+                "x": 2.0,
+                "y": 2.0
+              },
+              {
+                "x": 3.0,
+                "y": 1.0
+              },
+              {
+                "x": 4.0,
+                "y": 3.0
+              },
+              {
+                "x": 5.0,
+                "y": 0.0
+              },
+              {
+                "x": 6.0,
+                "y": 2.0
+              },
+              {
+                "x": 7.0,
+                "y": 1.0
+              }
+            ]
+          },
+          {
+            "name": "Agent",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 6.0
+              },
+              {
+                "x": 2.0,
+                "y": 0.0
+              },
+              {
+                "x": 3.0,
+                "y": 0.0
+              },
+              {
+                "x": 4.0,
+                "y": 0.0
+              },
+              {
+                "x": 5.0,
+                "y": 0.0
+              },
+              {
+                "x": 6.0,
+                "y": 0.0
+              },
+              {
+                "x": 7.0,
+                "y": 0.0
+              }
+            ]
+          },
+          {
+            "name": "Skill",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 1.0
+              },
+              {
+                "x": 2.0,
+                "y": 0.0
+              },
+              {
+                "x": 3.0,
+                "y": 0.0
+              },
+              {
+                "x": 4.0,
+                "y": 0.0
+              },
+              {
+                "x": 5.0,
+                "y": 0.0
+              },
+              {
+                "x": 6.0,
+                "y": 0.0
+              },
+              {
+                "x": 7.0,
+                "y": 0.0
+              }
+            ]
+          },
+          {
+            "name": "ToolSearch",
+            "role": "accent",
+            "points": [
+              {
+                "x": 1.0,
+                "y": 1.0
+              },
+              {
+                "x": 2.0,
+                "y": 0.0
+              },
+              {
+                "x": 3.0,
+                "y": 0.0
+              },
+              {
+                "x": 4.0,
+                "y": 0.0
+              },
+              {
+                "x": 5.0,
+                "y": 0.0
+              },
+              {
+                "x": 6.0,
+                "y": 0.0
+              },
+              {
+                "x": 7.0,
+                "y": 0.0
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "kind": "failed",
+            "x": 1.0,
+            "row": 0,
+            "role": "crit"
+          }
+        ],
+        "forecast": null,
+        "thresholds": [],
+        "roles": [
+          "accent",
+          "crit"
+        ]
+      },
+      "readouts": [
+        {
+          "x": 1.0,
+          "text": "Turn 1 · 25 calls: Bash 17, Agent 6, Skill 1, ToolSearch 1, 1 failed."
+        },
+        {
+          "x": 2.0,
+          "text": "Turn 2 · 2 calls: Bash 2."
+        },
+        {
+          "x": 3.0,
+          "text": "Turn 3 · 1 call: Bash 1."
+        },
+        {
+          "x": 4.0,
+          "text": "Turn 4 · 3 calls: Bash 3."
+        },
+        {
+          "x": 5.0,
+          "text": "Turn 5 · 0 calls."
+        },
+        {
+          "x": 6.0,
+          "text": "Turn 6 · 2 calls: Bash 2."
+        },
+        {
+          "x": 7.0,
+          "text": "Turn 7 · 1 call: Bash 1."
+        }
+      ],
+      "legend": [
+        {
+          "role": "accent",
+          "text": "brighter = more calls"
+        },
+        {
+          "role": "crit",
+          "text": "failed"
+        }
+      ],
+      "fallback_cells": []
+    }
+  ],
+  "footer": "spent so far ≈$2.70 · what this session would cost at API prices"
+}
