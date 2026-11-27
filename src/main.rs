@@ -340,6 +340,14 @@ fn main() {
         Command::Query(q) => query(q),
         Command::Coach { copy_md } => {
             let _ = copy_md;
+            let dir = cctop::copy_docs::fixtures_dir();
+            if !dir.is_dir() {
+                eprintln!(
+                    "cctop: coach --copy-md fires the rules on the repository's fixture sessions, and {} is not there; run it from a checkout of the cctop repository built from source",
+                    dir.display()
+                );
+                std::process::exit(1);
+            }
             print!("{}", cctop::copy_docs::coach_copy_md());
         }
         Command::Verdicts { md } => {
