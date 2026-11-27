@@ -1,11 +1,15 @@
 //! What `area_forecast` and `cumulative_forecast` share: a filled line over
 //! the x axis, a forecast past its end, threshold lines and markers.
 //!
-//! Cells: each column samples the line at its centre and fills up to the
-//! value; past the line's end the forecast fills in its (muted) colour; a
-//! threshold is dashed across on alternate columns; a marker fills its
-//! column up to the marker in its colour, except `now`, which lights the
-//! one pixel at its value.
+//! The first series is the line. Any later series is a band under it (the
+//! context's fixed prefix): filled flat, with no line of its own.
+//!
+//! Cells: each column samples the series at its centre and fills up to the
+//! value, bands over the line's fill (at least their bottom pixel); past the line's end the forecast fills
+//! in its colour at 40 %; thresholds are dashed across on alternate columns
+//! over everything, so a budget stays visible once the line passes it; a
+//! marker fills its column up to the marker in its colour. `now` is not
+//! drawn in cells (the line's end is now); a picture gives it a dot.
 
 use super::{col_of, frac, row_of, value_at};
 use crate::canvas::{circle, polyline, solid, vertical, Canvas};
@@ -21,6 +25,9 @@ pub(super) enum AreaFill {
     /// The series colour at 14 % throughout.
     Flat,
 }
+
+/// A point on the picture, in pixels.
+type Xy = (f32, f32);
 
 fn sorted(points: &[Point]) -> Vec<Point> {
     let mut v = points.to_vec();
@@ -48,7 +55,7 @@ pub(super) fn cells(spec: &ChartSpec, g: &mut Grid, t: &Theme) {
         .fold(f64::MIN, f64::max);
 
     if let Some(f) = &spec.forecast {
-        let colour = t.fill(f.role);
+        let colour = t.deep(f.role);
         for c in 0..w {
             let x = x_at(c);
             if x < f.from.x || x > f.to.x || x <= end {
@@ -67,16 +74,7 @@ pub(super) fn cells(spec: &ChartSpec, g: &mut Grid, t: &Theme) {
             }
         }
     }
-    for th in &spec.thresholds {
-        let f = frac(th.y, &spec.y);
-        if (0.0..=1.0).contains(&f) {
-            let py = row_of(f, h);
-            for c in (0..w).step_by(2) {
-                g.set(c, py, t.role(th.role));
-            }
-        }
-    }
-    for (points, colour) in &series {
+    for (i, (points, colour)) in series.iter().enumerate() {
         for c in 0..w {
             let Some(v) = value_at(points, x_at(c)) else {
                 continue;
@@ -86,21 +84,29 @@ pub(super) fn cells(spec: &ChartSpec, g: &mut Grid, t: &Theme) {
                     g.set(c, py, *colour);
                 }
             }
+            // A band thinner than half a pixel still shows its bottom row.
+            if i > 0 && v > spec.y.from {
+                g.set(c, h - 1, *colour);
+            }
         }
     }
-    for m in &spec.markers {
+    for th in &spec.thresholds {
+        let f = frac(th.y, &spec.y);
+        if (0.0..=1.0).contains(&f) {
+            let py = row_of(f, h);
+            for c in (0..w).step_by(2) {
+                g.set(c, py, t.role(th.role));
+            }
+        }
+    }
+    for m in spec.markers.iter().filter(|m| m.kind != "now") {
         let Some(c) = col_of(frac(m.x, &spec.x), w) else {
             continue;
         };
         let y =
             m.y.or_else(|| series.iter().find_map(|(p, _)| value_at(p, m.x)));
         let Some(y) = y else { continue };
-        let py = row_of(frac(y, &spec.y), h);
-        if m.kind == "now" {
-            g.set(c, py, t.role(m.role));
-        } else {
-            g.column(c, py, h, t.role(m.role));
-        }
+        g.column(c, row_of(frac(y, &spec.y), h), h, t.role(m.role));
     }
 }
 
@@ -109,6 +115,15 @@ pub(super) fn picture(spec: &ChartSpec, cv: &mut Canvas, t: &Theme, fill: AreaFi
     let margin = 2.0 * u;
     let px = |x: f64| (frac(x, &spec.x).clamp(0.0, 1.0) as f32) * w;
     let py = |y: f64| (h - margin) - (frac(y, &spec.y).clamp(0.0, 1.0) as f32) * (h - 2.0 * margin);
+    // A series' line and the area under it, down to the bottom edge.
+    let shape = |points: &[Point]| -> Option<(Vec<Xy>, Vec<Xy>)> {
+        let (first, last) = (points.first()?, points.last()?);
+        let line: Vec<Xy> = points.iter().map(|p| (px(p.x), py(p.y))).collect();
+        let mut area = line.clone();
+        area.push((px(last.x), h));
+        area.push((px(first.x), h));
+        Some((line, area))
+    };
 
     // The midline.
     cv.stroke(
@@ -123,24 +138,27 @@ pub(super) fn picture(spec: &ChartSpec, cv: &mut Canvas, t: &Theme, fill: AreaFi
             (px(f.to.x), py(f.high)),
             (px(f.to.x), py(f.low)),
         ];
-        cv.fill(polyline(&cone, true), &solid(t.role(f.role), 0.12));
+        cv.fill(polyline(&cone, true), &solid(t.role(f.role), 0.09));
     }
-    for s in &spec.series {
-        let points = sorted(&s.points);
-        let (Some(first), Some(last)) = (points.first(), points.last()) else {
-            continue;
-        };
-        let colour = t.role(s.role);
-        let line: Vec<(f32, f32)> = points.iter().map(|p| (px(p.x), py(p.y))).collect();
-        let mut area = line.clone();
-        area.push((px(last.x), h));
-        area.push((px(first.x), h));
-        let paint = match fill {
-            AreaFill::Fade => vertical((colour, 0.6), (colour, 0.06), py(spec.y.to), h),
-            AreaFill::Flat => solid(colour, 0.14),
-        };
-        cv.fill(polyline(&area, true), &paint);
-        cv.stroke(polyline(&line, false), colour, 2.2 * u, None);
+    let mut line = None;
+    if let Some(s) = spec.series.first() {
+        if let Some((l, area)) = shape(&sorted(&s.points)) {
+            let colour = t.role(s.role);
+            let paint = match fill {
+                AreaFill::Fade => vertical((colour, 0.6), (colour, 0.06), py(spec.y.to), h),
+                AreaFill::Flat => solid(colour, 0.14),
+            };
+            cv.fill(polyline(&area, true), &paint);
+            line = Some((l, colour));
+        }
+    }
+    for s in spec.series.iter().skip(1) {
+        if let Some((_, area)) = shape(&sorted(&s.points)) {
+            cv.fill(polyline(&area, true), &solid(t.role(s.role), 0.75));
+        }
+    }
+    if let Some((l, colour)) = line {
+        cv.stroke(polyline(&l, false), colour, 2.2 * u, None);
     }
     if let Some(f) = &spec.forecast {
         let fc = [(px(f.from.x), py(f.from.y)), (px(f.to.x), py(f.to.y))];

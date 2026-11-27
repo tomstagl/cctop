@@ -188,11 +188,19 @@ impl ChartSpec {
 /// sRGB, 0–255 per channel.
 pub type Rgb = (u8, u8, u8);
 
-/// One terminal cell of a chart drawn in half-blocks: `fg` is the upper
-/// half, `bg` the lower.
+/// One terminal cell of a chart drawn in half-blocks. A colour of `None` is
+/// the terminal's default (nothing painted there), so an empty part of a
+/// chart shows whatever the surface sits on. By what the two halves hold:
+///
+/// | upper   | lower   | `ch` | `fg`  | `bg`  |
+/// |---------|---------|------|-------|-------|
+/// | painted | painted | `▀`  | upper | lower |
+/// | painted | empty   | `▀`  | upper | None  |
+/// | empty   | painted | `▄`  | lower | None  |
+/// | empty   | empty   | ` `  | None  | None  |
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub ch: char,
-    pub fg: Rgb,
-    pub bg: Rgb,
+    pub fg: Option<Rgb>,
+    pub bg: Option<Rgb>,
 }

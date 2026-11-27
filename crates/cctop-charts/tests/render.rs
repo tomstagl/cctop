@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use cctop_charts::{
-    encode_png, render_cells, render_rgba, Cell, ChartSpec, Kind, Rgb, Theme, HALF_BLOCK,
-    MAX_PIXELS,
+    encode_png, render_cells, render_rgba, Cell, ChartSpec, Kind, Rgb, Theme, LOWER_HALF,
+    MAX_PIXELS, UPPER_HALF,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -42,16 +42,23 @@ fn px(f: &Fixture, scale: u32) -> (u32, u32) {
     (f.cols as u32 * 8 * scale, f.rows as u32 * 16 * scale)
 }
 
+/// A cell's two pixels, (upper, lower), read back through its glyph;
+/// `None` is unpainted (the terminal's default).
+fn halves(c: &Cell) -> (Option<Rgb>, Option<Rgb>) {
+    match c.ch {
+        UPPER_HALF => (c.fg, c.bg),
+        LOWER_HALF => (None, c.fg),
+        _ => (None, None),
+    }
+}
+
 /// Cells as pixels, two text lines per cell row, one letter per colour
-/// (`.` the background), the colours listed below.
+/// (`.` unpainted), the colours listed below.
 fn pixels_text(cells: &[Cell], cols: u16) -> String {
-    let bg = Theme::CELLS.bg;
     let mut names: BTreeMap<Rgb, char> = BTreeMap::new();
     let mut order: Vec<Rgb> = Vec::new();
-    let mut letter = |c: Rgb| -> char {
-        if c == bg {
-            return '.';
-        }
+    let mut letter = |c: Option<Rgb>| -> char {
+        let Some(c) = c else { return '.' };
         let next = (b'a' + order.len() as u8) as char;
         *names.entry(c).or_insert_with(|| {
             order.push(c);
@@ -60,8 +67,8 @@ fn pixels_text(cells: &[Cell], cols: u16) -> String {
     };
     let mut out = String::new();
     for row in cells.chunks(cols as usize) {
-        let upper: String = row.iter().map(|c| letter(c.fg)).collect();
-        let lower: String = row.iter().map(|c| letter(c.bg)).collect();
+        let upper: String = row.iter().map(|c| letter(halves(c).0)).collect();
+        let lower: String = row.iter().map(|c| letter(halves(c).1)).collect();
         writeln!(out, "{upper}\n{lower}").unwrap();
     }
     out.push('\n');
@@ -105,7 +112,7 @@ fn cells_per_kind() {
 }
 
 #[test]
-fn cells_are_half_blocks_in_the_xterm_palette() {
+fn cells_use_the_four_glyph_forms_in_the_xterm_palette() {
     const CUBE: [u8; 6] = [0, 95, 135, 175, 215, 255];
     let xterm = |c: Rgb| {
         [c.0, c.1, c.2].iter().all(|v| CUBE.contains(v))
@@ -114,9 +121,33 @@ fn cells_are_half_blocks_in_the_xterm_palette() {
     for f in every() {
         let cells = render_cells(&f.spec, f.cols, f.rows);
         assert_eq!(cells.len(), f.cols as usize * f.rows as usize, "{}", f.name);
+        let mut empty = 0;
         for c in &cells {
-            assert_eq!(c.ch, HALF_BLOCK);
-            assert!(xterm(c.fg) && xterm(c.bg), "{}: {c:?}", f.name);
+            // painted/painted ▀ fg bg · painted/empty ▀ fg · empty/painted
+            // ▄ fg · empty/empty ' ' — nothing else.
+            let form = match (c.ch, c.fg, c.bg) {
+                (UPPER_HALF, Some(_), _) => true,
+                (LOWER_HALF, Some(_), None) => true,
+                (' ', None, None) => {
+                    empty += 1;
+                    true
+                }
+                _ => false,
+            };
+            assert!(form, "{}: {c:?}", f.name);
+            for rgb in [c.fg, c.bg].into_iter().flatten() {
+                assert!(xterm(rgb), "{}: {c:?}", f.name);
+                assert_ne!(
+                    rgb,
+                    Theme::CELLS.bg,
+                    "{}: the background is never painted",
+                    f.name
+                );
+            }
+        }
+        // Charts with open space leave it to the terminal.
+        if !matches!(f.spec.kind, Kind::StackedBar | Kind::Progress | Kind::Heat) {
+            assert!(empty > 0, "{}", f.name);
         }
     }
 }
@@ -228,7 +259,7 @@ fn degenerate_specs_draw_an_empty_or_partial_chart_without_panicking() {
         let blank = render_cells(&nan, f.cols, f.rows);
         assert!(blank
             .iter()
-            .all(|c| c.fg == Theme::CELLS.bg && c.bg == Theme::CELLS.bg));
+            .all(|c| c.ch == ' ' && c.fg.is_none() && c.bg.is_none()));
         assert!(render_rgba(&nan, 64, 32, &Theme::DARK)
             .iter()
             .all(|b| *b == 0));

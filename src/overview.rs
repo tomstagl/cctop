@@ -215,11 +215,11 @@ fn context(state: &State) -> Chart {
             to: point(last + horizon, at(vel)),
             low: at(lo),
             high: at(hi),
-            role: Role::Dim,
+            role: Role::Accent,
         });
         spec_x_to = last + horizon;
         legend_rows.push(legend(
-            Role::Dim,
+            Role::Accent,
             format!("forecast · +{} a turn", fmt::tokens(vel.round() as u64)),
         ));
     }
@@ -233,15 +233,34 @@ fn context(state: &State) -> Chart {
         role: Role::Accent,
         points: points.clone(),
     });
+    // The band under it: what cannot change this session (system prompt and
+    // tools, PRD 3's composition), as much of each point as it fills.
+    let prefix: u64 = crate::dashboard::Composition::of(state).map_or(0, |c| {
+        c.items
+            .iter()
+            .filter(|(name, _)| composition_role(name) == Role::S0)
+            .map(|(_, tokens)| *tokens)
+            .sum()
+    });
+    if prefix > 0 && !points.is_empty() {
+        spec.series.push(Series {
+            name: "system + tools".into(),
+            role: Role::S0,
+            points: points
+                .iter()
+                .map(|p| point(p.x, p.y.min(prefix as f64)))
+                .collect(),
+        });
+    }
     spec.forecast = forecast;
     if v.window > 0 {
         spec.thresholds.push(Threshold {
             name: "auto-compact".into(),
             y: v.threshold as f64,
-            role: Role::Crit,
+            role: Role::Warn,
         });
         legend_rows.push(legend(
-            Role::Crit,
+            Role::Warn,
             format!("auto-compact at {}", fmt::tokens(v.threshold)),
         ));
     }
@@ -339,7 +358,7 @@ fn composition_role(name: &str) -> Role {
         "messages" => Role::S2,
         "mcp tools" | "skills" | "custom agents" | "memory files" => Role::S1,
         "free" => Role::Dim,
-        "buffer" => Role::Warn,
+        "buffer" => Role::Crit,
         _ => Role::S0,
     }
 }
@@ -403,7 +422,7 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
             to: point(end, at(rate)),
             low: at(rate.min(average)),
             high: at(rate.max(average)),
-            role: Role::Dim,
+            role: Role::Accent,
         });
         x_to = end;
         y_to = y_to.max(at(rate.max(average)));
@@ -414,7 +433,7 @@ fn spend(state: &State, chain_usd: Option<f64>) -> Chart {
             money(facts.total.unwrap_or(cum) + ahead)
         ));
         legend_rows.push(legend(
-            Role::Dim,
+            Role::Accent,
             format!("forecast · {} a minute", money(rate)),
         ));
     }

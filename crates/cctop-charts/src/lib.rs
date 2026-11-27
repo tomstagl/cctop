@@ -14,7 +14,7 @@ mod kinds;
 mod spec;
 mod theme;
 
-pub use grid::HALF_BLOCK;
+pub use grid::{LOWER_HALF, UPPER_HALF};
 pub use spec::{
     Axis, Cell, ChartSpec, Forecast, Kind, Marker, Point, Rgb, Role, Series, Threshold,
 };
@@ -23,13 +23,14 @@ pub use theme::Theme;
 /// The largest picture [`render_rgba`] draws, in pixels (16 MiB of RGBA).
 pub const MAX_PIXELS: u64 = 4 << 20;
 
-/// The chart as `cols` × `rows` cells, row-major. Each cell is a
-/// [`HALF_BLOCK`] with the upper pixel in `fg` and the lower in `bg`, so a
-/// chart gets two pixels per row; every colour is an xterm 256-colour entry
-/// ([`Theme::CELLS`]). A spec with a non-finite number draws an empty chart.
+/// The chart as `cols` × `rows` cells, row-major, two pixels per cell
+/// (upper and lower half; [`Cell`] lists the glyphs). Every painted colour
+/// is an xterm 256-colour entry ([`Theme::CELLS`]); what nothing paints is
+/// `None`, the terminal's default. A spec with a non-finite number draws an
+/// empty chart.
 pub fn render_cells(spec: &ChartSpec, cols: u16, rows: u16) -> Vec<Cell> {
     let theme = Theme::CELLS;
-    let mut g = grid::Grid::new(cols, rows, theme.bg);
+    let mut g = grid::Grid::new(cols, rows);
     if spec.is_finite() && cols > 0 && rows > 0 {
         kinds::cells(spec, &mut g, &theme);
     }
