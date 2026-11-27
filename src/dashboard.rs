@@ -233,6 +233,7 @@ fn short_category(name: &str) -> String {
         "memory files" => "mem".into(),
         "messages" => "msgs".into(),
         "custom agents" => "agents".into(),
+        "skills" => "skills".into(),
         _ => name.to_string(),
     }
 }
@@ -240,7 +241,7 @@ fn short_category(name: &str) -> String {
 impl Composition {
     pub fn of(state: &State) -> Option<Composition> {
         use crate::ui::state::CaptureSource;
-        let (cap, _, src, _) = state.context_capture()?;
+        let (cap, _, src, _) = state.current_context_capture()?;
         let mut items: Vec<(String, u64)> = cap.categories.clone();
         if items.is_empty() {
             return None;
@@ -2460,6 +2461,19 @@ mod tests {
             },
         });
         assert!(Composition::of(&s).is_none());
+    }
+
+    /// A `/context` table from before the last compaction describes a window
+    /// that is gone: no row; one after it counts.
+    #[test]
+    fn a_transcript_capture_before_a_compaction_gives_no_row() {
+        let (mut s, _) = fixture_at("b", usize::MAX);
+        assert!(Composition::of(&s).is_some(), "fixture B has the table");
+        let boundary = s.last_compaction_ms().expect("fixture B compacts");
+        s.prefix.context_capture_at_ms = Some(boundary - 1);
+        assert!(Composition::of(&s).is_none());
+        s.prefix.context_capture_at_ms = Some(boundary + 1);
+        assert_eq!(Composition::of(&s).unwrap().source, "per /context");
     }
 
     /// No capture: no row, no keys, and the cell serialises as before.

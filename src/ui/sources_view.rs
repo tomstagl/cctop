@@ -75,7 +75,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let calibrated = match (&r.mode, state.context_capture()) {
         (Mode::Calibrated { .. }, Some((_, _, _, at))) if at > 0 => format!(
             ", calibrated {} ago",
-            crate::coach::short_duration(state.clock_ms() - at)
+            crate::coach::ago(state.clock_ms() - at)
         ),
         // A table without a timestamp is still a calibration.
         (Mode::Calibrated { .. }, _) => ", calibrated".to_string(),

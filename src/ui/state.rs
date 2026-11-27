@@ -1584,6 +1584,43 @@ impl State {
         }
     }
 
+    /// The time of the last Compact or Microcompact boundary, epoch ms.
+    pub fn last_compaction_ms(&self) -> Option<i64> {
+        self.agg
+            .boundaries
+            .iter()
+            .rev()
+            .find(|b| {
+                matches!(
+                    b.kind,
+                    crate::metrics::usage::BoundaryKind::Compact
+                        | crate::metrics::usage::BoundaryKind::Microcompact
+                )
+            })
+            .and_then(|b| b.at.as_deref())
+            .and_then(crate::metrics::cost::parse_ts_ms)
+    }
+
+    /// Like [`State::context_capture`], for what describes the window as it
+    /// is: a capture taken before the last compaction describes a window
+    /// that is gone, whichever surface it came from. (Residency keeps
+    /// calibrating from the transcript capture regardless.)
+    pub fn current_context_capture(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let c = self.context_capture()?;
+        // An unknown time (0) is not evidence of staleness.
+        match self.last_compaction_ms() {
+            Some(b) if c.3 > 0 && c.3 < b => None,
+            _ => Some(c),
+        }
+    }
+
     /// Keep the pane's latest spool; it is anchored when read.
     pub fn apply_context_spool(&mut self, s: crate::context_spool::SpoolCapture) {
         self.context_spool = Some(s);
@@ -1601,20 +1638,7 @@ impl State {
         i64,
     )> {
         let s = self.context_spool.as_ref()?;
-        let compacted_at = self
-            .agg
-            .boundaries
-            .iter()
-            .rev()
-            .find(|b| {
-                matches!(
-                    b.kind,
-                    crate::metrics::usage::BoundaryKind::Compact
-                        | crate::metrics::usage::BoundaryKind::Microcompact
-                )
-            })
-            .and_then(|b| b.at.as_deref())
-            .and_then(crate::metrics::cost::parse_ts_ms);
+        let compacted_at = self.last_compaction_ms();
         if compacted_at.is_some_and(|c| s.at_ms < c) {
             return None;
         }

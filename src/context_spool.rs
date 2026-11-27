@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::transcript::ContextCapture;
 
@@ -20,15 +20,39 @@ pub struct SpoolCapture {
     pub capture: ContextCapture,
 }
 
+/// A count that arrives as an integer or as a float: rounded, never negative.
+fn count<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+    let n = f64::deserialize(d)?;
+    if n.is_finite() {
+        Ok(n.round().max(0.0) as u64)
+    } else {
+        Err(serde::de::Error::custom("not a finite number"))
+    }
+}
+
+fn count_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    Option::<f64>::deserialize(d)?
+        .map(|n| count(serde::de::value::F64Deserializer::<D::Error>::new(n)))
+        .transpose()
+}
+
+fn instant<'de, D: Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
+    count(d).map(|n| n as i64)
+}
+
 #[derive(Deserialize)]
 struct Spool {
     v: u64,
+    #[serde(deserialize_with = "instant")]
     at: i64,
+    #[serde(deserialize_with = "count")]
     tokens: u64,
+    #[serde(deserialize_with = "count")]
     window: u64,
     model: Option<String>,
     #[serde(default)]
     categories: Vec<Category>,
+    #[serde(default, deserialize_with = "count_opt")]
     autocompact_threshold: Option<u64>,
     #[serde(default)]
     mcp_tools: Vec<Tool>,
@@ -38,18 +62,22 @@ struct Spool {
 #[derive(Deserialize)]
 struct Category {
     name: String,
+    #[serde(deserialize_with = "count")]
     tokens: u64,
     kind: String,
 }
 
 #[derive(Deserialize)]
 struct Tool {
+    #[serde(deserialize_with = "count")]
     tokens: u64,
 }
 
 #[derive(Deserialize)]
 struct Skills {
+    #[serde(deserialize_with = "count")]
     count: u64,
+    #[serde(deserialize_with = "count")]
     tokens: u64,
 }
 
@@ -91,9 +119,12 @@ pub fn parse(text: &str) -> Option<SpoolCapture> {
 }
 
 pub fn path(session_id: &str) -> PathBuf {
-    crate::status::cctop_dir()
-        .join("context")
-        .join(format!("{session_id}.json"))
+    path_in(&crate::status::cctop_dir(), session_id)
+}
+
+/// The spool's path under a given `~/.cctop`.
+pub fn path_in(home: &std::path::Path, session_id: &str) -> PathBuf {
+    home.join("context").join(format!("{session_id}.json"))
 }
 
 /// Read the spool once, if present and understood.
@@ -109,10 +140,6 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    pub fn new(session_id: &str) -> Watcher {
-        Watcher::at(path(session_id))
-    }
-
     pub fn at(path: PathBuf) -> Watcher {
         Watcher {
             path,
@@ -129,8 +156,11 @@ impl Watcher {
         if mtime.is_some() && mtime == self.last_mtime {
             return None;
         }
+        // Remember the file only once it parsed: a half-written one is read
+        // again on the next poll, even if its mtime has not moved.
+        let parsed = parse(&std::fs::read_to_string(&self.path).ok()?)?;
         self.last_mtime = mtime;
-        parse(&std::fs::read_to_string(&self.path).ok()?)
+        Some(parsed)
     }
 }
 
@@ -185,6 +215,39 @@ mod tests {
     fn truncated_json_ignored() {
         assert!(parse(&SPOOL[..SPOOL.len() / 2]).is_none());
         assert!(parse("").is_none());
+    }
+
+    #[test]
+    fn floats_are_rounded() {
+        let s = parse(r#"{"v":1,"at":1789000000000.0,"tokens":10.6,"window":100.4,"model":null,"categories":[{"name":"Messages","tokens":5.5,"kind":"used"}],"autocompact_threshold":90.2,"mcp_tools":[{"name":"a","tokens":2.4}],"skills":{"count":3.0,"tokens":7.5}}"#).unwrap();
+        assert_eq!(s.at_ms, 1_789_000_000_000);
+        let c = s.capture;
+        assert_eq!((c.used_tokens, c.window_tokens), (11, 100));
+        assert_eq!(c.categories, [("Messages".to_string(), 6)]);
+        assert_eq!(c.autocompact_window, Some(90));
+        assert_eq!(c.mcp_tools, Some((1, 2)));
+        assert_eq!(c.skills, Some((3, 8)));
+    }
+
+    #[test]
+    fn a_half_written_file_is_read_again_at_the_same_mtime() {
+        let dir = std::env::temp_dir().join(format!("cctop-spool-half-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("s.json");
+        let mut w = Watcher::at(p.clone());
+        std::fs::write(&p, &SPOOL[..SPOOL.len() / 2]).unwrap();
+        assert!(w.poll().is_none(), "truncated: nothing yet");
+        let mtime = std::fs::metadata(&p).unwrap().modified().unwrap();
+        std::fs::write(&p, SPOOL).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&p)
+            .unwrap()
+            .set_modified(mtime)
+            .unwrap();
+        assert!(w.poll().is_some(), "complete write, same mtime: picked up");
+        assert!(w.poll().is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -193,12 +193,8 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         }
     }));
     // The pane's context-breakdown spool.
-    let mut spool = crate::context_spool::Watcher::new(&app.state.session.session_id);
-    app.tick_hooks.push(Box::new(move |state: &mut State| {
-        if let Some(s) = spool.poll() {
-            state.apply_context_spool(s);
-        }
-    }));
+    app.tick_hooks
+        .push(spool_hook(&cctop_home, &app.state.session.session_id));
     // Background tasks every 2 s.
     if let Some(dir) = crate::tasks::dir_for(&app.state.session.session_id) {
         let mut last = Instant::now() - Duration::from_secs(5);
@@ -255,6 +251,17 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
         app.sources.push(Box::new(t) as Box<dyn LineSource>);
     }
+}
+
+/// The tick hook that feeds the pane's breakdown spool for one session id.
+fn spool_hook(home: &Path, session_id: &str) -> crate::app::TickHook {
+    let mut spool =
+        crate::context_spool::Watcher::at(crate::context_spool::path_in(home, session_id));
+    Box::new(move |state: &mut State| {
+        if let Some(s) = spool.poll() {
+            state.apply_context_spool(s);
+        }
+    })
 }
 
 /// The live registry entry that carries `pid` under a session id other than
@@ -331,6 +338,29 @@ mod tests {
 
     const OLD: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
     const NEW: &str = "9d337130-79ad-4df0-8bd5-1365210208b1";
+
+    /// After a session-id change `attach` builds the watcher for the new id:
+    /// the hook reads that id's spool, not the old one's.
+    #[test]
+    fn the_spool_hook_follows_the_session_id() {
+        let home = std::env::temp_dir().join(format!("cctop-attach-spool-{}", std::process::id()));
+        std::fs::create_dir_all(home.join("context")).unwrap();
+        let body = |tokens: u64| {
+            format!(r#"{{"v":1,"at":5,"tokens":{tokens},"window":100,"model":null}}"#)
+        };
+        std::fs::write(crate::context_spool::path_in(&home, OLD), body(11)).unwrap();
+        std::fs::write(crate::context_spool::path_in(&home, NEW), body(22)).unwrap();
+        for (id, want) in [(OLD, 11), (NEW, 22)] {
+            let mut state = State::new(crate::metrics::cost::Pricing::default());
+            spool_hook(&home, id)(&mut state);
+            assert_eq!(
+                state.context_spool.unwrap().capture.used_tokens,
+                want,
+                "{id}"
+            );
+        }
+        std::fs::remove_dir_all(&home).unwrap();
+    }
 
     #[test]
     fn rotated_entry_is_this_pid_under_another_live_id() {
