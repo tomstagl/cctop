@@ -379,15 +379,17 @@ pub fn compose_scrolled<'a>(
     out.extend(act_rows(t, d, width, open));
     if let Some(body) = d.bodies.get(open) {
         out.push(rule_line(t, body, w, body.id == "events", keys));
-        // Body 1 is the overview: the charts, drawn from the overview object.
-        if let (Some(o), "context") = (&d.overview, body.id) {
+        // Body 1 is the overview: the charts, drawn from the overview object
+        // (built by the caller, which knows the width); the body's own rows
+        // are drawn by neither surface.
+        if body.id == "context" {
+            let all = d
+                .overview
+                .as_ref()
+                .map(|o| crate::ui::overview_view::rows(t, o, width))
+                .unwrap_or_default();
             let room = h.saturating_sub(out.len());
-            let (rows, max) = scrolled(
-                t,
-                crate::ui::overview_view::rows(t, o, width),
-                d.scroll,
-                room,
-            );
+            let (rows, max) = scrolled(t, all, d.scroll, room);
             out.extend(rows);
             out.truncate(h);
             return (out, max);
@@ -583,28 +585,6 @@ mod tests {
         assert!(!narrow.contains("ZDR"), "{narrow}");
         assert!(narrow.contains(&d.header.phase.word), "{narrow}");
         insta::assert_snapshot!("header_rules_hooks_40", narrow);
-    }
-
-    /// Body 1 as the pane still draws it from the dashboard object (its
-    /// rows, no charts): the pane's row-identity test reads this snapshot
-    /// until the pane draws the overview (mod-pane Task 7).
-    #[test]
-    fn body_one_rows_without_the_overview() {
-        let (app, mut d) = dashboard_with(all_facts());
-        d.overview = None;
-        let text = compose(&app.state.theme, &d, 85, 24, 0, false)
-            .iter()
-            .map(|l| {
-                l.spans
-                    .iter()
-                    .map(|s| s.content.as_ref())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_string()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        insta::assert_snapshot!("console_context_rows_85x24", text);
     }
 
     #[test]

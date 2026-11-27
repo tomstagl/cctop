@@ -10,6 +10,7 @@ import {
   HIDDEN_STATUS,
   initialModel,
   outcomeText,
+  overviewShown,
   reduce,
   unsupportedVerbs,
   UNSUPPORTED,
@@ -21,12 +22,13 @@ import {
   type View,
 } from './model';
 import { spoolText } from './breakdown';
-import { chartsDecision, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode } from './charts';
+import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode, type Picture } from './charts';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
+import { maxTurnsFor, overviewOf, pictureJobs, type Pictures } from './views/overview-charts';
 
 // Re-exported so the checked-in `$` contract's own version (US-009) has one
 // source (`model.ts`, already imported by both this file and the views) and
@@ -52,6 +54,9 @@ export const OPEN_SETTLE_MS = 800;
 // as hidden (the /diff panel took the dock after the open) and the status
 // line under the prompt says so.
 export const HIDDEN_AFTER_MS = 2000;
+// How long after a render that drew the first Image its probe blit waits:
+// the tree is mounted at the surface's next frame, after the hook returned.
+export const PROBE_AFTER_MS = 200;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 // The views in view-bar order; the `view` is the /cctop-pane argument.
 const VIEWS: { view: View; label: string }[] = [
@@ -84,6 +89,18 @@ let breakdownFailureLogged = false;
 // charts.wasm, compiled and instantiated once per session.start (null until
 // then, and for good when it would not load: the query's cells are drawn).
 let chartRenderer: ChartRenderer | null = null;
+// The overview's pictures (US-007), rendered off the render hook: by key, the
+// picture and the hash of what it was drawn from, so only a changed chart is
+// drawn again. `mounted` is what the last render drew under each key (a
+// blit needs the same kind and size mounted), `chartsTimer` the pending
+// refresh, `chartsBusy`/`chartsAgain` one refresh at a time with one more
+// after it, `probeTimer` the probe blit waiting for its Image to mount.
+let pictures = new Map<string, { hash: string; picture: Picture }>();
+let mounted = new Map<string, Picture>();
+let chartsTimer: Timer | null = null;
+let chartsBusy = false;
+let chartsAgain = false;
+let probeTimer: Timer | null = null;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -162,6 +179,7 @@ function unpinStatus($: EngineInterface): void {
 // open waiting on it and lifts the hidden status if it was pinned.
 function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): void {
   const wasHidden = model.visibility === 'hidden';
+  const before = model;
   model = reduce(model, {
     type: 'render',
     at: now,
@@ -171,6 +189,15 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): vo
   });
   // The view in force (a switch from the tasks list shows here too).
   model = reduce(model, { type: 'agents.viewed', id: e.props.view?.agentId ?? null });
+  // A new width is a full redraw of the overview: its pictures at the new
+  // sizes, and its object again when the turns that fit changed.
+  if (overviewShown(model) && model.bodyColumns !== before.bodyColumns) {
+    scheduleCharts($);
+    if (before.bodyColumns === null || maxTurnsFor(before.bodyColumns) !== maxTurnsFor(e.props.bodyColumns)) {
+      // A timer away, as the pictures: nothing is spawned from the render hook.
+      $.clock.after(1, () => poller?.pollNow());
+    }
+  }
   stopHiddenTimer();
   unpinStatus($);
   // The width may have changed the status line's form.
@@ -238,6 +265,7 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
+  overviewChanged($, before);
   if (model.sessionId !== before.sessionId) agentsAsked.clear();
   if (model.query.agents !== before.query.agents) agentsPolled($);
 }
@@ -292,12 +320,137 @@ function coachChanged($: EngineInterface): void {
 }
 
 // What Console's targets do: a cell, the act line or `0 home` opens its
-// body in place; the header never moves.
+// body in place; the header never moves. A turn number under one of the
+// overview's per-turn charts shows that turn's readout.
 function overviewActions($: EngineInterface): OverviewActions {
   return {
     open: (id) => apply($, { type: 'overview.body', id }),
     keys: (keys) => apply($, { type: 'overview.keys', keys }),
+    readout: (chart, turn) => apply($, { type: 'overview.readout', chart, turn }),
   };
+}
+
+// The picture-or-cells mode the overview's pictures are drawn in now.
+function modeOf(m: Model): ChartsMode {
+  return m.charts === null ? 'cells' : chartsDecision(m.charts).mode;
+}
+
+// What changed for the overview's charts: body 1 just came into view (its
+// verb is read at once, not at the next tick), or its object or what the
+// pane knows of picture-or-cells moved while it is shown (the pictures are
+// drawn again, off the render hook; a new width is noteRender's).
+function overviewChanged($: EngineInterface, before: Model): void {
+  if (!overviewShown(model)) return;
+  const opened = !overviewShown(before);
+  if (opened) poller?.pollNow();
+  if (opened || model.query.overview !== before.query.overview || model.charts !== before.charts) scheduleCharts($);
+}
+
+// One refresh of the overview's pictures, a timer away: never inside a hook
+// (the render hook among them), and the triggers of one moment fold into it.
+function scheduleCharts($: EngineInterface): void {
+  if (chartsTimer !== null) return;
+  chartsTimer = $.clock.after(1, () => {
+    chartsTimer = null;
+    void refreshCharts($).catch((err: unknown) => $.ui.log(`cctop: charts failed: ${String(err)}`));
+  });
+}
+
+// Draws the overview's pictures that changed (spec §5.4): one wasm call per
+// picture whose spec, size or mode moved since it was last drawn; a picture
+// mounted at the same kind and size is swapped in place with `$.ui.blit`,
+// anything else (a first draw, a new size, a refused blit) asks for one
+// redraw. Pictures no longer drawn are dropped.
+async function refreshCharts($: EngineInterface): Promise<void> {
+  if (chartsBusy) {
+    chartsAgain = true;
+    return;
+  }
+  chartsBusy = true;
+  try {
+    const o = overviewOf(model.query.overview);
+    const columns = model.bodyColumns;
+    if (!overviewShown(model) || o === null || columns === null) return;
+    const mode = modeOf(model);
+    const jobs = pictureJobs(o, columns);
+    const keys = new Set(jobs.map((j) => j.key));
+    for (const key of [...pictures.keys()]) if (!keys.has(key)) pictures.delete(key);
+    let redraw = false;
+    const blits: Promise<void>[] = [];
+    // The query's cells are drawn only until the wasm is there: its arrival is a change too.
+    const source = chartRenderer === null ? 'query' : 'wasm';
+    for (const job of jobs) {
+      const hash = `${pictureHash(job, mode)}:${source}`;
+      if (pictures.get(job.key)?.hash === hash) continue;
+      const picture = drawPicture(chartRenderer, job, mode);
+      if (picture === null) {
+        pictures.delete(job.key);
+        redraw = true;
+        continue;
+      }
+      pictures.set(job.key, { hash, picture });
+      const shown = mounted.get(job.key);
+      if (shown === undefined || shown.kind !== picture.kind || shown.cols !== picture.cols || shown.rows !== picture.rows) {
+        redraw = true;
+        continue;
+      }
+      blits.push(blitPicture($, job.key, picture).then((ok) => {
+        if (ok) mounted.set(job.key, picture);
+        else redraw = true;
+      }));
+    }
+    await Promise.all(blits);
+    if (redraw && model.open) await requestRender($);
+  } finally {
+    chartsBusy = false;
+    if (chartsAgain) {
+      chartsAgain = false;
+      scheduleCharts($);
+    }
+  }
+}
+
+// Swaps one mounted picture: an Image's source or a Raster's cells, at the
+// size it is mounted. True when the surface took it.
+function blitPicture($: EngineInterface, key: string, picture: Picture): Promise<boolean> {
+  const args =
+    picture.kind === 'image'
+      ? { requestId: PANE_ID, key, source: { png: picture.png }, columns: picture.cols, rows: picture.rows }
+      : { requestId: PANE_ID, key, cells: picture.cells, columns: picture.cols, rows: picture.rows };
+  return $.ui.blit(args).then(
+    (answer) => answer.deny === undefined,
+    (err: unknown) => {
+      $.ui.log(`cctop: chart blit failed: ${String(err)}`);
+      return false;
+    },
+  );
+}
+
+// The pictures a render may draw, each one it draws noted as mounted.
+function picturesForRender(): Pictures {
+  mounted = new Map();
+  return {
+    get: (key) => {
+      const p = pictures.get(key)?.picture;
+      if (p !== undefined) mounted.set(key, p);
+      return p;
+    },
+  };
+}
+
+// After a render that drew an Image while the terminal's answer is not known:
+// the probe blit (§5.3) once the Image is mounted, a moment after the tree.
+function probeAfterRender($: EngineInterface): void {
+  if (probeTimer !== null || model.charts === null || model.charts.probe !== 'unknown') return;
+  const first = [...mounted.entries()].find(([, p]) => p.kind === 'image');
+  if (first === undefined) return;
+  const [key, picture] = first;
+  if (picture.kind !== 'image') return;
+  probeTimer = $.clock.after(PROBE_AFTER_MS, () => {
+    probeTimer = null;
+    if (mounted.get(key) !== picture) return;
+    void probeCharts($, PANE_ID, key, picture.png);
+  });
 }
 
 // What the agents view's Buttons do: a run's row opens its detail, `back` the
@@ -402,10 +555,9 @@ async function initCharts($: EngineInterface, detected: Promise<void>): Promise<
   updateMarker($);
 }
 
-// How the pane draws charts now: for the overview (Task 8) to choose
-// `Image` or `Raster` by, and `chartRenderer` to draw them with.
+// How the pane draws charts now: `Image` or `Raster`.
 export function chartsMode(): ChartsMode {
-  return model.charts === null ? 'cells' : chartsDecision(model.charts).mode;
+  return modeOf(model);
 }
 
 // The wasm renderer, or null when it would not load.
@@ -841,6 +993,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   const opened = model.open;
   const label = view === undefined ? undefined : VIEWS.find((v) => v.view === view)?.label;
   const openedAt = opened ? model.openedAt : await clockNow($);
+  const before = model;
   model = {
     ...model,
     open: true,
@@ -848,6 +1001,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
     openedAt,
     visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
   };
+  overviewChanged($, before);
   persistPane($);
   if (model.view === 'agents') void readAgents($);
   if (!opened) {
@@ -894,7 +1048,9 @@ async function closePane($: EngineInterface): Promise<void> {
 // A view-bar press: the view changes, the choice is remembered, the pane
 // redraws.
 function selectView($: EngineInterface, view: View): void {
+  const before = model;
   model = { ...model, view };
+  overviewChanged($, before);
   if (view === 'agents') void readAgents($);
   persistPane($);
   invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
@@ -917,10 +1073,12 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
       </Box>
     );
   }
+  // Raster and Image are the terminal's: elsewhere body 1 draws blank boxes.
+  const charts = e.surface === 'terminal' ? { el: $.ui.resolve(e), pictures: picturesForRender() } : undefined;
   return (
     <Box flexDirection="column">
       {viewBar($, el, columns)}
-      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($), agents: agentsActions($) })}
+      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($), agents: agentsActions($), ...(charts ? { charts } : {}) })}
       {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
       {model.stale && <Text wrap="truncate">cctop query stale</Text>}
       {unsupportedVerbs(model).map((verb) => (
@@ -1041,6 +1199,14 @@ export const register: Register = (on) => {
   poller?.stop();
   poller = null;
   chartRenderer = null;
+  pictures = new Map();
+  mounted = new Map();
+  chartsTimer?.cancel();
+  chartsTimer = null;
+  chartsBusy = false;
+  chartsAgain = false;
+  probeTimer?.cancel();
+  probeTimer = null;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.
@@ -1207,6 +1373,7 @@ export const register: Register = (on) => {
     try {
       const tree = buildPane($, e, now);
       model = { ...model, lastTree: tree };
+      probeAfterRender($);
       return tree;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

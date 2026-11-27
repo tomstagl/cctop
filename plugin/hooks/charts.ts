@@ -125,6 +125,8 @@ export function toBase64(bytes: Uint8Array): string {
 
 /** The chart renderer over one instantiated charts.wasm. Both answer null when the module refuses the spec. */
 export type ChartRenderer = {
+  /** How many times `render` was called into the wasm: one per picture drawn. */
+  readonly renders: number;
   /** A PNG as base64, `cols * 8 * scale` by `rows * 16 * scale` pixels. */
   png(spec: { kind: string }, cols: number, rows: number, scale: number): string | null;
   /** The Raster `cells` prop: base64 of u32 triplets. */
@@ -141,9 +143,11 @@ export async function instantiateCharts(module: WebAssembly.Module): Promise<Cha
   for (const name of ['memory', 'alloc', 'free', 'render'] as const) {
     if (ex[name] === undefined) throw new Error(`charts.wasm has no export \`${name}\``);
   }
+  let renders = 0;
   const call = (spec: { kind: string }, cols: number, rows: number, scale: number, mode: number): Uint8Array | null => {
     const kind = (CHART_KINDS as readonly string[]).indexOf(spec.kind);
     if (kind < 0) return null;
+    renders += 1;
     const json = encoder().encode(JSON.stringify(spec));
     const sp = ex.alloc(json.length);
     new Uint8Array(ex.memory.buffer, sp, json.length).set(json);
@@ -159,6 +163,9 @@ export async function instantiateCharts(module: WebAssembly.Module): Promise<Cha
     return bytes.length === 0 ? null : bytes;
   };
   return {
+    get renders() {
+      return renders;
+    },
     png: (spec, cols, rows, scale) => {
       const bytes = call(spec, cols, rows, scale, 0);
       return bytes === null ? null : toBase64(bytes);
@@ -206,4 +213,54 @@ export function chartCells(
 ): RasterCells {
   const cells = renderer?.cells(chart.spec, cols, rows) ?? null;
   return cells === null ? chart.fallback_cells : { cols, rows, cells };
+}
+
+/** A chart as the pane draws it: a PNG for an `Image`, or the cells of a `Raster`, and the box of cells it fills. */
+export type Picture = { kind: 'image'; png: string; cols: number; rows: number } | { kind: 'raster'; cells: string; cols: number; rows: number };
+
+/** One picture the overview draws: its key, its spec, the box it fills, and the query's cells for it. */
+export type PictureJob = {
+  /** The `Image` / `Raster` key, and the picture cache's. */
+  key: string;
+  spec: { kind: string };
+  cols: number;
+  rows: number;
+  /** Cells only, whatever the mode (the sparkline form). */
+  cells: boolean;
+  /** The query's cells at the spec's default size: what is drawn when the wasm is not there. */
+  fallback?: RasterCells;
+};
+
+/** PNGs are drawn at twice an assumed 8 × 16 px cell (spec §3). */
+export const PNG_SCALE = 2;
+
+/**
+ * The picture for one job: a PNG in image mode (one wasm call), else cells
+ * at the job's size (one wasm call), else the query's cells at their own
+ * size; null when there is none of these.
+ */
+export function drawPicture(renderer: ChartRenderer | null, job: PictureJob, mode: ChartsMode): Picture | null {
+  if (mode === 'image' && !job.cells && renderer !== null) {
+    const png = renderer.png(job.spec, job.cols, job.rows, PNG_SCALE);
+    if (png !== null) return { kind: 'image', png, cols: job.cols, rows: job.rows };
+  }
+  const cells = renderer?.cells(job.spec, job.cols, job.rows) ?? null;
+  if (cells !== null) return { kind: 'raster', cells, cols: job.cols, rows: job.rows };
+  if (job.fallback === undefined) return null;
+  return { kind: 'raster', cells: job.fallback.cells, cols: job.fallback.cols, rows: job.fallback.rows };
+}
+
+/**
+ * What a picture is drawn from: the spec, the box and the mode. Two jobs
+ * with the same hash draw the same picture, so only a changed hash is
+ * drawn again (FNV-1a over the spec's JSON).
+ */
+export function pictureHash(job: PictureJob, mode: ChartsMode): string {
+  const text = `${JSON.stringify(job.spec)}|${job.cols}x${job.rows}|${job.cells ? 'cells' : mode}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(16)}:${text.length}`;
 }
