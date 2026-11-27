@@ -212,6 +212,8 @@ export type FakeExtras = {
     /** `onPress` of every Button drawn, by key; `press(key)` runs one. */
     presses: Map<string, () => void>;
     press: (key: string) => void;
+    /** Every `$.ui.place` id, in order. */
+    places: string[];
     /** Every `$.ui.view` argument, in order; the next calls answer `viewAnswer`. */
     views: SiteView[];
     viewAnswer: UiViewResult;
@@ -323,6 +325,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const copyAnswer: { current: UiCopyResult } = { current: { isCopied: true } };
   const compiles: string[] = [];
   const live: AgentInfo[] = [];
+  const places: string[] = [];
 
   const engine = {
     plugin: { name: opts.plugin?.name ?? 'cctop', root: opts.plugin?.root ?? '/plugins/cctop' },
@@ -368,6 +371,11 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       copy: async ({ text }: UiCopyArgs): Promise<UiCopyResult> => {
         copies.push(text);
         return { ...copyAnswer.current };
+      },
+      places,
+      place: async ({ id }: { id: string }) => {
+        places.push(id);
+        return { isPlaced: true as const, requestId: `placed-${id}` };
       },
       views,
       viewAnswer,
@@ -697,4 +705,9 @@ export function paneRender(
       view: extra.view ?? {},
     },
   };
+}
+
+// A `ui.render` event for a `Placed` row `id` of `plugin`, as the terminal sends it.
+export function placedRender(id: string, columns: number, plugin = 'cctop'): RenderInput<'Placed', 'terminal'> {
+  return { surface: 'terminal', component: 'Placed', requestId: `placed-${id}`, viewport: { columns, rows: 40 }, props: { id, plugin } };
 }
