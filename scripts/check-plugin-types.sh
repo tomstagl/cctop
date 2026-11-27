@@ -22,7 +22,7 @@ fi
 
 if [ "$dts_version" != "$claude_version" ]; then
   echo "check-plugin-types: $dts is written for Claude Code $dts_version, but this machine has $claude_version" >&2
-  echo "run: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p '/plugin-types ./.claude/types'" >&2
+  echo "run: scripts/regen-dts.sh; then npm run typecheck names every call site" >&2
   exit 1
 fi
 
