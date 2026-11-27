@@ -86,6 +86,7 @@ impl Rule for CacheMiss {
                 String::new(),
             ),
         };
+        let mut shim = false;
         let what = match located {
             Some(l) => {
                 match l.cause {
@@ -112,10 +113,15 @@ impl Rule for CacheMiss {
                 }
                 l.cause.compact()
             }
-            None => shim_deltas(state, miss.kind.as_str()).unwrap_or(kind_what),
+            None => match shim_deltas(state, miss) {
+                Some(t) => {
+                    shim = true;
+                    t
+                }
+                None => kind_what,
+            },
         };
         // The coach draws `▸ ` + the headline in WIDTH cells: cut `what`, never the figure.
-        let shim = located.is_none() && (what.starts_with("tools ") || what.starts_with("system "));
         let tail = format!(" · {} re-written{price}", fmt::tokens(miss.tokens));
         // The shim's figures are the content: shorten the lead-in before clipping them.
         let head = if shim
@@ -155,12 +161,31 @@ impl Rule for CacheMiss {
 
 /// The status line's own deltas for its last miss (`tools_added`,
 /// `tools_removed`, `system_char_delta`), used when the transcript's request
-/// ledger could not locate the cause. A model change is explained by its name.
-fn shim_deltas(state: &State, kind: &str) -> Option<String> {
-    if kind == "model_changed" {
+/// ledger could not locate the cause. They describe the status line's *last*
+/// miss, so they apply only when that is the miss A01 describes: the same
+/// kind (`tools_changed`, the only cause that carries these deltas), and
+/// within two minutes by the clocks when both have one, else A01's miss being
+/// the newest named one.
+fn shim_deltas(state: &State, miss: &crate::metrics::usage::CacheMissRecord) -> Option<String> {
+    let c = &state.cache;
+    if miss.kind != "tools_changed" || c.last_miss_cause.as_deref() != Some("tools_changed") {
         return None;
     }
-    let c = &state.cache;
+    let miss_ms = miss
+        .at
+        .as_deref()
+        .and_then(crate::metrics::cost::parse_ts_ms);
+    let same_miss = match (c.last_miss_at_ms, miss_ms) {
+        (Some(shim), Some(at)) => (shim - at).abs() <= 120_000,
+        _ => state
+            .agg
+            .cache_misses
+            .last()
+            .is_some_and(|m| m.message_id == miss.message_id),
+    };
+    if !same_miss {
+        return None;
+    }
     let mut parts = Vec::new();
     if c.last_miss_tools_added.unwrap_or(0) + c.last_miss_tools_removed.unwrap_or(0) > 0 {
         parts.push(format!(
@@ -1194,9 +1219,97 @@ mod tests {
         s
     }
 
+    /// The status line's last miss, with the cause it names (no clock).
+    fn shim_miss(s: &mut State, cause: &str) {
+        s.cache.from_shim = true;
+        s.cache.last_miss_cause = Some(cause.to_string());
+    }
+
+    #[test]
+    fn a01_ignores_shim_deltas_that_do_not_match() {
+        // Kind mismatch: a rewritten-messages miss never gets tool counts.
+        let mut s = unlocated_miss("messages_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("tools +2"), "{}", a.headline);
+        assert!(
+            a.headline.contains("an earlier message changed"),
+            "{}",
+            a.headline
+        );
+        // The shim's cause names a different miss.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "messages_rewritten");
+        s.cache.last_miss_tools_added = Some(2);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        // Time mismatch: the shim's miss is an hour later than the transcript's.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        let at = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:03Z").unwrap();
+        s.cache.last_miss_at_ms = Some(at + 3_600_000);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        // Within two minutes it matches.
+        s.cache.last_miss_at_ms = Some(at + 60_000);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +2 −0"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_not_the_newest_miss_without_clocks() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        // A newer named miss exists (too small to fire A01 itself).
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:05Z","message":{"id":"d","model":"claude-opus-5","content":[],"usage":{"input_tokens":2,"cache_creation_input_tokens":3000},"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":3000}}}}"#).unwrap());
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_model_change_ignores_shim_deltas() {
+        let mut s = unlocated_miss("model_changed");
+        shim_miss(&mut s, "model_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_system_delta = Some(1200);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("model →"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_tools_and_system_clip_with_the_short_lead_in() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(
+            a.headline.starts_with("miss: tools +2 −0"),
+            "{}",
+            a.headline
+        );
+        assert!(
+            a.headline.chars().count() + 2 <= crate::coach::WIDTH,
+            "{}",
+            a.headline
+        );
+        assert!(a.headline.contains('…'), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+    }
+
     #[test]
     fn a01_uses_shim_deltas_when_unlocated() {
         let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
         s.cache.last_miss_tools_added = Some(2);
         s.cache.last_miss_tools_removed = Some(0);
         let a = CacheMiss.evaluate(&s).expect("fires");
@@ -1212,6 +1325,7 @@ mod tests {
     #[test]
     fn a01_system_delta() {
         let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
         s.cache.last_miss_system_delta = Some(-800);
         let a = CacheMiss.evaluate(&s).expect("fires");
         assert!(a.headline.contains("system −800 chars"), "{}", a.headline);

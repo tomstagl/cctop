@@ -251,6 +251,8 @@ pub struct CacheState {
     pub last_miss_tools_added: Option<u64>,
     pub last_miss_tools_removed: Option<u64>,
     pub last_miss_system_delta: Option<i64>,
+    /// When Claude Code recorded that miss (epoch ms), if it said.
+    pub last_miss_at_ms: Option<i64>,
     pub requests: u64,
     pub miss_recache_tokens: u64,
     /// When the status file that carried this was written (epoch ms).
@@ -1144,6 +1146,7 @@ impl State {
                     .last_miss_cause
                     .as_ref()
                     .and_then(|c| c.system_char_delta),
+                last_miss_at_ms: pc.last_miss_at.map(|t| (t * 1000.0) as i64),
                 requests: pc.requests,
                 miss_recache_tokens: pc.miss_recache_tokens,
                 sample_at_ms: s.at_ms,
