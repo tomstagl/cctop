@@ -524,6 +524,10 @@ mod tests {
     #[test]
     fn a06_post_compaction_exact_boundary_and_retrigger() {
         // 2.1.270: only compact_boundary lines count, never a drop.
+        assert!(
+            PostCompaction.evaluate(&witness::a06_drop()).is_none(),
+            "a drop is not a compaction on 2.1.270"
+        );
         let mut s = witness::a06_retrigger();
         let a = PostCompaction.evaluate(&s).expect("fires");
         assert_eq!(
