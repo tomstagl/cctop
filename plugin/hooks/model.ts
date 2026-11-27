@@ -143,6 +143,12 @@ export type Model = {
   coachToastTurn: number | null;
   /** The last `$.ui.status` line the coach set; set again only when it changes. */
   coachStatus: string | null;
+  /** The act dialog (`cctop-act`) is open. */
+  actOpen: boolean;
+  /** The act dialog's selected item (a rule id); null = the first. */
+  actSel: string | null;
+  /** What the last action in the dialog did, drawn in it (toasts are held while it is open). */
+  actNote: string | null;
   /** Console's open body (its id): the overview's charts (`context`, key 1) by default, as spec §5.2 opens the Overview; `0` is events, the way home. */
   body: string;
   /** Console's rule line expanded into the key map (`? keys` pressed). */
@@ -195,6 +201,10 @@ export type Action =
   | { type: 'coach.filled'; text: string | null }
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
+  | { type: 'act.open'; id: string | null }
+  | { type: 'act.close' }
+  | { type: 'act.select'; id: string }
+  | { type: 'act.note'; text: string | null }
   | { type: 'overview.body'; id: string }
   | { type: 'overview.keys'; keys: boolean }
   | { type: 'overview.readout'; chart: string; turn: number }
@@ -255,6 +265,9 @@ export function initialModel(): Model {
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
+    actOpen: false,
+    actSel: null,
+    actNote: null,
     body: 'context',
     keys: false,
     readouts: {},
@@ -375,6 +388,8 @@ export function reduce(model: Model, action: Action): Model {
         coachStatus: null,
         coachNext: null,
         coachFilled: null,
+        actSel: null,
+        actNote: null,
         readouts: {},
         openRun: null,
         liveAgents: [],
@@ -405,6 +420,14 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, coachNext: model.coachNext === action.id ? null : action.id };
     case 'coach.filled':
       return model.coachFilled === action.text ? model : { ...model, coachFilled: action.text };
+    case 'act.open':
+      return { ...model, actOpen: true, actSel: action.id ?? model.actSel, actNote: null };
+    case 'act.close':
+      return model.actOpen ? { ...model, actOpen: false, actNote: null } : model;
+    case 'act.select':
+      return model.actSel === action.id ? model : { ...model, actSel: action.id, actNote: null };
+    case 'act.note':
+      return model.actNote === action.text ? model : { ...model, actNote: action.text };
     case 'coach.toasted':
       return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
     case 'coach.status':

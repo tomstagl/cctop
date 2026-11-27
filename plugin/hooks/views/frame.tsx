@@ -233,7 +233,24 @@ function buttonRow(
   Button: NonNullable<FrameElements['Button']>,
 ): RenderElement {
   const { Box } = el;
-  const parts: RenderElement[] = [textRow([seg('│ ', border)], el)];
+  const cells = buttonCells(buttons, inner, el, Button);
+  return (
+    <Box flexDirection="row">
+      {textRow([seg('│ ', border)], el)}
+      {cells.parts}
+      {textRow([seg(' '.repeat(Math.max(0, inner - cells.used))), seg(' │', border)], el)}
+    </Box>
+  );
+}
+
+/** The Buttons of one row, BUTTON_GAP apart, and the cells they take; shared by a frame's row and a dialog's borderless one. */
+export function buttonCells(
+  buttons: FrameButton[],
+  inner: number,
+  el: FrameElements,
+  Button: NonNullable<FrameElements['Button']>,
+): { parts: RenderElement[]; used: number } {
+  const parts: RenderElement[] = [];
   let used = 0;
   for (const b of buttons) {
     const gap = used === 0 ? 0 : BUTTON_GAP;
@@ -245,8 +262,7 @@ function buttonRow(
     parts.push(<Button key={b.key} label={label} {...(b.hotkey === undefined ? {} : { hotkey: b.hotkey })} plain onPress={b.onPress} />);
     used += gap + buttonWidth({ label, hotkey: b.hotkey });
   }
-  parts.push(textRow([seg(' '.repeat(Math.max(0, inner - used))), seg(' │', border)], el));
-  return <Box flexDirection="row">{parts}</Box>;
+  return { parts, used };
 }
 
 /** Frames side by side on one row; each keeps its own width. */

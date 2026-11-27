@@ -26,6 +26,7 @@ import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type Ch
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, copiedText, DRAFT_KEPT, openerFor, settingsPath, settingsScope, statusLine, USER_SETTINGS, type CoachActions, type LightId, type SettingsKind } from './views/coach';
+import { ACT_ID, ACT_ROWS, renderAct, type ActActions } from './views/act';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
 import { maxTurnsFor, overviewOf, pictureJobs, type Pictures } from './views/overview-charts';
@@ -267,7 +268,7 @@ function stopRenderTimer(): void {
 function replaceModel($: EngineInterface, next: Model): void {
   const before = model;
   model = next;
-  if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  if (model.open || model.actOpen) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
   if (model.queryAt !== before.queryAt) checkFilled($);
   overviewChanged($, before);
@@ -696,7 +697,59 @@ function coachActions($: EngineInterface): CoachActions {
     agents: () => selectView($, 'agents'),
     light: (light: LightId | 'none') => apply($, { type: 'coach.light', light }),
     next: (id) => apply($, { type: 'coach.next', id }),
+    act: (id) => openAct($, id),
   };
+}
+
+// What the act dialog's buttons do: the coach card's own (one implementation
+// for both). Two differences: a fill, or a switch to the agents view, hands
+// the keyboard back first (the dialog holds it; a fill is refused under a
+// dialog), and the outcome is drawn in the dialog (`notice`), since toasts
+// are held while it is open.
+function actActions($: EngineInterface): ActActions {
+  const card = coachActions($);
+  const then = (run: () => void): void => {
+    closeAct($).then(run, run);
+  };
+  return {
+    ...card,
+    fill: (text) => then(() => card.fill(text)),
+    agents: () => then(() => card.agents()),
+    select: (id) => apply($, { type: 'act.select', id }),
+    jump: (agentId) => then(() => viewAgent($, agentId)),
+  };
+}
+
+// `a` or a press on the nudge: the dialog opens (an open id is retitled)
+// with the keyboard, Esc to close it, and every other plugin's toasts held.
+// Called from a press, so it is placed at any width; a refusal is a toast.
+function openAct($: EngineInterface, id?: string): void {
+  apply($, { type: 'act.open', id: id ?? null });
+  $.ui
+    .open({ id: ACT_ID, title: 'cctop · act', focus: true, closeOnEscape: true, holdToasts: true, rows: ACT_ROWS })
+    .then((opened) => {
+      if (opened.isPlaced === false) {
+        apply($, { type: 'act.close' });
+        $.ui.toast(`cctop: the act dialog was not shown (${opened.reason ?? 'no room'})`);
+      }
+    })
+    .catch((err: unknown) => {
+      apply($, { type: 'act.close' });
+      $.ui.log(`cctop: act dialog failed: ${String(err)}`);
+    });
+}
+
+function closeAct($: EngineInterface): Promise<void> {
+  if (!model.actOpen) return Promise.resolve();
+  return $.ui.close({ id: ACT_ID }).then(() => {
+    apply($, { type: 'act.close' });
+  });
+}
+
+// A toast, and the same words in the dialog while it is open (toasts wait for it).
+function notice($: EngineInterface, text: string): void {
+  $.ui.toast(text);
+  if (model.actOpen) apply($, { type: 'act.note', text });
 }
 
 // A fill never replaces what the person is typing: the box is read first,
@@ -711,12 +764,12 @@ function fillPrompt($: EngineInterface, text: string): void {
         return;
       }
       if (box !== '') {
-        $.ui.toast(DRAFT_KEPT);
+        notice($, DRAFT_KEPT);
         return;
       }
       return $.prompt.fill({ text }).then(({ isFilled }) => {
         if (!isFilled) {
-          $.ui.toast('cctop: the prompt box is busy — the action was not filled');
+          notice($, 'cctop: the prompt box is busy — the action was not filled');
           return;
         }
         apply($, { type: 'coach.filled', text });
@@ -762,7 +815,7 @@ async function settingsFile($: EngineInterface, kind: SettingsKind): Promise<str
 function copySetting($: EngineInterface, text: string, kind: SettingsKind): void {
   Promise.all([$.ui.copy({ text }), settingsFile($, kind)])
     .then(([copied, path]) => {
-      $.ui.toast(copied.isCopied ? copiedText(text, kind, path ?? USER_SETTINGS) : `cctop: nothing was copied (${copied.reason})`);
+      notice($, copied.isCopied ? copiedText(text, kind, path ?? USER_SETTINGS) : `cctop: nothing was copied (${copied.reason})`);
     })
     .catch((err: unknown) => $.ui.log(`cctop: copy failed: ${String(err)}`));
 }
@@ -774,16 +827,16 @@ function openSettings($: EngineInterface, kind: SettingsKind): void {
   settingsFile($, kind)
     .then(async (path) => {
       if (path === null) {
-        $.ui.toast(`cctop: HOME is not set: open ${USER_SETTINGS} in your editor`);
+        notice($, `cctop: HOME is not set: open ${USER_SETTINGS} in your editor`);
         return;
       }
       const opener = openerFor(model.sessionFacts?.platform);
       if (opener === null) {
-        $.ui.toast(`cctop: open ${path} in your editor`);
+        notice($, `cctop: open ${path} in your editor`);
         return;
       }
       const result = await $.process.run([opener, path], { timeoutMs: 5000 });
-      $.ui.toast(
+      notice($, 
         result.exitCode === 0
           ? `cctop: opened ${path} in your editor. cctop never edits it`
           : `cctop: could not open ${path} (is it there?): open it in your editor`,
@@ -800,7 +853,7 @@ function snoozeRule($: EngineInterface, rule: string, flag: '--snooze' | '--snoo
     .then((result) => {
       if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
       const answer = JSON.parse(result.stdout) as { snooze?: unknown };
-      if (typeof answer.snooze === 'string') $.ui.toast(`cctop: ${answer.snooze}`);
+      if (typeof answer.snooze === 'string') notice($, `cctop: ${answer.snooze}`);
       apply($, { type: 'query', verb: 'coach', data: answer });
     })
     .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
@@ -1207,6 +1260,13 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
   );
 }
 
+// The act dialog's tree: the items and the selected one's detail, drawn by
+// the dialog's own width. It is not the pane: nothing of the pane's render
+// bookkeeping (visibility, the width the status line follows) is touched.
+function buildAct($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
+  return renderAct(model, $.ui.resolve(e), e.props.bodyColumns, actActions($));
+}
+
 // The view bar, the pane's first row: `cctop  Overview  Tools  …`. The
 // current view is an inverse Text; the others are plain Buttons (a click,
 // or Enter after `ctrl+x tab` and `tab`, switches). No hotkeys: the docked
@@ -1465,6 +1525,17 @@ export const register: Register = (on) => {
     return next(e);
   });
 
+  // The dialog's close, by Esc or by a Button: the state follows.
+  on('ui.close', { id: ACT_ID }, ($, e, next) => {
+    return next(e).then((result) => {
+      apply($, { type: 'act.close' });
+      return result;
+    });
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
   // Every close of the pane, the person's and an unload's as much as the
   // command's, ends the timers and the poller; a close of another pane is
   // not ours.
@@ -1482,6 +1553,7 @@ export const register: Register = (on) => {
   // one line above the last tree that built, kept in the model for that.
   // The clock is read once per render, before the tree: the frame's time.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId === ACT_ID) return buildAct($, e);
     if (e.requestId !== PANE_ID) return next(e);
     const now = await clockNow($);
     noteRender($, e, now);

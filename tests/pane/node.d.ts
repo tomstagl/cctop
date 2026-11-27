@@ -29,6 +29,7 @@ declare module 'node:fs' {
   // No encoding: the file's bytes (a Buffer in Node, typed as the Uint8Array it is).
   export function readFileSync(path: string): Uint8Array;
   export function readdirSync(path: string): string[];
+  export function statSync(path: string): { isDirectory(): boolean };
 }
 
 declare module 'node:path' {
