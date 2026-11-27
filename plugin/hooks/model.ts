@@ -2,6 +2,7 @@
 // touches `$`: the hooks in pane.tsx turn engine events into actions, the
 // views draw the model. Kept pure so it is testable from plain data.
 import type { RenderElement, SessionUsage } from 'claude-code';
+import type { LiveAgent } from './agentmap';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
@@ -140,6 +141,10 @@ export type Model = {
   keys: boolean;
   /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
   openRun: string | null;
+  /** `$.agent.list()` as last read: what the agent rows' ids are mapped against (agentmap.ts). */
+  liveAgents: LiveAgent[];
+  /** The agent whose transcript the main view shows (a press, or the render's `view.agentId`); null = the main conversation. */
+  viewedAgent: string | null;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -175,7 +180,9 @@ export type Action =
   | { type: 'coach.status'; status: string | null }
   | { type: 'overview.body'; id: string }
   | { type: 'overview.keys'; keys: boolean }
-  | { type: 'agents.run'; run: string | null };
+  | { type: 'agents.run'; run: string | null }
+  | { type: 'agents.live'; agents: LiveAgent[] }
+  | { type: 'agents.viewed'; id: string | null };
 
 /** The least time between two reads of /context's breakdown for the spool. */
 export const BREAKDOWN_DEBOUNCE_MS = 15_000;
@@ -231,6 +238,8 @@ export function initialModel(): Model {
     body: 'events',
     keys: false,
     openRun: null,
+    liveAgents: [],
+    viewedAgent: null,
   };
 }
 
@@ -329,6 +338,8 @@ export function reduce(model: Model, action: Action): Model {
         coachToastTurn: null,
         coachStatus: null,
         openRun: null,
+        liveAgents: [],
+        viewedAgent: null,
       };
     case 'verbs':
       return { ...model, verbs: action.verbs };
@@ -363,6 +374,10 @@ export function reduce(model: Model, action: Action): Model {
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
     case 'agents.run':
       return model.openRun === action.run ? model : { ...model, openRun: action.run };
+    case 'agents.live':
+      return JSON.stringify(model.liveAgents) === JSON.stringify(action.agents) ? model : { ...model, liveAgents: action.agents };
+    case 'agents.viewed':
+      return model.viewedAgent === action.id ? model : { ...model, viewedAgent: action.id };
   }
 }
 

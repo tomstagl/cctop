@@ -156,6 +156,8 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): vo
     bodyColumns: e.props.bodyColumns,
     viewportColumns: e.viewport?.columns ?? null,
   });
+  // The view in force (a switch from the tasks list shows here too).
+  model = reduce(model, { type: 'agents.viewed', id: e.props.view?.agentId ?? null });
   stopHiddenTimer();
   unpinStatus($);
   // The width may have changed the status line's form.
@@ -261,9 +263,45 @@ function overviewActions($: EngineInterface): OverviewActions {
   };
 }
 
-// What the agents view's Buttons do: a run's row opens its detail, `back` the list (view state).
-function agentsActions($: EngineInterface): { open(run: string | null): void } {
-  return { open: (run) => apply($, { type: 'agents.run', run }) };
+// What the agents view's Buttons do: a run's row opens its detail, `back` the
+// list (view state); an agent's row puts its transcript in the main view.
+function agentsActions($: EngineInterface): { open(run: string | null): void; jump(agentId: string): void } {
+  return { open: (run) => apply($, { type: 'agents.run', run }), jump: (agentId) => viewAgent($, agentId) };
+}
+
+// `$.ui.view`: an agent's transcript in Claude Code's main view, or `{}` back
+// to the main conversation. Called only from a Button's onPress (the d.ts:
+// only while the call answers the person's own input). A `{ deny }` says why
+// the view did not move: one toast with the reason.
+function viewAgent($: EngineInterface, agentId: string | null): void {
+  $.ui
+    .view(agentId === null ? {} : { agentId })
+    .then((shown) => {
+      if (shown.deny !== undefined) {
+        $.ui.toast(`cctop: ${shown.deny}`);
+        return;
+      }
+      apply($, { type: 'agents.viewed', id: agentId });
+      invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: ui.view failed: ${String(err)}`));
+}
+
+// `$.agent.list()`: the engine's ids the agent rows are mapped to (agentmap.ts).
+// Read on turn.start, turn.complete and when the agents view opens; a read
+// that lands after `/clear` is dropped.
+function readAgents($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.agent
+    .list()
+    .then((list) => {
+      if (model.sessionId !== sessionId) return;
+      apply($, {
+        type: 'agents.live',
+        agents: list.map((a) => ({ id: a.id, type: a.type, description: a.description })),
+      });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: agent.list failed: ${String(err)}`));
 }
 
 // What the coach view's Buttons do: `fill` writes a prompt- or slash-class
@@ -601,6 +639,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
     visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
   };
   persistPane($);
+  if (model.view === 'agents') void readAgents($);
   if (!opened) {
     // The id first, so a `/clear` since the last look does not wipe the
     // usage read next.
@@ -646,6 +685,7 @@ async function closePane($: EngineInterface): Promise<void> {
 // redraws.
 function selectView($: EngineInterface, view: View): void {
   model = { ...model, view };
+  if (view === 'agents') void readAgents($);
   persistPane($);
   invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
 }
@@ -732,6 +772,22 @@ function viewBar(
     used += gap + width;
     prevActive = active;
   }
+  // While an agent's transcript is in the main view: the way back.
+  if (model.viewedAgent !== null) {
+    const line = lines.at(-1);
+    const back = 'back to main';
+    if (line !== undefined) {
+      if (used + 2 + back.length + 2 > columns) {
+        lines.push([]);
+        used = 0;
+      }
+      lines.at(-1)?.push(
+        <Text wrap="truncate">{used === 0 ? '' : '  '}</Text>,
+        <Button key="back-to-main" label={back} plain onPress={() => viewAgent($, null)} />,
+      );
+      used += (used === 0 ? 0 : 2) + back.length + 2;
+    }
+  }
   // The `bin · shim · hooks 2.1.273` badges after the tabs, when they fit:
   // Console's header is the object's, identical on both surfaces.
   const badges = badgesLine(header(model, 0).badges);
@@ -802,6 +858,7 @@ export const register: Register = (on) => {
   // follow the session id, nothing else: no timer, no poll, no usage read.
   on('turn.start', async ($, e, next) => {
     apply($, { type: 'turn.start', at: await clockNow($) });
+    void readAgents($);
     if (model.open) startUsageTimer($);
     poller?.reschedule();
     followSession($);
@@ -819,6 +876,7 @@ export const register: Register = (on) => {
     if (model.open) readUsage($);
     void writeBreakdown($);
     void readAgentLimits($);
+    void readAgents($);
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);

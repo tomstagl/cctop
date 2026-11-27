@@ -294,7 +294,7 @@ test('agents-w: the run is one row of the list, a Button that opens it; back ret
   const presses = new Map<string, () => void>();
   const opened: (string | null)[] = [];
   const bel = fakeElements(presses);
-  const actions = { el: bel, open: (run: string | null) => opened.push(run) };
+  const actions = { el: bel, open: (run: string | null) => opened.push(run), jump: () => undefined };
   const withButtons = body(renderToText(renderAgents({ ...model, view: 'agents' }, bel, 80, NOW, actions), 80));
   assert.ok(withButtons.includes(wf.row as string), JSON.stringify(withButtons));
   presses.get(wf.run as string)?.();
@@ -330,7 +330,7 @@ test('agents: a run entry without a row (an older binary) keeps its agents in th
   const presses = new Map<string, () => void>();
   const bel = fakeElements(presses);
   const model = build({ query: { agents: old } });
-  const list = body(renderToText(renderAgents({ ...model, view: 'agents' }, bel, 80, NOW, { el: bel, open: () => undefined }), 80));
+  const list = body(renderToText(renderAgents({ ...model, view: 'agents' }, bel, 80, NOW, { el: bel, open: () => undefined, jump: () => undefined }), 80));
   assert.equal(list.length, MAX_ROWS, 'the run agents are listed one by one');
   assert.ok(list.every((r) => !r.includes('wf_0aa065f')), 'no run row');
   assert.equal(presses.size, 0, 'no Button');
@@ -568,6 +568,33 @@ test('agents at 120 columns: the header names the limits when the query carries 
   assert.deepEqual(frameTitles(rawRows('agents', model, 120)), ['6 Agents & MCP ─ 1 agents · 0 / 10 running · depth ≤ 2 · no background']);
   // An older binary's query has no `limits`: the header is what it was.
   assert.deepEqual(frameTitles(rawRows('agents', build({ query: { agents: { ...agents, limits: null } } }), 120)), ['6 Agents & MCP ─ 0/1 agents']);
+});
+
+// US-003: an agent row is a Button when the engine's list has the agent.
+test('agents: a row whose agent the engine lists is a Button that jumps; a row with no match has none', () => {
+  const data = fixture<Record<string, unknown>>('agents');
+  const agent = (data.agents as Array<Record<string, unknown>>)[0];
+  const presses = new Map<string, () => void>();
+  const bel = fakeElements(presses);
+  const jumped: string[] = [];
+  const actions = { el: bel, open: () => undefined, jump: (id: string) => jumped.push(id) };
+  const draw = (live: Model['liveAgents']) => {
+    presses.clear();
+    const model = { ...build({ query: { agents: data } }), view: 'agents' as const, liveAgents: live };
+    return body(renderToText(renderAgents(model, bel, 80, NOW, actions), 80));
+  };
+  // Exact id.
+  draw([{ id: agent.id as string, type: 'other', description: 'other' }]);
+  presses.get(`agent-${agent.id as string}`)?.();
+  assert.deepEqual(jumped, [agent.id]);
+  // No exact id: description and type; the press carries the engine's id.
+  draw([{ id: 'engine-id', type: agent.type as string, description: agent.description as string }]);
+  presses.get('agent-engine-id')?.();
+  assert.deepEqual(jumped, [agent.id, 'engine-id']);
+  // No match: the row is drawn, no Button.
+  const rowsDrawn = draw([{ id: 'zzz', type: 'Plan', description: 'nothing alike' }]);
+  assert.equal(presses.size, 0);
+  assert.ok(rowsDrawn.some((r) => r.includes('fork')), JSON.stringify(rowsDrawn));
 });
 
 test('agents at 70 columns: the title drops depth before no background; 80 keeps both', () => {

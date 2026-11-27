@@ -698,6 +698,21 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+44. **Pressing an agent row shows its transcript; back to main returns**
+    (the pane-APIs PRD, US-003).
+    Setup: a session with a running `Explore` agent (ask it to explore
+    something slow in the background), the pane docked on the Agents view.
+    Expected: the agent's row is a Button; pressing it puts that agent's
+    transcript in Claude Code's main view and `back to main` appears in the
+    pane's view bar; pressing that returns to the main conversation. A row
+    for an agent the engine refuses (a teammate in a pane of its own, a
+    stopped one) raises one toast with the reason and does not move the
+    view. Record whether cctop's agent ids equal `AgentInfo.id` (a press on
+    a row with no match draws no Button: the mapping falls back on
+    description and type).
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

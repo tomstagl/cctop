@@ -15,6 +15,7 @@
 // compiles against (`h`, `Fragment`): the engine provides them in its own
 // environment, Node does not, so they must exist before a render hook runs.
 import type {
+  AgentInfo,
   CommandSpec,
   Elements,
   ElementTable,
@@ -34,7 +35,9 @@ import type {
   ResolveInput,
   SessionInfo,
   SessionUsage,
+  SiteView,
   Timer,
+  UiViewResult,
 } from 'claude-code';
 
 type Props = Record<string, unknown>;
@@ -171,6 +174,9 @@ export type FakeExtras = {
     /** `onPress` of every Button drawn, by key; `press(key)` runs one. */
     presses: Map<string, () => void>;
     press: (key: string) => void;
+    /** Every `$.ui.view` argument, in order; the next calls answer `viewAnswer`. */
+    views: SiteView[];
+    viewAnswer: UiViewResult;
     /** Run on every `$.ui.invalidate("ui.render")`: how `fakeOn`'s surface learns to draw. */
     renderListeners: (() => void)[];
   };
@@ -184,7 +190,8 @@ export type FakeExtras = {
   fs: { files: Map<string, string> };
   process: { calls: string[][]; script: Record<string, ProcessScript> };
   session: { scripted: ScriptedSession };
-  agent: { scripted: ScriptedAgentLimits };
+  /** `live` is what `$.agent.list()` answers. */
+  agent: { scripted: ScriptedAgentLimits; live: AgentInfo[] };
   command: { registered: CommandSpec[] };
   env: { values: Record<string, string> };
 };
@@ -259,6 +266,9 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const closes: PaneCloseArgs[] = [];
   const renderListeners: (() => void)[] = [];
   const fills: string[] = [];
+  const views: SiteView[] = [];
+  const viewAnswer: UiViewResult = {};
+  const live: AgentInfo[] = [];
 
   const engine = {
     plugin: { name: opts.plugin?.name ?? 'cctop', root: opts.plugin?.root ?? '/plugins/cctop' },
@@ -282,6 +292,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (event === 'ui.render') for (const fn of renderListeners) fn();
       },
       renderListeners,
+      views,
+      viewAnswer,
+      view: async (view: SiteView): Promise<UiViewResult> => {
+        views.push({ ...view });
+        return { ...viewAnswer };
+      },
       // Only the terminal's table exists here: the pane draws on no other
       // surface, and a test that asks for one should hear so.
       resolve: <E extends ResolveInput>(e: E): Elements[E['surface']] => {
@@ -310,6 +326,8 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     },
     agent: {
       scripted: agentLimits,
+      live,
+      list: async () => live.map((a) => ({ ...a })),
       limits: async () => ({ ...agentLimits }),
     },
     session: {
@@ -563,6 +581,8 @@ export function paneRender(
     title?: string;
     /** Cells across the pane body; defaults to `columns` (the whole screen). */
     bodyColumns?: number;
+    /** The view in force (`agentId` of the agent shown); default the main conversation. */
+    view?: SiteView;
   } = {},
 ): RenderInput<'Pane', 'terminal'> {
   const rows = extra.rows ?? 40;
@@ -578,7 +598,7 @@ export function paneRender(
       placement: extra.placement ?? 'dock',
       scroll: { offset: 0, bodyRows: rows },
       // The main conversation in view (2.1.272: `agentId` names an agent's).
-      view: {},
+      view: extra.view ?? {},
     },
   };
 }
