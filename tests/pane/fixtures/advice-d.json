@@ -1,14 +1,14 @@
 {
   "items": [
     {
-      "action": "queue: 'run cargo test --lib lorem_i 2>&1, fix failures' or /goal",
+      "action": "queue: 'run cargo test, fix failures' or /goal",
       "action_kind": "prompt",
-      "action_text": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+      "action_text": "Run cargo test and fix any failures before continuing.",
       "actions": [
         {
           "kind": "prompt",
           "label": "Put the fix prompt in the box",
-          "payload": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing."
+          "payload": "Run cargo test and fix any failures before continuing."
         }
       ],
       "body": "Claude edited 1 source file 17 minutes ago (1 edit over 29 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
@@ -18,7 +18,7 @@
       "evidence_rows": [],
       "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
       "family": "verify-gap",
-      "fix_prompt": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+      "fix_prompt": "Run cargo test and fix any failures before continuing.",
       "foot": "goes away after a test run or a read of an edited file",
       "headline": "Edited 1 src file, no test/build run yet",
       "name": "Edits not tested yet",
@@ -67,7 +67,7 @@
           "payload": "Run builds and test suites longer than a minute in the background and keep working meanwhile."
         }
       ],
-      "body": "The command `lorem_ipsum_dolor_sit_amet_consectetur_adipiscing_elit_sed_do_eiusmod_tempor_incididunt_ut_labore_et_dolore_magna_ echo lore` ran in the foreground for 2 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
+      "body": "The command `lorem_ipsum_dolor_sit_a…` ran in the foreground for 2 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
       "class": "LATER",
       "doc_key": "A10",
       "evidence": "a foreground Bash call longer than a minute; Claude waited for it",
@@ -93,14 +93,14 @@
   },
   "primary": {
     "acting": false,
-    "action": "queue: 'run cargo test --lib lorem_i 2>&1, fix failures' or /goal",
+    "action": "queue: 'run cargo test, fix failures' or /goal",
     "action_kind": "prompt",
-    "action_text": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+    "action_text": "Run cargo test and fix any failures before continuing.",
     "actions": [
       {
         "kind": "prompt",
         "label": "Put the fix prompt in the box",
-        "payload": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing."
+        "payload": "Run cargo test and fix any failures before continuing."
       }
     ],
     "body": "Claude edited 1 source file 17 minutes ago (1 edit over 29 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
@@ -111,7 +111,7 @@
     "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
     "family": "verify-gap",
     "fired_at_ms": 1789225485845,
-    "fix_prompt": "Run cargo test --lib lorem_i 2>&1 and fix any failures before continuing.",
+    "fix_prompt": "Run cargo test and fix any failures before continuing.",
     "foot": "goes away after a test run or a read of an edited file",
     "headline": "Edited 1 src file, no test/build run yet",
     "name": "Edits not tested yet",

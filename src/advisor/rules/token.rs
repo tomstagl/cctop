@@ -495,7 +495,7 @@ impl Rule for RunawayResult {
         } else {
             biggest.result_tokens_est
         };
-        a.hole("tool", name.clone());
+        a.hole("tool", super::ident(&name));
         a.hole("tokens", fmt::tokens(shown));
         a.hole("share", percent(shown as f64 / window as f64 * 100.0));
         Some(a)
@@ -580,7 +580,7 @@ impl Rule for Rereads {
             a.action_kind = ActionKind::Prompt;
             a.saving = Saving::Tokens(tokens);
             a.variant = "churn";
-            a.hole("file", short(&f.path));
+            a.hole("file", super::ident(&short(&f.path)));
             a.hole("n", f.edit_reread_edit.to_string());
             a.hole("tokens", fmt::tokens(tokens));
             return Some(a);
@@ -608,7 +608,7 @@ impl Rule for Rereads {
         );
         a.action = "read once with an offset/limit, or ask Claude to keep the relevant lines in its summary".into();
         a.saving = Saving::Tokens(tokens);
-        a.hole("file", short(&f.path));
+        a.hole("file", super::ident(&short(&f.path)));
         a.hole("n", f.reads_since_edit.to_string());
         a.hole("tokens", fmt::tokens(tokens));
         Some(a)
@@ -694,7 +694,7 @@ impl Rule for IdleMcp {
         &[
             Words {
                 variant: "",
-                body: "{server} has been idle for {idle}, yet its {count}, about {tokens} tokens, ride along in every request{loads}. Disable it for this project in .mcp.json, or rely on deferred tool loading.",
+                body: "{server} has been idle for {idle}, yet its {count}, about {tokens} tokens, ride along in every request{loads}. Turn it off for this project with /mcp (or list it under disabledMcpjsonServers in your settings), or rely on deferred tool loading.",
                 fix_prompt: None,
                 foot: "a tip, nothing to type · goes away after three turns",
             },
@@ -765,11 +765,11 @@ impl Rule for IdleMcp {
                     }
                 );
                 a.action =
-                    "disable it for this project (.mcp.json) or rely on deferred tool loading"
-                        .into();
-                a.action_kind = ActionKind::Setting;
+                    "/mcp — turn it off for this project, or rely on deferred tool loading".into();
+                a.action_text = "/mcp".into();
+                a.action_kind = ActionKind::Slash;
                 a.saving = Saving::Tokens(tokens);
-                a.hole("server", server.clone());
+                a.hole("server", super::ident(&server));
                 a.hole("idle", spoken(idle_ms));
                 a.hole("count", super::count(count, "tool schema", "tool schemas"));
                 a.hole("tokens", fmt::tokens(tokens));
@@ -797,7 +797,7 @@ impl Rule for IdleMcp {
                 a.action_kind = ActionKind::Slash;
                 a.saving = Saving::Tokens(tokens);
                 a.variant = "plugin";
-                a.hole("plugin", name.clone());
+                a.hole("plugin", super::ident(&name));
                 a.hole("tokens", fmt::tokens(tokens));
                 a.hole("startups", unused.unwrap_or(0).to_string());
             }
@@ -1201,7 +1201,7 @@ impl Rule for SubagentModel {
         a.action_text = "Run search and summary subagents on sonnet (model: \"sonnet\"), keep opus for the main thread.".into();
         a.action_kind = ActionKind::Prompt;
         a.saving = Saving::Tokens(saved_tokens.max(1));
-        a.hole("agent", ag.agent_type.clone());
+        a.hole("agent", super::ident(&ag.agent_type));
         a.hole("searches", ag.search_calls().to_string());
         a.hole("opus", money(opus));
         a.hole("sonnet", money(sonnet));
@@ -1369,7 +1369,7 @@ impl Rule for BigPrefix {
         &[
             Words {
                 variant: "",
-                body: "Every request starts with the same {prefix} tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about {per_turn} a turn at {calls} per turn.{biggest} Trim CLAUDE.md, move rarely used rules into skills, and disable the MCP servers and plugins this project doesn't use; i on the Context panel shows what the prefix holds.",
+                body: "Every request starts with the same {prefix} tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about {per_turn} a turn at {calls} per turn.{biggest} /context shows what fills it, and i on cctop's Context panel breaks the prefix down. Then trim CLAUDE.md, move rarely used rules into skills, and turn off the MCP servers (/mcp) and plugins (/plugin) this project doesn't use.",
                 fix_prompt: None,
                 foot: "goes away when you open the breakdown (i or m on Context)",
             },
@@ -1414,9 +1414,10 @@ impl Rule for BigPrefix {
         );
         a.evidence = format!("{biggest}{captured}");
         a.action =
-            "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins — i on Context shows what the prefix is, m what else fills the window"
+            "/context or i on Context shows the prefix; trim CLAUDE.md, move rarely-used rules to skills, turn off unused MCP servers and plugins"
                 .into();
-        a.action_kind = ActionKind::Setting;
+        a.action_text = "/context".into();
+        a.action_kind = ActionKind::Slash;
         // Assumes a fifth of the prefix is trimmable.
         a.saving = Saving::Tokens(per_turn_tokens / 5);
         a.retires_on = "an inspector opened (i or m on Context)";
@@ -1436,7 +1437,7 @@ impl Rule for BigPrefix {
                 .map(|r| {
                     format!(
                         " The largest part is {} ({} tokens).",
-                        r.name,
+                        super::ident(&r.name),
                         fmt::tokens(r.tokens_est)
                     )
                 })
@@ -2781,7 +2782,10 @@ mod tests {
             a.headline
         );
         assert!(a.headline.ends_with("/turn at 1 calls"), "{}", a.headline);
-        assert_eq!(a.action_kind, ActionKind::Setting);
+        // The action matches the advice: /context shows what fills it.
+        assert_eq!(a.action_kind, ActionKind::Slash);
+        assert_eq!(a.action_text, "/context");
+        assert!(a.body.contains("at 1 call per turn."), "{}", a.body);
         assert_eq!(a.saving, Saving::Tokens(24_000));
         // A raw 60k on Opus at one call per turn is every session's on a
         // plugin-heavy setup and $0.03/turn: quiet. Decision 9 of the
@@ -3139,7 +3143,7 @@ impl Rule for ContextCost {
         &[
             Words {
                 variant: "",
-                body: "At {ctx} tokens every call re-reads the whole context: about {per_call} a call and {per_turn} a turn at this session's {calls} per turn, against {at_100k} a turn at 100k. The next 30 calls cost about {next30}. {when}, /compact with a focus, or a hand-off note and /clear, brings it back down.",
+                body: "At {ctx} tokens every call re-reads the whole context: about {per_call} a call and {per_turn} a turn at this session's {calls} per turn, against {at_100k} a turn at 100k. The next 30 calls cost about {next30}. {when}: /compact with a focus, or a hand-off note and /clear, brings it back down.",
                 fix_prompt: None,
                 foot: "goes away after a /compact or /clear",
             },

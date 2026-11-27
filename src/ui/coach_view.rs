@@ -77,31 +77,41 @@ const FIX_LEAD: (&str, &str) = ("fix ↵ ", "      ");
 
 /// The nudge's full words in the card, for `rows` rows: the name, the
 /// body and the fix prompt, wrapped at the card's width, after a blank row
-/// when all of it fits; else cut with a pointer to `e`. Nothing under
-/// three rows.
+/// when all of it fits. When it does not, the fix prompt (the line to act
+/// on) comes before the body and the rest is cut with a pointer to `e`.
+/// Nothing under three rows.
 fn advice_rows<'a>(t: &Theme, inner: usize, full: &Full, rows: usize) -> Vec<Line<'a>> {
     if rows < 3 {
         return Vec::new();
     }
-    let mut v: Vec<(String, Style)> = vec![(
+    let name = (
         full.name.to_string(),
         Style::default().add_modifier(Modifier::BOLD),
-    )];
-    for s in wrap(&full.body, inner, "", "") {
-        v.push((s, Style::default()));
-    }
-    if let Some(f) = &full.fix_prompt {
-        for s in wrap(f, inner, FIX_LEAD.0, FIX_LEAD.1) {
-            v.push((s, t.accent()));
+    );
+    let body: Vec<(String, Style)> = wrap(&full.body, inner, "", "")
+        .into_iter()
+        .map(|s| (s, Style::default()))
+        .collect();
+    let fix: Vec<(String, Style)> = full
+        .fix_prompt
+        .as_deref()
+        .map(|f| wrap(f, inner, FIX_LEAD.0, FIX_LEAD.1))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s, t.accent()))
+        .collect();
+    let mut v = vec![name];
+    if 1 + body.len() + fix.len() <= rows {
+        v.extend(body);
+        v.extend(fix);
+        if v.len() < rows {
+            v.insert(0, (String::new(), Style::default()));
         }
-    }
-    match v.len().cmp(&rows) {
-        std::cmp::Ordering::Greater => {
-            v.truncate(rows - 1);
-            v.push(("… e shows the whole advice".into(), t.dim()));
-        }
-        std::cmp::Ordering::Less => v.insert(0, (String::new(), Style::default())),
-        std::cmp::Ordering::Equal => {}
+    } else {
+        v.extend(fix);
+        v.extend(body);
+        v.truncate(rows - 1);
+        v.push(("… e shows the whole advice".into(), t.dim()));
     }
     v.into_iter()
         .map(|(s, style)| {
@@ -477,8 +487,8 @@ pub fn why_lines<'a>(t: &Theme, width: usize, c: &Coach) -> Vec<Line<'a>> {
             }
             if let Some(fix) = &f.fix_prompt {
                 lines.push(Line::from(""));
-                for s in wrap(&t.coach_text(fix), width, FIX_LEAD.0, FIX_LEAD.1) {
-                    lines.push(Line::from(Span::styled(s, t.accent())));
+                for s in wrap(fix, width, FIX_LEAD.0, FIX_LEAD.1) {
+                    lines.push(Line::from(Span::styled(t.coach_text(&s), t.accent())));
                 }
             }
             lines.push(Line::from(""));
@@ -746,6 +756,10 @@ mod tests {
         let out = render_to_string(&ascii, 56, 20);
         assert!(out.contains("! rework"), "{out}");
         assert!(!out.contains('●') && !out.contains('╭'), "{out}");
+        // The fix prompt's lead is ASCII too, in the card and the why column.
+        assert!(out.contains("fix > ") && !out.contains('↵'), "{out}");
+        let wide = render_to_string(&ascii, 122, 32);
+        assert!(wide.contains("fix > ") && !wide.contains('↵'), "{wide}");
     }
 
     /// The sync contract: the state line, the four light rows and the
@@ -831,7 +845,7 @@ mod tests {
             c.nudge.as_ref().unwrap().full.fix_prompt.as_ref()
         );
         assert!(
-            text.starts_with("Before you change anything else"),
+            text.starts_with("Before you change anything, tell me"),
             "{text}"
         );
         assert!(app.state.ask_send_ok);

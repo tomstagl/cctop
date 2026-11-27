@@ -77,12 +77,12 @@
   "next": {
     "actions": [
       {
-        "kind": "setting",
-        "label": "Open settings.json",
-        "payload": ""
+        "kind": "slash",
+        "label": "Put /context in the box",
+        "payload": "/context"
       }
     ],
-    "body": "Every request starts with the same 49k tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about $0.86 a turn at 35 calls per turn. The largest part is built-in tools (schemas) (12k tokens). Trim CLAUDE.md, move rarely used rules into skills, and disable the MCP servers and plugins this project doesn't use; i on the Context panel shows what the prefix holds.",
+    "body": "Every request starts with the same 49k tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about $0.86 a turn at 35 calls per turn. The largest part is built-in tools (schemas) (12k tokens). /context shows what fills it, and i on cctop's Context panel breaks the prefix down. Then trim CLAUDE.md, move rarely used rules into skills, and turn off the MCP servers (/mcp) and plugins (/plugin) this project doesn't use.",
     "class": "LATER",
     "evidence": [
       "largest: built-in tools (schemas) (12k)"
@@ -108,7 +108,7 @@
         "payload": "/compact "
       }
     ],
-    "body": "At 333k tokens every call re-reads the whole context: about $0.18 a call and $6.33 a turn at this session's 35 calls per turn, against $2.25 a turn at 100k. The next 30 calls cost about $5.42. This is a clean stop, /compact with a focus, or a hand-off note and /clear, brings it back down.",
+    "body": "At 333k tokens every call re-reads the whole context: about $0.18 a call and $6.33 a turn at this session's 35 calls per turn, against $2.25 a turn at 100k. The next 30 calls cost about $5.42. This is a clean stop: /compact with a focus, or a hand-off note and /clear, brings it back down.",
     "class": "NEXT",
     "evidence": [
       "35 calls per turn on this session · next 30 calls ≈$5.4"

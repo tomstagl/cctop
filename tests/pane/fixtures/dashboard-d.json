@@ -17,7 +17,7 @@
         "tone": "dim"
       },
       {
-        "text": "queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+        "text": "queue: 'run cargo test, fix failures' or /goal",
         "tone": "fg"
       }
     ],
@@ -1322,7 +1322,7 @@
         ],
         [
           {
-            "text": "    queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+            "text": "    queue: 'run cargo test, fix failures' or /goal",
             "tone": "dim"
           }
         ],
@@ -2810,7 +2810,7 @@
     "version": "2.1.269"
   },
   "lines": {
-    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test, fix failures' or /goal",
     "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },

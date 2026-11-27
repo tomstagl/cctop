@@ -39,6 +39,7 @@ Generated artefacts that tests assert are fresh (regenerate, never hand-edit):
 cctop metrics --md > docs/metrics.md && cctop metrics --readme README.md   # from src/metrics/registry.rs
 scripts/pane-fixtures.sh                          # tests/pane/fixtures/<verb>.json from fixtures/session-a.jsonl
 scripts/pane-fixtures.sh fixtures/session-b.jsonl b   # the -b and coach-<moment> fixtures — rerun after any change to the coach or dashboard objects
+scripts/pane-fixtures.sh fixtures/session-d.jsonl d   # the -d fixtures (fixture D's coach and advice carry nudges) — rerun with -b
 INSTA_UPDATE=always cargo test                    # accept insta snapshots (src/snapshots, src/ui/snapshots); then strip `assertion_line:` and delete *.snap.new
 make site                                         # site/ from README marked blocks + docs/metrics.md + themes
 ```

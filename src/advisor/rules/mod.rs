@@ -159,6 +159,12 @@ pub(crate) fn spoken(ms: i64) -> String {
     }
 }
 
+/// A structural name (a file's basename, a server, hook, plugin, agent or
+/// tool name) as the words carry it: cut at 40 cells.
+pub(crate) fn ident(s: &str) -> String {
+    crate::ui::fmt::clip(s, 40)
+}
+
 /// `1 file`, `3 files`.
 pub(crate) fn count(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
@@ -221,6 +227,63 @@ mod tests {
         let b = s.as_bytes();
         b.windows(3)
             .any(|w| w[0] == b'A' && w[1].is_ascii_digit() && w[2].is_ascii_digit())
+    }
+
+    /// Every nudge the rules fire on the fixture sessions, fed line by line
+    /// and read every few lines at two clocks (live, and ten minutes idle):
+    /// whole words, no hole left, and an action payload that fits its kind
+    /// — something to fill, copy or press, empty only for `read`.
+    #[test]
+    fn every_fired_nudge_has_whole_words_and_fitting_payloads() {
+        use crate::advisor::ActionKind;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+        let rules = all();
+        let mut fired = std::collections::BTreeSet::new();
+        for name in ["a", "b", "c", "d", "e", "r", "s", "t", "w", "w-live"] {
+            let path = root.join(format!("session-{name}.jsonl"));
+            let parsed = crate::transcript::parse_file(&path).unwrap();
+            let step = (parsed.len() / 40).max(1);
+            let mut s = State::new(crate::metrics::Pricing::bundled());
+            s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+            for (i, line) in parsed.iter().enumerate() {
+                s.apply(line);
+                let lines = i + 1;
+                if lines % step != 0 && lines != parsed.len() {
+                    continue;
+                }
+                for idle_ms in [30_000, 600_000] {
+                    s.clock_override = true;
+                    s.now_ms = s.last_line_at_ms.unwrap_or(0) + idle_ms;
+                    for r in &rules {
+                        let Some(a) = r.evaluate(&s) else { continue };
+                        fired.insert(r.id());
+                        let at = format!("{} on session-{name} at {lines}", r.id());
+                        assert_eq!(a.name, r.name(), "{at}");
+                        for text in [&a.body, &a.foot].into_iter().chain(a.fix_prompt.as_ref()) {
+                            assert!(!text.trim().is_empty(), "{at}: empty words");
+                            assert!(!text.contains('{') && !text.contains('}'), "{at}: {text}");
+                        }
+                        assert!(!a.actions.is_empty(), "{at}");
+                        for x in &a.actions {
+                            assert_eq!(
+                                x.kind == ActionKind::Advice,
+                                x.payload.trim().is_empty(),
+                                "{at}: {x:?}"
+                            );
+                            assert!(!x.label.is_empty(), "{at}: {x:?}");
+                            if x.kind == ActionKind::Prompt {
+                                assert!(
+                                    Some(&x.payload) == a.fix_prompt.as_ref()
+                                        || x.payload == a.action_text,
+                                    "{at}: {x:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(fired.len() >= 15, "only {fired:?} fired");
     }
 
     #[test]

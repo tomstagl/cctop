@@ -39,16 +39,7 @@ fn is_doc(path: &str) -> bool {
     crate::phase::is_doc_path(path)
 }
 
-/// The command a shell line is about: the first `&&` segment that is not
-/// a `cd`, cut at the first `;` or `|`.
-fn command_core(cmd: &str) -> &str {
-    let seg = cmd
-        .split(" && ")
-        .map(str::trim)
-        .find(|s| !s.starts_with("cd ") && !s.is_empty())
-        .unwrap_or(cmd.trim());
-    seg.split([';', '|']).next().unwrap_or(seg).trim()
-}
+use crate::tools::{call_shape, command_core, command_shape};
 
 /// Source edits (Edit / Write / MultiEdit / NotebookEdit / implement-class
 /// Bash) on non-doc paths after `since_ms`.
@@ -64,7 +55,8 @@ fn source_edits_since(state: &State, since_ms: i64) -> Vec<&Call> {
 }
 
 /// The test command this session runs: the last confirmed check, else the
-/// last test-class Bash; its first pipeline segment, clipped.
+/// last test-class Bash; its shape (`cargo test`, `make check`), never its
+/// arguments.
 fn known_test(state: &State) -> Option<String> {
     let tests = || {
         state
@@ -77,8 +69,8 @@ fn known_test(state: &State) -> Option<String> {
     let c = tests()
         .find(|c| c.is_confirmed_test())
         .or_else(|| tests().next())?;
-    let first = command_core(&c.input_summary);
-    (!first.is_empty()).then(|| fmt::clip(first, 40))
+    let shape = command_shape(&c.input_summary);
+    (!shape.is_empty()).then_some(shape)
 }
 
 /// A confirmed check that failed: the exit status, or the output's own
@@ -98,18 +90,28 @@ fn turn_calls(state: &State) -> Vec<&Call> {
         .collect()
 }
 
-/// The shape of a call: the tool name, or for Bash the command's argv0 and
-/// its word-like subcommands (`gh pr view`, `git push`, `rm`).
+/// The shape of a call for the one-line forms and the retry counting: the
+/// tool name, or for Bash the command's argv0 (leading `VAR=…` dropped, a
+/// path reduced to its name) and its word-like subcommands (`gh pr view`,
+/// `git push`, `rm`). The full words use [`call_shape`] (one subcommand).
 pub(crate) fn prefix(c: &Call) -> String {
     if c.name != "Bash" {
-        return c.name.clone();
+        return fmt::clip(&c.name, 40);
     }
-    let core = command_core(&c.input_summary);
-    let mut words = core.split_whitespace();
-    let mut out: Vec<&str> = words.next().into_iter().collect();
-    out.extend(words.take(2).take_while(|w| {
-        w.chars().all(|ch| ch.is_ascii_lowercase() || ch == '-') && !w.starts_with('-')
-    }));
+    let mut words = command_core(&c.input_summary)
+        .split_whitespace()
+        .skip_while(|w| crate::tools::is_env_assignment(w));
+    let mut out: Vec<String> = words
+        .next()
+        .map(crate::tools::argv0_name)
+        .into_iter()
+        .collect();
+    out.extend(
+        words
+            .take(2)
+            .take_while(|w| crate::tools::is_subcommand(w))
+            .map(str::to_string),
+    );
     out.join(" ")
 }
 
@@ -155,6 +157,12 @@ pub const ERROR_WORDS: &[ErrorWords] = &[
         id: "not_logged_in",
         label: "the command line tool is not logged in",
         fix: "stop and ask me to log in",
+        rank: 4,
+    },
+    ErrorWords {
+        id: "publickey_refused",
+        label: "the SSH key was refused",
+        fix: "stop and ask me to check the SSH key",
         rank: 4,
     },
     ErrorWords {
@@ -260,6 +268,7 @@ pub fn error_words_for(
         (Some(Failure::NotLoggedIn), _) => "not_logged_in",
         (Some(Failure::CommandNotFound), _) => "command_not_found",
         (Some(Failure::NotARepo), _) => "not_a_repo",
+        (Some(Failure::PublicKeyRefused), _) => "publickey_refused",
         (None, ErrorClass::FileNotFound) => "file_not_found",
         (None, ErrorClass::ContentNotFound) => "content_not_found",
         (None, ErrorClass::EditFailed) => "edit_failed",
@@ -597,8 +606,8 @@ impl Rule for CorrectionStreak {
         &[
             Words {
                 variant: "",
-                body: "You corrected Claude {n} times in a row ({kinds}) on the same work: its picture of the task has drifted and each steer patches it. Esc Esc (or /rewind) restores the conversation and the files to turn {turn}, so a restated prompt starts clean.{bash}",
-                fix_prompt: Some("Before you change anything else, tell me in two lines what you think I want, and wait for my answer."),
+                body: "You corrected Claude {n} times in a row ({kinds}) on the same work: its picture of the task has drifted and each steer patches it. Rewind with Esc Esc (or /rewind) to turn {turn}, which restores the conversation and the files, then send the prompt below so Claude states the task back before changing anything.{bash}",
+                fix_prompt: Some("Before you change anything, tell me in two lines what you think I want, and wait for my answer."),
                 foot: "goes away after a /rewind",
             },
         ]
@@ -730,7 +739,7 @@ impl Rule for FailureCascade {
         &[
             Words {
                 variant: "",
-                body: "Claude keeps trying without a fact it can't find out by itself: {causes}. Each retry re-sends the whole {ctx}-token context{per_call}.",
+                body: "Claude keeps repeating calls that fail the same way: {causes}. Each retry re-sends the whole {ctx}-token context{per_call}, and the next one fails too until something changes.",
                 fix_prompt: Some("Stop retrying. {facts} {fixes}."),
                 foot: "goes away when the failing command succeeds",
             },
@@ -805,7 +814,8 @@ impl Rule for FailureCascade {
         let mut words: Vec<ErrorWords> = Vec::new();
         for c in run.iter().rev() {
             let w = error_words(c);
-            a.evidence_rows.push(format!("{} · {}", prefix(c), w.label));
+            a.evidence_rows
+                .push(format!("{} · {}", call_shape(c), w.label));
             if !words.contains(&w) {
                 words.push(w);
             }
@@ -1279,7 +1289,7 @@ impl Rule for StaleCollision {
         a.action_kind = ActionKind::Prompt;
         a.saving = Saving::Avoids;
         a.retires_on = "a re-read or a further edit of the file";
-        a.hole("file", name.to_string());
+        a.hole("file", super::ident(name));
         a.hole("ide", count(f.ide_edits, "edit", "edits"));
         a.hole("claude", count(f.edits_this_turn, "edit", "edits"));
         a.mark = state.tools.calls.len() as u64;
@@ -1356,14 +1366,14 @@ impl Rule for DenialStreak {
             a.action = "tell Claude the alternative — it cannot run this".into();
             a.action_text = format!(
                 "You can't run `{}` here (it's denied by my settings). Use another way or tell me what you need.",
-                prefix(c)
+                call_shape(c)
             );
             a.action_kind = ActionKind::Prompt;
             a.saving = Saving::Avoids;
             a.retires_on = "turn end";
             a.mark = state.tools.calls.len() as u64;
             a.variant = "deny";
-            a.hole("shape", prefix(c));
+            a.hole("shape", call_shape(c));
             return Some(a);
         }
         let blocked: Vec<&Call> = recent
@@ -1415,7 +1425,7 @@ impl Rule for DenialStreak {
         );
         a.evidence = format!("{} denials in the last 3 turns", recent.len());
         a.action = format!("allow {rule} or approve it");
-        a.hole("shape", p.clone());
+        a.hole("shape", call_shape(last));
         a.hole("n", n.to_string());
         a.hole("when", if this_turn >= 2 { " this turn" } else { "" });
         a.hole("rule", rule.clone());
@@ -1542,7 +1552,13 @@ impl Rule for TurnDied {
         &[
             Words {
                 variant: "rate_limit",
-                body: "The turn ended on the {kind} rate limit, not on a reply{resets}. Sending again now runs into the same limit: wait for the reset, or switch to another model family with /model, which has its own limit.",
+                body: "The turn ended on {limit}, not on a reply{resets}. Sending again now only runs into the same limit: wait for the reset.",
+                fix_prompt: None,
+                foot: "goes away after the next successful call",
+            },
+            Words {
+                variant: "rate_limit_model",
+                body: "The turn ended on {limit}, not on a reply{resets}. Sending again now runs into the same limit: wait for the reset, or switch to another model with /model, which has its own weekly limit.",
                 fix_prompt: None,
                 foot: "goes away after the next successful call",
             },
@@ -1591,15 +1607,28 @@ impl Rule for TurnDied {
         let status = e.status.unwrap_or(0);
         let mut a = Advice::new("A47", "turn-died", Urgency::Now);
         let (headline, action, text) = if err == "rate_limit" || status == 429 {
-            let kind = e.rate_limit_type.as_deref().unwrap_or("rate limit");
-            let kind_word = match kind {
-                "five_hour" => "session",
-                "seven_day" => "weekly",
-                k => k,
+            // Known limit types in words; anything else is "a usage limit".
+            // Only a model's own weekly limit is escaped by switching models.
+            let (kind_word, limit, per_model) = match e.rate_limit_type.as_deref() {
+                Some("five_hour") => (Some("session"), "the 5-hour usage limit", false),
+                Some("seven_day") => (Some("weekly"), "the weekly usage limit", false),
+                Some("seven_day_opus") => (Some("weekly Opus"), "the weekly Opus limit", true),
+                Some("seven_day_sonnet") => {
+                    (Some("weekly Sonnet"), "the weekly Sonnet limit", true)
+                }
+                _ => (None, "a usage limit", false),
+            };
+            let lead = match kind_word {
+                Some(k) => format!("Rate limit ({k})"),
+                None => "Rate limit".to_string(),
             };
             let resets = e.resets_at.map(|s| (s * 1000.0) as i64);
-            a.variant = "rate_limit";
-            a.hole("kind", kind_word.to_string());
+            a.variant = if per_model {
+                "rate_limit_model"
+            } else {
+                "rate_limit"
+            };
+            a.hole("limit", limit);
             a.hole(
                 "resets",
                 resets
@@ -1615,14 +1644,22 @@ impl Rule for TurnDied {
             (
                 match resets {
                     Some(r) => format!(
-                        "Rate limit ({kind_word}) · resets {} (in {})",
+                        "{lead} · resets {} (in {})",
                         fmt::clock_hhmm(r),
                         crate::coach::short_duration(r - now)
                     ),
-                    None => format!("Rate limit ({kind_word})"),
+                    None => lead,
                 },
-                "wait, or /model <other family> to keep working".to_string(),
-                "/model".to_string(),
+                if per_model {
+                    "wait, or /model another model to keep working".to_string()
+                } else {
+                    "wait for the reset; sending again hits the same limit".to_string()
+                },
+                if per_model {
+                    "/model".to_string()
+                } else {
+                    String::new()
+                },
             )
         } else if err.contains("spend") || status == 402 {
             a.variant = "spend";
@@ -2152,14 +2189,14 @@ mod tests {
         assert_eq!(
             a.evidence_rows,
             [
-                "gh pr view · there is no PR for this branch yet",
-                "gh pr view · there is no PR for this branch yet",
+                "gh pr · there is no PR for this branch yet",
+                "gh pr · there is no PR for this branch yet",
                 "git push · the remote has commits you don't",
             ]
         );
         assert!(
             a.body.starts_with(
-                "Claude keeps trying without a fact it can't find out by itself: the remote has commits you don't and there is no PR for this branch yet. Each retry re-sends the whole 50k-token context, about $"
+                "Claude keeps repeating calls that fail the same way: the remote has commits you don't and there is no PR for this branch yet. Each retry re-sends the whole 50k-token context, about $"
             ),
             "{}",
             a.body
@@ -2205,18 +2242,30 @@ mod tests {
     fn every_error_class_has_words() {
         use crate::tools::{ErrorClass, Failure};
         assert_eq!(
-            Failure::classify("no pull requests found for branch x"),
+            Failure::classify("no pull requests found for branch x", "gh pr"),
             Some(Failure::NoPr)
         );
         assert_eq!(
-            Failure::classify(" ! [rejected] main -> main (non-fast-forward)"),
+            Failure::classify(" ! [rejected] main -> main (non-fast-forward)", "git push"),
             Some(Failure::RejectedNonFf)
         );
         assert_eq!(
-            Failure::classify("zsh: command not found: foo"),
+            Failure::classify("git@github.com: Permission denied (publickey).", "git push"),
+            Some(Failure::PublicKeyRefused)
+        );
+        assert_eq!(
+            Failure::classify("zsh: command not found: foo", "foo"),
             Some(Failure::CommandNotFound)
         );
-        assert_eq!(Failure::classify("Exit code 1"), None);
+        assert_eq!(Failure::classify("Exit code 1", "git push"), None);
+        // gh's and git's markers count only on gh and git: a test that
+        // prints "non-fast-forward" or "no pull requests found" is not one.
+        assert_eq!(
+            Failure::classify("no pull requests found", "cargo test"),
+            None
+        );
+        assert_eq!(Failure::classify("non-fast-forward", "pytest"), None);
+        assert_eq!(Failure::classify("not logged in", "npm publish"), None);
         let ids: Vec<&str> = ERROR_WORDS.iter().map(|w| w.id).collect();
         let mut sorted = ids.clone();
         sorted.dedup();
@@ -2257,6 +2306,7 @@ mod tests {
             (Failure::NotLoggedIn, "not_logged_in"),
             (Failure::CommandNotFound, "command_not_found"),
             (Failure::NotARepo, "not_a_repo"),
+            (Failure::PublicKeyRefused, "publickey_refused"),
         ] {
             assert_eq!(error_words_for(Some(f), ErrorClass::Other).id, id);
         }
@@ -2776,6 +2826,41 @@ mod tests {
     }
 
     #[test]
+    fn a47_names_the_limit_in_words_and_offers_a_switch_only_for_a_model_limit() {
+        let line = |kind: &str| {
+            Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T10:01:00Z","message":{{"id":"e1","model":"<synthetic>","content":[{{"type":"text","text":"Rate limit hit"}}],"stop_reason":"stop_sequence","usage":{{"input_tokens":0,"output_tokens":0}}}},"quotaLimits":{{"status":"rejected"{kind}}},"error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429}}"#)).unwrap()
+        };
+        let fire = |kind: &str| {
+            let mut s = fresh();
+            s.apply(&line(kind));
+            s.now_ms = t("2026-01-01T10:01:30Z");
+            TurnDied.evaluate(&s).expect("a confirmed 429")
+        };
+        let opus = fire(r#","rateLimitType":"seven_day_opus""#);
+        assert_eq!(opus.headline, "Rate limit (weekly Opus)");
+        assert!(
+            opus.body
+                .starts_with("The turn ended on the weekly Opus limit, not on a reply."),
+            "{}",
+            opus.body
+        );
+        assert!(opus.body.contains("/model"));
+        assert_eq!(opus.actions[0].payload, "/model");
+        for kind in ["", r#","rateLimitType":"something_new""#] {
+            let a = fire(kind);
+            assert_eq!(a.headline, "Rate limit");
+            assert!(
+                a.body
+                    .starts_with("The turn ended on a usage limit, not on a reply."),
+                "{}",
+                a.body
+            );
+            assert!(!a.body.contains("rate limit rate limit") && !a.body.contains("something_new"));
+            assert_eq!(a.actions[0].kind, ActionKind::Advice);
+        }
+    }
+
+    #[test]
     fn a47_turn_died_branches_on_the_error_and_ignores_synthetic_text() {
         let rate = |s: &mut State| {
             s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:01:00Z","message":{"id":"e1","model":"<synthetic>","content":[{"type":"text","text":"Rate limit hit"}],"stop_reason":"stop_sequence","usage":{"input_tokens":0,"output_tokens":0}},"quotaLimits":{"status":"rejected","resetsAt":1767265200,"rateLimitType":"five_hour","lowPriorityRetryAfterSeconds":20},"error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429}"#).unwrap());
@@ -2785,7 +2870,21 @@ mod tests {
         s.now_ms = t("2026-01-01T10:01:30Z");
         let a = TurnDied.evaluate(&s).expect("a confirmed 429");
         assert_eq!(a.headline, "Rate limit (session) · resets 11:00 (in 58m)");
-        assert_eq!(a.action, "wait, or /model <other family> to keep working");
+        assert_eq!(
+            a.action,
+            "wait for the reset; sending again hits the same limit"
+        );
+        // The 5-hour limit is account-wide: no model switch is offered.
+        assert_eq!(
+            a.actions.iter().map(|x| x.kind.id()).collect::<Vec<_>>(),
+            ["read"]
+        );
+        assert!(
+            a.body.starts_with("The turn ended on the 5-hour usage limit, not on a reply; it resets at 11:00 (in 59 minutes)."),
+            "{}",
+            a.body
+        );
+        assert!(!a.body.contains("/model"), "{}", a.body);
         assert_eq!(a.evidence, "turn 1 · low-priority retry in 20 s");
         assert_eq!(a.urgency, Urgency::Now);
         assert_eq!(TurnDied.ttl(), Ttl::NextPrompt);

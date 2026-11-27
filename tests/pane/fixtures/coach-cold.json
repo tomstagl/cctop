@@ -69,7 +69,7 @@
     }
   ],
   "lines": {
-    "l0": "◐193k ≈$.11/call (cold: next call ≈$1.9) · ◐cache 193k · ○5h — · ◐corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l0": "◐193k ≈$.11/call (cold: next call ≈$1.9) · ◐cache 193k · ○5h — · ◐corrections 1 · ▸ /context or i on Context shows the prefix; trim C…",
     "l1": "◐19% ○— ◐193k ◐1 open ▸",
     "l2": "◐◐○◐"
   },
@@ -99,16 +99,16 @@
   "next_row": "next     long-foreground → when the slot frees · `c…",
   "nudge": {
     "acting": false,
-    "action_kind": "setting",
-    "action_text": "",
+    "action_kind": "slash",
+    "action_text": "/context",
     "actions": [
       {
-        "kind": "setting",
-        "label": "Open settings.json",
-        "payload": ""
+        "kind": "slash",
+        "label": "Put /context in the box",
+        "payload": "/context"
       }
     ],
-    "body": "Every request starts with the same 49k tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about $0.37 a turn at 15 calls per turn. The largest part is built-in tools (schemas) (12k tokens). Trim CLAUDE.md, move rarely used rules into skills, and disable the MCP servers and plugins this project doesn't use; i on the Context panel shows what the prefix holds.",
+    "body": "Every request starts with the same 49k tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about $0.37 a turn at 15 calls per turn. The largest part is built-in tools (schemas) (12k tokens). /context shows what fills it, and i on cctop's Context panel breaks the prefix down. Then trim CLAUDE.md, move rarely used rules into skills, and turn off the MCP servers (/mcp) and plugins (/plugin) this project doesn't use.",
     "class": "LATER",
     "evidence": [
       "largest: built-in tools (schemas) (12k)"
@@ -121,7 +121,7 @@
     "headline": "Fixed prefix 49k tokens ≈$0.37/turn at 15 calls",
     "id": "A17",
     "line1": "▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls",
-    "line2": "  trim CLAUDE.md, move rarely-used rules to skills,…",
+    "line2": "  /context or i on Context shows the prefix; trim C…",
     "line3": "  LATER · since turn 6 · +1 queued (n)",
     "name": "Heavy always-on context",
     "queued": 1,

@@ -108,12 +108,16 @@ test('the status line follows the width, the fill button exists for prompt-class
   assert.ok(c.lines.l0.startsWith('●333k'), c.lines.l0);
   assert.equal(c.lines.l2.length, 4);
   // A23 is a slash-class nudge (`/compact `): fillable. A17 at the cold
-  // moment is settings-class: no fill.
+  // moment offers `/context` (slash-class): fillable too. A read-class
+  // nudge (nothing to type) gets no fill.
   assert.equal(fillable(c.nudge), true);
   const cold = coachOf(moment('cold'))!;
   assert.equal(cold.nudge?.id, 'A17');
-  assert.equal(fillable(cold.nudge), false);
-  const tree = renderCoach(build(moment('cold')), el, 72, noActions);
+  assert.equal(fillable(cold.nudge), true);
+  const raw0 = moment('cold') as { nudge: Record<string, unknown> };
+  const read = { ...raw0, nudge: { ...raw0.nudge, action_kind: 'advice', action_text: '' } };
+  assert.equal(fillable(coachOf(read)!.nudge), false);
+  const tree = renderCoach(build(read), el, 72, noActions);
   assert.deepEqual(
     buttons(tree).map((b) => b.props?.label),
     ['snooze', 'why', '◐ cache', '○ limits', '◐ rework'],

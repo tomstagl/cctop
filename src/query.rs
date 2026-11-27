@@ -957,9 +957,10 @@ mod tests {
         let mut s = State::new(crate::metrics::Pricing::bundled());
         s.session.alive = true;
         s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:00Z","promptSource":"typed","message":{"role":"user","content":"SECRET-PROMPT-xyz open the PR and push"}}"#).unwrap());
+        // The tool inputs carry secrets too: an env assignment, arguments.
         let out = [
             (
-                "gh pr view 24",
+                "TOKEN=SECRET-INPUT-def gh pr view SECRET-ARG",
                 "no pull requests found for branch SECRET-OUTPUT-abc",
             ),
             (
@@ -967,7 +968,7 @@ mod tests {
                 "no pull requests found for branch SECRET-OUTPUT-abc",
             ),
             (
-                "git push",
+                "git push SECRET-ARG",
                 "! [rejected] SECRET-OUTPUT-abc (non-fast-forward)",
             ),
         ];
@@ -991,7 +992,7 @@ mod tests {
             .contains("there is no PR for this branch yet"));
         assert_eq!(
             n["evidence"][1],
-            "gh pr view · there is no PR for this branch yet"
+            "gh pr · there is no PR for this branch yet"
         );
         assert!(n["fix_prompt"]
             .as_str()
@@ -1007,6 +1008,9 @@ mod tests {
                 "SECRET-PROMPT",
                 "SECRET-OUTPUT",
                 "SECRET-MODEL",
+                "SECRET-INPUT",
+                "SECRET-ARG",
+                "TOKEN=",
                 "open the PR and push",
             ] {
                 assert!(!text.contains(secret), "{verb} leaks {secret}: {text}");
