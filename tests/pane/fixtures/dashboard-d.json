@@ -79,7 +79,12 @@
             "tone": "dim"
           }
         ],
-        [],
+        [
+          {
+            "text": "  per /context sys 10k tools 31k msgs 42k free 877k …",
+            "tone": "dim"
+          }
+        ],
         [
           {
             "text": "  ",
@@ -2435,6 +2440,36 @@
   ],
   "cells": [
     {
+      "composition": {
+        "items": [
+          {
+            "name": "System prompt",
+            "tokens": 10200
+          },
+          {
+            "name": "System tools",
+            "tokens": 31200
+          },
+          {
+            "name": "Skills",
+            "tokens": 4800
+          },
+          {
+            "name": "Messages",
+            "tokens": 42900
+          },
+          {
+            "name": "free",
+            "tokens": 877900
+          },
+          {
+            "name": "buffer",
+            "tokens": 33000
+          }
+        ],
+        "line": "per /context sys 10k tools 31k msgs 42k free 877k …",
+        "source": "per /context"
+      },
       "id": "context",
       "key": "1",
       "label": [
@@ -2717,6 +2752,34 @@
       ]
     }
   ],
+  "composition": [
+    {
+      "name": "System prompt",
+      "tokens": 10200
+    },
+    {
+      "name": "System tools",
+      "tokens": 31200
+    },
+    {
+      "name": "Skills",
+      "tokens": 4800
+    },
+    {
+      "name": "Messages",
+      "tokens": 42900
+    },
+    {
+      "name": "free",
+      "tokens": 877900
+    },
+    {
+      "name": "buffer",
+      "tokens": 33000
+    }
+  ],
+  "composition_metric_id": "context_composition",
+  "composition_source": "per /context",
   "cost_combined": {
     "approx": true,
     "metric_id": "cost_combined",
