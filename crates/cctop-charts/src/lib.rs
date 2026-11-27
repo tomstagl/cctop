@@ -13,6 +13,8 @@ mod grid;
 mod kinds;
 mod spec;
 mod theme;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use grid::{LOWER_HALF, UPPER_HALF};
 pub use spec::{
@@ -65,6 +67,7 @@ pub fn encode_png(rgba: &[u8], w: u32, h: u32) -> Vec<u8> {
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     enc.set_compression(png::Compression::Fast);
+    enc.set_filter(png::Filter::NoFilter);
     let written = enc
         .write_header()
         .and_then(|mut wr| wr.write_image_data(rgba).and_then(|_| wr.finish()));

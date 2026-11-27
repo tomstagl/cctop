@@ -26,6 +26,8 @@ declare module 'node:assert/strict' {
 
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
+  // No encoding: the file's bytes (a Buffer in Node, typed as the Uint8Array it is).
+  export function readFileSync(path: string): Uint8Array;
   export function readdirSync(path: string): string[];
 }
 
@@ -37,3 +39,7 @@ declare var __dirname: string;
 
 // Bare timers for a test that has to let promise chains settle.
 declare function setTimeout(fn: () => void, ms: number): unknown;
+
+declare var Buffer: { from(data: string, encoding: 'base64'): Uint8Array };
+declare var process: { env: Record<string, string | undefined> };
+declare var console: { log(...a: unknown[]): void };
