@@ -132,6 +132,10 @@ pub struct Closed {
     pub cache_creation: u64,
     /// The response line's timestamp.
     pub at: Option<String>,
+    /// Messages (keep + tail) in the main-thread request sent immediately
+    /// before this one, paired or not: `keep` counts what was reused from
+    /// the last request sent.
+    pub prior_sent: Option<usize>,
 }
 
 /// The cache TTL a request asked for: its message-content breakpoint's,
@@ -246,7 +250,7 @@ pub fn locate(
             }
         }
     }
-    let prev_total = p.keep + p.tail_len;
+    let prev_total = cur.prior_sent.unwrap_or(p.keep + p.tail_len);
     if c.keep < prev_total {
         return LocatedCause::PrefixRewritten {
             from: c.keep,
@@ -279,6 +283,10 @@ pub struct RequestChain {
     shapes: HashMap<String, ShapeFacts>,
     latest_shape: Option<String>,
     pending: Option<ApiRequest>,
+    /// keep + tail of the last main-thread request sent, paired or not.
+    last_sent: Option<usize>,
+    /// `last_sent` as it was when `pending` was sent.
+    pending_prior: Option<usize>,
     prev: Option<Closed>,
     misses: Vec<LocatedMiss>,
     by_id: HashMap<String, usize>,
@@ -292,6 +300,8 @@ impl RequestChain {
                 self.shapes.insert(s.shape_hash.clone(), s.clone());
             }
             Line::ApiRequest(r) if is_main_thread(&r.query_source) => {
+                self.pending_prior = self.last_sent;
+                self.last_sent = Some(r.keep + r.tail_len);
                 self.pending = Some(r.clone());
             }
             Line::Assistant(a) if !a.is_sidechain && a.request_id.is_some() => {
@@ -308,6 +318,7 @@ impl RequestChain {
                     cache_read: usage.cache_read_input_tokens,
                     cache_creation: usage.cache_creation_input_tokens,
                     at: a.timestamp.clone(),
+                    prior_sent: self.pending_prior,
                 };
                 let reason = a.cache_miss_reason().map(|r| r.kind.clone());
                 let shrank = self.prev.as_ref().is_some_and(|p| {
@@ -338,6 +349,8 @@ impl RequestChain {
 
     fn reset(&mut self) {
         self.pending = None;
+        self.last_sent = None;
+        self.pending_prior = None;
         self.prev = None;
     }
 
@@ -475,6 +488,23 @@ mod tests {
     }
 
     #[test]
+    fn keep_compares_with_the_unpaired_request_before() {
+        // A paired (keep 40 + 2), B unpaired (47 + 3 = 50), C keeps 48.
+        let lines = [
+            req("s1", 40, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 47, 3, "high", T1),
+            req("s1", 48, 2, "high", T1),
+            reply("c", 5_000, 30_000, T1, None),
+        ];
+        let c = run(&lines);
+        assert_eq!(
+            c.misses()[0].cause,
+            LocatedCause::PrefixRewritten { from: 48, of: 50 }
+        );
+    }
+
+    #[test]
     fn expired() {
         let lines = [
             req("s1", 10, 2, "high", T0),
@@ -608,13 +638,21 @@ mod fixture_tests {
         let path = std::path::Path::new("fixtures/session-r.jsonl");
         let info = crate::ui::state::SessionInfo::from_fixture(path);
         let state = crate::load::state_from(path, info);
-        // Under the planning ruling (named reason, or the cached prefix
-        // shrank by >= MISS_TOKENS) this fixture holds no miss: cache_read
-        // grows on every response, including across the shapeHash change at
-        // line 85 and the 8-minute gap at line 191. The keep drop at line 256
-        // follows a request (line 250) that has no response, so it is never
-        // paired. The fixture's located causes are asserted nowhere yet.
-        assert!(state.requests.misses().is_empty());
+        // Pinned from the run. PrefixRewritten is covered by the synthetic
+        // unit test only: no real session has it beside a shape miss.
+        let misses = state.requests.misses();
+        let ids: Vec<(&str, &str)> = misses
+            .iter()
+            .map(|m| (m.message_id.as_str(), m.cause.kind()))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                ("msg_011CgMcApk8Wt1XX5BxnZmun", "tools_changed"),
+                ("msg_011CgYPRTTRGbJ4Rrtfi1Prt", "params_changed"),
+                ("msg_011CgYRZof3gtWbRy45bcbgt", "expired"),
+            ]
+        );
         assert!(state.requests.latest_shape().is_some());
     }
 }
