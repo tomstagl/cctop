@@ -120,17 +120,28 @@ function actionOf(v: unknown): CoachAction | null {
   return { kind: kind as ActionKind, label: stringAt(v, 'label') ?? '', payload: typeof payload === 'string' ? payload : '' };
 }
 
+// A coach object before schema 2 (cctop < 0.10) has no `actions` and one
+// `evidence` string: its fill-class `action_text` becomes the one action and
+// the string the one evidence row, so the card keeps its fill Button.
+function legacyActions(v: unknown): CoachAction[] {
+  const text = stringAt(v, 'action_text');
+  const kind = stringAt(v, 'action_kind');
+  if (text === null || text === '' || (kind !== 'prompt' && kind !== 'slash')) return [];
+  return [{ kind, label: 'fill', payload: text }];
+}
+
 function adviceOf(v: unknown, id: string): Advice {
   const actions = at(v, 'actions');
+  const evidence = at(v, 'evidence');
   return {
     id,
     cls: stringAt(v, 'class') ?? '',
     name: stringAt(v, 'name') ?? '',
     headline: stringAt(v, 'headline') ?? '',
     body: stringAt(v, 'body') ?? '',
-    evidence: strings(at(v, 'evidence')),
+    evidence: typeof evidence === 'string' ? (evidence === '' ? [] : [evidence]) : strings(evidence),
     fixPrompt: stringAt(v, 'fix_prompt'),
-    actions: Array.isArray(actions) ? actions.map(actionOf).filter((a): a is CoachAction => a !== null) : [],
+    actions: Array.isArray(actions) ? actions.map(actionOf).filter((a): a is CoachAction => a !== null) : legacyActions(v),
     foot: stringAt(v, 'foot') ?? '',
   };
 }

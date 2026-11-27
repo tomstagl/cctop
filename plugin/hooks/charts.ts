@@ -30,7 +30,8 @@ export type ChartsWhy = 'override' | 'config' | 'terminal' | 'unknown' | 'probe'
 
 export type ChartsChoice = { mode: ChartsMode; why: ChartsWhy };
 
-const IMAGE_TERMINALS = ['ghostty', 'iTerm.app', 'WezTerm'];
+// The terminals the d.ts `Image` names: kitty (by its own variable), Ghostty, iTerm2 3.5+.
+const IMAGE_TERMINALS = ['ghostty', 'iTerm.app'];
 const CELL_TERMINALS = ['Apple_Terminal', 'vscode'];
 
 const forced = (v: string | undefined): ChartsMode | null => (v === 'image' || v === 'cells' ? v : null);
@@ -242,19 +243,23 @@ export type PictureJob = {
 /** PNGs are drawn at twice an assumed 8 × 16 px cell (spec §3). */
 export const PNG_SCALE = 2;
 
+/** The widest and tallest an `Image` may be (the d.ts: columns and rows 1 to 255); a wider box is drawn as cells. */
+export const IMAGE_MAX_CELLS = 255;
+
 /**
- * The picture for one job: a PNG in image mode (one wasm call), else cells
- * at the job's size (one wasm call), else the query's cells at their own
- * size; null when there is none of these.
+ * The picture for one job: a PNG in image mode (one wasm call) when the box
+ * is one an `Image` can take, else cells at the job's size (one wasm call),
+ * else the query's cells at their own size when they are no taller than the
+ * box (the sparkline form keeps its one row); null when there is none of these.
  */
 export function drawPicture(renderer: ChartRenderer | null, job: PictureJob, mode: ChartsMode): Picture | null {
-  if (mode === 'image' && !job.cells && renderer !== null) {
+  if (mode === 'image' && !job.cells && renderer !== null && job.cols <= IMAGE_MAX_CELLS && job.rows <= IMAGE_MAX_CELLS) {
     const png = renderer.png(job.spec, job.cols, job.rows, PNG_SCALE);
     if (png !== null) return { kind: 'image', png, cols: job.cols, rows: job.rows };
   }
   const cells = renderer?.cells(job.spec, job.cols, job.rows) ?? null;
   if (cells !== null) return { kind: 'raster', cells, cols: job.cols, rows: job.rows };
-  if (job.fallback === undefined) return null;
+  if (job.fallback === undefined || job.fallback.rows > job.rows) return null;
   return { kind: 'raster', cells: job.fallback.cells, cols: job.fallback.cols, rows: job.fallback.rows };
 }
 

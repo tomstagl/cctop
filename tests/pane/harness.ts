@@ -187,9 +187,13 @@ export type FakeExtras = {
   prompt: {
     /** Every `$.prompt.fill` text, in order. */
     fills: string[];
+    /** Every `$.prompt.fill` mode, in order (`replace` when left out, as the engine takes it). */
+    fillModes: string[];
+    /** When set, what the person types right after a `$.prompt.read()` answers: the draft becomes it. */
+    typedAfterRead: string | null;
     /** What the next fills answer (`isFilled`). */
     filled: boolean;
-    /** The prompt box's draft: what `$.prompt.read()` answers; a fill that took replaces it. */
+    /** The prompt box's draft: what `$.prompt.read()` answers; a fill that took writes it per its mode. */
     draft: string;
     /** When true, `$.prompt.read()` rejects. */
     readFails: boolean;
@@ -507,21 +511,28 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     },
     prompt: {
       fills,
+      fillModes: [] as string[],
+      typedAfterRead: null as string | null,
       filled: true,
       draft: '',
       readFails: false,
       read: async (): Promise<PromptBox> => {
         if (engine.prompt.readFails) throw new Error('fakeEngine: prompt.read failed');
-        return { text: engine.prompt.draft, cursor: engine.prompt.draft.length };
+        const box = { text: engine.prompt.draft, cursor: engine.prompt.draft.length };
+        if (engine.prompt.typedAfterRead !== null) engine.prompt.draft = engine.prompt.typedAfterRead;
+        return box;
       },
       // The return type is spelled so the body may read `engine` back (a
       // literal under `satisfies` cannot otherwise name itself). Since 2.1.278
       // the result carries the box after the fill and the cursor (PromptFilled).
-      fill: async ({ text }: PromptFillArgs): Promise<PromptFilled> => {
+      fill: async ({ text, mode }: PromptFillArgs): Promise<PromptFilled> => {
         fills.push(text);
+        engine.prompt.fillModes.push(mode ?? 'replace');
         const isFilled = engine.prompt.filled;
-        if (isFilled) engine.prompt.draft = text;
-        return { isFilled, text: isFilled ? text : '', cursor: isFilled ? text.length : 0 };
+        // `insert` is at the cursor, which the fake keeps at the end: the same as `append`.
+        if (isFilled) engine.prompt.draft = (mode ?? 'replace') === 'replace' ? text : engine.prompt.draft + text;
+        const box = engine.prompt.draft;
+        return { isFilled, text: isFilled ? box : '', cursor: isFilled ? box.length : 0 };
       },
       submit: async () => {
         throw new Error('fakeEngine: prompt.submit is never called by cctop');

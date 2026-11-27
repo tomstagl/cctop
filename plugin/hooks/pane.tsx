@@ -135,9 +135,10 @@ let notifyState: NotifyState = initialNotifyState();
 const resetTimers = new Map<string, Timer>();
 // Rows placed in the transcript (`$.ui.place`), by id: what each draws from
 // when the engine asks. Each id is placed once. `standing` holds what the
-// first coach and summary answers already had (the nudge in the slot when the
-// pane loaded, a resumed session's located misses): history is not replayed
-// into the transcript. The flags say which answers have been taken.
+// first coach and summary answers after each pane open already had (the
+// nudge in the slot, the located misses of a resumed session or of the time
+// the pane was closed): history is not replayed into the transcript. The
+// flags say which answers have been taken since the last open.
 const placedRows = new Map<string, PlacedRow>();
 const standing = new Set<string>();
 let standingTaken = { coach: false, summary: false };
@@ -279,7 +280,7 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open || model.actOpen) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
-  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($, model.query.coach !== before.query.coach);
+  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($, model.query.coach !== before.query.coach, model.query.summary !== before.query.summary);
   if (model.queryAt !== before.queryAt) checkFilled($);
   overviewChanged($, before);
   if (model.sessionId !== before.sessionId) {
@@ -287,6 +288,8 @@ function replaceModel($: EngineInterface, next: Model): void {
     placedRows.clear();
     standing.clear();
     standingTaken = { coach: false, summary: false };
+    // The act dialog acts on the old session's nudges: it closes.
+    if (model.actOpen) closeAct($).catch((err: unknown) => $.ui.log(`cctop: act dialog close failed: ${String(err)}`));
   }
   if (model.query.agents !== before.query.agents) agentsPolled($);
 }
@@ -720,16 +723,17 @@ function coachActions($: EngineInterface): CoachActions {
 // a located cache miss that came after the first summary (`miss-<turn>`) are
 // placed at the transcript's end once each, and only between turns, so they
 // land at the turn end. Display only: nothing is written to the transcript.
-function placeNotes($: EngineInterface, coachMoved: boolean): void {
+function placeNotes($: EngineInterface, coachMoved: boolean, summaryMoved: boolean): void {
   const nudge = nudgePlacement(coachOf(model.query.coach));
   const misses = missPlacements(model.query.summary);
-  // What was already there when each answer first arrived is taken as
-  // history, mid-turn or not.
-  if (model.query.coach !== undefined && !standingTaken.coach) {
+  // What was already there when each answer first arrived (since the load
+  // or the last open) is taken as history, mid-turn or not. Only an answer
+  // that just arrived counts: the other verb's may be from before a close.
+  if (coachMoved && model.query.coach !== undefined && !standingTaken.coach) {
     standingTaken.coach = true;
     if (nudge !== null) standing.add(nudge.id);
   }
-  if (model.query.summary !== undefined && !standingTaken.summary) {
+  if (summaryMoved && model.query.summary !== undefined && !standingTaken.summary) {
     standingTaken.summary = true;
     for (const m of misses) standing.add(m.id);
   }
@@ -800,9 +804,11 @@ function notice($: EngineInterface, text: string): void {
 }
 
 // A fill never replaces what the person is typing: the box is read first,
-// and only an empty one is filled (`$.prompt.fill` replaces by default).
-// A draft, or a box cctop cannot read, keeps the draft and says so; a box
-// already holding this very text is left as it is and counts as filled.
+// and only an empty one is filled. The fill appends (`$.prompt.fill`
+// replaces by default), which on an empty box is the same text, and keeps a
+// draft typed between the read and the fill. A draft, or a box cctop cannot
+// read, keeps the draft and says so; a box already holding this very text is
+// left as it is and counts as filled.
 function fillPrompt($: EngineInterface, text: string): void {
   readPromptBox($)
     .then((box) => {
@@ -814,7 +820,7 @@ function fillPrompt($: EngineInterface, text: string): void {
         notice($, DRAFT_KEPT);
         return;
       }
-      return $.prompt.fill({ text }).then(({ isFilled }) => {
+      return $.prompt.fill({ text, mode: 'append' }).then(({ isFilled }) => {
         if (!isFilled) {
           notice($, 'cctop: the prompt box is busy — the action was not filled');
           return;
@@ -900,6 +906,9 @@ function snoozeRule($: EngineInterface, rule: string, flag: '--snooze' | '--snoo
     .run(['cctop', 'query', 'coach', flag, rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
     .then((result) => {
       if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
+      // The session rotated (`/clear`) while the binary ran: the answer is
+      // the old session's coach, not the new one's.
+      if (model.sessionId !== id) return;
       const answer = JSON.parse(result.stdout) as { snooze?: unknown };
       if (typeof answer.snooze === 'string') notice($, `cctop: ${answer.snooze}`);
       apply($, { type: 'query', verb: 'coach', data: answer });
@@ -1222,6 +1231,10 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   persistPane($);
   if (model.view === 'agents') void readAgents($);
   if (!opened) {
+    // Whatever happened while the pane was closed is history: the first
+    // coach and summary answers after this open are the placed rows'
+    // baseline again, so a miss located meanwhile is not placed here.
+    standingTaken = { coach: false, summary: false };
     // The id first, so a `/clear` since the last look does not wipe the
     // usage read next.
     await poller?.sync();
@@ -1481,7 +1494,7 @@ export const register: Register = (on) => {
 
   on('turn.complete', async ($, e, next) => {
     apply($, { type: 'turn.complete', at: await clockNow($), durationMs: e.durationMs, reason: e.reason });
-    placeNotes($, false);
+    placeNotes($, false, false);
     stopUsageTimer();
     poller?.reschedule();
     const result = await next(e);

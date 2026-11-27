@@ -8,7 +8,7 @@ import { chartsRenderer, register } from '../../plugin/hooks/pane';
 import { initialModel, reduce } from '../../plugin/hooks/model';
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { drawPicture, instantiateCharts, type ChartRenderer, type ChartsMode, type Picture } from '../../plugin/hooks/charts';
+import { IMAGE_MAX_CELLS, drawPicture, instantiateCharts, type ChartRenderer, type ChartsMode, type Picture } from '../../plugin/hooks/charts';
 import {
   PAIRS,
   SPARKLINE,
@@ -223,6 +223,21 @@ test('the query\'s cells when the wasm is not there, drawn at their own size', a
   assert.equal(ctx.type, 'Raster');
   const fallback = o.charts.find((c) => c.id === 'context')!.fallback!;
   assert.deepEqual([ctx.props?.columns, ctx.props?.rows, ctx.props?.cells], [fallback.cols, fallback.rows, fallback.cells]);
+});
+
+test('a box wider than an Image may be is drawn as cells; the query\'s cells never make the sparkline taller', async () => {
+  const wasm = await renderer();
+  const o = B();
+  const job = pictureJobs(o, 122).find((j) => j.key === chartKey('context'))!;
+  const wide = { ...job, cols: IMAGE_MAX_CELLS + 1 };
+  const p = drawPicture(wasm, wide, 'image')!;
+  assert.equal(p.kind, 'raster');
+  assert.equal(p.cols, IMAGE_MAX_CELLS + 1);
+  assert.equal(drawPicture(wasm, { ...job, cols: IMAGE_MAX_CELLS }, 'image')?.kind, 'image');
+  // No wasm: the query's cells (8 rows for the context chart) fit a full chart, not a one-row sparkline.
+  assert.equal(job.fallback!.rows > 1, true);
+  assert.equal(drawPicture(null, { ...job, rows: 1, cells: true }, 'cells'), null);
+  assert.equal(drawPicture(null, job, 'cells')?.rows, job.fallback!.rows);
 });
 
 test('before the pictures are drawn: blank boxes of their size, the labels already there', () => {

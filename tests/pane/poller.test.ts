@@ -425,6 +425,21 @@ test('a query answered after the session rotated is discarded; stale is judged f
   assert.ok(queries($).slice(-POLLED.length).every((argv) => argv[4] === NEXT));
 });
 
+test('an answer to a query begun before a stop is dropped: the next start\'s first answers are fresh', async () => {
+  let answer: (r: ProcessRunResult) => void = () => {};
+  const scripts = binaryScripts();
+  scripts[`cctop query summary --session ${SESSION} --surface pane`] = () => new Promise<ProcessRunResult>((resolve) => (answer = resolve));
+  const { poller, model } = bootPoller(scripts);
+  poller.start();
+  await settle();
+  // The pane closes while the summary is still running; it answers afterwards.
+  poller.stop();
+  answer(ok(JSON.stringify(fixture('summary'))));
+  await settle();
+  await settle();
+  assert.equal(model().query.summary, undefined, 'the answer predates the stop');
+});
+
 test('/clear between turns: the open pane follows the new id at the next turn, with no session.start', async () => {
   const { $, start, open, turnStart, turnComplete, render } = bootHooks(binaryScripts());
   await start();

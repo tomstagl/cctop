@@ -601,6 +601,49 @@ test('a fill never replaces a draft: only an empty box is filled; a draft or an 
   assert.ok(!flat((await render(72)).rows).includes("It's in your prompt box"));
 });
 
+test('the fill appends to the box it read empty: a draft typed between the read and the fill is kept', async () => {
+  const raw = withNudge(A38);
+  const { $ } = await boot(raw);
+  $.prompt.typedAfterRead = 'typed meanwhile ';
+  $.ui.press('coach-now-fix-0');
+  await settle();
+  await settle();
+  assert.deepEqual($.prompt.fillModes, ['append']);
+  assert.equal($.prompt.draft, `typed meanwhile ${A38.fix_prompt}`, 'the draft survives, the text after it');
+});
+
+test('a snooze answered after /clear is the old session\'s: it is not taken into the new one', async () => {
+  const raw = moment('waiting');
+  const { $, dispatch, render } = await boot(raw);
+  let answer: (r: ProcessRunResult) => void = () => {};
+  $.process.script[`cctop query coach --snooze-session A41 --session ${SESSION} --surface pane`] = () => new Promise<ProcessRunResult>((resolve) => (answer = resolve));
+  $.ui.press('coach-now-0-gotit');
+  await settle();
+  // `/clear` rotates the id while the binary runs; the new session has no coach yet.
+  $.session.scripted.id = 'rotated-session';
+  $.process.script['cctop query coach --session rotated-session --surface pane'] = new Error('not yet');
+  await dispatch('turn.start', { text: 'hi', turnId: 't1' }, () => ({ turnId: 't1' }));
+  await settle();
+  answer(ok(JSON.stringify({ ...raw, nudge: null, snooze: 'A41 quiet for the session' })));
+  await settle();
+  await settle();
+  assert.ok(!$.ui.toasts.includes('cctop: A41 quiet for the session'), JSON.stringify($.ui.toasts));
+  const rows = (await render(72)).rows;
+  assert.ok(!rows.some((r) => r.includes('quiet · nothing to act on')), JSON.stringify(rows));
+});
+
+test('a coach object before schema 2 (one evidence string, no actions) keeps its evidence row and its fill', () => {
+  const legacy = { ...withNudge(A38) } as Record<string, unknown>;
+  const nudge: Record<string, unknown> = { ...(legacy.nudge as Record<string, unknown>), evidence: 'slowest: `lint` 4.2s', action_text: '/compact ', action_kind: 'slash' };
+  delete nudge.actions;
+  const c = coachOf({ ...legacy, schema: 1, nudge })!;
+  assert.deepEqual(c.nudge!.evidence, ['slowest: `lint` 4.2s']);
+  assert.deepEqual(c.nudge!.actions, [{ kind: 'slash', label: 'fill', payload: '/compact ' }]);
+  // A setting is copied, not filled: no action from it.
+  const setting = coachOf({ ...legacy, schema: 1, nudge: { ...nudge, action_text: '"async": true', action_kind: 'setting' } })!;
+  assert.deepEqual(setting.nudge!.actions, []);
+});
+
 test('the "is in your prompt box" line is said once, even when two cards fill the same command', () => {
   const raw = withNudge(A09);
   const twin = { ...A09, id: 'A99', class: 'LATER', name: 'Another rule to allow' };

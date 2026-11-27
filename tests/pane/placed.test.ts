@@ -80,9 +80,12 @@ test('a located miss is one dim row with the cause and what it re-wrote; an unlo
   const rows = missPlacements(summaryWith([miss(4), miss(5, 'unlocated', 'x'), miss(6, 'expired', 'cache expired', 900)]));
   assert.deepEqual(rows.map((r) => r.id), ['miss-4', 'miss-6']);
   const lines = renderToText(placedTree(rows[0]!.row, null, 100, el, actions), 100);
-  assert.deepEqual(lines, ['cctop  cache miss here: a new MCP tool loaded, 112k tokens re-written']);
+  assert.deepEqual(lines, ['cctop  turn 4 · cache miss here: a new MCP tool loaded, 112k tokens re-written']);
   const priced = missPlacements(summaryWith([miss(8, 'tools_changed', 'a new MCP tool loaded', 112_000, { cost: { value: 2.1, unit: 'USD' }, after_config_change: 'user_settings' })]));
-  assert.deepEqual(renderToText(placedTree(priced[0]!.row, null, 120, el, actions), 120), ['cctop  cache miss here: a new MCP tool loaded, 112k tokens ≈ $2.10 re-written, after a settings change']);
+  assert.deepEqual(renderToText(placedTree(priced[0]!.row, null, 120, el, actions), 120), ['cctop  turn 8 · cache miss here: a new MCP tool loaded, 112k tokens ≈ $2.10 re-written, after a settings change']);
+  // The overview's words for the cause when the binary sends them (one phrasing on both).
+  const worded = missPlacements(summaryWith([{ ...miss(9), located: { kind: 'tools_changed', detail: 'tools changed: +1', words: 'a new MCP tool loaded (mcp__x)' } }]));
+  assert.deepEqual(renderToText(placedTree(worded[0]!.row, null, 120, el, actions), 120), ['cctop  turn 9 · cache miss here: a new MCP tool loaded (mcp__x), 112k tokens re-written']);
   assert.deepEqual(missPlacements({}), []);
 });
 
@@ -112,7 +115,12 @@ async function boot(coach: unknown, summary: unknown, opts: { startTurn?: boolea
     await settle();
   };
   const draw = (id: string) => dispatch<RenderElement>('ui.render', placedRender(id, 100));
-  return { $, dispatch, set, poll, draw };
+  const pane = async (args: string) => {
+    await dispatch('command.run', { command: 'cctop-pane', args, origin: { kind: 'composer' } });
+    await settle();
+    await settle();
+  };
+  return { $, dispatch, set, poll, draw, pane };
 }
 
 test('the pane places a new NOW nudge and a new miss once, and not what stood when it loaded', async () => {
@@ -126,6 +134,22 @@ test('the pane places a new NOW nudge and a new miss once, and not what stood wh
   assert.deepEqual([...$.ui.places].sort(), ['miss-4', 'nudge-6']);
   await poll();
   assert.deepEqual([...$.ui.places].sort(), ['miss-4', 'nudge-6'], 'once each');
+});
+
+test('a reopened pane takes what happened while it was closed as history; a miss after the reopen is placed', async () => {
+  const { $, set, poll, pane } = await boot({ ...idle, nudge: null }, summaryWith([miss(3)]));
+  await poll();
+  await pane('close');
+  // While closed: two misses are located and a NOW nudge fires.
+  set('summary', summaryWith([miss(3), miss(5), miss(6)]));
+  set('coach', nowCoach('NOW', 8));
+  await poll();
+  await pane('coach');
+  await poll();
+  assert.deepEqual($.ui.places, [], 'nothing from the closed period is placed at the reopen point');
+  set('summary', summaryWith([miss(3), miss(5), miss(6), miss(9)]));
+  await poll();
+  assert.deepEqual($.ui.places, ['miss-9']);
 });
 
 test('a first summary that arrives mid-turn is still the baseline; the turn\'s own new miss is placed at its end', async () => {
