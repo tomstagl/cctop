@@ -314,6 +314,20 @@ tr:target td{background:var(--spot-soft)}
 <dt class="act">What to do</dt><dd>Persistent retries point at a network or rate-limit issue outside a single session's control, but this confirms it wasn't something you did.</dd>
 <dt>Measured</dt><dd class="meta">ms · from Claude Code's own cost record · exact · <a href="../metrics.html#retry_time">how</a></dd>
 </dl></article>
+<article class="entry" id="api_retries">
+<div class="mg">
+<h3>API retries</h3>
+</div><dl>
+<dt>What it means</dt><dd>Per turn, <code>gen_ai.request.attempt</code> events beyond the first on each <code>llm_request</code> span joined to the turn's responses by <code>gen_ai.response.id</code> = <code>requestId</code>; the added time is span end − its last attempt event</dd>
+<dt>Measured</dt><dd class="meta">count · from OpenTelemetry · the transcript · exact · <a href="../metrics.html#api_retries">how</a></dd>
+</dl></article>
+<article class="entry" id="hook_overhead">
+<div class="mg">
+<h3>Hook overhead</h3>
+</div><dl>
+<dt>What it means</dt><dd>Sum of <code>claude_code.hook</code> span durations (<code>duration_ms</code>, else span end − start), per <code>hook_event</code>; a span belongs to the turn whose start is the latest not after the span's start; a turn over 500 ms gets an events row</dd>
+<dt>Measured</dt><dd class="meta">ms · from OpenTelemetry · exact · <a href="../metrics.html#hook_overhead">how</a></dd>
+</dl></article>
 <article class="entry" id="phase">
 <div class="mg">
 <h3>Phase</h3>
@@ -392,6 +406,20 @@ tr:target td{background:var(--spot-soft)}
 <dt class="act">What to do</dt><dd>A tool pattern approved the same way repeatedly is a candidate for the allow-list in your settings, which removes the prompt entirely.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A09">A09 Permission waits</a> · <a href="advisor.html#A45">A45 Denial streak</a></dd>
 <dt>Measured</dt><dd class="meta">ms · from hook events (after cctop install) · always an estimate · <a href="../metrics.html#permission_wait">how</a></dd>
+</dl></article>
+<article class="entry" id="permission_decisions">
+<div class="mg">
+<h3>Who decided each wait</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>claude_code.tool.blocked_on_user</code> spans joined to the permission wait of the same <code>tool_use_id</code> (through the parent <code>claude_code.tool</code> span), grouped by <code>source</code>: <code>user</code> shown as you, <code>config</code> as rule, <code>classifier</code>, <code>hook</code>, anything else as other; zero groups omitted</dd>
+<dt>Measured</dt><dd class="meta">count · from hook events (after cctop install) · OpenTelemetry · exact · <a href="../metrics.html#permission_decisions">how</a></dd>
+</dl></article>
+<article class="entry" id="elicitation_wait">
+<div class="mg">
+<h3>MCP prompt wait</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>Elicitation</code> → the next <code>ElicitationResult</code> for the same MCP server (FIFO per server), summed per session with the count and the <code>accept</code> / <code>decline</code> / <code>cancel</code> split; a <code>Stop</code> or the next prompt closes an open one without counting it</dd>
+<dt>Measured</dt><dd class="meta">ms · from hook events (after cctop install) · exact · <a href="../metrics.html#elicitation_wait">how</a></dd>
 </dl></article>
 <article class="entry" id="queued_prompts">
 <div class="mg">

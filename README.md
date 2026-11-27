@@ -341,6 +341,16 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **Rework light** <a id="coach_rework"></a> `coach_rework` | state | Open issues: consecutive failed calls of the turn (denials excluded), corrections (interrupts, rejected calls) in the last three turns, blocked calls; else the source edits since the last confirmed test run. The figure is a state word — `N open`, `N unchecked`, `ok`, or `—` before the session has called anything — never a `0` that means healthy and no data alike. ◐ after 10 min or 14 calls unverified, two fails, a PR without a review, an uncommitted tail; ● on a cascade, a denial streak, a correction streak, destructive git on a dirty tree, a commit without a check | D1 D7 | — | never |
 <!-- metrics:end -->
 
+## OpenTelemetry (optional)
+
+`cctop install --otel` prints the `env` block for `~/.claude/settings.json` (cctop never writes it) and `cctop run --otlp` receives what Claude Code exports on a loopback port: metrics (exact tokens, cost, active time), logs (exact tool durations, API errors) and, since the traces beta, spans. Traces add exact permission-wait deciders (you, a rule, the classifier, a hook), API retries and the time they cost, and hook overhead per turn. The sources view (`m` on Context) shows `otel: metrics · logs · traces`, each lit once data of that kind has arrived.
+
+Traces need two more lines in the block: `OTEL_TRACES_EXPORTER=otlp` and `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`. They are a Claude Code beta and are the only way to see who decided a permission.
+
+**What it costs, and what cctop keeps.** Every exported span carries account identifiers (`user.email`, `user.id`, `organization.id`), and the interaction span carries the prompt unless `OTEL_LOG_USER_PROMPTS` is unset — keep it unset. cctop keeps none of that: its receiver stores an allowlist of timing and outcome attributes per span (never identifiers, prompts, content or tool inputs) and drops the rest even when present. It holds the last 2000 spans per session, refuses bodies over 4 MB, and does not accept protobuf (`http/json` only). Spans whose names it does not know are counted, not stored.
+
+OTel data is live in `cctop run --otlp` only: `cctop query` and the pane run in other processes and do not see it. Without `--otlp`, or without traces, every surface is exactly what it was.
+
 ## Ask your session about it
 
 `cctop query … --json` exposes every number, and the bundled `cctop-insights` skill teaches Claude Code to use it — ask *"why is my cache hit ratio low?"* in the session and get numbers plus one change to make. See [`plugin/skills/cctop-insights/SKILL.md`](plugin/skills/cctop-insights/SKILL.md).

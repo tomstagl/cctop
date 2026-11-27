@@ -614,11 +614,22 @@ pub fn env_block(addr: &str) -> String {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
     "OTEL_METRICS_EXPORTER": "otlp",
     "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_TRACES_EXPORTER": "otlp",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://{addr}",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
     "OTEL_LOGS_EXPORT_INTERVAL": "5000"
   }}
+
+Traces (OTEL_TRACES_EXPORTER, CLAUDE_CODE_ENHANCED_TELEMETRY_BETA) are a Claude
+Code beta: leave both lines out for metrics and logs only. Every exported span
+carries account identifiers (user.email, user.id, organization.id) and the
+interaction span carries the prompt unless OTEL_LOG_USER_PROMPTS is unset. cctop
+keeps none of them: its receiver drops identifiers, prompt and content
+attributes before anything is stored. Keep OTEL_LOG_USER_PROMPTS unset.
+Traces add one more POST per batch to cctop and nothing else; spans beyond the
+last 2000 per session are dropped.
 
 Then run cctop with --otlp (default {DEFAULT_ADDR}).
 "#
@@ -1066,6 +1077,19 @@ mod tests {
         assert_eq!(s.durations_by_tool()["Bash"], vec![640]);
         assert!(serve("0.0.0.0:0", None).is_err(), "non-loopback refused");
         assert!(env_block(DEFAULT_ADDR).contains("http/json"));
+    }
+
+    #[test]
+    fn env_block_turns_traces_on_and_says_what_cctop_drops() {
+        let b = env_block(DEFAULT_ADDR);
+        assert!(b.contains(r#""OTEL_TRACES_EXPORTER": "otlp""#), "{b}");
+        assert!(
+            b.contains(r#""CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1""#),
+            "{b}"
+        );
+        assert!(b.contains("a Claude\nCode beta"), "{b}");
+        assert!(b.contains("cctop\nkeeps none of them"), "{b}");
+        assert!(b.contains("Keep OTEL_LOG_USER_PROMPTS unset"), "{b}");
     }
 }
 

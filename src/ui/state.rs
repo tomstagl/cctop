@@ -1518,6 +1518,21 @@ impl State {
         out
     }
 
+    /// Which OTel signals have delivered data: `(metrics, logs, traces)`;
+    /// `None` when no receiver data was ever applied.
+    pub fn otel_signals(&self) -> Option<(bool, bool, bool)> {
+        let o = self.otel.as_ref()?;
+        Some((
+            !o.tokens.is_empty()
+                || o.cost_usd > 0.0
+                || o.active_time_s > 0.0
+                || o.lines_added > 0.0
+                || o.lines_removed > 0.0,
+            !o.api_requests.is_empty() || o.api_errors > 0 || !o.tool_results.is_empty(),
+            !o.spans.is_empty() || o.unknown_spans > 0,
+        ))
+    }
+
     /// Session hook overhead for `cctop query dashboard`: `None` without
     /// trace spans, else the total and the time per `hook_event`.
     pub fn hook_overhead(&self) -> Option<(u64, std::collections::BTreeMap<String, u64>)> {
