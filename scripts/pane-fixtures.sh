@@ -24,7 +24,7 @@ session=${1:-fixtures/session-a.jsonl}
 suffix=${2:+-$2}
 out=tests/pane/fixtures
 mkdir -p "$out"
-for verb in summary dashboard tools files agents advice coach events; do
+for verb in summary dashboard overview tools files agents advice coach events; do
   cargo run -q -- query "$verb" --session "$session" > "$out/$verb$suffix.json"
   echo "$out/$verb$suffix.json"
 done
@@ -67,15 +67,13 @@ print()
   echo "$out/overview-cells-b.json"
 fi
 
-# The overview object the pane draws (`cctop query overview`): fixture B at the
-# binary's default, and a synthetic 300-turn session at the turns that fit a
+# The overview object at length (`overview<suffix>.json` above is each
+# fixture's at the binary's default): a synthetic 300-turn session at the turns that fit a
 # 105-column pane body (two cells a turn: `--max-turns 18`), for the "last N
 # turns" form. The synthetic transcript is generated here and thrown away: a
 # prompt, one Bash call and one answer per turn, the shapes the Rust tests
 # build (src/advisor/rules/mod.rs `fixtures`).
 if [[ "$session" == fixtures/session-b.jsonl ]]; then
-  cargo run -q -- query overview --session "$session" > "$out/overview-b.json"
-  echo "$out/overview-b.json"
   tmp=$(mktemp -d)
   long="$tmp/session-long.jsonl"
   python3 - "$long" <<'EOF'

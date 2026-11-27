@@ -101,6 +101,12 @@ let chartsTimer: Timer | null = null;
 let chartsBusy = false;
 let chartsAgain = false;
 let probeTimer: Timer | null = null;
+// The overview's object is read again with the next refresh: its charts came
+// into view, or the turns that fit the width changed.
+let chartsQuery = false;
+// Probe blits sent this session that came back saying nothing of the terminal.
+let probeTries = 0;
+const PROBE_TRIES = 5;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -192,11 +198,9 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): vo
   // A new width is a full redraw of the overview: its pictures at the new
   // sizes, and its object again when the turns that fit changed.
   if (overviewShown(model) && model.bodyColumns !== before.bodyColumns) {
+    // The read, like the pictures, a timer away: nothing is spawned from the render hook.
+    if (before.bodyColumns === null || maxTurnsFor(before.bodyColumns) !== maxTurnsFor(e.props.bodyColumns)) chartsQuery = true;
     scheduleCharts($);
-    if (before.bodyColumns === null || maxTurnsFor(before.bodyColumns) !== maxTurnsFor(e.props.bodyColumns)) {
-      // A timer away, as the pictures: nothing is spawned from the render hook.
-      $.clock.after(1, () => poller?.pollNow());
-    }
   }
   stopHiddenTimer();
   unpinStatus($);
@@ -342,16 +346,20 @@ function modeOf(m: Model): ChartsMode {
 function overviewChanged($: EngineInterface, before: Model): void {
   if (!overviewShown(model)) return;
   const opened = !overviewShown(before);
-  if (opened) poller?.pollNow();
+  if (opened) chartsQuery = true;
   if (opened || model.query.overview !== before.query.overview || model.charts !== before.charts) scheduleCharts($);
 }
 
 // One refresh of the overview's pictures, a timer away: never inside a hook
 // (the render hook among them), and the triggers of one moment fold into it.
+// When asked, the overview's verb is read first, on its own.
 function scheduleCharts($: EngineInterface): void {
   if (chartsTimer !== null) return;
   chartsTimer = $.clock.after(1, () => {
     chartsTimer = null;
+    const ask = chartsQuery;
+    chartsQuery = false;
+    if (ask) void poller?.queryNow('overview');
     void refreshCharts($).catch((err: unknown) => $.ui.log(`cctop: charts failed: ${String(err)}`));
   });
 }
@@ -410,6 +418,13 @@ async function refreshCharts($: EngineInterface): Promise<void> {
   }
 }
 
+function stopChartTimers(): void {
+  chartsTimer?.cancel();
+  chartsTimer = null;
+  probeTimer?.cancel();
+  probeTimer = null;
+}
+
 // Swaps one mounted picture: an Image's source or a Raster's cells, at the
 // size it is mounted. True when the surface took it.
 function blitPicture($: EngineInterface, key: string, picture: Picture): Promise<boolean> {
@@ -441,7 +456,7 @@ function picturesForRender(): Pictures {
 // After a render that drew an Image while the terminal's answer is not known:
 // the probe blit (§5.3) once the Image is mounted, a moment after the tree.
 function probeAfterRender($: EngineInterface): void {
-  if (probeTimer !== null || model.charts === null || model.charts.probe !== 'unknown') return;
+  if (probeTimer !== null || probeTries >= PROBE_TRIES || model.charts === null || model.charts.probe !== 'unknown') return;
   const first = [...mounted.entries()].find(([, p]) => p.kind === 'image');
   if (first === undefined) return;
   const [key, picture] = first;
@@ -566,13 +581,18 @@ export function chartsRenderer(): ChartRenderer | null {
 }
 
 // The probe blit (§5.3): the first time a chart is drawn as an `Image`, the
-// same source is blitted once. A `deny` means the terminal draws the alt, so
-// the session is cells; `fix` (tmux's passthrough) goes to the marker.
+// same source is blitted once. A `deny` naming the alt means the terminal
+// draws the alt, so the session is cells; `fix` (tmux's passthrough) goes to
+// the marker. A deny that says nothing of the terminal (not mounted yet, no
+// surface) leaves it unknown: a later render tries again, PROBE_TRIES times.
 export async function probeCharts($: EngineInterface, requestId: string, key: string, png: string): Promise<void> {
   if (model.charts === null || model.charts.probe !== 'unknown') return;
   try {
+    probeTries += 1;
     const answer = await $.ui.blit({ requestId, key, source: { png } });
-    apply($, { type: 'charts.probe', probe: probeOf(answer), ...(answer.fix !== undefined ? { fix: answer.fix } : {}) });
+    const probe = probeOf(answer);
+    if (probe === 'unknown') return;
+    apply($, { type: 'charts.probe', probe, ...(answer.fix !== undefined ? { fix: answer.fix } : {}) });
     updateMarker($);
     invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   } catch (err) {
@@ -1031,6 +1051,7 @@ function paneClosed($: EngineInterface): void {
   stopUsageTimer();
   stopRenderTimer();
   stopHiddenTimer();
+  stopChartTimers();
   unpinStatus($);
   if (model.coachStatus !== null) {
     $.ui.status(undefined);
@@ -1201,12 +1222,11 @@ export const register: Register = (on) => {
   chartRenderer = null;
   pictures = new Map();
   mounted = new Map();
-  chartsTimer?.cancel();
-  chartsTimer = null;
   chartsBusy = false;
   chartsAgain = false;
-  probeTimer?.cancel();
-  probeTimer = null;
+  stopChartTimers();
+  probeTries = 0;
+  chartsQuery = false;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.

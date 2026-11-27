@@ -474,22 +474,33 @@ function renderInline(model: Model, el: ViewElements, columns: number, now: numb
 }
 
 /**
- * Body 1 is the overview (mod-pane US-007): the charts of `cctop query
- * overview`, as the TUI's body 1 draws them, with the pictures pane.tsx
- * rendered for them; a line until the binary has answered.
+ * Body 1 is the overview (mod-pane US-007), what the Overview opens on
+ * (spec §5.2, POC 7): the charts of `cctop query overview` at the TUI's
+ * sizes, with the pictures pane.tsx rendered for them and the act line (the
+ * nudge) pinned under them above the footer; a line until the binary has
+ * answered.
  */
-function overviewBody(model: Model, el: ViewElements, columns: number, buttons: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts } | undefined): RenderElement {
+function overviewBody(model: Model, el: ViewElements, columns: number, buttons: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts } | undefined, pinned: RenderElement[]): RenderElement {
+  const { Box } = el;
   const o = overviewOf(model.query.overview);
   if (o === null) {
     const text = isSupported(model, 'overview') ? 'waiting for cctop query overview…' : `overview: ${UNSUPPORTED}`;
-    return textRow([dim(` ${text}`)], el, 'body_context');
+    return (
+      <Box flexDirection="column">
+        {textRow([dim(` ${text}`)], el, 'body_context')}
+        {pinned}
+      </Box>
+    );
   }
-  const bare = { ...el, Button: el.Box, Raster: el.Box, Image: el.Box } as unknown as ChartElements;
+  // Without the terminal's table (another surface, a test's bare elements)
+  // the pictures are blank boxes; the turn numbers keep Console's Buttons.
+  const bare = { ...el, Button: buttons?.el.Button ?? el.Box, Raster: el.Box, Image: el.Box } as unknown as ChartElements;
   const actions = buttons?.actions;
   return renderOverviewCharts(o, columns, {
     el: buttons?.charts?.el ?? bare,
     ...(buttons?.charts ? { pictures: buttons.charts.pictures } : {}),
     readouts: model.readouts,
+    pinned,
     ...(actions ? { actions: { readout: (chart: string, turn: number) => actions.readout(chart, turn) } } : {}),
   });
 }
@@ -535,11 +546,13 @@ export function renderOverview(
   // The workflow strip, verbatim, above the cells while a run is live (the TUI's row 2).
   if (d.workflow !== null) body.push(textRow(fit(d.workflow, columns), el, 'workflow_failed'));
   body.push(...cellRows(d, open, columns, bel, actions));
-  body.push(...actRows(d, open, columns, bel, actions));
+  const acts = actRows(d, open, columns, bel, actions);
   const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];
+  // Over the charts the act line is pinned beneath them; over a body, above it.
+  if (shown?.id !== 'context') body.push(...acts);
   if (shown !== undefined) {
     body.push(ruleRow(shown, model.keys, columns, bel, actions));
-    if (shown.id === 'context') body.push(overviewBody(model, el, columns, buttons));
+    if (shown.id === 'context') body.push(overviewBody(model, el, columns, buttons, acts));
     else shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
   }
   return <Box flexDirection="column">{body}</Box>;

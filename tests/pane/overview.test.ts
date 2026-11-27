@@ -48,7 +48,10 @@ function build(opts: Options = {}): Model {
   if (opts.summary ?? true) actions.push({ type: 'query', verb: 'summary', data: fixture('summary') });
   const dash = opts.dashboard ?? true;
   if (dash !== false) actions.push({ type: 'query', verb: 'dashboard', data: dash === true ? fixture('dashboard') : dash });
-  if (opts.body !== undefined) actions.push({ type: 'overview.body', id: opts.body });
+  // The bodies as the TUI opens Console (events, the way home): the TUI
+  // snapshots these rows are compared with. The pane's own default, the
+  // overview's charts, is tested below and in overview-charts.test.ts.
+  actions.push({ type: 'overview.body', id: opts.body ?? 'events' });
   return actions.reduce(reduce, initialModel());
 }
 
@@ -411,4 +414,41 @@ test('the rules badge renders row-identical on both surfaces and is absent witho
   const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
   assert.doesNotMatch(pane40, /ZDR/);
   assert.equal(pane40, snapRow('header_rules_hooks_40'));
+});
+
+// Spec §5.2 / POC 7: the Overview opens on the charts (body 1), the act line
+// (the nudge) pinned under them above the footer; `0` still goes home.
+test('the Overview opens on the charts, the act line pinned under them above the footer', () => {
+  const model = [
+    { type: 'binary', binary: 'present' },
+    { type: 'query', verb: 'dashboard', data: fixture('dashboard-b') },
+    { type: 'query', verb: 'overview', data: fixture('overview-b') },
+  ].reduce((m, a) => reduce(m, a as Action), initialModel());
+  assert.equal(model.body, 'context');
+  const lines = raw(model, 105, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined });
+  const rule = lines.findIndex((l) => l.startsWith('─── context '));
+  assert.ok(rule > 0, JSON.stringify(lines));
+  assert.ok(lines[rule + 1]?.startsWith(' Context window'), lines[rule + 1]);
+  const act = lines.findIndex((l) => l.startsWith(' ▸ '));
+  assert.ok(act > rule, `the act line is under the charts: ${act} > ${rule}`);
+  assert.equal(lines.at(-1), ' spent so far $18.75 · what this session would cost at API prices');
+  assert.ok(act < lines.length - 1);
+  // Before the overview arrives: the waiting line, the act line under it.
+  const waiting = raw(reduce(model, { type: 'query', verb: 'overview', data: null }), 105);
+  assert.equal(waiting[waiting.findIndex((l) => l.startsWith('─── context ')) + 1], ' waiting for cctop query overview…');
+  assert.ok(waiting.at(-1)?.startsWith(' ') && waiting.some((l) => l.startsWith(' ▸ ')));
+});
+
+// A surface without Raster and Image (no terminal table): the pictures are
+// blank boxes, but the turn numbers are still Console's Buttons, not gone.
+test('without the terminal\'s table the turn numbers stay Buttons', () => {
+  const model = [
+    { type: 'binary', binary: 'present' },
+    { type: 'query', verb: 'dashboard', data: fixture('dashboard-b') },
+    { type: 'query', verb: 'overview', data: fixture('overview-b') },
+  ].reduce((m, a) => reduce(m, a as Action), initialModel());
+  const actions = { open: () => undefined, keys: () => undefined, readout: () => undefined };
+  const tree = renderOverview(model, el, 105, 'dock', NOW, { el, actions });
+  assert.ok(buttons(tree).some((b) => b.props?.key === 'turn-cost_per_turn-3'));
+  has(renderToText(tree, 105), /│ +1  2  3  4  5  6$/);
 });

@@ -61,9 +61,17 @@ export function decideCharts(env: ChartsEnv, probe: Probe): ChartsMode {
 /** What `$.ui.blit` answered, as far as the probe reads it. */
 export type BlitAnswer = { deny?: string; fix?: string };
 
-/** A blit that took the source: the terminal draws pictures. Any `deny`: it draws the alt. */
+/**
+ * What a probe blit says of the terminal: a taken source, pictures; a deny
+ * that names the alt (or tmux's passthrough code), the terminal draws the
+ * alt there, so cells. Any other deny — not mounted yet, another size, a bad
+ * source, `no-surface` — says nothing of the terminal: still unknown, and the
+ * next draw tries again.
+ */
 export function probeOf(answer: BlitAnswer): Probe {
-  return answer.deny === undefined ? 'ok' : 'denied';
+  if (answer.deny === undefined) return 'ok';
+  if (answer.fix === 'tmux-passthrough' || /\balt\b|placeholder/i.test(answer.deny)) return 'denied';
+  return 'unknown';
 }
 
 /** Whether the wasm is there: not tried, loaded, or failed to compile or instantiate. */

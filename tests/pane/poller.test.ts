@@ -56,7 +56,7 @@ function binaryScripts(help = HELP): Record<string, ProcessScript> {
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-// The verbs a round runs while body 1 is not shown: all but the overview's.
+// The verbs a round runs while the Overview's charts are not shown (the pane closed, another view): all but the overview's.
 const POLLED = QUERY_VERBS.filter((v) => v !== 'overview');
 
 // The queries spawned so far, `summary` alone or every verb.
@@ -379,8 +379,9 @@ test('a rotated session id: the next tick follows it, swaps the markers and drop
   assert.equal(next?.sessionId, NEXT);
   assert.equal(next?.loaded, true);
   assert.equal(next?.openedAt, new Date(T0).toISOString(), 'the pane was not reopened');
-  const tick2 = queries($).slice(POLLED.length);
-  assert.equal(tick2.length, POLLED.length, 'the same round queried the new id');
+  // Open on the Overview's charts: the round reads the overview too.
+  const tick2 = queries($).slice(QUERY_VERBS.length);
+  assert.equal(tick2.length, QUERY_VERBS.length, 'the same round queried the new id');
   assert.ok(tick2.every((argv) => argv[4] === NEXT), JSON.stringify(tick2));
   assert.ok(!$.ui.logs.some((l) => l.includes('no session matches')), 'the old id is never queried again');
   assert.equal($.process.calls.filter((argv) => argv[2] === '--help').length, 1, 'the verbs are the binary’s, read once');
