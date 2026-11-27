@@ -555,6 +555,10 @@ mod tests {
 
     #[test]
     fn a09_permission_waits_use_claude_codes_rule_and_never_bare_bash() {
+        assert!(
+            PermissionWaits.evaluate(&witness::a09_two()).is_none(),
+            "two asks"
+        );
         let mut s = witness::a09();
         let a = PermissionWaits.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "You've approved gh api 3 times (0:45 waiting)");

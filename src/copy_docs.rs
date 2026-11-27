@@ -20,12 +20,18 @@ pub struct Fired {
     pub actions: Vec<(String, String, String)>,
 }
 
+/// Where the fixture sessions are: the repository's `fixtures/`, read at
+/// run time (nothing is embedded in the binary).
+pub fn fixtures_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
+}
+
 /// Fire every rule on the fixture sessions, fed line by line and read at
 /// 40 points and at two clocks (live, and ten minutes idle): the same
 /// sweep as the rules' own whole-words test. Keyed by `(rule id, variant)`.
 pub fn fired_examples() -> std::collections::BTreeMap<(String, String), Fired> {
     use crate::ui::state::{SessionInfo, State};
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+    let root = fixtures_dir();
     let rules = rules::all();
     let mut out: std::collections::BTreeMap<(String, String), Fired> = Default::default();
     for name in ["a", "b", "c", "d", "e", "r", "s", "t", "w", "w-live"] {

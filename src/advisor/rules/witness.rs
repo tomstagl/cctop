@@ -436,6 +436,16 @@ pub(crate) fn permission_ask(s: &mut State, cmd: &str, suggestion: Option<&str>)
     s.apply_hook(&crate::hooks::HookEvent::from_stdin(0, payload).unwrap());
 }
 
+/// A09 below its bar: two approvals of `gh api`.
+#[cfg(test)]
+pub(crate) fn a09_two() -> State {
+    let mut s = State::new(Pricing::bundled());
+    s.apply(&prompt("2026-01-01T00:00:00Z"));
+    permission_ask(&mut s, "gh api repos/x", None);
+    permission_ask(&mut s, "gh api repos/y --jq .id", Some("gh api:*"));
+    s
+}
+
 /// A09: three approvals of `gh api`, 45 seconds of waiting, Claude Code's
 /// own suggestion for the rule.
 pub(crate) fn a09() -> State {
