@@ -23,6 +23,7 @@ pub fn tools() -> Vec<Value> {
         json!({"name":"cctop_advice","description":"The coach's nudge (primary: class, headline, action_text, evidence, saving, explanation), the ranked queue, snoozed rules, session mode.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_coach","description":"The coach: state line, four lights (context, cache, limits, rework), the nudge to act on now, what is next or snoozed.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_prefix","description":"What is in the context window: what rides on every request (CLAUDE.md, tool schemas, skills, memory) and, as `sources`, the rest by kind since the last boundary, with per-file tokens.","inputSchema":obj(json!({"session":session}), vec![])}),
+        json!({"name":"cctop_lineage","description":"The session chain: ancestors, descendants, cost per member and in total, missing transcripts.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_events","description":"Recent events (tool start/end, hooks, permissions, compactions, alerts). `since` like 10m, 2h.","inputSchema":obj(json!({"session":session,"since":{"type":"string"}}), vec![])}),
         json!({"name":"cctop_explain_metric","description":"Definition, formula, sources and caveats of a metric id from docs/metrics.md.","inputSchema":obj(json!({"metric_id":{"type":"string"}}), vec!["metric_id"])}),
     ]
@@ -86,6 +87,20 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
             let mut v = query::prefix(&state);
             v["sources"] = query::sources(&state);
             Ok(v)
+        }
+        "cctop_lineage" => {
+            let t = Target {
+                session: args
+                    .get("session")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(parent_session),
+                cwd: None,
+                wait: false,
+                lines: None,
+            };
+            let (path, _) = crate::load::resolve(&t).map_err(|e| e.to_string())?;
+            Ok(query::lineage(&path))
         }
         "cctop_events" => {
             let since = match args.get("since").and_then(Value::as_str) {
@@ -185,9 +200,9 @@ mod tests {
             );
             assert!(t["inputSchema"]["type"] == "object");
         }
-        assert_eq!(tools().len(), 9);
+        assert_eq!(tools().len(), 10);
         let tokens = schema_tokens();
-        assert!(tokens < 800, "schemas ≈ {tokens} tokens");
+        assert!(tokens < 900, "schemas ≈ {tokens} tokens");
     }
 
     #[test]
@@ -222,7 +237,7 @@ mod tests {
         );
         assert_eq!(lines[0]["result"]["serverInfo"]["name"], "cctop");
         assert_eq!(lines[0]["result"]["protocolVersion"], PROTOCOL_VERSION);
-        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 9);
+        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 10);
         let summary: Value =
             serde_json::from_str(lines[2]["result"]["content"][0]["text"].as_str().unwrap())
                 .unwrap();

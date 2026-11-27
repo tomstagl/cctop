@@ -26,6 +26,7 @@ pub mod hooks;
 pub mod insights;
 pub mod install;
 pub mod ledger;
+pub mod lineage;
 pub mod load;
 pub mod mcp;
 pub mod metrics;

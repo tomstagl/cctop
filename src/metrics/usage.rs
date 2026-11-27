@@ -391,6 +391,9 @@ pub struct Aggregate {
     /// when the transcript is a teammate's, so a teammate attached as the
     /// main session shows its team.
     pub team: Option<(String, String)>,
+    /// `(id, via)` of the first entry of the last `derived-from` line: the
+    /// session this one was started from and how (`clear`, `subprocess` …).
+    pub derived_from: Option<(String, String)>,
     /// Interrupts, in order: `(turn, tool calls so far)`.
     pub interrupts: Vec<(usize, usize)>,
     /// The `/model`, `/effort`, `/clear` … lines seen, with the turn.
@@ -747,6 +750,13 @@ impl Aggregate {
                 if let Some(t) = self.turns.last_mut() {
                     t.checkpoints += 1;
                 }
+            }
+            Line::DerivedFrom(d) => {
+                self.derived_from = d
+                    .sessions
+                    .first()
+                    .filter(|s| !s.id.is_empty())
+                    .map(|s| (s.id.clone(), s.via.clone()));
             }
             Line::ContinuedIn(c) => {
                 let turn = self.turn_number();

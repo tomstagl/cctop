@@ -158,6 +158,10 @@ pub struct Header {
     /// (its lines carry `agentName` / `teamName`); absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
+    /// `from <id8> · <via>` when the transcript says the session was started
+    /// from another (`derived-from`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     pub phase: PhaseCell,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
@@ -457,6 +461,14 @@ fn header(state: &State, c: &Coach) -> Header {
     if let Some(t) = &team {
         parts.push(t.clone());
     }
+    let from = state
+        .agg
+        .derived_from
+        .as_ref()
+        .map(|(id, via)| crate::lineage::header_text(id, via));
+    if let Some(f) = &from {
+        parts.push(f.clone());
+    }
     // The workspace items come before the PR and the version, so a narrow
     // row cuts those first (`fit_workspace` then drops items from the right).
     let workspace = workspace_items(&state.status_facts);
@@ -476,6 +488,7 @@ fn header(state: &State, c: &Coach) -> Header {
         cwd,
         pr,
         team,
+        from,
         phase: PhaseCell {
             glyph,
             word,
@@ -2275,6 +2288,29 @@ mod tests {
         assert_eq!(d.header.team, None);
         let v = serde_json::to_value(&d).unwrap();
         assert!(v["header"].get("team").is_none());
+    }
+
+    #[test]
+    fn a_derived_session_names_its_origin_in_the_header() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.from.as_deref(), Some("from 65b51d4c · subprocess"));
+        assert!(
+            d.header.line.contains(" · from 65b51d4c · subprocess"),
+            "{}",
+            d.header.line
+        );
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["header"]["from"], "from 65b51d4c · subprocess");
+        let (s, e) = fixture_b();
+        assert_eq!(snapshot(&s, &e).header.from, None);
     }
 
     /// Schema 2 (US-102): six cells with contiguous keys, the act line,

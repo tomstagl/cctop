@@ -753,6 +753,13 @@ pub fn advice_of(engine: &advisor::Engine) -> Value {
     })
 }
 
+/// The session's chain: ancestors, descendants and the chain's cost, from
+/// the transcript at `path` and the transcripts under `~/.claude/projects`.
+pub fn lineage(path: &std::path::Path) -> Value {
+    let root = crate::baseline::default_projects_dir().unwrap_or_default();
+    serde_json::to_value(crate::lineage::chain(path, &root)).unwrap_or(Value::Null)
+}
+
 pub fn prefix(state: &State) -> Value {
     let ctx = state.context();
     let rows: Vec<Value> = state
