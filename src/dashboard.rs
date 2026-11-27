@@ -163,6 +163,11 @@ pub struct Header {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
     pub phase: PhaseCell,
+    /// `hooks: 7 new`, amber, between the facts and the phase cell: the
+    /// installed hooks lack events this cctop would add (`cctop install`).
+    /// Absent when the install is current, not installed, or a fixture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<String>,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
     /// Inside `line`, before the PR and the version; both surfaces drop
@@ -500,6 +505,8 @@ fn header(state: &State, c: &Coach) -> Header {
                 .unwrap_or_else(|| "—".into()),
             tokens: c.state.tokens.clone(),
         },
+        hooks: (!state.hooks_missing.is_empty())
+            .then(|| format!("hooks: {} new", state.hooks_missing.len())),
         workspace,
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),

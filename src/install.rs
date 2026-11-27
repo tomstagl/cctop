@@ -78,6 +78,51 @@ pub fn uninstall_transform(settings: &Value) -> Value {
     crate::hooks::without_hooks(&without_shim(settings))
 }
 
+/// The events in `hooks::EVENTS` that have no `cctop hook` entry in these
+/// settings, in `EVENTS` order. An old install lists the events added since.
+pub fn hooks_missing(settings: &Value) -> Vec<&'static str> {
+    crate::hooks::EVENTS
+        .iter()
+        .copied()
+        .filter(|ev| {
+            !settings
+                .get("hooks")
+                .and_then(|h| h.get(*ev))
+                .and_then(Value::as_array)
+                .is_some_and(|groups| {
+                    groups.iter().any(|g| {
+                        g.get("hooks").and_then(Value::as_array).is_some_and(|hs| {
+                            hs.iter().any(|h| {
+                                h.get("command").and_then(Value::as_str)
+                                    == Some(crate::hooks::HOOK_COMMAND)
+                            })
+                        })
+                    })
+                })
+        })
+        .collect()
+}
+
+/// What an old install should be told: the number of missing events, only
+/// when cctop's hooks are installed at all (nothing installed is the
+/// existing "run cctop install" hint, not "new events").
+pub fn hooks_missing_of_install(settings: &Value) -> Vec<&'static str> {
+    let missing = hooks_missing(settings);
+    if missing.len() == crate::hooks::EVENTS.len() {
+        Vec::new()
+    } else {
+        missing
+    }
+}
+
+/// `7 new events, run cctop install` for the sources view and `pane status`.
+pub fn hooks_missing_text(n: usize) -> String {
+    format!(
+        "hooks: {n} new event{}, run cctop install",
+        if n == 1 { "" } else { "s" }
+    )
+}
+
 pub fn pretty(v: &Value) -> String {
     let mut s = serde_json::to_string_pretty(v).unwrap_or_default();
     s.push('\n');
@@ -198,6 +243,78 @@ mod tests {
         let w = with_shim(&empty);
         assert_eq!(w["statusLine"]["command"], "cctop statusline-shim");
         assert_eq!(without_shim(&w), empty);
+    }
+
+    /// The 22 events cctop registered before the seven were added.
+    fn old_install() -> Value {
+        let user = json!({"hooks": {"PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"lint.sh"}]}]}});
+        let mut out = crate::hooks::with_hooks(&user);
+        for ev in &crate::hooks::EVENTS[22..] {
+            out["hooks"].as_object_mut().unwrap().remove(*ev);
+        }
+        out
+    }
+
+    #[test]
+    fn hooks_missing_lists_new_events() {
+        let old = old_install();
+        let missing = hooks_missing(&old);
+        assert_eq!(missing, &crate::hooks::EVENTS[22..]);
+        assert_eq!(missing.len(), 7);
+        assert_eq!(hooks_missing_of_install(&old).len(), 7);
+        assert!(hooks_missing(&install_transform(&old)).is_empty());
+        // Nothing installed: all 29 are missing, but it is not an old install.
+        assert_eq!(hooks_missing(&json!({})).len(), 29);
+        assert!(hooks_missing_of_install(&json!({})).is_empty());
+        assert_eq!(
+            hooks_missing_text(7),
+            "hooks: 7 new events, run cctop install"
+        );
+    }
+
+    #[test]
+    fn install_adds_exactly_seven() {
+        let old = old_install();
+        let new = install_transform(&old);
+        for ev in &crate::hooks::EVENTS[..22] {
+            assert_eq!(new["hooks"][*ev], old["hooks"][*ev], "{ev} untouched");
+        }
+        for ev in &crate::hooks::EVENTS[22..] {
+            assert_eq!(new["hooks"][*ev].as_array().unwrap().len(), 1, "{ev}");
+        }
+        assert_eq!(install_transform(&new), new, "idempotent");
+        let d = diff(&pretty(&old), &pretty(&new), Path::new("s.json"));
+        assert!(d.contains("+    \"Elicitation\": ["), "{d}");
+        assert_eq!(
+            d.matches("+            \"command\": \"cctop hook\"")
+                .count(),
+            7,
+            "{d}"
+        );
+    }
+
+    #[test]
+    fn install_beside_user_hooks() {
+        // A user hook on a new event, and one on a NEVER event, both kept.
+        let user = json!({"hooks": {
+            "ConfigChange": [{"hooks":[{"type":"command","command":"audit.sh"}]}],
+            "WorktreeCreate": [{"hooks":[{"type":"command","command":"mkwt.sh"}]}],
+        }});
+        let w = install_transform(&user);
+        assert_eq!(
+            w["hooks"]["ConfigChange"][0]["hooks"][0]["command"],
+            "audit.sh"
+        );
+        assert_eq!(w["hooks"]["ConfigChange"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            w["hooks"]["WorktreeCreate"],
+            user["hooks"]["WorktreeCreate"]
+        );
+        assert_eq!(
+            uninstall_transform(&w),
+            user,
+            "uninstall restores the user's"
+        );
     }
 
     #[test]

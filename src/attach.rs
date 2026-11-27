@@ -150,6 +150,7 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
     }
     if app.state.session.pid.is_some() {
         app.state.load_autocompact();
+        app.state.load_hooks_missing();
     }
     // `~/.claude/usage-data`: Claude Code's own analysis, at attach and
     // whenever `/insights` writes a new file.

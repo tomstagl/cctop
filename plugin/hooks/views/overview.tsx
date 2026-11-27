@@ -105,6 +105,8 @@ export type Dashboard = {
   headerLine: string;
   /** The header's workspace items (`header.workspace`), priority order, inside `headerLine`; dropped from the right to fit. */
   workspace: string[];
+  /** The amber hooks badge (`header.hooks`, `hooks: 7 new`) between the facts and the phase; null when the install is current. */
+  hooksBadge: string | null;
   /** The header's second row, the workflow strip, while a run is live (`header.workflow`); null otherwise. */
   workflow: Seg[] | null;
   phase: { glyph: string; word: string; elapsed: string; tokens: string[] };
@@ -167,6 +169,7 @@ export function dashboardOf(query: unknown): Dashboard | null {
     schema: SCHEMA,
     headerLine: stringAt(query, 'header', 'line') ?? '',
     workspace: strings(at(query, 'header', 'workspace')),
+    hooksBadge: stringAt(query, 'header', 'hooks') ?? null,
     workflow: Array.isArray(at(query, 'header', 'workflow')) ? segsOf(at(query, 'header', 'workflow')) : null,
     phase: {
       glyph: stringAt(phase, 'glyph') ?? '○',
@@ -250,12 +253,14 @@ export function fitWorkspace(facts: string, items: string[], room: number): stri
 function headerLine(d: Dashboard, columns: number): Line {
   const facts = d.headerLine.replace(/^cctop\s+/, '');
   const phaseText = clip(`${d.phase.glyph} ${d.phase.word} ${d.phase.elapsed}`, Math.min(40, Math.max(0, columns - 10)));
-  const factsRoom = Math.max(0, columns - 8 - width(phaseText) - 2);
+  const badge = d.hooksBadge ?? '';
+  const badgeRoom = badge === '' ? 0 : width(badge) + 2;
+  const factsRoom = Math.max(0, columns - 8 - width(phaseText) - 2 - badgeRoom);
   const factsText = clip(fitWorkspace(facts, d.workspace, factsRoom), factsRoom);
-  const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText));
+  const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText) - badgeRoom);
   const phaseStyle: Omit<Seg, 'text'> =
     d.phase.glyph === '◆' ? { color: THEME.yellow, bold: true } : d.phase.glyph === '○' ? { dim: true, bold: true } : { color: THEME.green, bold: true };
-  return [seg(' cctop  ', { color: ACCENT, bold: true }), dim(factsText), seg(' '.repeat(padCells)), seg(phaseText, phaseStyle)];
+  return [seg(' cctop  ', { color: ACCENT, bold: true }), dim(factsText), seg(' '.repeat(padCells)), ...(badge === '' ? [] : [seg(`${badge}  `, { color: THEME.yellow })]), seg(phaseText, phaseStyle)];
 }
 
 /** The cell text form for the width: wide at ≥ 80 columns, mid at cells ≥ 28, short below. */

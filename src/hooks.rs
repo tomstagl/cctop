@@ -32,6 +32,31 @@ pub const EVENTS: &[&str] = &[
     "Stop",
     "StopFailure",
     "SessionEnd",
+    // Added in 0.10: each is safe for a hook that prints nothing and exits 0.
+    "Elicitation",
+    "ElicitationResult",
+    "ConfigChange",
+    "CwdChanged",
+    "DirectoryAdded",
+    "TeammateIdle",
+    "PreSkillShellCommand",
+];
+
+/// Events cctop never subscribes to: a registered hook changes Claude Code's
+/// behaviour or has no value for a silent observer. `without_hooks` still
+/// strips cctop's entry from them, in case an older or hand-edited install
+/// put one there.
+pub const NEVER: &[&str] = &[
+    // The hook replaces worktree creation (stdout is the path): silence breaks it.
+    "WorktreeCreate",
+    // Same family: the hook performs the removal.
+    "WorktreeRemove",
+    // Carries the assistant's text and can replace what is displayed: prose, in the display path.
+    "MessageDisplay",
+    // Fires only for init/maintenance; exit-0 stdout goes to Claude as context.
+    "Setup",
+    // Needs a matcher naming files to watch, which cctop has no reason to choose.
+    "FileChanged",
 ];
 
 /// Bound on the command text kept from a `tool_input` or a background task.
@@ -280,7 +305,7 @@ pub fn with_hooks(settings: &Value) -> Value {
         .as_object_mut()
         .map(|m| m.entry("hooks").or_insert_with(|| serde_json::json!({})))
         .expect("settings is an object");
-    for ev in EVENTS {
+    for ev in EVENTS.iter().filter(|e| !NEVER.contains(e)) {
         let arr = hooks
             .as_object_mut()
             .map(|m| m.entry(*ev).or_insert_with(|| serde_json::json!([])))
@@ -421,7 +446,7 @@ mod tests {
             ev.payload["permission_suggestions"][0]["rules"][0]["ruleContent"],
             "gh api:*"
         );
-        assert_eq!(EVENTS.len(), 22);
+        assert_eq!(EVENTS.len(), 29);
     }
 
     #[test]
@@ -432,6 +457,38 @@ mod tests {
         let now = crate::app::now_ms();
         assert_eq!(prune(&home, now), 0);
         assert_eq!(prune(&home, now + PRUNE_AFTER_MS + 60_000), 1);
+    }
+
+    #[test]
+    fn events_and_never_disjoint() {
+        for ev in NEVER {
+            assert!(!EVENTS.contains(ev), "{ev} is in both");
+        }
+        assert_eq!(NEVER.len(), 5);
+        let mut seen = std::collections::BTreeSet::new();
+        assert!(EVENTS.iter().all(|e| seen.insert(*e)), "no duplicates");
+    }
+
+    #[test]
+    fn uninstall_removes_never_events_too() {
+        let user = serde_json::json!({"hooks":{"Setup":[{"hooks":[{"type":"command","command":"mine.sh"}]}]}});
+        let mut s = user.clone();
+        for ev in NEVER.iter().filter(|e| **e != "Setup") {
+            s["hooks"][*ev] =
+                serde_json::json!([{"hooks":[{"type":"command","command":HOOK_COMMAND}]}]);
+        }
+        s["hooks"]["Setup"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"hooks":[{"type":"command","command":HOOK_COMMAND}]}));
+        let out = without_hooks(&s);
+        assert_eq!(out, user, "only the user's Setup hook is left");
+        // And with_hooks never writes one.
+        for ev in NEVER {
+            assert!(with_hooks(&serde_json::json!({}))["hooks"]
+                .get(*ev)
+                .is_none());
+        }
     }
 
     #[test]

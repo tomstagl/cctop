@@ -192,6 +192,7 @@
     "value": 31228823
   },
   "hooks_installed": false,
+  "hooks_missing": [],
   "input_rate": {
     "approx": false,
     "metric_id": "input_rate",

@@ -71,10 +71,17 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
-    let facts_room = width.saturating_sub(8 + phase.chars().count() + 2);
+    // The hooks badge sits between the facts and the phase cell.
+    let badge = d.header.hooks.clone().unwrap_or_default();
+    let badge_room = if badge.is_empty() {
+        0
+    } else {
+        badge.chars().count() + 2
+    };
+    let facts_room = width.saturating_sub(8 + phase.chars().count() + 2 + badge_room);
     let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
-    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count());
+    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count() + badge_room);
     let phase_style = match d.header.phase.glyph {
         '◆' => t.warn(),
         '○' => t.dim(),
@@ -85,6 +92,14 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         Span::styled(" cctop  ", t.accent().add_modifier(Modifier::BOLD)),
         Span::styled(facts, t.dim()),
         Span::raw(" ".repeat(pad)),
+        Span::styled(
+            if badge.is_empty() {
+                badge
+            } else {
+                format!("{badge}  ")
+            },
+            t.warn(),
+        ),
         Span::styled(phase, phase_style),
     ])
 }
@@ -419,6 +434,28 @@ mod tests {
             assert!(!r.contains("remote") || r.contains("acme/shop"), "{w}: {r}");
         }
         assert!(seen);
+    }
+
+    #[test]
+    fn header_hooks_badge_is_amber_when_events_are_missing() {
+        let (mut app, d) = dashboard_with(all_facts());
+        assert!(d.header.hooks.is_none());
+        let plain = header_row(&app, &d, 120);
+        assert!(!plain.contains("hooks:"), "{plain}");
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let d = app.dashboard();
+        assert_eq!(d.header.hooks.as_deref(), Some("hooks: 7 new"));
+        let rows = compose(&app.state.theme, &d, 120, 24, 0, false);
+        let badge = rows[0]
+            .spans
+            .iter()
+            .find(|s| s.content.contains("hooks: 7 new"))
+            .expect("the badge span");
+        assert_eq!(badge.style, app.state.theme.warn());
+        let row = header_row(&app, &d, 120);
+        assert_eq!(row.chars().count(), 120, "{row}");
+        assert!(row.contains("hooks: 7 new  ● "), "{row}");
+        insta::assert_snapshot!("header_hooks_missing_120", row);
     }
 
     #[test]

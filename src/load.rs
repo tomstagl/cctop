@@ -156,6 +156,7 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
             state.apply_claude_home(&v);
         }
         state.load_autocompact();
+        state.load_hooks_missing();
         if let Some(dir) = crate::insights::default_dir() {
             state.refresh_insights(&dir);
         }

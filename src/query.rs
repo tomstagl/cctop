@@ -169,6 +169,7 @@ fn summary_object(state: &State) -> Value {
         "tokens_to_ctx": m(state.tools.tokens_to_ctx(), "tokens", "tokens_to_ctx", true),
         "agents": m(state.agents.len(), "count", "agent_state", false),
         "hooks_installed": state.session.hooks_installed,
+        "hooks_missing": state.hooks_missing,
         "permission_waits": if state.session.hooks_installed {
             json!({"count": state.session.permission_waits, "total": m(state.session.permission_wait_ms, "ms", "permission_wait", true)})
         } else {

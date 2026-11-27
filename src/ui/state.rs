@@ -511,6 +511,10 @@ pub struct State {
     pub inspector_opens: u64,
     /// The sources inspector shows its per-file list.
     pub sources_files: bool,
+    /// Events `cctop install` would add to an old install (`hooks::EVENTS`
+    /// without a `cctop hook` entry in settings). Empty when nothing is
+    /// installed, when the install is current, and for a fixture.
+    pub hooks_missing: Vec<&'static str>,
     pub prefix: crate::prefix::Prefix,
     /// The pane's latest breakdown spool, raw: anchored and checked against
     /// compactions when read, since the transcript may lag it.
@@ -2164,6 +2168,13 @@ impl State {
     /// Read the autocompact overrides for a live session: settings.json and
     /// the claude process environment; price the enabled plugins with the
     /// catalog cache.
+    /// Read which of cctop's hook events the settings lack (an old install).
+    pub fn load_hooks_missing(&mut self) {
+        self.hooks_missing = crate::install::hooks_missing_of_install(
+            &crate::install::read_settings(&crate::install::settings_path()),
+        );
+    }
+
     pub fn load_autocompact(&mut self) {
         let settings = crate::install::read_settings(&crate::install::settings_path());
         let catalog = std::env::var_os("HOME").and_then(|h| {

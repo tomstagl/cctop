@@ -376,3 +376,19 @@ test('a status-bearing header renders row-identical on both surfaces at 80, 120 
   assert.match(rows.get(120) ?? '', /\/home\/user\/project · acme\/shop/);
   assert.doesNotMatch(rows.get(120) ?? '', /remote/);
 });
+
+// The hooks badge (PRD 5): an old `cctop install` lacks events, the object's
+// `header.hooks` is `hooks: 7 new`, and both surfaces draw it between the
+// facts and the phase cell. The TUI's insta snapshot is the reference row.
+test('the hooks badge renders row-identical on both surfaces and is absent without it', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 120)[0], /hooks:/);
+  dash.header.hooks = 'hooks: 7 new';
+  const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__header_hooks_missing_120.snap'), 'utf8');
+  const tui = snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), tui);
+});
