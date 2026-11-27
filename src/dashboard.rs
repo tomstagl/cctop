@@ -682,12 +682,35 @@ fn cells(state: &State, c: &Coach) -> Vec<Cell> {
             l.five_hour_resets_at_ms
                 .map(|r| vec![fg(format!("↻ {}", coach::short_duration(r - now)))]),
         ),
-        None => cell(
-            '2',
-            "limits",
-            vec![fg("5h "), dim("—")],
-            Some(vec![dim("no status line")]),
-        ),
+        None => match budget_line(state) {
+            // A `--max-budget-usd` session has no status line: the budget is
+            // its limit.
+            Some((text, ratio, eta)) => {
+                let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Fg };
+                let amounts = text.strip_prefix("budget ").unwrap_or(&text);
+                let compact = amounts.replace(" / ", "/");
+                let mut c = cell(
+                    '2',
+                    "limits",
+                    vec![fg("budget "), seg(amounts.to_string(), tone)],
+                    eta.map(|e| vec![fg(e)]),
+                );
+                let mut mid = vec![seg(compact.clone(), tone)];
+                if let Some(e) = &c.label.get(3..) {
+                    mid.push(dim(" "));
+                    mid.extend(e.iter().cloned());
+                }
+                c.mid = mid;
+                c.short = vec![seg(compact, tone)];
+                c
+            }
+            None => cell(
+                '2',
+                "limits",
+                vec![fg("5h "), dim("—")],
+                Some(vec![dim("no status line")]),
+            ),
+        },
     };
     // 3 · cache: the countdown and the TTL.
     let ttl = if state.cache_ttl_ms() >= 3_600_000 {
@@ -2694,6 +2717,38 @@ mod tests {
         let text = body_text(&body_limits(&s, &c)).join("\n");
         assert!(text.contains("  budget $3.20 / $5.00  ▇▇▇▇▇▇"), "{text}");
         assert!(text.contains("  spend limit 40 %"), "{text}");
+    }
+
+    #[test]
+    fn a_budget_session_shows_the_budget_in_the_limits_cell() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        assert!(s.limits.is_none());
+        let (used, total, _) = s.budget_usd.expect("session-s has a budget");
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        let cell = &d.cells[1];
+        let want = format!("${used:.2} / ${total:.2}");
+        assert!(
+            text_of(&cell.label).starts_with(&format!("budget {want}")),
+            "{}",
+            text_of(&cell.label)
+        );
+        assert_eq!(text_of(&cell.short), want.replace(" / ", "/"));
+        assert!(text_of(&cell.mid).starts_with(&want.replace(" / ", "/")));
+        assert!(!text_of(&cell.label).contains("no status line"));
+        // Red from 90 %.
+        s.budget_usd = Some((4.6, 5.0, 0.4));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().any(|g| g.tone == Tone::Crit));
+        s.budget_usd = Some((2.0, 5.0, 3.0));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().all(|g| g.tone != Tone::Crit));
     }
 
     #[test]

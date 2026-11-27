@@ -1,6 +1,6 @@
 //! Session lineage: the chain a transcript belongs to. Ancestors are found
 //! through `derived-from` (the first entry of the last such line of a
-//! transcript), descendants through `continued-in`. Each relative is looked
+//! transcript that names another session), descendants through `continued-in`. Each relative is looked
 //! up by id as `<id>.jsonl`, in this transcript's project directory first
 //! and then in every project directory under `projects_root`. The walk is
 //! bounded (`MAX_DEPTH`) and guarded against cycles; `--lines` does not
@@ -67,11 +67,11 @@ fn scan(path: &Path) -> Scan {
         }
         match &line {
             Line::DerivedFrom(d) => {
-                derived = d
-                    .sessions
-                    .first()
-                    .filter(|s| !s.id.is_empty())
-                    .map(|s| (s.id.clone(), s.via.clone()));
+                let own: Vec<&str> = [Some(stem.as_str()), state.agg.session_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                derived = d.parent(&own).map(|s| (s.id.clone(), s.via.clone()));
             }
             Line::ContinuedIn(c) => {
                 if let Some(id) = c.continued_in_session_id.clone().filter(|i| !i.is_empty()) {
@@ -312,6 +312,42 @@ mod tests {
         write(&p, "self", Some(("self", "clear")), Some("self"));
         let s = chain(&p.join("self.jsonl"), &root);
         assert!(s.ancestors.is_empty() && s.descendants.is_empty());
+        assert_eq!(s.chain_cost_usd, s.this.cost_usd.unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn write_raw(dir: &Path, id: &str, entries: &[(&str, &str)]) {
+        std::fs::create_dir_all(dir).unwrap();
+        let sessions: Vec<String> = entries
+            .iter()
+            .map(|(i, v)| format!(r#"{{"type":"claude_code_session","id":"{i}","via":"{v}"}}"#))
+            .collect();
+        let s = format!(
+            r#"{{"type":"derived-from","sessionId":"{id}","sessions":[{}]}}"#,
+            sessions.join(",")
+        ) + "\n"
+            + &assistant("2026-11-27T10:00:00.000Z")
+            + "\n";
+        std::fs::write(dir.join(format!("{id}.jsonl")), s).unwrap();
+    }
+
+    #[test]
+    fn a_compact_entry_naming_the_session_itself_is_not_a_parent() {
+        let root = tmp("selfcompact");
+        let p = root.join("proj");
+        // Compact-only file (2.1.332): [{self, compact}].
+        write_raw(&p, "cmp", &[("cmp", "compact")]);
+        let l = chain(&p.join("cmp.jsonl"), &root);
+        assert!(l.ancestors.is_empty(), "{:?}", l.ancestors);
+        assert_eq!(l.this.via, None);
+        assert_eq!(l.missing, 0);
+        // Cleared, then compacted: [{parent, clear}, {self, compact}].
+        write(&p, "par", None, None);
+        write_raw(&p, "cc", &[("par", "clear"), ("cc", "compact")]);
+        let l = chain(&p.join("cc.jsonl"), &root);
+        assert_eq!(l.ancestors.len(), 1);
+        assert_eq!(l.ancestors[0].id, "par");
+        assert_eq!(l.this.via.as_deref(), Some("clear"));
         let _ = std::fs::remove_dir_all(&root);
     }
 

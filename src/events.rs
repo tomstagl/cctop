@@ -643,4 +643,17 @@ mod tests {
             "thinking dropped · 10 blocks / 10 turns · history changed"
         );
     }
+
+    #[test]
+    fn a_drop_without_change_kinds_has_no_tail() {
+        let mut l = Log::default();
+        l.apply(&Line::parse(r#"{"type":"attachment","timestamp":"2026-11-17T07:57:05.877Z","attachment":{"type":"thinking_drop","thinkingBlocksSent":4,"thinkingTurnsSent":4,"newlyDropped":{"blockCount":4,"turnCount":3,"reason":"prefix_mismatch"}}}"#).unwrap());
+        let rows: Vec<&Event> = l
+            .iter()
+            .filter(|e| e.text.starts_with("thinking dropped"))
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].text, "thinking dropped · 4 blocks / 3 turns");
+        assert!(!rows[0].text.ends_with(['·', ' ']));
+    }
 }

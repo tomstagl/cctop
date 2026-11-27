@@ -1112,8 +1112,25 @@ pub struct PrLink {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DerivedFrom {
+    /// The session the line was written in (the transcript's own id).
+    #[serde(default)]
+    pub session_id: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub sessions: Vec<DerivedSession>,
+}
+
+impl DerivedFrom {
+    /// The first entry that names another session. On 2.1.332 a
+    /// `via: compact` entry names the session itself (compact-only files:
+    /// `[{self, compact}]`; cleared then compacted: `[{parent, clear},
+    /// {self, compact}]`), so entries whose id is one of `own` are skipped.
+    pub fn parent(&self, own: &[&str]) -> Option<&DerivedSession> {
+        self.sessions.iter().find(|s| {
+            !s.id.is_empty()
+                && Some(s.id.as_str()) != self.session_id.as_deref()
+                && !own.contains(&s.id.as_str())
+        })
+    }
 }
 
 /// One entry of a `derived-from` line (`type` is the entry's kind, e.g.

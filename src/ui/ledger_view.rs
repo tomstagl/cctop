@@ -236,7 +236,11 @@ mod tests {
     use std::path::Path;
 
     fn fixture_app() -> App {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        fixture_app_of("session-a")
+    }
+
+    fn fixture_app_of(name: &str) -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl"));
         let mut app = App::new(
             crate::ui::panels::all(),
             Box::new(|l, s: &mut State| s.apply(l)),
@@ -252,6 +256,32 @@ mod tests {
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn the_ledger_shows_a_drop_column_only_when_a_turn_has_a_drop() {
+        let mut app = fixture_app_of("session-t");
+        app.state.open = Some(1);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let out = render_to_string(&app, 140, 60);
+        let head = out.lines().find(|l| l.contains("START")).expect("header");
+        assert!(head.contains("DROP"), "{head}");
+        let row = out
+            .lines()
+            .find(|l| l.contains("thinking dropped 10") || is_drop_row(l, head))
+            .expect("a row carrying the drop count");
+        assert!(row.contains(" 10 "), "{row}");
+        // A transcript without a drop has no column.
+        let mut app = fixture_app();
+        app.state.open = Some(1);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 140, 60).contains("DROP"));
+    }
+
+    /// A ledger row whose DROP cell (aligned under the header's) is `10`.
+    fn is_drop_row(line: &str, head: &str) -> bool {
+        let col = head.find("DROP").unwrap();
+        line.get(col..col + 4).is_some_and(|c| c.trim() == "10")
     }
 
     #[test]

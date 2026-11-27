@@ -391,8 +391,8 @@ pub struct Aggregate {
     /// when the transcript is a teammate's, so a teammate attached as the
     /// main session shows its team.
     pub team: Option<(String, String)>,
-    /// `(id, via)` of the first entry of the last `derived-from` line: the
-    /// session this one was started from and how (`clear`, `subprocess` …).
+    /// `(id, via)` of the first entry of the last `derived-from` line that
+    /// names another session (not this one): the session this one was started from and how (`clear`, `subprocess` …).
     pub derived_from: Option<(String, String)>,
     /// Interrupts, in order: `(turn, tool calls so far)`.
     pub interrupts: Vec<(usize, usize)>,
@@ -752,11 +752,8 @@ impl Aggregate {
                 }
             }
             Line::DerivedFrom(d) => {
-                self.derived_from = d
-                    .sessions
-                    .first()
-                    .filter(|s| !s.id.is_empty())
-                    .map(|s| (s.id.clone(), s.via.clone()));
+                let own: Vec<&str> = self.session_id.as_deref().into_iter().collect();
+                self.derived_from = d.parent(&own).map(|s| (s.id.clone(), s.via.clone()));
             }
             Line::ContinuedIn(c) => {
                 let turn = self.turn_number();
@@ -965,6 +962,33 @@ mod tests {
     fn fixture(name: &str) -> Vec<Line> {
         parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl")))
             .unwrap()
+    }
+
+    #[test]
+    fn derived_from_skips_entries_naming_the_session_itself() {
+        let line = |sessions: &str| {
+            Line::parse(&format!(
+                r#"{{"type":"derived-from","sessionId":"me","sessions":[{sessions}]}}"#
+            ))
+            .unwrap()
+        };
+        // Compact-only: the only entry is the session itself.
+        let agg = Aggregate::from_lines(&[line(
+            r#"{"type":"claude_code_session","id":"me","via":"compact"}"#,
+        )]);
+        assert_eq!(agg.derived_from, None);
+        // Cleared then compacted: the parent is the first foreign entry.
+        let agg = Aggregate::from_lines(&[line(
+            r#"{"type":"claude_code_session","id":"parent-1234","via":"clear"},{"type":"claude_code_session","id":"me","via":"compact"}"#,
+        )]);
+        assert_eq!(
+            agg.derived_from,
+            Some(("parent-1234".into(), "clear".into()))
+        );
+        assert_eq!(
+            crate::lineage::header_text("parent-1234", "clear"),
+            "from parent-1 · clear"
+        );
     }
 
     #[test]

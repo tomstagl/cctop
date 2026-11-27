@@ -17,6 +17,8 @@ Three record types Claude Code now writes carry facts cctop has no other source 
 | `attachment` `budget_usd` | `used`, `total`, `remaining` (USD) | `t2i(maxBudgetUsd)`: only when the session runs with `--max-budget-usd` (print/SDK mode). In print mode Claude Code stops the run when `used` reaches `total`: *"print budget halt: this run's spend reached --max-budget-usd"* | 317 instances, all 2.1.332, all in `sdk` sessions |
 | line `derived-from` | `v`, `sessions[{type, id, via}]` | `last-wins` per transcript (binary's line table) | `type` always `claude_code_session`; `via`: `subprocess` 14, `clear` 8, `compact` 7 |
 
+**Correction (final review):** on 2.1.332 a `compact` entry points at the session itself (compact-only files: `[{self, compact}]`; cleared then compacted: `[{parent, clear}, {self, compact}]`). cctop takes the first entry whose id is not the session's own, so a compact-only session has no origin and a cleared-then-compacted one reads `from <parent8> · clear`.
+
 What each gives cctop:
 
 - **`thinking_drop`**: when Claude Code stops sending earlier thinking, the next call re-reads context it had cached, and the model loses its prior reasoning. cctop cannot see this today. `clientChange.kinds` names what changed client-side (history / system prompt / tool schemas), the same question PRD 1's request ledger answers from the request lines.
