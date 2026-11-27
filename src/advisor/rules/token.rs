@@ -466,9 +466,8 @@ impl Rule for RunawayResult {
             .unwrap_or_default();
         let mut a = Advice::new("A03", "runaway-result", Urgency::Later);
         let single_line = format!(
-            "`{} {}` pushed {} tokens into context{produced}",
-            biggest.name,
-            fmt::clip(&biggest.input_summary, 24),
+            "`{}` pushed {} tokens into context{produced}",
+            crate::tools::call_shape(biggest),
             fmt::tokens(biggest.result_tokens_est)
         );
         let type_line = format!(
@@ -2169,7 +2168,7 @@ mod tests {
         let a = RunawayResult.evaluate(&s).expect("fires");
         assert!(
             a.headline
-                .starts_with("`Bash find / -name x` pushed 12k tokens into context"),
+                .starts_with("`find` pushed 12k tokens into context"),
             "{}",
             a.headline
         );
@@ -2202,8 +2201,7 @@ mod tests {
             "Grep results: 32k since the last boundary (16 % of the window)"
         );
         assert!(
-            a.evidence
-                .starts_with("biggest: `Grep todo` pushed 8.0k tokens"),
+            a.evidence.starts_with("biggest: `Grep` pushed 8.0k tokens"),
             "{}",
             a.evidence
         );

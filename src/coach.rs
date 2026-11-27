@@ -920,12 +920,8 @@ fn fail_streak(state: &State) -> (usize, String) {
         if c.is_error && c.error_class != Some(crate::tools::ErrorClass::Denied) {
             n += 1;
             if prefix.is_empty() {
-                prefix = c
-                    .input_summary
-                    .split_whitespace()
-                    .take(3)
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                // The command's shape, never its words.
+                prefix = crate::tools::call_shape(c);
             }
         } else {
             break;
@@ -1503,10 +1499,7 @@ mod tests {
         assert_eq!(c.line(30), "○○○●");
         assert_eq!(c.queued, 0);
         let n = c.nudge.as_ref().unwrap();
-        assert_eq!(
-            n.line1,
-            "▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…"
-        );
+        assert_eq!(n.line1, "▸ A shell command blocked the turn for 9:09");
         assert_eq!(n.line3, "  LATER · since turn 6 · +0 queued");
         assert_eq!(
             c.lights[0].lines[1],

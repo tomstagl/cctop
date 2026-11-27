@@ -76,7 +76,7 @@
       "family": "long-foreground",
       "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
       "foot": "goes away when Claude backgrounds a command, or after three turns",
-      "headline": "`lorem_ipsum_dolor_sit_amet_co…` blocked the turn for 1:38",
+      "headline": "`lorem_ipsum_dolor_sit_a…` blocked the turn for 1:38",
       "name": "A long command blocked the turn",
       "retires_on": "3 turns",
       "rule": "A10",

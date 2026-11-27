@@ -193,13 +193,19 @@ impl Rule for PermissionWaits {
         if traced && ask.count == 0 {
             return None;
         }
+        // The command's shape, never its arguments or an env assignment.
+        let shape = match key.strip_prefix("Bash(") {
+            Some(inner) => crate::tools::command_shape(inner.trim_end_matches(')')),
+            None => super::ident(key),
+        };
+        // Claude Code's own suggestion, else the shape's rule.
         let rule = ask
             .rule
             .clone()
             .filter(|r| r.contains('('))
             .unwrap_or_else(|| {
                 if key.starts_with("Bash(") {
-                    format!("{}:*)", key.trim_end_matches(')'))
+                    format!("Bash({shape}:*)")
                 } else {
                     key.clone()
                 }
@@ -211,7 +217,7 @@ impl Rule for PermissionWaits {
         let mut a = Advice::new("A09", "permission-wait", Urgency::Next);
         a.headline = format!(
             "You've approved {} {} times ({} waiting)",
-            key.trim_start_matches("Bash(").trim_end_matches(')'),
+            shape,
             ask.count,
             fmt::duration_ms(wait_ms)
         );
@@ -223,14 +229,7 @@ impl Rule for PermissionWaits {
             "allow {rule} (permissions.allow in settings), or approve it once with 'always'"
         );
         a.hole("count", count(ask.count, "time", "times"));
-        // The command's shape, never its arguments or an env assignment.
-        a.hole(
-            "shape",
-            match key.strip_prefix("Bash(") {
-                Some(inner) => crate::tools::command_shape(inner.trim_end_matches(')')),
-                None => super::ident(key),
-            },
-        );
+        a.hole("shape", shape.clone());
         a.hole("wait", spoken(wait_ms));
         a.hole("rule", rule.clone());
         a.action_text = rule;
@@ -289,10 +288,17 @@ impl Rule for LongForeground {
             })
             .filter(|(_, d)| *d > 60_000)
             .max_by_key(|(_, d)| *d)?;
+        // The command's shape, never its arguments; a bare `cd` says nothing.
+        let shape = crate::tools::call_shape(call);
+        let named = !shape.is_empty() && shape != "cd";
         let mut a = Advice::new("A10", "long-foreground", Urgency::Later);
         a.headline = format!(
-            "`{}` blocked the turn for {}",
-            fmt::clip(&call.input_summary, 30),
+            "{} blocked the turn for {}",
+            if named {
+                format!("`{shape}`")
+            } else {
+                "A shell command".to_string()
+            },
             fmt::duration_ms(ms)
         );
         a.evidence = "a foreground Bash call longer than a minute; Claude waited for it".into();
@@ -305,11 +311,9 @@ impl Rule for LongForeground {
         a.saving = Saving::Seconds((ms / 1000) as u64);
         a.window_turns = 5;
         a.mark = background_calls(state);
-        // The command's shape, never its arguments; a bare `cd` says nothing.
-        let shape = crate::tools::call_shape(call);
         a.hole(
             "what",
-            if shape.is_empty() || shape == "cd" {
+            if !named {
                 "A shell command".to_string()
             } else {
                 format!("The command `{shape}`")
@@ -631,10 +635,7 @@ mod tests {
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"id":"b1","model":"m","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"cargo build --release"}}],"usage":{"output_tokens":1}}}"#).unwrap());
         s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:01:58Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ok"}]}}"#).unwrap());
         let a = LongForeground.evaluate(&s).expect("fires");
-        assert_eq!(
-            a.headline,
-            "`cargo build --release` blocked the turn for 1:58"
-        );
+        assert_eq!(a.headline, "`cargo build` blocked the turn for 1:58");
         assert_eq!(a.saving, Saving::Seconds(118));
         assert_eq!(a.action_kind, ActionKind::Prompt);
         // Acted: a later background call.

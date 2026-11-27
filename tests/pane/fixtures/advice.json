@@ -75,7 +75,7 @@
       "body": "mcp:claude-in-chrome results take up 152k tokens since the last /clear or compaction, 15 % of the window. They stay in context and every later call re-reads them. Narrow the command (head, grep, Glob), or let a subagent read it and return a summary.",
       "class": "LATER",
       "doc_key": "A03",
-      "evidence": "biggest: `mcp:claude-in-chrome lorem` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
+      "evidence": "biggest: `mcp:claude-in-chrome` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
       "evidence_rows": [],
       "explain": "Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request; `/context` flags a tool once its results pass 15 % of the window. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary. A result Claude Code spilled to disk (`<persisted-output>`) kept only its head; the rest cost the run, not the context.",
       "family": "runaway-result",

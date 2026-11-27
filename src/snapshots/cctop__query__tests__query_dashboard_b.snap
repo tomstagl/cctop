@@ -13,7 +13,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
         "tone": "fg"
       },
       {
-        "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+        "text": "A shell command blocked the turn for 9:09",
         "tone": "bold"
       },
       {
@@ -33,7 +33,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
         "tone": "fg"
       },
       {
-        "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+        "text": "A shell command blocked the turn for 9:09",
         "tone": "bold"
       }
     ],
@@ -1317,7 +1317,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "ok"
           },
           {
-            "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+            "text": "A shell command blocked the turn for 9:09",
             "tone": "bold"
           }
         ],
@@ -1449,7 +1449,7 @@ expression: "serde_json::to_string_pretty(&d).unwrap()"
             "tone": "dim"
           },
           {
-            "text": "LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+            "text": "LATER A10 fired · A shell command blocked the turn for 9:09",
             "tone": "fg"
           }
         ],

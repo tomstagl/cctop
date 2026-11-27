@@ -5,8 +5,8 @@ expression: "render_to_string(&app, 85, 24)"
  cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
  1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
  4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
- ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
-   builds and test suites longer than a …  LATER · turn 6
+ ▸ A shell command blocked the turn for 9:09 — queue: 'run builds and     a: advisor
+   test suites longer than a …  LATER · turn 6
 ─── tools ──────────────────────────────────────────────────── 0: home  ·  ? keys ───
   TOOL / CLASS        CALLS    ERR       p50     →CTX     LAST
   Bash·explore           39      3    ≈206ms      11k     8h54

@@ -968,7 +968,7 @@ mod tests {
                 "no pull requests found for branch SECRET-OUTPUT-abc",
             ),
             (
-                "git push SECRET-ARG",
+                "git push sekritbranch SECRET-ARG",
                 "! [rejected] SECRET-OUTPUT-abc (non-fast-forward)",
             ),
         ];
@@ -1002,6 +1002,26 @@ mod tests {
         assert_eq!(n["actions"][1]["kind"], "prompt");
         assert!(n["foot"].as_str().is_some_and(|f| !f.is_empty()));
         assert!(n["line3"].as_str().unwrap().contains("NOW"));
+        // The headline (uncut) and the one-line forms name commands by shape:
+        // `git push`, never its lowercase argument, which a word-like
+        // subcommand filter alone would let through.
+        assert_eq!(
+            n["headline"], "3 fails in a row: gh pr ×2, git push",
+            "{coach:#}"
+        );
+        for field in [
+            &n["headline"],
+            &n["line1"],
+            &n["line2"],
+            &coach["lines"]["l0"],
+            &coach["lines"]["l1"],
+            &coach["lines"]["l2"],
+        ] {
+            let f = field.as_str().unwrap();
+            for secret in ["sekrit", "SECRET", "TOKEN="] {
+                assert!(!f.contains(secret), "{secret} in {f}");
+            }
+        }
         for (verb, v) in [("coach", coach.clone()), ("advice", advice(&s))] {
             let text = v.to_string();
             for secret in [
@@ -1011,6 +1031,7 @@ mod tests {
                 "SECRET-INPUT",
                 "SECRET-ARG",
                 "TOKEN=",
+                "sekrit",
                 "open the PR and push",
             ] {
                 assert!(!text.contains(secret), "{verb} leaks {secret}: {text}");

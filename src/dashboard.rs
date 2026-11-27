@@ -2408,7 +2408,7 @@ mod tests {
         assert_eq!(d.act.nudge, Some("A10"));
         assert_eq!(d.act.tag, "LATER · turn 6");
         assert!(
-            text_of(&d.act.line).starts_with("▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn"),
+            text_of(&d.act.line).starts_with("▸ A shell command blocked the turn"),
             "{}",
             text_of(&d.act.line)
         );
