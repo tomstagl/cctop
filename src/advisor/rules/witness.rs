@@ -403,12 +403,23 @@ pub(crate) fn a30_resume() -> State {
 
 // -- events axis (A06–A16) --------------------------------------------------
 
-/// A06 `retrigger`: one compaction that left the context near the threshold.
-pub(crate) fn a06_retrigger() -> State {
+fn a06_drop_state() -> State {
     let mut s = State::new(Pricing::bundled());
     s.apply(&prompt("2026-01-01T00:00:00Z"));
     s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","version":"2.1.270","message":{"id":"a","model":"claude-opus-5","content":[],"usage":{"input_tokens":900000}}}"#).unwrap());
     s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","version":"2.1.270","message":{"id":"b","model":"claude-opus-5","content":[],"usage":{"input_tokens":200000}}}"#).unwrap());
+    s
+}
+
+/// A06 negative: on 2.1.270 a context drop alone is not a compaction.
+#[cfg(test)]
+pub(crate) fn a06_drop() -> State {
+    a06_drop_state()
+}
+
+/// A06 `retrigger`: one compaction that left the context near the threshold.
+pub(crate) fn a06_retrigger() -> State {
+    let mut s = a06_drop_state();
     s.apply(&Line::parse(r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00:00:03Z","version":"2.1.270","compactMetadata":{"trigger":"auto","preTokens":960000,"postTokens":955000,"durationMs":80000}}"#).unwrap());
     s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:04Z","version":"2.1.270","message":{"id":"c","model":"claude-opus-5","content":[],"usage":{"input_tokens":955000}}}"#).unwrap());
     s
