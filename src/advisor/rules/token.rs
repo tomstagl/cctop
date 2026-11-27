@@ -112,15 +112,24 @@ impl Rule for CacheMiss {
                 }
                 l.cause.compact()
             }
-            None => kind_what,
+            None => shim_deltas(state, miss.kind.as_str()).unwrap_or(kind_what),
         };
         // The coach draws `▸ ` + the headline in WIDTH cells: cut `what`, never the figure.
-        let head = "cache miss: ";
+        let shim = located.is_none() && (what.starts_with("tools ") || what.starts_with("system "));
         let tail = format!(" · {} re-written{price}", fmt::tokens(miss.tokens));
+        // The shim's figures are the content: shorten the lead-in before clipping them.
+        let head = if shim
+            && 2 + "cache miss: ".chars().count() + what.chars().count() + tail.chars().count()
+                > crate::coach::WIDTH
+        {
+            "miss: "
+        } else {
+            "cache miss: "
+        };
         let room = crate::coach::WIDTH
             .saturating_sub(2 + head.chars().count() + tail.chars().count())
             .max(1);
-        let what = if located.is_some() {
+        let what = if located.is_some() || shim {
             fmt::clip(&what, room)
         } else {
             what
@@ -142,6 +151,31 @@ impl Rule for CacheMiss {
         a.window_turns = 3;
         Some(a)
     }
+}
+
+/// The status line's own deltas for its last miss (`tools_added`,
+/// `tools_removed`, `system_char_delta`), used when the transcript's request
+/// ledger could not locate the cause. A model change is explained by its name.
+fn shim_deltas(state: &State, kind: &str) -> Option<String> {
+    if kind == "model_changed" {
+        return None;
+    }
+    let c = &state.cache;
+    let mut parts = Vec::new();
+    if c.last_miss_tools_added.unwrap_or(0) + c.last_miss_tools_removed.unwrap_or(0) > 0 {
+        parts.push(format!(
+            "tools +{} −{}",
+            c.last_miss_tools_added.unwrap_or(0),
+            c.last_miss_tools_removed.unwrap_or(0)
+        ));
+    }
+    if let Some(d) = c.last_miss_system_delta.filter(|d| *d != 0) {
+        parts.push(format!(
+            "system {} chars",
+            crate::requests::signed(d).replacen('-', "−", 1)
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// A02 — a prompt gap longer than the cache TTL followed by a full-context
@@ -1151,6 +1185,54 @@ mod tests {
         let a = CacheMiss.evaluate(&s).expect("fires");
         assert!(a.headline.contains("tool list changed"), "{}", a.headline);
         assert!(!a.evidence.contains("located:"), "{}", a.evidence);
+    }
+
+    fn unlocated_miss(kind: &str) -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{{"id":"c","model":"claude-opus-5","content":[],"usage":{{"input_tokens":2,"cache_creation_input_tokens":30000}},"diagnostics":{{"cache_miss_reason":{{"type":"{kind}","cache_missed_input_tokens":30000}}}}}}}}"#)).unwrap());
+        s
+    }
+
+    #[test]
+    fn a01_uses_shim_deltas_when_unlocated() {
+        let mut s = unlocated_miss("tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +2 −0"), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+        assert!(a.headline.chars().count() + 2 <= crate::coach::WIDTH);
+    }
+
+    #[test]
+    fn a01_system_delta() {
+        let mut s = unlocated_miss("tools_changed");
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        s.cache.last_miss_system_delta = Some(1200);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system +1.2k chars"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_located_beats_shim() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        s.cache.last_miss_tools_added = Some(5);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("+mcp__x__find"), "{}", a.headline);
+        assert!(!a.headline.contains("tools +5"), "{}", a.headline);
     }
 
     #[test]
