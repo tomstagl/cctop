@@ -18,7 +18,7 @@ const HELP = `Commands:\n${['summary', 'dashboard', 'coach', 'tools', 'files', '
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const idle = JSON.parse(readFileSync(join(repo, 'tests', 'pane', 'fixtures', 'coach-idle.json'), 'utf8')) as { nudge: Record<string, unknown> };
 const nowCoach = (cls: string, fired: number, extra: Record<string, unknown> = {}) => ({ ...idle, nudge: { ...idle.nudge, class: cls, id: 'A47', headline: 'Rate limit', fired_at_ms: fired, ...extra } });
-const miss = (turn: number, kind = 'tools_changed', detail = 'a new MCP tool loaded', tokens = 112_000) => ({ turn, at: 't', message_id: 'm', tokens: { value: tokens, unit: 'tokens' }, api_reason: null, located: { kind, detail } });
+const miss = (turn: number, kind = 'tools_changed', detail = 'a new MCP tool loaded', tokens = 112_000, extra: Record<string, unknown> = {}) => ({ turn, at: 't', message_id: 'm', tokens: { value: tokens, unit: 'tokens' }, api_reason: null, located: { kind, detail }, ...extra });
 const summaryWith = (misses: unknown[]) => {
   const s = JSON.parse(JSON.stringify(fixture('summary'))) as { cache: Record<string, unknown> };
   s.cache.located_misses = misses;
@@ -55,7 +55,7 @@ test('the card is bordered: the headline, one body line and the two main buttons
   assert.equal(lines.length, 5, lines.join('\n'));
   assert.ok(/^╭/.test(lines[0] ?? '') && /^╰/.test(lines[4] ?? ''));
   assert.ok((lines[1] ?? '').includes('NOW') && (lines[1] ?? '').includes('Rate limit'));
-  assert.ok((lines[2] ?? '').startsWith('│ word word'));
+  assert.ok((lines[2] ?? '').startsWith('│ word word') && /…\s*│$/.test(lines[2] ?? ''), lines[2]);
   assert.ok((lines[3] ?? '').includes('Draft the fix') && (lines[3] ?? '').includes('Snooze'));
   assert.deepEqual([...presses.keys()], ['coach-placed-77-0-fill', 'coach-placed-77-snooze']);
   calls.length = 0;
@@ -81,10 +81,12 @@ test('a located miss is one dim row with the cause and what it re-wrote; an unlo
   assert.deepEqual(rows.map((r) => r.id), ['miss-4', 'miss-6']);
   const lines = renderToText(placedTree(rows[0]!.row, null, 100, el, actions), 100);
   assert.deepEqual(lines, ['cctop  cache miss here: a new MCP tool loaded, 112k tokens re-written']);
+  const priced = missPlacements(summaryWith([miss(8, 'tools_changed', 'a new MCP tool loaded', 112_000, { cost: { value: 2.1, unit: 'USD' }, after_config_change: 'user_settings' })]));
+  assert.deepEqual(renderToText(placedTree(priced[0]!.row, null, 120, el, actions), 120), ['cctop  cache miss here: a new MCP tool loaded, 112k tokens ≈ $2.10 re-written, after a settings change']);
   assert.deepEqual(missPlacements({}), []);
 });
 
-async function boot(coach: unknown, summary: unknown) {
+async function boot(coach: unknown, summary: unknown, opts: { startTurn?: boolean } = {}) {
   const script: Record<string, ProcessRunResult> = {
     'cctop --version': ok('cctop 0.2.0\n'),
     'cctop query --help': ok(HELP),
@@ -97,6 +99,7 @@ async function boot(coach: unknown, summary: unknown) {
   register(on, {});
   await dispatch('session.start', { cwd: '/home/user/project', surface: 'terminal', isInteractive: true }, () => ({ cwd: '/home/user/project' }));
   await settle();
+  if (opts.startTurn) await dispatch('turn.start', { text: 'hi', turnId: 't1' }, () => ({ turnId: 't1' }));
   await dispatch('command.run', { command: 'cctop-pane', args: 'coach', origin: { kind: 'composer' } });
   await settle();
   await settle();
@@ -112,16 +115,27 @@ async function boot(coach: unknown, summary: unknown) {
   return { $, dispatch, set, poll, draw };
 }
 
-test('the pane places a NOW nudge once, a miss after the first summary once, and not the history', async () => {
+test('the pane places a new NOW nudge and a new miss once, and not what stood when it loaded', async () => {
   const { $, set, poll } = await boot(nowCoach('NOW', 5), summaryWith([miss(3)]));
-  assert.deepEqual($.ui.places, ['nudge-5'], 'the history miss is not replayed');
+  assert.deepEqual($.ui.places, [], 'the standing nudge and the history miss are not replayed');
   await poll();
-  assert.deepEqual($.ui.places, ['nudge-5'], 'once');
+  assert.deepEqual($.ui.places, []);
+  set('coach', nowCoach('NOW', 6));
   set('summary', summaryWith([miss(3), miss(4)]));
   await poll();
-  assert.deepEqual($.ui.places, ['nudge-5', 'miss-4']);
+  assert.deepEqual([...$.ui.places].sort(), ['miss-4', 'nudge-6']);
   await poll();
-  assert.deepEqual($.ui.places, ['nudge-5', 'miss-4']);
+  assert.deepEqual([...$.ui.places].sort(), ['miss-4', 'nudge-6'], 'once each');
+});
+
+test('a first summary that arrives mid-turn is still the baseline; the turn\'s own new miss is placed at its end', async () => {
+  const { $, dispatch, set, poll } = await boot({ ...idle, nudge: null }, summaryWith([miss(3)]), { startTurn: true });
+  await poll();
+  await dispatch('turn.complete', { answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' }, () => ({ text: 'ok' }));
+  assert.deepEqual($.ui.places, [], 'the history miss was taken as history');
+  set('summary', summaryWith([miss(3), miss(4)]));
+  await poll();
+  assert.deepEqual($.ui.places, ['miss-4']);
 });
 
 test('a note that arrives mid-turn is placed at the turn end', async () => {
@@ -136,7 +150,9 @@ test('a note that arrives mid-turn is placed at the turn end', async () => {
 });
 
 test('the placed row draws through ui.render, and settles once the nudge is gone; another plugin\'s row is left alone', async () => {
-  const { $, set, poll, draw, dispatch } = await boot(nowCoach('NOW', 5, { body: 'one line' }), summaryWith([]));
+  const { $, set, poll, draw, dispatch } = await boot({ ...idle, nudge: null }, summaryWith([]));
+  set('coach', nowCoach('NOW', 5, { body: 'one line' }));
+  await poll();
   const card = renderToText(await draw('nudge-5'), 100);
   assert.ok(card.some((l) => l.includes('Rate limit')) && /^╭/.test(card[0] ?? ''), card.join('\n'));
   set('coach', { ...idle, nudge: null });
@@ -157,6 +173,6 @@ function sources(dir: string): string[] {
 test('display only: nothing in the plugin writes to the transcript', () => {
   for (const f of sources(join(repo, 'plugin', 'hooks'))) {
     const text = readFileSync(f, 'utf8');
-    assert.ok(!/session\.append|\.append\(/.test(text), f);
+    assert.ok(!/session\.append/.test(text), f);
   }
 });

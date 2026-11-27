@@ -10,7 +10,7 @@
 // nudge is still the one in the slot; once it is snoozed, acted on or
 // replaced, the same id answers with one dim settled line.
 import type { RenderElement } from 'claude-code';
-import { at, formatTokensTui, stringAt } from './format';
+import { at, formatTokensTui, formatUsd, stringAt } from './format';
 import { CRIT, clip, frame, innerWidth, seg, type FrameElements, type Line } from './frame';
 import { mainButtons, type Advice, type Coach, type CoachActions } from './coach';
 import { wrapWords, type FrameRow } from './table';
@@ -31,9 +31,11 @@ export function nudgePlacement(c: Coach | null): { id: string; row: PlacedRow } 
 }
 
 /** The one line a located miss is: what changed, and how much it re-wrote. */
-export function missText(cause: string, tokens: number | null): string {
+export function missText(cause: string, tokens: number | null, usd: number | null, after: string | null): string {
   const what = cause === '' ? 'cause not named' : cause;
-  return `cache miss here: ${what}${tokens === null ? '' : `, ${formatTokensTui(tokens)} tokens re-written`}`;
+  const cost = usd === null ? '' : ` ≈ ${formatUsd(usd)}`;
+  const written = tokens === null ? '' : `, ${formatTokensTui(tokens)} tokens${cost} re-written`;
+  return `cache miss here: ${what}${written}${after === null ? '' : ', after a settings change'}`;
 }
 
 /** Every located miss of `cache.located_misses` with a turn, as `miss-<turn>` rows (an unlocated one has no cause to name). */
@@ -46,15 +48,14 @@ export function missPlacements(summary: unknown): { id: string; row: PlacedRow }
     const kind = stringAt(at(m, 'located'), 'kind');
     if (typeof turn !== 'number' || !Number.isInteger(turn) || kind === null || kind === 'unlocated') continue;
     const tokens = at(m, 'tokens', 'value');
-    out.push({ id: `miss-${turn}`, row: { kind: 'miss', turn, text: missText(stringAt(at(m, 'located'), 'detail') ?? '', typeof tokens === 'number' ? tokens : null) } });
+    const usd = at(m, 'cost', 'value');
+    const after = stringAt(m, 'after_config_change');
+    out.push({
+      id: `miss-${turn}`,
+      row: { kind: 'miss', turn, text: missText(stringAt(at(m, 'located'), 'detail') ?? '', typeof tokens === 'number' ? tokens : null, typeof usd === 'number' ? usd : null, after) },
+    });
   }
   return out;
-}
-
-/** The fire time `nudge-<fire>` names, or null for another id. */
-export function fireOf(id: string): number | null {
-  const m = /^nudge-(\d+)$/.exec(id);
-  return m === null ? null : Number(m[1]);
 }
 
 const LEAD = 'cctop';
@@ -79,8 +80,10 @@ function cardRows(a: Advice, fire: number, inner: number, actions: CoachActions)
   const badge = seg(' NOW ', { inverse: true, bold: true, color: CRIT });
   const head: Line = [badge, seg(' '), seg(clip(a.headline, inner - 6), { bold: true })];
   const rows: FrameRow[] = [{ line: head }];
-  const body = wrapWords(a.body, inner)[0];
-  if (body !== undefined) rows.push({ line: [seg(clip(body, inner))] });
+  const words = wrapWords(a.body, inner);
+  const first = words[0];
+  // One line of body: the rest of a longer one is cut with an ellipsis.
+  if (first !== undefined) rows.push({ line: [seg(words.length > 1 ? `${[...first].slice(0, inner - 1).join('')}…` : first)] });
   const buttons = mainButtons(a, `placed-${fire}`, actions);
   if (buttons.length > 0) rows.push({ line: [], buttons });
   return rows;

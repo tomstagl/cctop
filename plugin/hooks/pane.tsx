@@ -134,11 +134,13 @@ let notifyState: NotifyState = initialNotifyState();
 // ours and the notification is sent only when the reset arrives.
 const resetTimers = new Map<string, Timer>();
 // Rows placed in the transcript (`$.ui.place`), by id: what each draws from
-// when the engine asks. Each id is placed once. `missesSeen` holds the
-// located misses the first summary already had (a resumed session's history
-// is not replayed into the transcript); null until that summary arrives.
+// when the engine asks. Each id is placed once. `standing` holds what the
+// first coach and summary answers already had (the nudge in the slot when the
+// pane loaded, a resumed session's located misses): history is not replayed
+// into the transcript. The flags say which answers have been taken.
 const placedRows = new Map<string, PlacedRow>();
-let missesSeen: Set<string> | null = null;
+const standing = new Set<string>();
+let standingTaken = { coach: false, summary: false };
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -277,13 +279,14 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open || model.actOpen) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
-  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($);
+  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($, model.query.coach !== before.query.coach);
   if (model.queryAt !== before.queryAt) checkFilled($);
   overviewChanged($, before);
   if (model.sessionId !== before.sessionId) {
     agentsAsked.clear();
     placedRows.clear();
-    missesSeen = null;
+    standing.clear();
+    standingTaken = { coach: false, summary: false };
   }
   if (model.query.agents !== before.query.agents) agentsPolled($);
 }
@@ -717,23 +720,31 @@ function coachActions($: EngineInterface): CoachActions {
 // a located cache miss that came after the first summary (`miss-<turn>`) are
 // placed at the transcript's end once each, and only between turns, so they
 // land at the turn end. Display only: nothing is written to the transcript.
-function placeNotes($: EngineInterface): void {
-  if (model.turn.state === 'busy') return;
-  const misses = missPlacements(model.query.summary);
-  const wanted = [];
+function placeNotes($: EngineInterface, coachMoved: boolean): void {
   const nudge = nudgePlacement(coachOf(model.query.coach));
-  if (nudge !== null) wanted.push(nudge);
-  if (model.query.summary !== undefined) {
-    if (missesSeen === null) missesSeen = new Set(misses.map((m) => m.id));
-    else wanted.push(...misses.filter((m) => !missesSeen?.has(m.id)));
+  const misses = missPlacements(model.query.summary);
+  // What was already there when each answer first arrived is taken as
+  // history, mid-turn or not.
+  if (model.query.coach !== undefined && !standingTaken.coach) {
+    standingTaken.coach = true;
+    if (nudge !== null) standing.add(nudge.id);
   }
-  for (const { id, row } of wanted) {
-    if (placedRows.has(id)) continue;
-    placedRows.set(id, row);
-    $.ui.place({ id }).catch((err: unknown) => $.ui.log(`cctop: place ${id} failed: ${String(err)}`));
+  if (model.query.summary !== undefined && !standingTaken.summary) {
+    standingTaken.summary = true;
+    for (const m of misses) standing.add(m.id);
   }
-  // A card whose nudge has left the slot is redrawn as its settled line, pane open or not.
-  if (!model.open && placedRows.size > 0) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  if (model.turn.state !== 'busy') {
+    for (const { id, row } of [...(nudge === null ? [] : [nudge]), ...misses]) {
+      if (placedRows.has(id) || standing.has(id)) continue;
+      placedRows.set(id, row);
+      $.ui.place({ id }).catch((err: unknown) => $.ui.log(`cctop: place ${id} failed: ${String(err)}`));
+    }
+  }
+  // A card whose nudge left the slot is redrawn as its settled line, pane open or not
+  // (only a coach change can settle one; an open pane already redraws on every change).
+  if (coachMoved && !model.open && [...placedRows.values()].some((r) => r.kind === 'nudge')) {
+    requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  }
 }
 
 // What the act dialog's buttons do: the coach card's own (one implementation
@@ -1414,7 +1425,8 @@ export const register: Register = (on) => {
   poller = null;
   chartRenderer = null;
   placedRows.clear();
-  missesSeen = null;
+  standing.clear();
+  standingTaken = { coach: false, summary: false };
   pictures = new Map();
   mounted = new Map();
   chartsBusy = false;
@@ -1469,7 +1481,7 @@ export const register: Register = (on) => {
 
   on('turn.complete', async ($, e, next) => {
     apply($, { type: 'turn.complete', at: await clockNow($), durationMs: e.durationMs, reason: e.reason });
-    placeNotes($);
+    placeNotes($, false);
     stopUsageTimer();
     poller?.reschedule();
     const result = await next(e);

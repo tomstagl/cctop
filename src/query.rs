@@ -311,14 +311,28 @@ fn located_misses(state: &State) -> Value {
             .misses()
             .iter()
             .map(|l| {
-                json!({
+                let mut row = json!({
                     "turn": l.turn,
                     "at": l.at,
                     "message_id": l.message_id,
                     "tokens": m(l.tokens, "tokens", "cache_write", false),
                     "api_reason": l.api_reason,
                     "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
-                })
+                });
+                // What re-writing those tokens cost at the cache-write price
+                // (the price A01 and the overview use); absent when unpriced.
+                if let Some(usd) = crate::advisor::rules::usd(
+                    state,
+                    l.tokens,
+                    crate::advisor::rules::PriceKind::CacheWrite,
+                ) {
+                    row["cost"] = m(usd, "USD", "cache_miss_located", true);
+                }
+                // The `ConfigChange` source this request followed (PRD 5).
+                if let Some(src) = &l.after_config_change {
+                    row["after_config_change"] = json!(src);
+                }
+                row
             })
             .collect(),
     )
@@ -1090,6 +1104,12 @@ mod tests {
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
         assert_eq!(first["tokens"]["metric_id"], "cache_write");
+        // Priced at the cache-write price when the model is known.
+        if let Some(usd) = first["cost"]["value"].as_f64() {
+            assert!(usd > 0.0);
+            assert_eq!(first["cost"]["metric_id"], "cache_miss_located");
+        }
+        assert!(first.get("after_config_change").is_none());
     }
 
     #[test]
