@@ -126,10 +126,10 @@ pub fn decider_group(source: &str) -> &'static str {
     }
 }
 
-/// Order the groups are shown in.
 /// A turn's hooks become an events row above this many milliseconds.
 pub const HOOK_ROW_MS: u64 = 500;
 
+/// Order the groups are shown in.
 pub const DECIDER_GROUPS: [&str; 5] = ["you", "rule", "classifier", "hook", "other"];
 
 /// The rule-shaped key of a permission prompt: `Bash(<argv0> <sub>)` for
@@ -1523,6 +1523,7 @@ impl State {
     pub fn hook_overhead(&self) -> Option<(u64, std::collections::BTreeMap<String, u64>)> {
         let o = self.otel.as_ref().filter(|o| !o.spans.is_empty())?;
         let mut by: std::collections::BTreeMap<String, u64> = Default::default();
+        let mut any = false;
         for sp in &o.spans {
             if let crate::otel::Span::Hook {
                 ids,
@@ -1531,12 +1532,13 @@ impl State {
                 ..
             } = sp
             {
+                any = true;
                 let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
                 *by.entry(hook_event.clone().unwrap_or_else(|| "other".into()))
                     .or_default() += ms;
             }
         }
-        Some((by.values().sum(), by))
+        any.then(|| (by.values().sum(), by))
     }
 
     /// One `hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s` row per turn whose
@@ -3603,6 +3605,17 @@ mod tests {
         assert_eq!(by["Stop"], 500);
         assert_eq!(by["Notification"], 50);
         assert!(hook_rows(&s).is_empty());
+    }
+
+    #[test]
+    fn hook_overhead_is_none_when_spans_arrived_but_none_is_a_hook() {
+        use super::tests_support::trace_spans;
+        let mut s = hooked_state();
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert!(s.hook_overhead().is_none());
     }
 
     #[test]
