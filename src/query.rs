@@ -758,6 +758,30 @@ pub fn dashboard(state: &State) -> Value {
     v
 }
 
+/// `cctop query overview`: the overview object (mod-pane US-002) — per
+/// chart its title, figure, verdict, chart spec, readouts and legend; the
+/// per-turn charts keep the last `max_turns` turns. `transcript` is the
+/// session's file: when the session was derived from another, the chain's
+/// cost is read from the transcripts beside it (PRD 4).
+pub fn overview(state: &State, max_turns: usize, transcript: Option<&std::path::Path>) -> Value {
+    let chain_usd = transcript
+        .filter(|_| state.agg.derived_from.is_some())
+        .map(lineage_cost);
+    let o = crate::overview::build_with(
+        state,
+        &crate::overview::Options {
+            max_turns,
+            chain_usd,
+        },
+    );
+    serde_json::to_value(o).unwrap_or(Value::Null)
+}
+
+fn lineage_cost(path: &std::path::Path) -> f64 {
+    let root = crate::baseline::default_projects_dir().unwrap_or_default();
+    crate::lineage::chain(path, &root).chain_cost_usd
+}
+
 /// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
 fn budget_value(state: &State) -> Value {
     let (Some((used, total, remaining)), Some((text, ratio, eta))) =
@@ -1356,6 +1380,27 @@ mod tests {
         let s = sources(&b);
         assert_eq!(s["since"]["kind"], "model switch");
         assert!(s["since"]["delta"].as_i64().unwrap() < 0);
+    }
+
+    /// `cctop query overview`: five charts, each verdict tagged with a
+    /// registered id; a derived session without its transcript has no chain.
+    #[test]
+    fn overview_carries_five_charts_with_registered_verdicts() {
+        let s = state_b();
+        let v = overview(&s, 50, None);
+        assert_eq!(v["schema"], 1);
+        let charts = v["charts"].as_array().unwrap();
+        assert_eq!(charts.len(), 5);
+        for c in charts {
+            let id = c["verdict"]["metric_id"].as_str().unwrap();
+            assert!(registry::get(id).is_some(), "{id} not registered");
+            assert!(
+                ["good", "watch", "act"].contains(&c["verdict"]["level"].as_str().unwrap()),
+                "{c}"
+            );
+            assert!(c["spec"]["kind"].is_string() && c["fallback_cells"].is_array());
+        }
+        assert!(v["footer"].as_str().unwrap().contains("at API prices"));
     }
 
     #[test]
