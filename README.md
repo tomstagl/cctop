@@ -119,9 +119,11 @@ Events and the Advisor, the same way `c`/`s`/`f`/`p` work in the terminal
 view. The Coach view draws the same coach object as the TUI's `c` view: the
 NOW card carries the nudge's plain name, headline, body and evidence wrapped
 at the pane's width, and its fix prompt as a card — a click puts it in the
-prompt box and nothing is ever submitted. The Buttons follow the action:
-fill a command, copy an allow rule or a setting and open settings.json (cctop
-never edits it), `Got it` for a tip, snooze; a key-kind nudge shows "Press
+prompt box and nothing is ever submitted (an empty box only: a draft you are
+typing is never replaced). The Buttons follow the action: fill a command,
+copy an allow rule (and open `.claude/settings.local.json`) or a setting (and
+open `~/.claude/settings.json`) — cctop never edits either — `Got it` for a
+tip, snooze; a key-kind nudge shows "Press
 Esc to stop the turn" as a step, never a stop button. "Up next" and the four
 lights open in place (the context light into what fills the window, per
 Claude Code), and the coach's one-line form is pinned under the prompt. It needs

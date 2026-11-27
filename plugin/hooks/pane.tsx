@@ -25,7 +25,7 @@ import { spoolText } from './breakdown';
 import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode, type Picture } from './charts';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
-import { coachOf, copiedText, openerFor, settingsPath, settingsScope, statusLine, type CoachActions, type LightId, type SettingsKind } from './views/coach';
+import { coachOf, copiedText, DRAFT_KEPT, openerFor, settingsPath, settingsScope, statusLine, USER_SETTINGS, type CoachActions, type LightId, type SettingsKind } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
 import { maxTurnsFor, overviewOf, pictureJobs, type Pictures } from './views/overview-charts';
@@ -269,6 +269,7 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
+  if (model.queryAt !== before.queryAt) checkFilled($);
   overviewChanged($, before);
   if (model.sessionId !== before.sessionId) agentsAsked.clear();
   if (model.query.agents !== before.query.agents) agentsPolled($);
@@ -679,12 +680,12 @@ function noteStop($: EngineInterface): void {
 }
 
 // What the coach view's Buttons do. None of it acts on the session: `fill`
-// drafts in the prompt box (never submits; the card then says nothing was
-// sent), `copy` puts a rule or a setting on the clipboard and says which
-// settings.json it belongs in, `openSettings` opens that file in the
-// person's editor (cctop never writes it), `snooze` and `gotIt` ask the
-// binary (queued for the TUI while it runs) and take its answer; `agents`,
-// `light` and `next` are view state.
+// drafts in an empty prompt box (never submits, never replaces a draft; the
+// card then says nothing was sent), `copy` puts a rule or a setting on the
+// clipboard and says which settings file it belongs in, `openSettings`
+// opens that file in the person's editor (cctop never writes it), `snooze`
+// and `gotIt` ask the binary (queued for the TUI while it runs) and take its
+// answer; `agents`, `light` and `next` are view state.
 function coachActions($: EngineInterface): CoachActions {
   return {
     fill: (text) => fillPrompt($, text),
@@ -698,31 +699,70 @@ function coachActions($: EngineInterface): CoachActions {
   };
 }
 
+// A fill never replaces what the person is typing: the box is read first,
+// and only an empty one is filled (`$.prompt.fill` replaces by default).
+// A draft, or a box cctop cannot read, keeps the draft and says so; a box
+// already holding this very text is left as it is and counts as filled.
 function fillPrompt($: EngineInterface, text: string): void {
-  $.prompt
-    .fill({ text })
-    .then(({ isFilled }) => {
-      if (!isFilled) {
-        $.ui.toast('cctop: the prompt box is busy — the action was not filled');
+  readPromptBox($)
+    .then((box) => {
+      if (box === text) {
+        apply($, { type: 'coach.filled', text });
         return;
       }
-      apply($, { type: 'coach.filled', text });
+      if (box !== '') {
+        $.ui.toast(DRAFT_KEPT);
+        return;
+      }
+      return $.prompt.fill({ text }).then(({ isFilled }) => {
+        if (!isFilled) {
+          $.ui.toast('cctop: the prompt box is busy — the action was not filled');
+          return;
+        }
+        apply($, { type: 'coach.filled', text });
+      });
     })
     .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
 }
 
-// The settings.json an action concerns: the project's for an allow rule, the
-// person's own for a setting. Read when pressed (`/cd` moves the root).
-async function settingsFile($: EngineInterface, kind: SettingsKind): Promise<string> {
+// The prompt box's draft; null when it cannot be read (a host without
+// `$.prompt.read`, or a read that failed), which a fill treats as a draft.
+function readPromptBox($: EngineInterface): Promise<string | null> {
+  // Called inside the chain: a host without the noun throws there, not here.
+  return Promise.resolve()
+    .then(() => $.prompt.read())
+    .then(
+      (box) => (typeof box?.text === 'string' ? box.text : null),
+      () => null,
+    );
+}
+
+// While the card says a fill is in the box, each poll looks at the box once:
+// emptied (sent, cleared, deleted), the line goes before the next turn does.
+function checkFilled($: EngineInterface): void {
+  if (model.coachFilled === null) return;
+  const filled = model.coachFilled;
+  readPromptBox($)
+    .then((box) => {
+      if (box === '' && model.coachFilled === filled) apply($, { type: 'coach.filled', text: null });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: prompt.read failed: ${String(err)}`));
+}
+
+// The settings file an action concerns, read when pressed (`/cd` moves the
+// root): the project's `.claude/settings.local.json` for an allow rule, the
+// person's `~/.claude/settings.json` for a setting; null when HOME is unset
+// (no shell expands `~`, so there is nothing to hand `open`).
+async function settingsFile($: EngineInterface, kind: SettingsKind): Promise<string | null> {
   if (settingsScope(kind) === 'project') return settingsPath('project', await $.session.root(), '');
   const home = await $.env.get('HOME');
-  return settingsPath('user', '', typeof home === 'string' ? home : '~');
+  return typeof home === 'string' && home !== '' ? settingsPath('user', '', home) : null;
 }
 
 function copySetting($: EngineInterface, text: string, kind: SettingsKind): void {
   Promise.all([$.ui.copy({ text }), settingsFile($, kind)])
     .then(([copied, path]) => {
-      $.ui.toast(copied.isCopied ? copiedText(text, kind, path) : `cctop: nothing was copied (${copied.reason})`);
+      $.ui.toast(copied.isCopied ? copiedText(text, kind, path ?? USER_SETTINGS) : `cctop: nothing was copied (${copied.reason})`);
     })
     .catch((err: unknown) => $.ui.log(`cctop: copy failed: ${String(err)}`));
 }
@@ -733,6 +773,10 @@ function copySetting($: EngineInterface, text: string, kind: SettingsKind): void
 function openSettings($: EngineInterface, kind: SettingsKind): void {
   settingsFile($, kind)
     .then(async (path) => {
+      if (path === null) {
+        $.ui.toast(`cctop: HOME is not set: open ${USER_SETTINGS} in your editor`);
+        return;
+      }
       const opener = openerFor(model.sessionFacts?.platform);
       if (opener === null) {
         $.ui.toast(`cctop: open ${path} in your editor`);

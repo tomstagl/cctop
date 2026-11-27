@@ -806,19 +806,27 @@ hooks are off or before its module is accepted.
     A09) and one with a key step (A38 or A36).
     Expected: the NOW card shows the plain name, the age and the dim rule
     id, the headline, the body and the evidence wrapped, nothing cut
-    mid-word, also with the pane narrowed to 59 columns. Clicking any line
-    of the fix-prompt card puts the prompt in the prompt box and nothing is
-    sent: the card then says `It's in your prompt box. Nothing has been
-    sent`, and the turn starts only when you press Enter (the line goes
-    with it). With a draft or a dialog open the fill is refused with a
-    toast and the card says nothing. A key-kind card shows `1  Press Esc to
-    stop the turn` as text before its Buttons: there is no stop Button, and
-    Esc itself stops the turn. An allow rule's `Copy the rule` puts the
-    rule on the clipboard (paste it somewhere to check), `Open
-    settings.json` opens the project's `.claude/settings.json` in your
-    editor without changing it (`git diff` stays clean; a missing file is
-    reported, not created), `Put /permissions in the box` fills
-    `/permissions`. A tip's `Got it` silences it for the session. An "Up
+    mid-word, also with the pane narrowed to 59 columns. With the prompt
+    box empty, clicking any line of the fix-prompt card puts the prompt in
+    the box and nothing is sent: the card then says `It's in your prompt
+    box. Nothing has been sent`, and the turn starts only when you press
+    Enter. The line goes with the turn, or within a few seconds once you
+    empty the box yourself. With a draft in the box (type a few words
+    first) the press fills nothing: the draft stays exactly as typed, a
+    toast says `cctop: Your draft is kept — clear the prompt box, then
+    press again`, and the card does not change. Under a dialog the fill is
+    refused with the toast `the prompt box is busy`. A key-kind card shows
+    `1  Press Esc to stop the turn` as text before its Buttons: there is
+    no stop Button, and Esc itself stops the turn. The NOW card's Buttons
+    keep their digits (1, 2, …) across polls; "Up next" Buttons have none.
+    An allow rule's `Copy the rule` puts the rule on the clipboard (paste
+    it somewhere to check) and the toast names the project's
+    `.claude/settings.local.json`; `Open settings.local.json` opens that
+    file in your editor without changing it (`git diff` stays clean; a
+    missing file is reported, not created); `Put /permissions in the box`
+    fills `/permissions` (into an empty box only). A setting opens
+    `~/.claude/settings.json`; with HOME unset the toast names the file to
+    open by hand. A tip's `Got it` silences it for the session. An "Up
     next" row and each light open in place on a click and close on a
     second; the context light shows what fills the window with its age
     (`per Claude Code, 12s ago` once a turn has written the spool) and the
