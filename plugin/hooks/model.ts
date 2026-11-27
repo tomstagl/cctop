@@ -132,9 +132,12 @@ export type Model = {
   viewportColumns: number | null;
   /** The context size at the end of each turn (the last HISTORY_TURNS), for the Context sparkline. */
   contextHistory: number[];
-  /** The coach view: which light's detail frame is open (null = the highest light) and whether the why frame is. */
-  coachLight: 'context' | 'cache' | 'limits' | 'rework' | null;
-  coachWhy: boolean;
+  /** The coach view: which light is open in place (null = the highest light, `none` = every light closed). */
+  coachLight: 'context' | 'cache' | 'limits' | 'rework' | 'none' | null;
+  /** The coach view: the "Up next" row open in place (its rule id); null = closed. */
+  coachNext: string | null;
+  /** The text the coach last put in the prompt box (`$.prompt.fill` said it took): the card's "nothing has been sent" line. Cleared by the next turn. */
+  coachFilled: string | null;
   /** `id:fired_at_ms` of the nudge last toasted, and the turn it was toasted in (one toast per turn). */
   coachToasted: string | null;
   coachToastTurn: number | null;
@@ -186,8 +189,10 @@ export type Action =
   // The engine asked for the pane's tree: it is being drawn, here and this wide.
   | { type: 'render'; at: number; placement: Placement; bodyColumns: number; viewportColumns: number | null }
   | { type: 'visibility'; visibility: Visibility }
-  | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | null }
-  | { type: 'coach.why'; why: boolean }
+  | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | 'none' | null }
+  // An "Up next" row pressed: opens it, or closes it when it is the open one.
+  | { type: 'coach.next'; id: string }
+  | { type: 'coach.filled'; text: string | null }
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
   | { type: 'overview.body'; id: string }
@@ -245,7 +250,8 @@ export function initialModel(): Model {
     viewportColumns: null,
     contextHistory: [],
     coachLight: null,
-    coachWhy: false,
+    coachNext: null,
+    coachFilled: null,
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
@@ -274,6 +280,8 @@ export function reduce(model: Model, action: Action): Model {
         ...model,
         // A new turn is the latest again: a picked readout gives way to it.
         readouts: {},
+        // The draft the coach filled was sent or replaced: its line goes.
+        coachFilled: null,
         turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at, toolMs: 0 },
       };
     case 'turn.complete': {
@@ -365,6 +373,8 @@ export function reduce(model: Model, action: Action): Model {
         coachToasted: null,
         coachToastTurn: null,
         coachStatus: null,
+        coachNext: null,
+        coachFilled: null,
         readouts: {},
         openRun: null,
         liveAgents: [],
@@ -390,9 +400,11 @@ export function reduce(model: Model, action: Action): Model {
     case 'visibility':
       return model.visibility === action.visibility ? model : { ...model, visibility: action.visibility };
     case 'coach.light':
-      return { ...model, coachLight: action.light, coachWhy: false };
-    case 'coach.why':
-      return { ...model, coachWhy: action.why };
+      return model.coachLight === action.light ? model : { ...model, coachLight: action.light };
+    case 'coach.next':
+      return { ...model, coachNext: model.coachNext === action.id ? null : action.id };
+    case 'coach.filled':
+      return model.coachFilled === action.text ? model : { ...model, coachFilled: action.text };
     case 'coach.toasted':
       return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
     case 'coach.status':

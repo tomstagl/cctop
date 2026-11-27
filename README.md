@@ -73,40 +73,58 @@ docks the same dashboard *inside* Claude Code, above the prompt, drawn in
 Claude Code's own frame and colour style — no multiplexer needed. Its
 Overview is Console above, row for row — the cells, the act line and
 `0: home` are the engine's own clickable chrome, the digit each draws being
-its hotkey; its Coach view is the card the TUI's `c` shows, with buttons:
+its hotkey; its Coach view is the coach's advice in full, with buttons:
 
 ```
 ╭coach ─ opus-5 · turn 5 ──────────────────────────────────╮
-│ PLANNING · 5c +490 · silent 13m · ▸ steer window         │
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · …     │
 │ ──────────────────────────────────────────────────────── │
-│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call              │
-│ ○ cache    warm 1h00 (1h) ≈                              │
-│ ○ limits   — no status line                              │
-│ ● rework   4 blocked · edits 3 ✓ none 18m                │
-│ ──────────────────────────────────────────────────────── │
-│ ▸ rm is denied by your rules                             │
-│   tell Claude the alternative — it cannot run this       │
-│   NOW · fired at call 6 · +4 queued (n)                  │
+│  NOW  A command keeps being blocked    7m ago · rule A45 │
+│ rm is denied by your rules                               │
 │                                                          │
-│ next     context-reset → next-row only · ctx 720k →…     │
-│ snoozed  —                                               │
+│ rm is denied by a permissions.deny rule in your          │
+│ settings, so Claude cannot run it however it tries. Tell │
+│ it the alternative, or what you need instead.            │
+│                                                          │
+│ · a permissions.deny rule in settings                    │
+│                                                          │
+│ Fix it with this prompt · click to put it in your prompt │
+│ box                                                      │
+│ ↵ You can't run `rm` here (it's denied by my settings).  │
+│   Use another way or tell me what you need.              │
+│                                                          │
+│ 1: Put the fix prompt in the box  2: Snooze              │
+│ goes away at the end of the turn                         │
 ╰──────────────────────────────────────────────────────────╯
-[1 fill] [2 snooze] [3 why]
-╭● rework ─ transcript ────────────────────────────────────╮
-│ last check `python3 - lorem_i lorem…` ok 19m ago         │
-│ fails: Denied 4 · Other 2                                │
-│ rewind 1 checkpoints this turn                           │
+╭Up next ─ click a row to open it ─────────────────────────╮
+│ NEXT  The context is getting expensive                 › │
+│       ctx 720k → ≈$.37/call, ≈$5.6/turn (was ≈$.96)      │
 ╰──────────────────────────────────────────────────────────╯
-[◐ context] [○ cache] [○ limits]  ● rework
+╭Session ─ click a row for the detail ─────────────────────╮
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call            › │
+│ ○ cache    warm 1h00 (1h) ≈                            › │
+│ ○ limits   — no status line                            › │
+│ ● rework   4 blocked · edits 3 ✓ none 18m              ▾ │
+│   last check `python3 - lorem_i lorem…` ok 19m ago       │
+│   fails: Denied 4 · Other 2                              │
+│   rewind 1 checkpoints this turn                         │
+│   from the transcript                                    │
+╰──────────────────────────────────────────────────────────╯
+spent so far ≈$19.26 · what this session would cost at API
+prices
 ```
 
 The view bar switches between the Overview, the Coach, Tools, Agents, Files,
 Events and the Advisor, the same way `c`/`s`/`f`/`p` work in the terminal
-view. The Coach view is the same 56-column card as the TUI's `c` view — the
-state line, four lights, the one nudge — with `[1 fill]` (writes a
-prompt-class action into the prompt box; nothing is ever submitted),
-`[2 snooze]` and `[3 why]`, a detail frame that follows the highest light,
-and the coach's one-line form pinned under the prompt. It needs
+view. The Coach view draws the same coach object as the TUI's `c` view: the
+NOW card carries the nudge's plain name, headline, body and evidence wrapped
+at the pane's width, and its fix prompt as a card — a click puts it in the
+prompt box and nothing is ever submitted. The Buttons follow the action:
+fill a command, copy an allow rule or a setting and open settings.json (cctop
+never edits it), `Got it` for a tip, snooze; a key-kind nudge shows "Press
+Esc to stop the turn" as a step, never a stop button. "Up next" and the four
+lights open in place (the context light into what fills the window, per
+Claude Code), and the coach's one-line form is pinned under the prompt. It needs
 `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of
 `~/.claude/settings.json` and `/tui fullscreen`; `cctop pane status` tells you
 which prerequisite is missing. The `/diff` panel and the cctop panel share one

@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far ≈$6.04 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "227k ▇▇▁▁▁▁▁▁▁▁ 23% · re-reads 227k/call",

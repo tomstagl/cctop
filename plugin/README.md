@@ -66,7 +66,7 @@ lit and pressed as one area. It shows the same views as the TUI:
 
 | View | TUI | What it shows |
 |---|---|---|
-| Coach | `c` | The 56-column card: the state line, the four lights, the one nudge with `[1 fill]` `[2 snooze]` `[3 why]`, what is next and what is snoozed, the detail frame of the highest light |
+| Coach | `c` | The NOW card: the state line and the nudge in full (plain name, age, rule id, headline, body, evidence), its fix prompt as a card a click puts in the prompt box, Buttons by action kind and snooze; "Up next" and the four lights opening in place (context: what fills the window and what put it there) |
 | Overview | the dashboard | Console: the header, the six cells (`1`–`6`), the act line (`a`), the rule line (`0` home, `? keys`), the open body in place — every figure the TUI's nine panels carry, one body at a time |
 | Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
 | Agents | 6 | Subagents, MCP servers, background tasks |
@@ -78,8 +78,11 @@ The Coach and Overview views draw `cctop query coach` and `cctop query
 dashboard` verbatim — the same objects the TUI draws — so the pane and the
 terminal show the same nudge at the same moment. The frames inside the other
 views carry the TUI's panel digits (`╭5 Tools ─ 257 calls╮`), the same
-numbers the guide and `cctop query` use. `[1 fill]` writes a prompt-class
-action into the prompt box (`$.prompt.fill`) and never submits it; the
+numbers the guide and `cctop query` use. A fix prompt or a command goes
+into the prompt box (`$.prompt.fill`) and is never submitted; a rule or a
+setting is copied (`$.ui.copy`) and settings.json is opened in your editor,
+never written; a key-kind nudge (stop the turn) is a step you take with Esc;
+the
 coach's one-line form sits under the prompt (`$.ui.status`) and changes only
 when a light's level or the nudge changes.
 

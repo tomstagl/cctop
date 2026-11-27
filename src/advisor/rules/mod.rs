@@ -77,7 +77,7 @@ pub const PHRASES: &[Phrase] = &[
     p("A41", "what", "permission", "A permission dialog opened"),
     p("A41", "what", "notification", "Claude asked for your input"),
     p("A41", "what", "asked", "The turn ended with a question"),
-    p("A41", "what", "elicitation", "An MCP server asked you something"),
+    p("A41", "what", "elicitation", "MCP {server} asked you something"),
     p("A41", "hint", "permission", "Approve, deny, or choose 'always' for this kind of command."),
     p("A41", "hint", "other", "A one-word reply is enough; /btw asks a side question first if you need a detail."),
     // A42: why this is a moment to start fresh.

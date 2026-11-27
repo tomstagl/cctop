@@ -1024,12 +1024,15 @@ impl Rule for WaitingOnYou {
         if since < 30_000 {
             return None;
         }
+        // The server asking is a structural name (mod-pane spec §7, PRD 5):
+        // the elicitation card says who is asking.
+        let server = super::ident(state.open_elicitation().map_or("", |(s, _)| s));
         let what = match w.kind {
-            WaitingKind::Question => "Claude asked a question",
-            WaitingKind::Permission => "a permission dialog is open",
-            WaitingKind::Notification => "Claude needs your input",
-            WaitingKind::Asked => "the turn ended with a question",
-            WaitingKind::Elicitation => "an MCP server asks you something",
+            WaitingKind::Question => "Claude asked a question".to_string(),
+            WaitingKind::Permission => "a permission dialog is open".to_string(),
+            WaitingKind::Notification => "Claude needs your input".to_string(),
+            WaitingKind::Asked => "the turn ended with a question".to_string(),
+            WaitingKind::Elicitation => format!("MCP {server} is asking you"),
         };
         let mut a = Advice::new("A41", "waiting", Urgency::Now);
         a.headline = format!("◆ WAITING {} · {what}", crate::coach::short_duration(since));
@@ -1063,7 +1066,8 @@ impl Rule for WaitingOnYou {
                     WaitingKind::Asked => "asked",
                     WaitingKind::Elicitation => "elicitation",
                 },
-            ),
+            )
+            .replace("{server}", &server),
         );
         a.hole("since", spoken(since));
         a.hole(
@@ -2446,6 +2450,29 @@ mod tests {
             "◆ WAITING 0:53 · the turn ended with a question"
         );
         assert_eq!(a.action, "reply now · a one-word answer unblocks the task");
+    }
+
+    #[test]
+    fn a41_names_the_mcp_server_that_is_asking() {
+        let mut s = fresh();
+        s.apply_hook(&crate::hooks::HookEvent {
+            at: t("2026-01-01T10:00:00Z"),
+            event: "Elicitation".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"mcp_server_name": "linear"}),
+        });
+        s.now_ms = t("2026-01-01T10:00:45Z");
+        let a = WaitingOnYou.evaluate(&s).expect("45 s");
+        assert_eq!(a.headline, "◆ WAITING 0:45 · MCP linear is asking you");
+        assert!(
+            a.body
+                .starts_with("MCP linear asked you something 45 seconds ago"),
+            "{}",
+            a.body
+        );
+        assert_eq!(a.urgency, Urgency::Now);
     }
 
     #[test]

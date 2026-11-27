@@ -3738,9 +3738,35 @@ mod tests {
                 .count(),
             1
         );
-        assert!(
-            PermissionWaits.evaluate(&s).is_some(),
-            "3 waits, only 1 joined"
+        let a = PermissionWaits
+            .evaluate(&s)
+            .expect("3 waits, only 1 joined");
+        // The card's split by who decided (PRD 7), in fixed words.
+        assert_eq!(
+            a.evidence_rows,
+            ["who decided the 3 permission waits: you 1 · not known 2"]
         );
+    }
+
+    #[test]
+    fn the_permission_card_splits_the_waits_by_who_decided() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        use crate::advisor::rules::events::PermissionWaits;
+        use crate::advisor::Rule;
+        let mut s = state_with_waits(5);
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user", "user", "user", "config", "classifier"]).into(),
+            ..Default::default()
+        });
+        let a = PermissionWaits.evaluate(&s).expect("3 of the person's own");
+        assert_eq!(
+            a.evidence_rows,
+            ["who decided the 5 permission waits: you 3 · rule 1 · classifier 1"]
+        );
+        // Without traces, no split row.
+        let plain = PermissionWaits
+            .evaluate(&state_with_waits(3))
+            .expect("3 waits");
+        assert!(plain.evidence_rows.is_empty());
     }
 }

@@ -204,6 +204,9 @@ pub struct Coach {
     /// Nudges are shown this session (`false` on the control arm of the
     /// measurement, `cctop run --coach off|auto`).
     pub exposed: bool,
+    /// `spent so far $14.82 · what this session would cost at API prices`:
+    /// the overview's footer, under the pane's coach card too (POC 1).
+    pub footer: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -391,6 +394,7 @@ pub fn snapshot(state: &State, engine: &Engine) -> Coach {
         quiet_row: String::new(),
         start_line: state.start_line().map(|l| cut(&l)),
         exposed: engine.exposed,
+        footer: crate::overview::spend_footer(state),
     };
     c.lines = StatusLines {
         l0: c.line(80),

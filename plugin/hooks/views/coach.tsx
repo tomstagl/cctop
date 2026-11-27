@@ -1,16 +1,28 @@
-// The Coach view: `cctop query coach` drawn as the TUI draws it — the state
-// line, the four lights, the nudge slot, `next`, `snoozed` — in one frame,
-// then the action Buttons (`[1 fill]` for prompt- and slash-class actions,
-// `[2 snooze]`, `[3 why]`), then the detail frame of one light (the highest
-// by default; four Buttons pick another) or the why frame. Every string is
-// the binary's, cut at 52 cells there, so the two surfaces never disagree;
-// below 50 body columns each light's row drops its third figure.
+// The Coach view (mod-pane POC 1, spec §5.2): `cctop query coach` drawn as
+// three frames and a footer.
+//
+// - The NOW card: the state line and the nudge in full — its class, plain
+//   name, age and dim rule id, the headline, the body and the evidence
+//   wrapped at the pane's width, the fix prompt as a card a click puts in
+//   the prompt box (never sent; a line says so), then the steps and Buttons
+//   of its actions by kind, and when it goes away.
+// - "Up next": the queued nudge as a row that opens in place (its body, its
+//   Buttons, its foot), and the snoozed rules.
+// - "Session": the four lights, each a row that opens in place; the context
+//   light opens into the window's composition as Claude Code counted it
+//   (PRD 3, from the dashboard object) and what put it there (residency).
+//
+// The one-line strings (the state line, the light rows) are the binary's,
+// cut at 52 cells there, so the TUI and the pane show the same characters;
+// the full words are uncut and wrapped here. Nothing here acts on the
+// session: a fill only drafts, a copy only copies, settings.json is only
+// opened, and "press Esc to stop the turn" is a step the person takes.
 import type { ElementTable, RenderElement } from 'claude-code';
 import type { Model } from '../model';
-import { at, stringAt } from './format';
-import { ACCENT, CRIT, WARN, seg, textRow, type Line } from './frame';
-import { NEEDS_BINARY, type ViewElements } from './overview';
-import { bodyWidth, line, panel, row, wrapWords, type FrameRow } from './table';
+import { at, formatAgo, formatTokensTui, stringAt } from './format';
+import { ACCENT, BUTTON_GAP, CRIT, OK, WARN, buttonWidth, clip, dim, lineWidth, pad, seg, textRow, width, type FrameButton, type Line, type Seg } from './frame';
+import { NEEDS_BINARY, dashboardOf, type ViewElements } from './overview';
+import { bodyWidth, line, panel, wrapWords, type FrameRow } from './table';
 
 /** Body columns below which a light's row keeps only its first two figures. */
 export const NARROW_COLUMNS = 50;
@@ -20,10 +32,26 @@ export const LIGHT_IDS: readonly LightId[] = ['context', 'cache', 'limits', 'rew
 export type Level = 'quiet' | 'watch' | 'act';
 
 export type Light = { id: LightId; level: Level; glyph: string; number: string; text: string; lines: string[]; source: string; approx: boolean };
-export type Nudge = {
+
+export type ActionKind = 'prompt' | 'slash' | 'allow_rule' | 'setting' | 'key' | 'read';
+const ACTION_KINDS: readonly ActionKind[] = ['prompt', 'slash', 'allow_rule', 'setting', 'key', 'read'];
+/** One of a nudge's actions as the binary words it: what the Buttons are made from. */
+export type CoachAction = { kind: ActionKind; label: string; payload: string };
+
+/** A nudge's full words (the coach object's `Full`), uncut. */
+export type Advice = {
   id: string;
-  family: string;
   cls: string;
+  name: string;
+  headline: string;
+  body: string;
+  evidence: string[];
+  fixPrompt: string | null;
+  actions: CoachAction[];
+  foot: string;
+};
+export type Nudge = Advice & {
+  family: string;
   line1: string;
   line2: string;
   line3: string;
@@ -35,6 +63,7 @@ export type Nudge = {
   firedAt: number | null;
   acting: boolean;
 };
+export type Next = Advice & { promotes: string; row: string };
 export type Coach = {
   session: string;
   model: string;
@@ -43,11 +72,15 @@ export type Coach = {
   stateKind: string;
   lights: Light[];
   nudge: Nudge | null;
+  next: Next | null;
   nextRow: string;
+  snoozed: number;
   snoozedRow: string;
   quietRow: string;
   recent: string[];
   sessionMode: string;
+  /** `spent so far $X · what this session would cost at API prices`; empty from a binary without it. */
+  footer: string;
   /** The one-line forms: L0 (≥ 80 columns), L1 (≥ 40), L2. */
   lines: { l0: string; l1: string; l2: string };
 };
@@ -59,19 +92,45 @@ function levelOf(v: unknown): Level {
   return s !== null && (LEVELS as string[]).includes(s) ? (s as Level) : 'quiet';
 }
 
+function strings(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((l): l is string => typeof l === 'string' && l !== '') : [];
+}
+
 function lightOf(v: unknown): Light | null {
   const id = stringAt(v, 'id');
   if (id === null || !(LIGHT_IDS as string[]).includes(id)) return null;
-  const lines = at(v, 'lines');
   return {
     id: id as LightId,
     level: levelOf(v),
     glyph: stringAt(v, 'glyph') ?? '○',
     number: stringAt(v, 'number') ?? '—',
     text: stringAt(v, 'text') ?? '',
-    lines: Array.isArray(lines) ? lines.filter((l): l is string => typeof l === 'string') : [],
+    lines: strings(at(v, 'lines')),
     source: stringAt(v, 'source') ?? '',
     approx: at(v, 'approx') === true,
+  };
+}
+
+function actionOf(v: unknown): CoachAction | null {
+  const kind = stringAt(v, 'kind');
+  if (kind === null || !(ACTION_KINDS as string[]).includes(kind)) return null;
+  // The payload is kept as the binary sent it: `/compact ` keeps its space for a focus.
+  const payload = at(v, 'payload');
+  return { kind: kind as ActionKind, label: stringAt(v, 'label') ?? '', payload: typeof payload === 'string' ? payload : '' };
+}
+
+function adviceOf(v: unknown, id: string): Advice {
+  const actions = at(v, 'actions');
+  return {
+    id,
+    cls: stringAt(v, 'class') ?? '',
+    name: stringAt(v, 'name') ?? '',
+    headline: stringAt(v, 'headline') ?? '',
+    body: stringAt(v, 'body') ?? '',
+    evidence: strings(at(v, 'evidence')),
+    fixPrompt: stringAt(v, 'fix_prompt'),
+    actions: Array.isArray(actions) ? actions.map(actionOf).filter((a): a is CoachAction => a !== null) : [],
+    foot: stringAt(v, 'foot') ?? '',
   };
 }
 
@@ -81,9 +140,8 @@ function nudgeOf(v: unknown): Nudge | null {
   if (id === null) return null;
   const fired = at(v, 'fired_at_ms');
   return {
-    id,
+    ...adviceOf(v, id),
     family: stringAt(v, 'family') ?? '',
-    cls: stringAt(v, 'class') ?? '',
     line1: stringAt(v, 'line1') ?? '',
     line2: stringAt(v, 'line2') ?? '',
     line3: stringAt(v, 'line3') ?? '',
@@ -97,6 +155,13 @@ function nudgeOf(v: unknown): Nudge | null {
   };
 }
 
+function nextOf(v: unknown): Next | null {
+  if (v === null || typeof v !== 'object') return null;
+  const id = stringAt(v, 'id');
+  if (id === null) return null;
+  return { ...adviceOf(v, id), promotes: stringAt(v, 'promotes') ?? '', row: stringAt(v, 'row') ?? '' };
+}
+
 /** The coach object as the pane reads it, or null when the query has not answered (or is not this shape). */
 export function coachOf(query: unknown): Coach | null {
   if (query === null || typeof query !== 'object') return null;
@@ -107,6 +172,7 @@ export function coachOf(query: unknown): Coach | null {
   const state = at(query, 'state');
   const lines = at(query, 'lines');
   const recent = at(query, 'recent');
+  const snoozed = at(query, 'snoozed');
   return {
     session: stringAt(query, 'session') ?? '',
     model: stringAt(query, 'model') ?? '',
@@ -115,11 +181,14 @@ export function coachOf(query: unknown): Coach | null {
     stateKind: stringAt(state, 'kind') ?? '',
     lights: parsed,
     nudge: nudgeOf(at(query, 'nudge')),
+    next: nextOf(at(query, 'next')),
     nextRow: stringAt(query, 'next_row') ?? 'next     —',
+    snoozed: Array.isArray(snoozed) ? snoozed.length : 0,
     snoozedRow: stringAt(query, 'snoozed_row') ?? 'snoozed  —',
     quietRow: stringAt(query, 'quiet_row') ?? '  quiet · nothing to act on',
     recent: Array.isArray(recent) ? recent.map((r) => stringAt(r, 'row') ?? '').filter((r) => r !== '') : [],
     sessionMode: stringAt(query, 'session_mode') ?? 'interactive',
+    footer: stringAt(query, 'footer') ?? '',
     lines: {
       l0: stringAt(lines, 'l0') ?? '',
       l1: stringAt(lines, 'l1') ?? '',
@@ -133,7 +202,7 @@ export function statusLine(c: Coach, columns: number): string {
   return columns >= 80 ? c.lines.l0 : columns >= 40 ? c.lines.l1 : c.lines.l2;
 }
 
-/** The light whose level is highest (the first of equals): what the detail frame follows. */
+/** The light whose level is highest (the first of equals): open by default. */
 export function highestLight(c: Coach): LightId {
   let best = c.lights[0];
   if (!best) return 'context';
@@ -141,13 +210,10 @@ export function highestLight(c: Coach): LightId {
   return best.id;
 }
 
-/** Prompt- and slash-class actions go into the prompt box; nothing else does. */
-export function fillable(n: Nudge | null): boolean {
-  return n !== null && n.actionText !== '' && (n.actionKind === 'prompt' || n.actionKind === 'slash');
-}
-
-function levelColor(level: Level): string | undefined {
-  return level === 'act' ? CRIT : level === 'watch' ? WARN : undefined;
+/** The light open in place: the one pressed, the highest until one is, none once the open one is pressed again. */
+export function openLight(model: Model, c: Coach): LightId | null {
+  if (model.coachLight === 'none') return null;
+  return model.coachLight ?? highestLight(c);
 }
 
 /** A light's row text, its third figure dropped below NARROW_COLUMNS body columns (the context light keeps its tokens and bar, and drops the price). */
@@ -157,16 +223,96 @@ export function lightText(l: Light, columns: number): string {
   return parts.slice(0, l.id === 'context' ? 1 : 2).join(' · ');
 }
 
+// ------------------------------------------------------------ the actions
+
+/** Which settings file an action concerns: an allow rule the project's, a setting the person's own. */
+export type SettingsKind = 'allow_rule' | 'setting';
+export type SettingsScope = 'project' | 'user';
+
+export function settingsScope(kind: SettingsKind): SettingsScope {
+  return kind === 'allow_rule' ? 'project' : 'user';
+}
+
+/** The settings.json an action points at: `<project>/.claude/settings.json` or `~/.claude/settings.json`. */
+export function settingsPath(scope: SettingsScope, root: string, home: string): string {
+  return `${(scope === 'project' ? root : home).replace(/\/+$/, '')}/.claude/settings.json`;
+}
+
+/** The command that opens a file in the person's editor on `platform` (`$.session.info()`), or null where cctop knows none. */
+export function openerFor(platform: string | undefined): 'open' | 'xdg-open' | null {
+  if (platform === 'macos') return 'open';
+  if (platform === 'linux' || platform === 'wsl') return 'xdg-open';
+  return null;
+}
+
+/** What a copy of `text` tells the person: where to paste it. */
+export function copiedText(text: string, kind: SettingsKind, path: string): string {
+  return kind === 'allow_rule' ? `cctop: copied ${text}. Paste it under permissions.allow in ${path}` : `cctop: copied ${text}. Paste it into ${path}`;
+}
+
+/** The line under the fix-prompt card once it is in the box. */
+export const FILLED_FIX = "✓ It's in your prompt box. Nothing has been sent: read it, change it if you like, then press Enter.";
+
+/** The line after any other fill: what is in the box, and that nothing was sent. */
+export function filledText(text: string): string {
+  const t = text.trim();
+  return t.startsWith('/') ? `✓ ${t} is in your prompt box. Nothing has been sent: press Enter to run it.` : FILLED_FIX;
+}
+
+/** A key-kind action as the step the person takes (no Button: cctop never stops a turn itself). */
+export function keyStep(a: CoachAction): string {
+  if (a.payload === 'Esc') return 'Press Esc to stop the turn';
+  if (a.payload === 'Esc Esc') return 'Press Esc twice to rewind';
+  const m = /^(.*?)\s*\(([^)]*)\)$/.exec(a.label);
+  if (m === null) return `Press ${a.payload}`;
+  const what = m[1] ?? '';
+  return `Press ${m[2]} to ${what.charAt(0).toLowerCase()}${what.slice(1)}`;
+}
+
 /** The elements the coach draws with: the views' Box and Text, plus Button. */
 export type CoachElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
 
-/** What the pane may do on a press; built in pane.tsx over `$`. */
+/** What the pane may do on a press; built in pane.tsx over `$`. None of it acts on the session. */
 export type CoachActions = {
+  /** Draft `text` in the prompt box (`$.prompt.fill`); never sends. */
   fill(text: string): void;
+  /** Put `text` on the clipboard (`$.ui.copy`) and say which settings.json it belongs in. */
+  copy(text: string, kind: SettingsKind): void;
+  /** Open that settings.json in the person's editor; cctop never writes it. */
+  openSettings(kind: SettingsKind): void;
+  /** Five turns' quiet for the rule (`cctop query coach --snooze`). */
   snooze(rule: string): void;
-  why(): void;
-  light(id: LightId): void;
+  /** A tip read: the rule is quiet for the session (`--snooze-session`). */
+  gotIt(rule: string): void;
+  /** The pane's Agents view, for a nudge whose step is the TUI's agents key. */
+  agents(): void;
+  /** Open a light in place, or close them all (`none`). */
+  light(id: LightId | 'none'): void;
+  /** Open an "Up next" row in place, or close it when it is the open one. */
+  next(id: string): void;
 };
+
+// ---------------------------------------------------------------- drawing
+
+type Style = Omit<Seg, 'text'>;
+
+function classColor(cls: string): string | undefined {
+  return cls === 'NOW' ? CRIT : cls === 'NEXT' ? WARN : undefined;
+}
+
+/** `text` wrapped at `inner - indent`, each line after `indent` spaces. */
+function wrapped(text: string, inner: number, style: Style = {}, indent = 0): FrameRow[] {
+  const lead = ' '.repeat(indent);
+  return wrapWords(text, inner - indent).map((w) => ({ line: [seg(lead), seg(w, style)] }));
+}
+
+/** `text` after a `prefix`, the lines after the first hanging under the text. */
+function hanging(prefix: Seg, text: string, inner: number, style: Style = {}): FrameRow[] {
+  const w = width(prefix.text);
+  return wrapWords(text, inner - w).map((t, i) => ({ line: [i === 0 ? prefix : seg(' '.repeat(w)), seg(t, style)] }));
+}
+
+const blank = (): FrameRow => ({ line: [seg('')] });
 
 function stateRow(c: Coach): FrameRow {
   const text = c.stateLine;
@@ -179,112 +325,316 @@ function stateRow(c: Coach): FrameRow {
   return { line: [seg(word, style), seg(rest)] };
 }
 
-function separatorRow(inner: number): FrameRow {
-  return { line: [seg('─'.repeat(inner), { dim: true })] };
+/** The card's first row: the class badge and the plain name, the age and the rule id dim at the right (on a row of their own when they don't fit). */
+function headRows(a: Advice, right: string, inner: number): FrameRow[] {
+  const color = classColor(a.cls);
+  const badge = seg(` ${a.cls} `, color === undefined ? { inverse: true, bold: true } : { inverse: true, bold: true, color });
+  const left: Line = [badge, seg(' '), seg(a.name, { bold: true })];
+  const lw = lineWidth(left);
+  if (lw + 2 + width(right) <= inner) return [{ line: [...left, seg(' '.repeat(inner - lw - width(right))), dim(right)] }];
+  return [{ line: left }, { line: [dim(right)] }];
 }
 
-export function renderCoach(model: Model, el: CoachElements, columns: number, actions: CoachActions): RenderElement {
+/** Hotkeys for the view's Buttons, 1 to 9 in drawing order; later ones go without. */
+type Counter = { n: number };
+function hotkey(counter: Counter): string | undefined {
+  const n = counter.n++;
+  return n <= 9 ? String(n) : undefined;
+}
+
+/** Buttons packed greedily into rows `inner` wide, BUTTON_GAP apart. */
+function packButtons(buttons: FrameButton[], inner: number): FrameRow[] {
+  const rows: FrameRow[] = [];
+  let cur: FrameButton[] = [];
+  let used = 0;
+  for (const b of buttons) {
+    const w = buttonWidth(b);
+    if (cur.length > 0 && used + BUTTON_GAP + w > inner) {
+      rows.push({ line: [], buttons: cur });
+      cur = [];
+      used = 0;
+    }
+    used += (cur.length === 0 ? 0 : BUTTON_GAP) + w;
+    cur.push(b);
+  }
+  if (cur.length > 0) rows.push({ line: [], buttons: cur });
+  return rows;
+}
+
+/** The texts a press of this advice can put in the box. */
+function fillTexts(a: Advice): string[] {
+  const out: string[] = [];
+  for (const x of a.actions) {
+    if (x.kind === 'prompt' || x.kind === 'slash') out.push(x.payload);
+    if (x.kind === 'allow_rule') out.push('/permissions');
+  }
+  return out;
+}
+
+// An advice's actions, by kind and in the binary's order: a key is a step
+// the person takes (shown first, numbered with the Buttons); prompt and
+// slash fill the box; an allow rule copies, opens settings.json and fills
+// /permissions; a setting copies and opens; a tip is "Got it". Snooze last.
+// Then the line saying a fill took and nothing was sent.
+function actionRows(a: Advice, where: string, inner: number, actions: CoachActions, counter: Counter, model: Model, fixShown: boolean): FrameRow[] {
+  const rows: FrameRow[] = [];
+  const buttons: FrameButton[] = [];
+  const button = (key: string, label: string, onPress: () => void): void => {
+    const hk = hotkey(counter);
+    buttons.push({ key: `coach-${where}-${key}`, label, onPress, ...(hk === undefined ? {} : { hotkey: hk }) });
+  };
+  a.actions.forEach((x, i) => {
+    switch (x.kind) {
+      case 'key':
+        // The TUI's agents key: in the pane, the Agents view.
+        if (x.payload === '6 Enter') {
+          button(`${i}-agents`, 'Open the agents view', () => actions.agents());
+        } else {
+          const n = counter.n++;
+          rows.push(...hanging(seg(`${n}  `, { color: ACCENT, bold: true }), keyStep(x), inner, { bold: true }));
+        }
+        break;
+      case 'prompt':
+      case 'slash':
+        button(`${i}-fill`, x.label, () => actions.fill(x.payload));
+        break;
+      case 'allow_rule':
+        button(`${i}-copy`, x.label, () => actions.copy(x.payload, 'allow_rule'));
+        button(`${i}-open`, 'Open settings.json', () => actions.openSettings('allow_rule'));
+        button(`${i}-permissions`, 'Put /permissions in the box', () => actions.fill('/permissions'));
+        break;
+      case 'setting':
+        button(`${i}-copy`, x.label, () => actions.copy(x.payload, 'setting'));
+        button(`${i}-open`, 'Open settings.json', () => actions.openSettings('setting'));
+        break;
+      case 'read':
+        button(`${i}-gotit`, x.label === '' ? 'Got it' : x.label, () => actions.gotIt(a.id));
+        break;
+    }
+  });
+  button('snooze', 'Snooze', () => actions.snooze(a.id));
+  rows.push(...packButtons(buttons, inner));
+  const filled = model.coachFilled;
+  if (filled !== null && fillTexts(a).includes(filled) && !(fixShown && filled === a.fixPrompt)) {
+    rows.push(...wrapped(filledText(filled), inner, { color: OK }));
+  }
+  return rows;
+}
+
+// An advice's words below its headline: the body, the evidence, the fix
+// prompt as a card a click puts in the box (and the line saying it is there
+// and nothing was sent), the steps and Buttons of its actions, the foot.
+function fullRows(a: Advice, where: string, inner: number, actions: CoachActions, counter: Counter, model: Model): FrameRow[] {
+  const rows: FrameRow[] = [];
+  if (a.body !== '') rows.push(blank(), ...wrapped(a.body, inner));
+  if (a.evidence.length > 0) {
+    rows.push(blank());
+    for (const e of a.evidence) rows.push(...hanging(dim('· '), e, inner));
+  }
+  const fix = a.fixPrompt;
+  if (fix !== null) {
+    rows.push(blank(), ...wrapped('Fix it with this prompt · click to put it in your prompt box', inner, { dim: true, bold: true }));
+    wrapWords(fix, inner - 2).forEach((t, i) => {
+      rows.push({ line: [seg(i === 0 ? '↵ ' : '  ', { color: ACCENT }), seg(t)], press: { key: `coach-${where}-fix-${i}`, onPress: () => actions.fill(fix), dimColor: false } });
+    });
+    if (model.coachFilled === fix) rows.push(...wrapped(FILLED_FIX, inner, { color: OK }));
+  }
+  rows.push(blank(), ...actionRows(a, where, inner, actions, counter, model, fix !== null));
+  if (a.foot !== '') rows.push(...wrapped(a.foot, inner, { dim: true }));
+  return rows;
+}
+
+// The NOW card: the nudge in full, or the quiet row and the last lifecycle rows.
+function nowCard(c: Coach, model: Model, columns: number, now: number, actions: CoachActions, counter: Counter, el: CoachElements): RenderElement {
+  const inner = bodyWidth(columns);
+  const rows: FrameRow[] = [stateRow(c), { line: [dim('─'.repeat(inner))] }];
+  const n = c.nudge;
+  if (n === null) {
+    rows.push({ line: [dim(c.quietRow)], key: 'advice_saving' });
+    for (const r of c.recent.slice(0, 2)) rows.push({ line: [dim(`  ${r}`)] });
+  } else {
+    const age = n.firedAt === null ? '' : `${formatAgo(now - n.firedAt)} ago · `;
+    rows.push(...headRows(n, `${age}rule ${n.id}`, inner));
+    rows.push(...wrapped(n.headline, inner, { bold: true }));
+    rows.push(...fullRows(n, 'now', inner, actions, counter, model));
+  }
+  return panel({ title: 'coach', summary: `${c.model.replace(/^claude-/, '')} · turn ${c.turn}` }, rows, columns, el);
+}
+
+/** A row that opens in place: its text, padded, and the chevron at the right edge; a text that needs the chevron's cells keeps them (a light's 52 cells at 56 columns). */
+function toggleRow(text: string, open: boolean, inner: number, key: string, onPress: () => void): FrameRow {
+  const press = { key, onPress, dimColor: false };
+  if (width(text) + 2 > inner) return { line: [seg(text)], press };
+  return { line: [seg(pad(text, inner - 2)), seg(' '), seg(open ? '▾' : '›')], press };
+}
+
+// "Up next": the queued nudge as rows that open in place, then the snoozed.
+function upNext(c: Coach, model: Model, columns: number, actions: CoachActions, counter: Counter, el: CoachElements): RenderElement {
+  const inner = bodyWidth(columns);
+  const rows: FrameRow[] = [];
+  const x = c.next;
+  if (x === null) {
+    rows.push(line('nothing else queued'));
+  } else {
+    const open = model.coachNext === x.id;
+    const press = () => actions.next(x.id);
+    const head = `${x.cls.padEnd(5)} ${x.name}`;
+    rows.push(toggleRow(clip(head, inner - 2), open, inner, `coach-next-${x.id}-0`, press));
+    // The headline under it, the same press on every line.
+    wrapWords(x.headline, inner - 6).forEach((t, i) => {
+      rows.push({ line: [seg(`      ${t}`)], press: { key: `coach-next-${x.id}-${i + 1}`, onPress: press, dimColor: false } });
+    });
+    if (open) rows.push(...fullRows(x, `next-${x.id}`, inner, actions, counter, model));
+  }
+  if (c.snoozed > 0) rows.push(line(c.snoozedRow));
+  return panel({ title: 'Up next', summary: 'click a row to open it' }, rows, columns, el);
+}
+
+// ------------------------------------------------------- the context light
+
+type Part = { name: string; tokens: number };
+
+/** A `/context` category's glyph and colour: what cannot change (█), what the person loads (▓), the conversation (█, accent), free (░), the reserve (▒). */
+function partStyle(name: string): { glyph: string; style: Style } {
+  switch (name.toLowerCase()) {
+    case 'messages':
+      return { glyph: '█', style: { color: ACCENT } };
+    case 'mcp tools':
+    case 'skills':
+    case 'custom agents':
+    case 'memory files':
+      return { glyph: '▓', style: {} };
+    case 'free':
+      return { glyph: '░', style: { dim: true } };
+    case 'buffer':
+      return { glyph: '▒', style: { color: CRIT } };
+    default:
+      return { glyph: '█', style: {} };
+  }
+}
+
+/** Cells per part of a bar `cells` wide, by tokens; a part with any tokens keeps at least one cell. */
+export function compositionCells(parts: readonly Part[], cells: number): number[] {
+  const total = parts.reduce((n, p) => n + Math.max(0, p.tokens), 0);
+  if (total <= 0 || cells <= 0) return parts.map(() => 0);
+  const out = parts.map((p) => (p.tokens > 0 ? Math.max(1, Math.round((p.tokens / total) * cells)) : 0));
+  // The largest part gives or takes the rounding, so the bar is exactly `cells`.
+  let diff = cells - out.reduce((a, b) => a + b, 0);
+  while (diff !== 0) {
+    let big = 0;
+    for (let i = 1; i < out.length; i++) if ((out[i] ?? 0) > (out[big] ?? 0)) big = i;
+    const step = diff > 0 ? 1 : -1;
+    if ((out[big] ?? 0) + step < 1) break;
+    out[big] = (out[big] ?? 0) + step;
+    diff -= step;
+  }
+  return out;
+}
+
+function partsOf(dashboard: unknown): Part[] {
+  const items = at(dashboard, 'composition');
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((i) => ({ name: stringAt(i, 'name') ?? '', tokens: typeof at(i, 'tokens') === 'number' ? (at(i, 'tokens') as number) : 0 }))
+    .filter((p) => p.name !== '');
+}
+
+// What fills the window, as Claude Code counted it, labelled with where and
+// how long ago: a one-row bar and its legend. Nothing without a capture.
+function compositionRows(dashboard: unknown, inner: number): FrameRow[] {
+  const parts = partsOf(dashboard);
+  if (parts.length === 0) return [];
+  const w = inner - 2;
+  const note = stringAt(dashboard, 'composition_note') ?? stringAt(dashboard, 'composition_source') ?? '';
+  const rows = wrapped(`what fills the window${note === '' ? '' : ` · ${note}`}`, inner, { dim: true }, 2);
+  const cells = compositionCells(parts, w);
+  const bar: Line = [seg('  ')];
+  parts.forEach((p, i) => {
+    const { glyph, style } = partStyle(p.name);
+    if ((cells[i] ?? 0) > 0) bar.push(seg(glyph.repeat(cells[i] ?? 0), style));
+  });
+  rows.push({ line: bar });
+  // The legend, whole entries per row.
+  let cur: Line = [seg('  ')];
+  let used = 0;
+  for (const p of parts) {
+    const { glyph, style } = partStyle(p.name);
+    const text = `${p.name} ${formatTokensTui(p.tokens)}`;
+    const ew = 2 + width(text);
+    if (used > 0 && used + 2 + ew > w) {
+      rows.push({ line: cur });
+      cur = [seg('  ')];
+      used = 0;
+    }
+    if (used > 0) cur.push(seg('  '));
+    cur.push(seg(glyph, style), seg(` ${text}`, { dim: true }));
+    used += (used > 0 ? 2 : 0) + ew;
+  }
+  if (used > 0) rows.push({ line: cur });
+  return rows;
+}
+
+// What put it there: the context body's residency rows (the `m`
+// inspector's, as the TUI draws them), from `since …` to the blank row.
+function residencyRows(dashboard: unknown, inner: number): FrameRow[] {
+  const d = dashboardOf(dashboard);
+  const body = d?.bodies.find((b) => b.id === 'context');
+  if (body === undefined) return [];
+  const text = (r: Seg[]) => r.map((s) => s.text).join('');
+  const start = body.rows.findIndex((r) => text(r).trim().startsWith('since '));
+  if (start < 0) return [];
+  const rows: FrameRow[] = [];
+  for (const r of body.rows.slice(start)) {
+    const t = text(r).trim();
+    if (t === '') break;
+    if (width(t) + 2 > inner) {
+      rows.push(...wrapped(t, inner, { dim: true }, 2));
+      continue;
+    }
+    // The row's own segments, its two-cell indent kept.
+    rows.push({ line: r });
+  }
+  return rows;
+}
+
+function lightDetail(l: Light, model: Model, inner: number): FrameRow[] {
+  const rows: FrameRow[] = [];
+  if (l.id === 'context') rows.push(...compositionRows(model.query.dashboard, inner), ...residencyRows(model.query.dashboard, inner));
+  for (const t of l.lines) rows.push(...wrapped(t, inner, { dim: true }, 2));
+  if (l.source !== '') rows.push(...wrapped(`from the ${l.source}${l.approx ? ', an estimate' : ''}`, inner, { dim: true }, 2));
+  return rows;
+}
+
+// "Session": the four lights, each a row that opens in place.
+function lightsFrame(c: Coach, model: Model, columns: number, actions: CoachActions, el: CoachElements): RenderElement {
+  const inner = bodyWidth(columns);
+  const open = openLight(model, c);
+  const rows: FrameRow[] = [];
+  for (const l of c.lights) {
+    const text = clip(`${l.glyph} ${l.id.padEnd(8)} ${lightText(l, columns)}`, 52);
+    const isOpen = open === l.id;
+    rows.push({ ...toggleRow(text, isOpen, inner, `coach-light-${l.id}`, () => actions.light(isOpen ? 'none' : l.id)), key: `coach_${l.id}` });
+    if (isOpen) rows.push(...lightDetail(l, model, inner));
+  }
+  return panel({ title: 'Session', summary: 'click a row for the detail' }, rows, columns, el);
+}
+
+export function renderCoach(model: Model, el: CoachElements, columns: number, actions: CoachActions, now: number): RenderElement {
   const { Box } = el;
   const c = coachOf(model.query.coach);
   const p = { title: 'coach', summary: c === null ? undefined : `${c.model.replace(/^claude-/, '')} · turn ${c.turn}` };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'advice_saving' })], columns, el);
   if (c === null) return panel(p, [line('waiting for cctop query coach…', { key: 'advice_saving' })], columns, el);
-  const inner = bodyWidth(columns);
-  const rows: FrameRow[] = [stateRow(c), separatorRow(inner)];
-  for (const l of c.lights) {
-    const color = levelColor(l.level);
-    const style = color === undefined ? {} : { color };
-    rows.push({
-      line: [seg(l.glyph, style), seg(' '), seg(l.id.padEnd(8), style), seg(' '), seg(lightText(l, columns), style)],
-      key: `coach_${l.id}`,
-    });
-  }
-  rows.push(separatorRow(inner));
-  const n = c.nudge;
-  if (n !== null) {
-    rows.push({ line: [seg(n.line1, { bold: true })], key: 'advice_saving' });
-    rows.push({ line: [seg(n.line2, { color: ACCENT })] });
-    rows.push({ line: [seg(n.line3, { dim: true })] });
-  } else {
-    rows.push({ line: [seg(c.quietRow, { dim: true })], key: 'advice_saving' });
-    for (const r of c.recent.slice(0, 2)) rows.push({ line: [seg(`  ${r}`, { dim: true })] });
-  }
-  rows.push({ line: [seg('')] });
-  rows.push({ line: [seg(c.nextRow, { dim: true })] });
-  rows.push({ line: [seg(c.snoozedRow, { dim: true })] });
-  const card = panel(p, rows, columns, el);
+  const counter: Counter = { n: 1 };
+  const footer = c.footer === '' ? [] : wrapWords(c.footer, columns).map((t) => textRow([dim(t)], el));
   return (
     <Box flexDirection="column">
-      {card}
-      {buttons(c, el, actions)}
-      {model.coachWhy && n !== null ? whyFrame(n, columns, el) : detailFrame(c, model.coachLight ?? highestLight(c), columns, el, actions)}
+      {nowCard(c, model, columns, now, actions, counter, el)}
+      {upNext(c, model, columns, actions, counter, el)}
+      {lightsFrame(c, model, columns, actions, el)}
+      {footer}
     </Box>
   );
-}
-
-// The action row: fill (prompt-class only), snooze and why, hotkeys armed
-// only while a Button of the row has the focus.
-function buttons(c: Coach, el: CoachElements, actions: CoachActions): RenderElement {
-  const { Box, Text, Button } = el;
-  const n = c.nudge;
-  const parts: RenderElement[] = [];
-  if (fillable(n)) {
-    parts.push(<Button key="coach-fill" label="fill" hotkey="1" onPress={() => actions.fill(n!.actionText)} />);
-  }
-  if (n !== null) {
-    parts.push(<Text wrap="truncate"> </Text>);
-    parts.push(<Button key="coach-snooze" label="snooze" hotkey="2" onPress={() => actions.snooze(n.id)} />);
-    parts.push(<Text wrap="truncate"> </Text>);
-    parts.push(<Button key="coach-why" label="why" hotkey="3" onPress={() => actions.why()} />);
-  }
-  if (parts.length === 0) return <Box />;
-  return <Box flexDirection="row">{parts}</Box>;
-}
-
-// The detail frame of one light: its three lines, then the four Buttons
-// that pick another light.
-function detailFrame(c: Coach, id: LightId, columns: number, el: CoachElements, actions: CoachActions): RenderElement {
-  const { Box, Text, Button } = el;
-  const l = c.lights.find((x) => x.id === id) ?? c.lights[0];
-  if (!l) return <Box flexDirection="column" />;
-  const inner = bodyWidth(columns);
-  const rows: FrameRow[] = l.lines.map((text) => row([{ text }], inner));
-  if (rows.length === 0) rows.push(line('—'));
-  const frame = panel({ title: `${l.glyph} ${l.id}`, summary: `${l.source}${l.approx ? ' ≈' : ''}` }, rows, columns, el);
-  const picks: RenderElement[] = [];
-  for (const x of c.lights) {
-    if (picks.length > 0) picks.push(<Text wrap="truncate"> </Text>);
-    picks.push(
-      x.id === l.id ? (
-        <Text key={`coach-light-${x.id}`} wrap="truncate" inverse>
-          {` ${x.glyph} ${x.id} `}
-        </Text>
-      ) : (
-        <Button key={`coach-light-${x.id}`} label={`${x.glyph} ${x.id}`} plain onPress={() => actions.light(x.id)} />
-      ),
-    );
-  }
-  return (
-    <Box flexDirection="column">
-      {frame}
-      <Box flexDirection="row">{picks}</Box>
-    </Box>
-  );
-}
-
-// The why frame: what the nudge rests on and the rule's explanation.
-function whyFrame(n: Nudge, columns: number, el: ViewElements): RenderElement {
-  const inner = bodyWidth(columns);
-  const rows: FrameRow[] = [
-    { line: [seg(`${n.cls} ${n.id} · ${n.family}`, { bold: true })] },
-    { line: [seg('evidence  ', { dim: true }), seg(n.line3.trim())] },
-    { line: [seg('retires   ', { dim: true }), seg(`on ${n.retiresOn}`)] },
-    { line: [seg('saving    ', { dim: true }), seg(`${n.saving} (an estimate)`)] },
-  ];
-  if (n.actionText !== '') rows.push({ line: [seg(`${n.actionKind.padEnd(10)}`, { dim: true }), seg(n.actionText, { color: ACCENT })] });
-  rows.push({ line: [seg('')] });
-  for (const w of wrapWords(n.explain, inner)) rows.push({ line: [seg(w, { dim: true })] });
-  return panel({ title: 'why' }, rows, columns, el);
 }
 
 /** The inline (classic renderer) form: the L1 line as one row. */
