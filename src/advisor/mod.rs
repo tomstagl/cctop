@@ -110,6 +110,118 @@ impl ActionKind {
             ActionKind::Advice => "advice",
         }
     }
+
+    /// The kind as an [`Action`] carries it (mod-pane PRD US-001): what a
+    /// surface does with it — fill (`prompt`, `slash`), copy and open
+    /// settings.json (`allow_rule`, `setting`), stop and fill (`key`), got
+    /// it (`read`).
+    pub fn id(self) -> &'static str {
+        match self {
+            ActionKind::Prompt => "prompt",
+            ActionKind::Slash => "slash",
+            ActionKind::AllowRule => "allow_rule",
+            ActionKind::Setting => "setting",
+            ActionKind::Key => "key",
+            ActionKind::Advice => "read",
+        }
+    }
+}
+
+/// One thing the person can do about a nudge: the kind says how a surface
+/// offers it, `payload` is the exact text (a prompt, a slash command, an
+/// allow rule, a settings line, a key), empty for `read`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Action {
+    #[serde(serialize_with = "action_kind_id")]
+    pub kind: ActionKind,
+    pub label: String,
+    pub payload: String,
+}
+
+fn action_kind_id<S: serde::Serializer>(k: &ActionKind, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(k.id())
+}
+
+impl Action {
+    pub fn new(kind: ActionKind, label: impl Into<String>, payload: impl Into<String>) -> Action {
+        Action {
+            kind,
+            label: label.into(),
+            payload: payload.into(),
+        }
+    }
+
+    /// The action a nudge's `action_kind` and `action_text` describe. The
+    /// payload is the text as is (`/compact ` keeps the space a focus is
+    /// typed after).
+    fn primary(kind: ActionKind, text: &str) -> Action {
+        let shown = text.trim();
+        match kind {
+            _ if shown.is_empty() && kind != ActionKind::Setting => {
+                Action::new(ActionKind::Advice, "Got it", "")
+            }
+            ActionKind::Prompt => Action::new(kind, "Put the prompt in the box", text),
+            ActionKind::Slash => Action::new(kind, format!("Put {shown} in the box"), text),
+            ActionKind::AllowRule => Action::new(kind, "Copy the rule", text),
+            ActionKind::Setting if shown.is_empty() => Action::new(kind, "Open settings.json", ""),
+            ActionKind::Setting => Action::new(kind, "Copy the setting", text),
+            ActionKind::Key => {
+                let label = match shown {
+                    "Esc" => "Stop the turn (Esc)".to_string(),
+                    "Esc Esc" => "Rewind (Esc Esc)".to_string(),
+                    "6 Enter" => "Open the agents view (6, Enter)".to_string(),
+                    k => format!("Press {k}"),
+                };
+                Action::new(kind, label, text)
+            }
+            ActionKind::Advice => Action::new(kind, "Got it", ""),
+        }
+    }
+}
+
+/// A rule's words (mod-pane PRD US-001, spec §5.6): templates whose
+/// `{holes}` the rule fills from structural facts only — counts, sizes,
+/// prices, durations, command shapes, file names, fixed labels — never
+/// from what the person or the model wrote. One entry per `variant`; a
+/// rule picks one with [`Advice::variant`] (`""` is the default).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Words {
+    pub variant: &'static str,
+    /// What happened, why it costs, what to do: two or three plain
+    /// sentences.
+    pub body: &'static str,
+    /// A ready prompt for the person to put in the box (never sent).
+    pub fix_prompt: Option<&'static str>,
+    /// When the nudge goes away, in words.
+    pub foot: &'static str,
+}
+
+/// `template` with each `{name}` replaced by its hole's value. A missing
+/// hole is a bug in the rule: it fails tests (debug builds) and is left
+/// empty in a release build.
+pub fn fill(template: &str, holes: &[(&'static str, String)]) -> String {
+    let mut out = String::with_capacity(template.len() + 32);
+    let mut rest = template;
+    while let Some(i) = rest.find('{') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        match after.find('}') {
+            Some(j) => {
+                let name = &after[..j];
+                match holes.iter().find(|(k, _)| *k == name) {
+                    Some((_, v)) => out.push_str(v),
+                    None => debug_assert!(false, "no hole `{name}` for {template:?}"),
+                }
+                rest = &after[j + 1..];
+            }
+            None => {
+                out.push_str(&rest[i..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// When a fired nudge expires on its own.
@@ -159,9 +271,117 @@ pub struct Advice {
     /// Never takes the slot: it waits in the `next` row (plan-first, the
     /// context cost below 200 k).
     pub next_row_only: bool,
+    /// The rule's plain-language name ([`Rule::name`]; filled by
+    /// [`Rule::evaluate`]).
+    pub name: &'static str,
+    /// Which of the rule's [`Words`] applies (`""`: the default).
+    pub variant: &'static str,
+    /// The facts the words' `{holes}` are filled from (set by the rule).
+    pub holes: Vec<(&'static str, String)>,
+    /// The full explanation, uncut (filled from the words).
+    pub body: String,
+    /// Evidence rows beyond `evidence`: one fact each (a failed call's
+    /// shape and its error class's fixed label), never quoted output.
+    pub evidence_rows: Vec<String>,
+    /// The ready prompt, filled from the words (absent when the rule has
+    /// none).
+    pub fix_prompt: Option<String>,
+    /// What the person can do. The rule may push extras; the primary (from
+    /// `action_kind`/`action_text`) and the fix prompt are added by
+    /// [`Advice::complete`].
+    pub actions: Vec<Action>,
+    /// When it goes away, in words.
+    pub foot: String,
 }
 
 impl Advice {
+    /// Set a hole the rule's words read.
+    pub fn hole(&mut self, name: &'static str, value: impl Into<String>) {
+        self.holes.retain(|(k, _)| *k != name);
+        self.holes.push((name, value.into()));
+    }
+
+    /// Fill the name, body, fix prompt and foot from the rule's words, and
+    /// put the primary action and the fix prompt into `actions`: a key
+    /// first (stop, then fill), else the fix prompt first, then the
+    /// primary, then the rule's extras.
+    pub fn complete(&mut self, name: &'static str, words: &[Words]) {
+        self.name = name;
+        let w = words
+            .iter()
+            .find(|w| w.variant == self.variant)
+            .or_else(|| {
+                debug_assert!(
+                    false,
+                    "{}: no words for variant {:?}",
+                    self.rule, self.variant
+                );
+                words.first()
+            });
+        if let Some(w) = w {
+            self.body = fill(w.body, &self.holes);
+            self.fix_prompt = w.fix_prompt.map(|f| fill(f, &self.holes));
+            self.foot = fill(w.foot, &self.holes);
+        }
+        let primary = Action::primary(self.action_kind, &self.action_text);
+        let fix = self.fix_prompt.as_ref().map(|f| {
+            Action::new(
+                ActionKind::Prompt,
+                "Put the fix prompt in the box",
+                f.clone(),
+            )
+        });
+        let extras = std::mem::take(&mut self.actions);
+        let mut v = Vec::new();
+        match (primary.kind, fix) {
+            (ActionKind::Key, fix) => {
+                v.push(primary);
+                v.extend(fix);
+            }
+            (_, Some(fix)) => {
+                let same = primary.kind == ActionKind::Prompt && primary.payload == fix.payload;
+                v.push(fix);
+                if !same {
+                    v.push(primary);
+                }
+            }
+            (_, None) => v.push(primary),
+        }
+        v.extend(extras);
+        self.actions = v;
+    }
+
+    /// What the act flow (the TUI's `Enter` / `a`) puts in the draft, and
+    /// whether it may be sent: the fix prompt when the rule has one, else
+    /// a prompt or slash command as is, a settings snippet for a rule, the
+    /// key to press, or cctop's own summary of the nudge.
+    pub fn act(&self) -> (String, bool) {
+        if let Some(f) = &self.fix_prompt {
+            return (f.clone(), true);
+        }
+        match self.action_kind {
+            ActionKind::Prompt | ActionKind::Slash if !self.action_text.is_empty() => {
+                (self.action_text.clone(), true)
+            }
+            ActionKind::AllowRule => (
+                format!(
+                    "\"permissions\": {{ \"allow\": [\"{}\"] }}",
+                    self.action_text
+                ),
+                false,
+            ),
+            ActionKind::Setting | ActionKind::Key if !self.action_text.is_empty() => {
+                (self.action_text.clone(), false)
+            }
+            _ => (
+                format!(
+                    "cctop advises: {} — {} ({}). Can you apply this now in this session?",
+                    self.headline, self.action, self.evidence
+                ),
+                true,
+            ),
+        }
+    }
     /// A nudge with the identity set and everything else empty; rules fill
     /// the text, the saving and the retirement words.
     pub fn new(rule: &'static str, family: &'static str, urgency: Urgency) -> Advice {
@@ -185,6 +405,14 @@ impl Advice {
             },
             mark: 0,
             next_row_only: false,
+            name: "",
+            variant: "",
+            holes: Vec::new(),
+            body: String::new(),
+            evidence_rows: Vec::new(),
+            fix_prompt: None,
+            actions: Vec::new(),
+            foot: String::new(),
         }
     }
 }
@@ -192,9 +420,22 @@ impl Advice {
 pub trait Rule: Send + Sync {
     /// `A01` …
     fn id(&self) -> &'static str;
+    /// The plain-language name a person reads ("Claude is stuck
+    /// retrying"): at most 32 characters, never the rule id.
+    fn name(&self) -> &'static str;
     fn family(&self) -> &'static str;
     fn urgency(&self) -> Urgency;
-    fn evaluate(&self, state: &State) -> Option<Advice>;
+    /// The rule's words, one entry per variant ([`Words`]).
+    fn words(&self) -> &'static [Words];
+    /// The trigger: the nudge with its headline, evidence, action and
+    /// holes, or nothing.
+    fn fire(&self, state: &State) -> Option<Advice>;
+    /// [`Rule::fire`], with the name and the words filled in.
+    fn evaluate(&self, state: &State) -> Option<Advice> {
+        let mut a = self.fire(state)?;
+        a.complete(self.name(), self.words());
+        Some(a)
+    }
     /// The observable completion: true once the person did the thing.
     fn acted(&self, _state: &State, _fired: &Advice) -> bool {
         false
@@ -1356,6 +1597,14 @@ pub mod tests_support {
     use crate::metrics::Pricing;
     use crate::transcript::Line;
 
+    /// The words every test rule shares.
+    pub const TEST_WORDS: &[Words] = &[Words {
+        variant: "",
+        body: "a test rule fired",
+        fix_prompt: None,
+        foot: "goes away when the test says so",
+    }];
+
     /// A state with `n` human turns, one small API call each, one minute
     /// apart, the clock 30 s after the last prompt.
     pub fn state_with_turns(n: usize) -> State {
@@ -1392,7 +1641,13 @@ pub mod tests_support {
         fn urgency(&self) -> Urgency {
             self.2
         }
-        fn evaluate(&self, _: &State) -> Option<Advice> {
+        fn name(&self) -> &'static str {
+            "test rule"
+        }
+        fn words(&self) -> &'static [Words] {
+            super::tests_support::TEST_WORDS
+        }
+        fn fire(&self, _: &State) -> Option<Advice> {
             let mut a = Advice::new(self.0, self.1, self.2);
             a.headline = format!("{} fires", self.0);
             a.saving = self.3;
@@ -1470,10 +1725,16 @@ mod tests {
             fn urgency(&self) -> Urgency {
                 Urgency::Now
             }
-            fn evaluate(&self, s: &State) -> Option<Advice> {
+            fn name(&self) -> &'static str {
+                "test rule"
+            }
+            fn words(&self) -> &'static [Words] {
+                super::tests_support::TEST_WORDS
+            }
+            fn fire(&self, s: &State) -> Option<Advice> {
                 self.0
                     .load(Ordering::Relaxed)
-                    .then(|| Fixed("W", "waiting", Urgency::Now, Saving::Avoids).evaluate(s))
+                    .then(|| Fixed("W", "waiting", Urgency::Now, Saving::Avoids).fire(s))
                     .flatten()
             }
         }
@@ -1631,8 +1892,14 @@ mod tests {
             fn urgency(&self) -> Urgency {
                 Urgency::Next
             }
-            fn evaluate(&self, s: &State) -> Option<Advice> {
-                Fixed("V", "verify-gap", Urgency::Next, Saving::Tokens(1)).evaluate(s)
+            fn name(&self) -> &'static str {
+                "test rule"
+            }
+            fn words(&self) -> &'static [Words] {
+                super::tests_support::TEST_WORDS
+            }
+            fn fire(&self, s: &State) -> Option<Advice> {
+                Fixed("V", "verify-gap", Urgency::Next, Saving::Tokens(1)).fire(s)
             }
             fn acted(&self, s: &State, _: &Advice) -> bool {
                 s.agg.human_turns() >= 5
@@ -1753,7 +2020,13 @@ mod tests {
             fn urgency(&self) -> Urgency {
                 Urgency::Now
             }
-            fn evaluate(&self, _: &State) -> Option<Advice> {
+            fn name(&self) -> &'static str {
+                "test rule"
+            }
+            fn words(&self) -> &'static [Words] {
+                super::tests_support::TEST_WORDS
+            }
+            fn fire(&self, _: &State) -> Option<Advice> {
                 self.0
                     .load(std::sync::atomic::Ordering::SeqCst)
                     .then(|| Advice::new("W", "waiting", Urgency::Now))
@@ -2027,5 +2300,85 @@ mod tests {
         let a = e.current.clone();
         e.evaluate(&s);
         assert_eq!(a, e.current);
+    }
+
+    #[test]
+    fn words_fill_their_holes_and_actions_follow_the_kind() {
+        assert_eq!(
+            fill(
+                "{n} fails, {what}.",
+                &[("n", "3".into()), ("what", "no PR".into())]
+            ),
+            "3 fails, no PR."
+        );
+        assert_eq!(fill("no holes {", &[]), "no holes {");
+        const W: &[Words] = &[
+            Words {
+                variant: "",
+                body: "{n} things.",
+                fix_prompt: Some("Fix {n}."),
+                foot: "goes away",
+            },
+            Words {
+                variant: "bare",
+                body: "{n} other things.",
+                fix_prompt: None,
+                foot: "goes away later",
+            },
+        ];
+        let mk = |kind: ActionKind, text: &str, variant: &'static str| {
+            let mut a = Advice::new("X", "x", Urgency::Now);
+            a.action_kind = kind;
+            a.action_text = text.into();
+            a.variant = variant;
+            a.hole("n", "2");
+            a.complete("A plain name", W);
+            a
+        };
+        let kinds =
+            |a: &Advice| -> Vec<&'static str> { a.actions.iter().map(|x| x.kind.id()).collect() };
+        // A key stops first, then the fix prompt fills the box.
+        let key = mk(ActionKind::Key, "Esc", "");
+        assert_eq!(key.name, "A plain name");
+        assert_eq!(key.body, "2 things.");
+        assert_eq!(key.fix_prompt.as_deref(), Some("Fix 2."));
+        assert_eq!(key.foot, "goes away");
+        assert_eq!(kinds(&key), ["key", "prompt"]);
+        assert_eq!(key.actions[0].label, "Stop the turn (Esc)");
+        assert_eq!(key.actions[1].payload, "Fix 2.");
+        // A prompt that is the fix prompt is offered once.
+        assert_eq!(kinds(&mk(ActionKind::Prompt, "Fix 2.", "")), ["prompt"]);
+        // Otherwise the fix prompt leads, then the primary.
+        assert_eq!(
+            kinds(&mk(ActionKind::Slash, "/clear", "")),
+            ["prompt", "slash"]
+        );
+        assert_eq!(kinds(&mk(ActionKind::Advice, "", "")), ["prompt", "read"]);
+        // Without a fix prompt: the primary alone, by kind.
+        assert_eq!(
+            kinds(&mk(ActionKind::AllowRule, "Bash(gh pr view:*)", "bare")),
+            ["allow_rule"]
+        );
+        assert_eq!(kinds(&mk(ActionKind::Setting, "", "bare")), ["setting"]);
+        assert_eq!(
+            kinds(&mk(ActionKind::Slash, "/compact ", "bare")),
+            ["slash"]
+        );
+        assert_eq!(kinds(&mk(ActionKind::Advice, "", "bare")), ["read"]);
+        let bare = mk(ActionKind::Prompt, "", "bare");
+        assert_eq!(kinds(&bare), ["read"], "an empty prompt is nothing to fill");
+        assert_eq!(bare.body, "2 other things.");
+        assert_eq!(bare.fix_prompt, None);
+        // The JSON form carries the kind's id.
+        let v =
+            serde_json::to_value(&mk(ActionKind::AllowRule, "Bash(x:*)", "bare").actions).unwrap();
+        assert_eq!(v[0]["kind"], "allow_rule");
+        assert_eq!(v[0]["payload"], "Bash(x:*)");
+        // The act flow delivers the fix prompt, sendable.
+        assert_eq!(key.act(), ("Fix 2.".to_string(), true));
+        assert_eq!(
+            mk(ActionKind::Key, "Esc Esc", "bare").act(),
+            ("Esc Esc".to_string(), false)
+        );
     }
 }

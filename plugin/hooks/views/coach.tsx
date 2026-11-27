@@ -26,7 +26,7 @@ export type Nudge = {
   cls: string;
   line1: string;
   line2: string;
-  evidence: string;
+  line3: string;
   actionText: string;
   actionKind: string;
   explain: string;
@@ -86,7 +86,7 @@ function nudgeOf(v: unknown): Nudge | null {
     cls: stringAt(v, 'class') ?? '',
     line1: stringAt(v, 'line1') ?? '',
     line2: stringAt(v, 'line2') ?? '',
-    evidence: stringAt(v, 'evidence') ?? '',
+    line3: stringAt(v, 'line3') ?? '',
     actionText: stringAt(v, 'action_text') ?? '',
     actionKind: stringAt(v, 'action_kind') ?? '',
     explain: stringAt(v, 'explain') ?? '',
@@ -204,7 +204,7 @@ export function renderCoach(model: Model, el: CoachElements, columns: number, ac
   if (n !== null) {
     rows.push({ line: [seg(n.line1, { bold: true })], key: 'advice_saving' });
     rows.push({ line: [seg(n.line2, { color: ACCENT })] });
-    rows.push({ line: [seg(n.evidence, { dim: true })] });
+    rows.push({ line: [seg(n.line3, { dim: true })] });
   } else {
     rows.push({ line: [seg(c.quietRow, { dim: true })], key: 'advice_saving' });
     for (const r of c.recent.slice(0, 2)) rows.push({ line: [seg(`  ${r}`, { dim: true })] });
@@ -277,7 +277,7 @@ function whyFrame(n: Nudge, columns: number, el: ViewElements): RenderElement {
   const inner = bodyWidth(columns);
   const rows: FrameRow[] = [
     { line: [seg(`${n.cls} ${n.id} · ${n.family}`, { bold: true })] },
-    { line: [seg('evidence  ', { dim: true }), seg(n.evidence.trim())] },
+    { line: [seg('evidence  ', { dim: true }), seg(n.line3.trim())] },
     { line: [seg('retires   ', { dim: true }), seg(`on ${n.retiresOn}`)] },
     { line: [seg('saving    ', { dim: true }), seg(`${n.saving} (an estimate)`)] },
   ];

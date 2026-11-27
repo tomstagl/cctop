@@ -62,7 +62,7 @@ test('every moment parses and the 56-column card is the object, row for row', ()
     if (c.nudge !== null) {
       assert.equal(inner[7], c.nudge.line1, name);
       assert.equal(inner[8], c.nudge.line2, name);
-      assert.equal(inner[9], c.nudge.evidence, name);
+      assert.equal(inner[9], c.nudge.line3, name);
     } else {
       assert.equal(inner[7], c.quietRow, name);
     }

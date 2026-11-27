@@ -74,6 +74,9 @@ pub struct Call {
     pub background: bool,
     /// The typed refusal, when the call was denied.
     pub denial: Option<crate::transcript::DenialKind>,
+    /// What a failed call ran into, when its output carries one of the
+    /// known markers ([`Failure::classify`]); only the kind is kept.
+    pub failure: Option<Failure>,
 }
 
 /// A `Workflow` call's launch result (`toolUseResult`), one per launch: a
@@ -198,6 +201,60 @@ impl ErrorClass {
             ErrorClass::Denied => "Denied",
             ErrorClass::Other => "Other",
         }
+    }
+}
+
+/// A failure the coach can name precisely, recognised from fixed markers
+/// in a failed call's output (gh, git, the shell). The output itself is
+/// dropped: the coach says it with a fixed label and a fixed fix
+/// (mod-pane spec §5.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Failure {
+    /// `gh`: no pull requests found for the branch.
+    NoPr,
+    /// `git push`: rejected, the remote has commits the branch lacks.
+    RejectedNonFf,
+    /// `git push`: the branch has no upstream.
+    NoUpstream,
+    /// A merge, rebase or pull stopped on conflicts.
+    MergeConflict,
+    /// `gh` or git needs a login.
+    NotLoggedIn,
+    /// The shell has no such command.
+    CommandNotFound,
+    /// git outside a repository.
+    NotARepo,
+}
+
+impl Failure {
+    /// Classify a failed result's text; `None` when no marker matches.
+    pub fn classify(text: &str) -> Option<Failure> {
+        let t = text.to_ascii_lowercase();
+        let has = |m: &[&str]| m.iter().any(|m| t.contains(m));
+        Some(
+            if has(&["no pull requests found", "no open pull requests"]) {
+                Failure::NoPr
+            } else if has(&["non-fast-forward", "fetch first", "updates were rejected"]) {
+                Failure::RejectedNonFf
+            } else if has(&["has no upstream branch", "no upstream configured"]) {
+                Failure::NoUpstream
+            } else if has(&["merge conflict", "conflict (", "fix conflicts and"]) {
+                Failure::MergeConflict
+            } else if has(&[
+                "gh auth login",
+                "authentication failed",
+                "not logged in",
+                "permission denied (publickey)",
+            ]) {
+                Failure::NotLoggedIn
+            } else if has(&["command not found"]) {
+                Failure::CommandNotFound
+            } else if has(&["not a git repository"]) {
+                Failure::NotARepo
+            } else {
+                return None;
+            },
+        )
     }
 }
 
@@ -368,6 +425,7 @@ impl Stats {
                     if r.is_error {
                         c.error_class =
                             Some(ErrorClass::classify(&text, u.tool_denial_kind.is_some()));
+                        c.failure = Failure::classify(&text);
                     }
                     if text.contains("<persisted-output>") || text.contains("Output too large") {
                         c.truncated = true;
@@ -512,6 +570,7 @@ impl Stats {
                             persisted_output_size: None,
                             cleared: false,
                             error_class: None,
+                            failure: None,
                             truncated: false,
                             turn: self.turn.max(1),
                             background: input

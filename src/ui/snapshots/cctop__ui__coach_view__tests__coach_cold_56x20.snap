@@ -13,12 +13,12 @@ expression: "render_to_string(&app, 56, 20)"
 │ ▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls    │
 │   trim CLAUDE.md, move rarely-used rules to skills,… │
 │   LATER · since turn 6 · +1 queued (n)               │
+│ Heavy always-on context                              │
+│ Every request starts with the same 49k tokens:       │
+│ system prompt, CLAUDE.md, tool schemas, skills and   │
+│ … e shows the whole advice                           │
 │                                                      │
 │ next     long-foreground → when the slot frees · `c… │
 │ snoozed  —                                           │
 ╰──────────────────────────────────────────────────────╯
-
-
-
-
  c dashboard  Enter act  x snooze  e why  1-4 light  q

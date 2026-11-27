@@ -128,6 +128,47 @@ pub(crate) fn calls_per_turn(state: &State) -> f64 {
     crate::metrics::cost::p50_calls_per_turn(&state.agg).max(1.0)
 }
 
+/// `$0.70` (the words' money form).
+pub(crate) fn money(v: f64) -> String {
+    crate::ui::fmt::usd(v)
+}
+
+/// `, about $0.70` at the current model's price of `kind`, or nothing:
+/// the words' optional price clause.
+pub(crate) fn about_usd(state: &State, tokens: u64, kind: PriceKind) -> String {
+    usd(state, tokens, kind)
+        .map(|v| format!(", about {}", money(v)))
+        .unwrap_or_default()
+}
+
+/// A duration in words: `40 seconds`, `4 minutes`, `2 hours 10 minutes`.
+pub(crate) fn spoken(ms: i64) -> String {
+    let s = ms.max(0) / 1000;
+    let unit = |n: i64, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
+    if s < 90 {
+        unit(s, "second")
+    } else if s < 3600 {
+        unit((s + 30) / 60, "minute")
+    } else {
+        let (h, m) = (s / 3600, (s % 3600) / 60);
+        if m == 0 {
+            unit(h, "hour")
+        } else {
+            format!("{} {}", unit(h, "hour"), unit(m, "minute"))
+        }
+    }
+}
+
+/// `1 file`, `3 files`.
+pub(crate) fn count(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// `41 %`.
+pub(crate) fn percent(v: f64) -> String {
+    format!("{v:.0} %")
+}
+
 #[cfg(test)]
 pub(crate) mod fixtures {
     //! Transcript lines the rule tests share.
@@ -173,5 +214,62 @@ mod tests {
         }
         assert!(explain("A06").contains("/compact"));
         assert!(explain("nope").starts_with("No explanation"));
+    }
+
+    /// `A38`, `A21b`: a rule id anywhere in `s`.
+    fn has_rule_id(s: &str) -> bool {
+        let b = s.as_bytes();
+        b.windows(3)
+            .any(|w| w[0] == b'A' && w[1].is_ascii_digit() && w[2].is_ascii_digit())
+    }
+
+    #[test]
+    fn every_rule_has_a_plain_name_and_words() {
+        let rules = all();
+        assert_eq!(rules.len(), 36);
+        let mut names = std::collections::BTreeSet::new();
+        for r in &rules {
+            let (id, name) = (r.id(), r.name());
+            assert!(!name.is_empty(), "{id} has no name");
+            assert!(name.chars().count() <= 32, "{id}: {name:?} is over 32");
+            assert!(!has_rule_id(name), "{id}: {name:?} carries a rule id");
+            assert!(names.insert(name), "{id}: {name:?} is not unique");
+            let words = r.words();
+            assert!(
+                words.iter().any(|w| w.variant.is_empty()),
+                "{id} has no default words"
+            );
+            let mut variants = std::collections::BTreeSet::new();
+            for w in words {
+                assert!(
+                    variants.insert(w.variant),
+                    "{id}: variant {:?} twice",
+                    w.variant
+                );
+                for text in [w.body, w.foot].into_iter().chain(w.fix_prompt) {
+                    assert!(!text.trim().is_empty(), "{id} {:?}: empty words", w.variant);
+                    assert!(!has_rule_id(text), "{id}: {text:?} carries a rule id");
+                    // Every hole is a plain name.
+                    let mut rest = text;
+                    while let Some(i) = rest.find('{') {
+                        let j = rest[i..].find('}').expect("closed hole") + i;
+                        let hole = &rest[i + 1..j];
+                        assert!(
+                            !hole.is_empty()
+                                && hole.chars().all(|c| c.is_ascii_lowercase()
+                                    || c.is_ascii_digit()
+                                    || c == '_'),
+                            "{id}: bad hole {hole:?}"
+                        );
+                        rest = &rest[j + 1..];
+                    }
+                }
+                assert!(
+                    w.body.ends_with('.') || w.body.ends_with('}'),
+                    "{id}: {:?}",
+                    w.body
+                );
+            }
+        }
     }
 }
