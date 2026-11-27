@@ -1321,6 +1321,30 @@ mod tests {
         assert_eq!(c.readouts[0].text, "Turn 1 · unpriced.");
     }
 
+    /// The account's spend limit (PRD 2): a line, a legend row, a readout
+    /// and a Watch at 80 % used; absent without the status line.
+    #[test]
+    fn the_spend_limit_shows_when_the_status_line_has_one() {
+        let mut s = fixture("fixtures/session-b.jsonl");
+        assert!(chart(&build(&s), "spend").spec.thresholds.is_empty());
+        s.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        s.status_facts.spend_limit_period = Some("monthly".into());
+        let o = build(&s);
+        let c = chart(&o, "spend");
+        assert_eq!(c.spec.thresholds[0].name, "spend limit");
+        assert_eq!(c.spec.thresholds[0].y, 500.0);
+        assert!(c
+            .readouts
+            .iter()
+            .any(|r| r.text == "now · spend $412 / $500 · monthly"));
+        assert_eq!(c.verdict.level, verdict::Level::Watch);
+        assert!(
+            c.verdict.text.contains("82 % of the spend limit used"),
+            "{}",
+            c.verdict.text
+        );
+    }
+
     #[test]
     fn a_cut_of_one_turn_is_singular() {
         let s = fixture("fixtures/session-b.jsonl");
