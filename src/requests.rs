@@ -71,6 +71,28 @@ impl LocatedCause {
         }
     }
 
+    /// The headline form: what changed in few cells — the first changed
+    /// tool name (`+` added before `−` removed) and a count of the rest.
+    pub fn compact(&self) -> String {
+        match self {
+            LocatedCause::ToolsChanged { added, removed, .. } => {
+                let names: Vec<String> = added
+                    .iter()
+                    .map(|n| format!("+{n}"))
+                    .chain(removed.iter().map(|n| format!("−{n}")))
+                    .collect();
+                match names.as_slice() {
+                    [] => "tool schema resized".to_string(),
+                    [one] => one.clone(),
+                    [first, rest @ ..] => format!("{first} +{} more", rest.len()),
+                }
+            }
+            LocatedCause::PrefixRewritten { from, of } => format!("prefix from msg {from}/{of}"),
+            LocatedCause::Expired { .. } => "cache expired".to_string(),
+            _ => self.short(),
+        }
+    }
+
     /// The one-line form every surface draws.
     pub fn short(&self) -> String {
         match self {
@@ -433,6 +455,53 @@ mod tests {
         lines.push(second);
         lines.push(reply("b", 5_000, 30_000, T1, None));
         run(&lines)
+    }
+
+    #[test]
+    fn compact_forms() {
+        let t = |a: &[&str], r: &[&str], z: &[(&str, i64)]| LocatedCause::ToolsChanged {
+            added: a.iter().map(|x| x.to_string()).collect(),
+            removed: r.iter().map(|x| x.to_string()).collect(),
+            resized: z.iter().map(|(n, d)| (n.to_string(), *d)).collect(),
+        };
+        assert_eq!(
+            t(&["mcp__x__search"], &[], &[]).compact(),
+            "+mcp__x__search"
+        );
+        assert_eq!(
+            t(&["mcp__a__b", "c", "d"], &[], &[]).compact(),
+            "+mcp__a__b +2 more"
+        );
+        assert_eq!(t(&[], &["WebSearch"], &[]).compact(), "−WebSearch");
+        assert_eq!(t(&["a"], &["b"], &[]).compact(), "+a +1 more");
+        assert_eq!(
+            t(&[], &[], &[("Bash", 40)]).compact(),
+            "tool schema resized"
+        );
+        let sys = LocatedCause::SystemChanged {
+            block: 2,
+            delta_chars: 1200,
+        };
+        assert_eq!(sys.compact(), sys.short());
+        assert_eq!(sys.compact(), "system block 2 +1.2k chars");
+        assert_eq!(
+            LocatedCause::PrefixRewritten { from: 4, of: 9 }.compact(),
+            "prefix from msg 4/9"
+        );
+        assert_eq!(
+            LocatedCause::Expired {
+                gap_ms: 400_000,
+                ttl_ms: 300_000
+            }
+            .compact(),
+            "cache expired"
+        );
+        let p = LocatedCause::ParamsChanged {
+            field: "effort",
+            from: Some("high".into()),
+            to: Some("max".into()),
+        };
+        assert_eq!(p.compact(), "effort high→max");
     }
 
     #[test]

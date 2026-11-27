@@ -104,7 +104,7 @@ impl Rule for CacheMiss {
                     }
                     _ => {}
                 }
-                l.cause.short()
+                l.cause.compact()
             }
             None => kind_what,
         };
@@ -127,7 +127,7 @@ impl Rule for CacheMiss {
             miss.turn,
             state.agg.cache_misses.len(),
             located
-                .map(|l| format!(" · located: {}", l.cause.kind()))
+                .map(|l| format!(" · located: {} · {}", l.cause.kind(), l.cause.short()))
                 .unwrap_or_default()
         );
         a.action = action;
@@ -1119,23 +1119,18 @@ mod tests {
         let s = miss_state(
             "tools_changed",
             &["Bash"],
-            &["Bash", "mcp__x__search"],
+            &["Bash", "mcp__x__find"],
             "2026-01-01T00:00:10Z",
         );
         let a = CacheMiss.evaluate(&s).expect("fires");
-        // The full form is cut to the coach width; the figure survives.
+        assert!(a.headline.contains("+mcp__x__find"), "{}", a.headline);
         assert!(
-            a.headline.starts_with("cache miss: tools changed"),
+            a.evidence.contains("tools changed: +mcp__x__find −0"),
             "{}",
-            a.headline
-        );
-        assert!(a.headline.contains("30k re-written"), "{}", a.headline);
-        assert_eq!(
-            s.requests.misses()[0].cause.short(),
-            "tools changed: +mcp__x__search −0"
+            a.evidence
         );
         assert!(
-            a.evidence.ends_with("· located: tools_changed"),
+            a.evidence.contains("located: tools_changed"),
             "{}",
             a.evidence
         );
@@ -1171,8 +1166,12 @@ mod tests {
             "{}",
             a.headline
         );
-        assert!(a.headline.contains("re-written"), "{}", a.headline);
         assert!(a.headline.contains('…'), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "tail must be uncut: {}",
+            a.headline
+        );
     }
 
     #[test]
