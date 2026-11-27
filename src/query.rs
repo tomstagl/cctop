@@ -639,9 +639,9 @@ pub fn prefix(state: &State) -> Value {
     let ctx = state.context();
     let rows: Vec<Value> = state
         .prefix
-        .rows(ctx.prefix)
+        .rows(ctx.prefix, state.requests.latest_shape())
         .iter()
-        .map(|r| json!({"kind": format!("{:?}", r.kind).to_lowercase(), "name": r.name, "bytes": r.bytes, "tokens": m(r.tokens_est, "tokens", "context_prefix", true), "count": r.count}))
+        .map(|r| json!({"kind": format!("{:?}", r.kind).to_lowercase(), "name": r.name, "bytes": r.bytes, "tokens": m(r.tokens_est, "tokens", "context_prefix", true), "count": r.count, "exact": r.exact}))
         .collect();
     json!({"total": m(ctx.prefix, "tokens", "context_prefix", false), "rows": rows})
 }

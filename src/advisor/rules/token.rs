@@ -976,10 +976,10 @@ impl Rule for BigPrefix {
         if per_turn_usd.is_none_or(|u| u < 0.25) && !(calibrated && prefix >= PREFIX_TOKENS) {
             return None;
         }
-        let rows = state.prefix.rows(prefix);
+        let rows = state.prefix.rows(prefix, state.requests.latest_shape());
         let biggest = rows
             .iter()
-            .find(|r| r.kind != crate::prefix::Kind::Other)
+            .find(|r| r.kind != crate::prefix::Kind::Other && r.name != crate::prefix::DEFERRED_ROW)
             .map(|r| format!("largest: {} ({})", r.name, fmt::tokens(r.tokens_est)))
             .unwrap_or_else(|| "press i on Context for the breakdown".into());
         let captured = state

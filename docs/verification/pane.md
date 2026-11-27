@@ -651,6 +651,16 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+40. **A `/model` or `/effort` switch mid-session shows `ParamsChanged` in
+    A01** (request ledger PRD §9).
+    Setup: a real session on Claude Code 2.1.302 or later; switch effort
+    (`/effort`) or model (`/model`) part-way through, send another prompt,
+    then `cctop query dashboard --session <id>`.
+    Expected: `cache.located_misses` has an entry whose cause is
+    `params_changed`.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

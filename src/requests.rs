@@ -303,7 +303,10 @@ fn is_main_thread(source: &str) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct RequestChain {
     shapes: HashMap<String, ShapeFacts>,
+    /// The newest shape line, whoever sent it.
     latest_shape: Option<String>,
+    /// The `shape_hash` of the newest main-thread request.
+    main_shape: Option<String>,
     pending: Option<ApiRequest>,
     /// keep + tail of the last main-thread request sent, paired or not.
     last_sent: Option<usize>,
@@ -322,6 +325,7 @@ impl RequestChain {
                 self.shapes.insert(s.shape_hash.clone(), s.clone());
             }
             Line::ApiRequest(r) if is_main_thread(&r.query_source) => {
+                self.main_shape = Some(r.shape_hash.clone());
                 self.pending_prior = self.last_sent;
                 self.last_sent = Some(r.keep + r.tail_len);
                 self.pending = Some(r.clone());
@@ -380,8 +384,19 @@ impl RequestChain {
         &self.misses
     }
 
+    /// The shape of the newest main-thread request; a subagent's shape line
+    /// never stands in for it. Before any main-thread request, the newest
+    /// shape line.
     pub fn latest_shape(&self) -> Option<&ShapeFacts> {
-        self.latest_shape.as_ref().and_then(|h| self.shapes.get(h))
+        self.main_shape
+            .as_ref()
+            .and_then(|h| self.shapes.get(h))
+            .or_else(|| {
+                if self.main_shape.is_some() {
+                    return None;
+                }
+                self.latest_shape.as_ref().and_then(|h| self.shapes.get(h))
+            })
     }
 
     pub fn miss_for(&self, message_id: &str) -> Option<&LocatedMiss> {
@@ -593,6 +608,20 @@ mod tests {
         let c = miss_pair(req("s1", 12, 1, "high", T1), vec![]);
         assert_eq!(c.misses()[0].cause, LocatedCause::Unlocated);
         assert_eq!(c.misses()[0].cause.short(), "unlocated");
+    }
+
+    #[test]
+    fn latest_shape_follows_the_main_thread_request() {
+        let mut c = RequestChain::default();
+        for l in [
+            shape("main", &[10], &[("Bash", 5)]),
+            req("main", 0, 1, "high", "2026-10-24T19:00:00.000Z"),
+            shape("side", &[3], &[("Read", 1)]),
+            req_src("agent:x", "side", 0, 1, "high", "2026-10-24T19:00:01.000Z"),
+        ] {
+            c.apply(&l, None, 300_000);
+        }
+        assert_eq!(c.latest_shape().unwrap().shape_hash, "main");
     }
 
     #[test]

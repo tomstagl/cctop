@@ -12,7 +12,7 @@ use crate::ui::State;
 
 pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let ctx = state.context();
-    let rows = state.prefix.rows(ctx.prefix);
+    let rows = state.prefix.rows(ctx.prefix, state.requests.latest_shape());
     let block = Block::default().borders(Borders::ALL).title(format!(
         " Prefix — {} on every request  (Esc back) ",
         fmt::tokens(ctx.prefix)
@@ -44,7 +44,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             Kind::Other => "other",
         };
         let note = match r.kind {
+            Kind::Tools if r.name == crate::prefix::DEFERRED_ROW => {
+                format!("{} tool schemas · exact, not in the total", r.count)
+            }
+            Kind::Tools | Kind::Mcp if r.count > 0 && r.exact => {
+                format!("{} tool schemas · exact (request shape)", r.count)
+            }
             Kind::Tools | Kind::Mcp if r.count > 0 => format!("{} tool schemas", r.count),
+            Kind::SystemPrompt if r.exact => "exact (request shape)".into(),
             Kind::Skills => format!("{} skills", r.count),
             Kind::Agents => format!("{} agent types", r.count),
             Kind::Other => "first call minus the rows above".into(),
@@ -144,7 +151,7 @@ mod tests {
         assert!(out.contains("tools      built-in tools"), "{out}");
         assert!(out.contains("other      system prompt + other"), "{out}");
         // Reconciled: other = first-call prefix − every measured row.
-        let rows = app.state.prefix.rows(app.state.context().prefix);
+        let rows = app.state.prefix.rows(app.state.context().prefix, None);
         let known: u64 = rows
             .iter()
             .filter(|r| r.kind != crate::prefix::Kind::Other)
@@ -162,5 +169,24 @@ mod tests {
         // Enter still opens the ledger.
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(render_to_string(&app, 100, 20).contains("Turn ledger"));
+    }
+
+    #[test]
+    fn session_r_prefix_is_exact_from_the_request_shape() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-r.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.state = State::new(Pricing::bundled());
+        app.state.session = SessionInfo::from_fixture(&path);
+        for l in parse_file(&path).unwrap() {
+            app.feed(l);
+        }
+        app.state.open = Some(1);
+        app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 120, 24);
+        assert!(out.contains("exact (request shape)"), "{out}");
+        insta::assert_snapshot!("prefix_r_120x24", out);
     }
 }

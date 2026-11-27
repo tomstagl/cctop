@@ -1,0 +1,28 @@
+---
+source: src/ui/prefix_view.rs
+expression: out
+---
+┌ Prefix — 82k on every request  (Esc back) ───────────────────────────────────────────────────────────────────────────┐
+│ KIND       WHAT                                        BYTES   TOKENS  NOTE                                          │
+│ other      other                                           —      52k  first call minus the rows above               │
+│ tools      built-in tools                              67 kB      17k  14 tool schemas · exact (request shape)       │
+│ agents     agent listing                               16 kB     4.2k  42 agent types                                │
+│ tools      deferred tools                               7 kB     1.8k  6 tool schemas · exact, not in the total      │
+│ system     system prompt §2                             6 kB     1.7k  exact (request shape)                         │
+│ system     system prompt §3                             5 kB     1.5k  exact (request shape)                         │
+│ mcp        mcp:lorem ipsum dolor instructions           1 kB      500                                                │
+│ CLAUDE.md  /home/user/project/src/71eed2.md (Proje…     1 kB      500                                                │
+│ CLAUDE.md  /home/user/project/src/fb95fc.md (Proje…     1 kB      500                                                │
+│ CLAUDE.md  /home/user/project/src/cb0430.md (Proje…     1 kB      500                                                │
+│ CLAUDE.md  /home/user/project/src/4d0bb8.md (Proje…     1 kB      500                                                │
+│ CLAUDE.md  /home/user/project/src/78cbdd.md (AutoM…     1 kB      500                                                │
+│ mcp        mcp:lorem ipsum dolor sit instructions       1 kB      473                                                │
+│ CLAUDE.md  /home/user/project/src/c7e908.md (Proje…     1 kB      466                                                │
+│ CLAUDE.md  /home/user/project/src/9592f2.md (Proje…     1 kB      460                                                │
+│ mcp        mcp:lorem  instructions                      1 kB      453                                                │
+│ skills     skills listing                               1 kB      257  1 skills                                      │
+│ mcp        mcp:lorem ipsum dolo instructions            0 kB      255                                                │
+│ system     system prompt §1                             0 kB       14  exact (request shape)                         │
+│ skills listing 1 kB of a 39 kB budget (1 % of the window)                                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Esc back  a ask  c coach  t theme  L sessions  q
