@@ -10,9 +10,9 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
       "title": "Context window",
       "figure": "142k of 1M · 14 %",
       "verdict": {
-        "level": "act",
-        "text": "142k of 1M: Claude Code compacts on its own in about 3 turns.",
-        "todo": "Do: /compact now with a focus, or write a hand-off note and /clear.",
+        "level": "good",
+        "text": "Plenty of room: 857k free.",
+        "todo": null,
         "metric_id": "verdict_context"
       },
       "note": "per /context, 2m ago",
@@ -20,7 +20,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         "kind": "area_forecast",
         "x": {
           "from": 1.0,
-          "to": 9.0,
+          "to": 6.0,
           "unit": "turn"
         },
         "y": {
@@ -74,19 +74,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
             "role": "fg"
           }
         ],
-        "forecast": {
-          "from": {
-            "x": 6.0,
-            "y": 142482.0
-          },
-          "to": {
-            "x": 9.0,
-            "y": 583215.576
-          },
-          "low": 155490.0,
-          "high": 1000000.0,
-          "role": "dim"
-        },
+        "forecast": null,
         "thresholds": [
           {
             "name": "auto-compact",
@@ -98,7 +86,6 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "accent",
           "warn",
           "fg",
-          "dim",
           "crit"
         ]
       },
@@ -219,10 +206,6 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           "text": "context so far"
         },
         {
-          "role": "dim",
-          "text": "forecast · +146k a turn"
-        },
-        {
           "role": "crit",
           "text": "auto-compact at 567k"
         },
@@ -256,7 +239,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
     {
       "id": "spend",
       "title": "Spend",
-      "figure": "$18.7 · ≈ $19.8 in an hour",
+      "figure": "$18.75 · ≈ $19.76 in an hour",
       "verdict": {
         "level": "good",
         "text": "$0.02 a minute. Two jumps: a costly turn in turn 2 ($5.95) and a costly turn in turn 4 ($9.26).",
@@ -272,7 +255,7 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         },
         "y": {
           "from": 0.0,
-          "to": 20.733403407445124,
+          "to": 22.174606769463196,
           "unit": "USD"
         },
         "series": [
@@ -286,27 +269,27 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
               },
               {
                 "x": 3.1334666666666666,
-                "y": 2.156033560417987
+                "y": 2.305902
               },
               {
                 "x": 14.183133333333334,
-                "y": 7.718080600535912
+                "y": 8.2545735
               },
               {
                 "x": 15.89725,
-                "y": 8.029910440045128
+                "y": 8.588078999999999
               },
               {
                 "x": 29.052366666666668,
-                "y": 16.691126575478993
+                "y": 17.8513465
               },
               {
                 "x": 45.35915,
-                "y": 18.407773425180885
+                "y": 19.687319499999997
               },
               {
                 "x": 565.9145666666667,
-                "y": 18.745904999999997
+                "y": 20.048954999999996
               }
             ]
           }
@@ -315,27 +298,27 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
           {
             "kind": "jump",
             "x": 14.183133333333334,
-            "y": 7.718080600535912,
+            "y": 8.2545735,
             "role": "warn"
           },
           {
             "kind": "jump",
             "x": 29.052366666666668,
-            "y": 16.691126575478993,
+            "y": 17.8513465,
             "role": "warn"
           }
         ],
         "forecast": {
           "from": {
             "x": 565.9145666666667,
-            "y": 18.745904999999997
+            "y": 20.048954999999996
           },
           "to": {
             "x": 625.9145666666667,
-            "y": 19.758484399999997
+            "y": 21.061534399999996
           },
-          "low": 19.758484399999997,
-          "high": 20.733403407445124,
+          "low": 21.061534399999996,
+          "high": 22.174606769463196,
           "role": "dim"
         },
         "thresholds": [],
@@ -346,6 +329,10 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
         ]
       },
       "readouts": [
+        {
+          "x": 565.9145666666667,
+          "text": "now · priced turns $20.05 · Claude Code's own count $18.75"
+        },
         {
           "x": 14.183133333333334,
           "text": "turn 2 · costly turn $5.95"
@@ -859,5 +846,5 @@ expression: "serde_json::to_string_pretty(&o).unwrap()"
       "fallback_cells": []
     }
   ],
-  "footer": "spent so far $18.7 · what this session would cost at API prices"
+  "footer": "spent so far $18.75 · what this session would cost at API prices"
 }
