@@ -42,7 +42,9 @@ pass() { echo "check-contract: ok: $1"; }
 
 # --- 1. the load check -------------------------------------------------------
 echo "check-contract: claude $claude_version, plugin $plugin_version"
+# env -u: an exported key would turn the noop into a model call.
 HOME="$work/home" CLAUDE_CONFIG_DIR="$work/config" CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
+  env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
   claude -p --debug --plugin-dir ./plugin "noop" </dev/null >"$work/stdout.txt" 2>&1
 exit_code=$?
 log="$work/config/debug/latest"
@@ -147,8 +149,13 @@ fi
 
 # --- the result line, in the shape docs/verification/pane.md §A records ------
 today=$(date -u +%Y-%m-%d)
+if [ "$exit_code" -eq 0 ]; then
+  exit_text="exit 0"
+else
+  exit_text="exit $exit_code (Not logged in, expected without credentials)"
+fi
 if [ "${#failures[@]}" -eq 0 ]; then
-  result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — exit 0, load line present, /cctop-pane listed, self-check ok, nothing refused, no hook failed, marker written with loaded: true; contract surface unchanged; validator and version pins green."
+  result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — $exit_text, load line present, /cctop-pane listed, self-check ok, nothing refused, no hook failed, marker written with loaded: true; contract surface unchanged; validator and version pins green."
 else
   result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — ${#failures[@]} failure(s): $(printf '%s; ' "${failures[@]}")"
 fi

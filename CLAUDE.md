@@ -18,7 +18,7 @@ make check                       # cargo fmt --check && cargo clippy --all-targe
 cargo test <name>                # one test / module, e.g. cargo test advisor::rules::outcome
 cargo build --release            # target/release/cctop
 make check-types                 # d.ts + harness_facts version vs installed `claude` (skips if no claude)
-make check-contract              # what CI's `contract` job runs: scripts/test-extract-dts.sh, the §A load check (no model call), the d.ts surface diff, the validator, the pins
+make check-contract              # what CI's `contract` job runs: scripts/test-extract-dts.sh, the §A load check (no model call), the d.ts surface diff, the validator, the pins (needs `zstd` on PATH)
 scripts/regen-dts.sh                                    # plugin/.claude/types/claude-code.d.ts, in full, from the installed claude (one model call, logged in)
 python3 -I scripts/extract-dts.py "$(command -v claude)" out.d.ts   # the d.ts surface read from the binary, no credentials (what CI diffs)
 make check-facts                 # src/harness_facts.rs constants re-read from the installed Claude Code bundle; then bump READ_FROM

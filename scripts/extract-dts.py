@@ -16,6 +16,7 @@ Exit 0 and the file written, or exit 1 with a message on stderr.
 import mmap
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -72,6 +73,8 @@ def find_declarations(path):
 def main():
     if len(sys.argv) != 3:
         fail("usage: extract-dts.py <claude-binary> <out.d.ts>")
+    if shutil.which("zstd") is None:
+        fail("zstd not found on PATH (brew install zstd / apt-get install zstd)")
     binary = os.path.realpath(sys.argv[1])
     dest = sys.argv[2]
     if not os.path.isfile(binary):

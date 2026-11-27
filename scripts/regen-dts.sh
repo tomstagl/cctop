@@ -21,12 +21,13 @@ trap 'rm -rf "$T"' EXIT
 v=$(claude --version | awk '{print $1}')
 
 CLAUDE_CODE_TMPDIR=$T CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
-  claude -p --max-turns 1 "/plugin-authoring reply with ok and do nothing else" </dev/null >/dev/null || true
+  claude -p --max-turns 1 "/plugin-authoring reply with ok and do nothing else" </dev/null >"$T/claude-out.txt" 2>&1 || true
 
 dir="$T/claude-*/bundled-skills/$v/*/plugin-authoring/types"
 # shellcheck disable=SC2012,SC2086
 src=$(ls -t $dir/claude-code.d.ts 2>/dev/null | head -n 1 || true)
 if [ -z "$src" ]; then
+  head -n 20 "$T/claude-out.txt" >&2
   echo "regen-dts: no claude-code.d.ts under $dir/ — is claude logged in?" >&2
   exit 1
 fi

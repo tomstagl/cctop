@@ -69,12 +69,18 @@ Expected:
   wrote `null` here in a `-p` run), `testedWith` and `selfCheck: "ok"`.
 
 The same check without a model call, and so without credentials — what CI
-runs (`.github/workflows/ci.yml`, the `contract` job): the prompt is the
-native `/plugin-types` command, which fires `session.start` like any run and
-writes the contract beside it.
+runs (`.github/workflows/ci.yml`, the `contract` job) through
+`scripts/check-contract.sh`: the prompt is `noop`, with `</dev/null` and
+`HOME` and `CLAUDE_CONFIG_DIR` pointing at a temp dir. `session.start` fires
+like in any run, and the run then stops at "Not logged in". That non-zero
+exit is the expected pass path; the checks above read the debug log and the
+marker. The contract surface is read from the installed binary by
+`scripts/extract-dts.py` (needs `zstd`) and diffed against the checked-in d.ts.
+The script's result line has the shape of the Result line below, with
+`exit 1 (Not logged in, expected without credentials)` in place of `exit 0`.
 
 ```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin '/plugin-types /tmp/types'
+HOME=$(mktemp -d) CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin "noop" </dev/null
 ```
 
 Known benign line: `[WARN] plugin cctop: options requested but its manifest
