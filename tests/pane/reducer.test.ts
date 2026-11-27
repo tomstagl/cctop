@@ -6,7 +6,7 @@ import { fakeElements, fakeEngine, fakeOn, paneRender, type FakeEngine } from '.
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { HISTORY_TURNS, initialModel, outcomeText, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
+import { BREAKDOWN_DEBOUNCE_MS, breakdownDue, HISTORY_TURNS, initialModel, outcomeText, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
 import { renderOverview } from '../../plugin/hooks/views/overview';
 import { register } from '../../plugin/hooks/pane';
 
@@ -104,11 +104,13 @@ test('usage rows draw what the engine left out as ?', () => {
 // reads, a chain with a core that answers each event as the engine would.
 function boot(usage?: SessionUsage) {
   const $: FakeEngine = fakeEngine({ now: T0, session: usage ? { usage } : {} });
-  const reads = { count: 0 };
+  // `reads` counts the status line's reads; a breakdown read (the spool's) is counted apart.
+  const reads = { count: 0, breakdowns: [] as (string | undefined)[] };
   const real = $.session.usage;
-  $.session.usage = () => {
-    reads.count += 1;
-    return real();
+  $.session.usage = (args) => {
+    if (args?.breakdown === undefined) reads.count += 1;
+    else reads.breakdowns.push(args.breakdown);
+    return real(args);
   };
   const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
@@ -299,4 +301,45 @@ test('a widget render is laid out as inline', () => {
   assert.equal(outcomeText(widget), outcomeText(inline));
   const draw = (model: Model): string[] => renderToText(renderOverview(model, fakeElements(new Map()), 60, model.placement, T0), 60);
   assert.deepEqual(draw(widget), draw(inline));
+});
+
+test('breakdownDue: true at first, false inside the debounce, true at its end', () => {
+  assert.equal(BREAKDOWN_DEBOUNCE_MS, 15_000);
+  assert.equal(breakdownDue(initialModel(), T0), true);
+  const read = reduce(initialModel(), { type: 'breakdown.read', at: T0 });
+  assert.equal(read.lastBreakdownAt, T0);
+  assert.equal(breakdownDue(read, T0 + 14_999), false);
+  assert.equal(breakdownDue(read, T0 + 15_000), true);
+});
+
+test('turn.complete and session.compact write the breakdown spool, once per debounce, never with full', async () => {
+  const usage = {
+    startedAt: 0,
+    context: {
+      window: 200000,
+      breakdown: { categories: [], totalTokens: 10, rawMaxTokens: 200000, model: 'm', memoryFiles: [], mcpTools: [], agents: [], isAutoCompactEnabled: true },
+    },
+    rateLimits: [],
+  } as unknown as SessionUsage;
+  const { $, dispatch, reads, start, turnStart, turnComplete, settle } = boot(usage);
+  $.env.values.HOME = '/home/u';
+  await start();
+  await settle();
+  await $.session.id(); // bound
+  await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
+  await settle();
+  await turnStart();
+  await turnComplete();
+  await settle();
+  const path = Object.keys(Object.fromEntries($.fs.files)).find((f) => f.startsWith('/home/u/.cctop/context/'));
+  assert.ok(path, 'the spool is written');
+  assert.deepEqual(reads.breakdowns, ['summary']);
+  assert.equal((JSON.parse($.fs.files.get(path) ?? '{}') as { v?: number }).v, 1);
+  await dispatch('session.compact', { trigger: 'auto', messages: [] }, () => ({ tokensBefore: 1, tokensAfter: 1 }));
+  await settle();
+  assert.equal(reads.breakdowns.length, 1, 'inside the debounce: no second read');
+  $.clock.tick(15_000);
+  await dispatch('session.compact', { trigger: 'auto', messages: [] }, () => ({ tokensBefore: 1, tokensAfter: 1 }));
+  await settle();
+  assert.deepEqual(reads.breakdowns, ['summary', 'summary']);
 });
