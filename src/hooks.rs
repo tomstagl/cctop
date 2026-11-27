@@ -117,11 +117,39 @@ impl HookEvent {
                 }
             }
             if let Some(input) = o.remove("tool_input") {
-                if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+                if event == "PreSkillShellCommand" {
+                    // Only the bounded command survives; the rest of the input is text.
+                    if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+                        o.insert(
+                            "tool_input".into(),
+                            serde_json::json!({ "command": bounded(cmd, COMMAND_CHARS) }),
+                        );
+                    }
+                } else if let Some(cmd) = input.get("command").and_then(Value::as_str) {
                     o.insert("command".into(), Value::String(bounded(cmd, COMMAND_CHARS)));
                 }
             }
             o.remove("transcript_path");
+            // MCP prompts: measured, never kept.
+            if let Some(Value::String(text)) = o.remove("message") {
+                if event == "Elicitation" {
+                    o.insert("message_chars".into(), Value::from(text.chars().count()));
+                }
+            }
+            if let Some(schema) = o.remove("requested_schema") {
+                let n = schema
+                    .get("properties")
+                    .and_then(Value::as_object)
+                    .map_or(0, |p| p.len());
+                o.insert("schema_fields".into(), Value::from(n));
+            }
+            if event == "ElicitationResult" {
+                let n = o
+                    .remove("content")
+                    .and_then(|c| c.as_object().map(|m| m.len()))
+                    .unwrap_or(0);
+                o.insert("content_fields".into(), Value::from(n));
+            }
             for key in ["prompt", "last_assistant_message"] {
                 if let Some(Value::String(text)) = o.remove(key) {
                     o.insert(format!("{key}_chars"), Value::from(text.chars().count()));
@@ -401,6 +429,75 @@ mod tests {
         assert!(w.poll().is_empty());
         record(&home, 2000, &stdin("PostToolUse", Some("t1")));
         assert_eq!(w.poll().len(), 1);
+    }
+
+    #[test]
+    fn new_events_are_spooled_as_facts() {
+        let line = |ev: &HookEvent| serde_json::to_string(ev).unwrap();
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"Elicitation","mcp_server_name":"srv","message":"SECRET-MSG please","mode":"form","elicitation_id":"e1",
+            "requested_schema":{"type":"object","properties":{"a":{"description":"SECRET-SCHEMA"},"b":{}}}
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(ev.payload["message_chars"], 17);
+        assert_eq!(ev.payload["schema_fields"], 2);
+        assert_eq!(ev.payload["mcp_server_name"], "srv");
+        assert_eq!(ev.payload["elicitation_id"], "e1");
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"ElicitationResult","mcp_server_name":"srv","action":"accept","mode":"form","elicitation_id":"e1",
+            "content":{"x":"SECRET-ANSWER","y":1,"z":2}
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(ev.payload["content_fields"], 3);
+        assert_eq!(ev.payload["action"], "accept");
+        assert_eq!(ev.payload["mode"], "form");
+        assert_eq!(ev.payload["elicitation_id"], "e1");
+        let ev = HookEvent::from_stdin(
+            1,
+            serde_json::json!({
+                "session_id":"s","hook_event_name":"ElicitationResult","action":"cancel"
+            }),
+        )
+        .unwrap();
+        assert_eq!(ev.payload["content_fields"], 0);
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"PreSkillShellCommand","command_name":"review","command_source":"project","invoked_by":"user",
+            "tool_input":{"command":"c".repeat(500),"description":"SECRET-DESC"}
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(
+            ev.payload["tool_input"]["command"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .count(),
+            200
+        );
+        assert_eq!(ev.payload["tool_input"].as_object().unwrap().len(), 1);
+        assert_eq!(ev.payload["command_name"], "review");
+        for (name, extra) in [
+            (
+                "ConfigChange",
+                serde_json::json!({"source":"project_settings","file_path":"/p/.claude/settings.json"}),
+            ),
+            (
+                "CwdChanged",
+                serde_json::json!({"old_cwd":"/a","new_cwd":"/b"}),
+            ),
+            ("DirectoryAdded", serde_json::json!({"directory":"/d"})),
+            (
+                "TeammateIdle",
+                serde_json::json!({"teammate_name":"t","team_name":"x"}),
+            ),
+        ] {
+            let mut v = extra.clone();
+            v["session_id"] = "s".into();
+            v["hook_event_name"] = name.into();
+            let ev = HookEvent::from_stdin(1, v).unwrap();
+            for (k, val) in extra.as_object().unwrap() {
+                assert_eq!(&ev.payload[k], val, "{name}.{k} kept");
+            }
+        }
     }
 
     #[test]
