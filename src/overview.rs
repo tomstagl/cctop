@@ -1601,6 +1601,12 @@ mod tests {
             .note
             .as_deref()
             .is_some_and(|n| n.starts_with("per /context")));
+        // The capture's age is in the note (`per /context, 12s ago`).
+        assert!(
+            c.note.as_deref().is_some_and(|n| n.contains(" ago")),
+            "{:?}",
+            c.note
+        );
         let none = build(&fixture("fixtures/session-a.jsonl"));
         let c = chart(&none, "context");
         assert!(c.bar.is_none() && c.bar_fallback_cells.is_none());

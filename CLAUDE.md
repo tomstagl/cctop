@@ -22,6 +22,7 @@ make check-contract              # what CI's `contract` job runs: scripts/test-e
 scripts/regen-dts.sh                                    # plugin/.claude/types/claude-code.d.ts, in full, from the installed claude (one model call, logged in)
 python3 -I scripts/extract-dts.py "$(command -v claude)" out.d.ts   # the d.ts surface read from the binary, no credentials (what CI diffs)
 make wasm                        # plugin/hooks/charts.wasm from crates/cctop-charts (isolated toolchain at ~/.cctop-toolchain if present); tests/wasm_fresh.rs fails when the sources moved
+# the isolated toolchain: rustup-init with RUSTUP_HOME=~/.cctop-toolchain/rustup CARGO_HOME=~/.cctop-toolchain/cargo, --no-modify-path, then `rustup target add wasm32-unknown-unknown`; the Makefile finds it, PATH and shell config stay untouched
 make check-facts                 # src/harness_facts.rs constants re-read from the installed Claude Code bundle; then bump READ_FROM
 ```
 
@@ -31,6 +32,7 @@ Pane (TypeScript, Node ≥ 22, no bun):
 npm run typecheck                                       # tsconfig.json (plugin/, noUncheckedIndexedAccess on, as the validator checks it) and tsconfig.test.json (tests/pane, flag off)
 npm test                                                # tsc -p tsconfig.test.json → node --test '.test-build/tests/pane/**/*.test.js'
 node --test .test-build/tests/pane/poller.test.js       # one file, after the tsc step above
+CCTOP_WASM_TIMING=1 npm test                             # also asserts the 30 ms per-chart wasm budget (plain npm test asserts < 100 ms and prints the times)
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin
 ```
 

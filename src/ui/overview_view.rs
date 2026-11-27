@@ -781,6 +781,7 @@ mod tests {
             "budget $25.00",
             "past 200k",
             "spend limit",
+            "retries",
             "Hooks add",
             "per /context",
         ] {
