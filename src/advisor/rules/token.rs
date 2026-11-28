@@ -4,8 +4,11 @@
 //! loop armed on a large context, A30 cold resume. A20 (the named cache
 //! miss) is A01's trigger; A22 folded into it.
 
-use super::{calls_per_turn, human_turns_since, model_short, recent_turns, usd_label, PriceKind};
-use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
+use super::{
+    about_usd, calls_per_turn, count, human_turns_since, model_short, money, percent, phrase,
+    recent_turns, spoken, usd_label, PriceKind,
+};
+use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency, Words};
 use crate::harness_facts::context_suggestions as ctx_rules;
 use crate::metrics::context::Mode;
 use crate::phase::ToolClass;
@@ -47,13 +50,26 @@ impl Rule for CacheMiss {
     fn id(&self) -> &'static str {
         "A01"
     }
+    fn name(&self) -> &'static str {
+        "The cache was rebuilt"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "At turn {turn} {cause}, so {tokens} cached tokens were written again at the cache-write price{usd}. {habit}",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "cache-miss"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let miss = state
             .agg
             .cache_misses
@@ -162,8 +178,43 @@ impl Rule for CacheMiss {
         a.action_text = action_text;
         a.saving = Saving::OneOff(miss.tokens);
         a.window_turns = 3;
+        let (cause, habit) = miss_words(&miss.kind, located.map(|l| &l.cause), old_cli);
+        a.hole("turn", miss.turn.to_string());
+        a.hole("cause", cause);
+        a.hole("habit", habit);
+        a.hole("tokens", fmt::tokens(miss.tokens));
+        a.hole("usd", about_usd(state, miss.tokens, PriceKind::CacheWrite));
         Some(a)
     }
+}
+
+/// A01's fixed words for a miss: what changed, and the habit that avoids
+/// it next time. The located cause (the request ledger) wins over the
+/// transcript's miss kind.
+fn miss_words(
+    kind: &str,
+    located: Option<&LocatedCause>,
+    old_cli: bool,
+) -> (&'static str, &'static str) {
+    let tools = if old_cli { "tools_old" } else { "tools" };
+    let key = match located {
+        Some(LocatedCause::PrefixRewritten { .. }) => "messages",
+        Some(LocatedCause::Expired { .. }) => "expired",
+        Some(LocatedCause::ToolsChanged { .. }) => tools,
+        Some(LocatedCause::SystemChanged { .. }) => "system",
+        Some(LocatedCause::ParamsChanged { field, .. }) => match *field {
+            "model" => "model",
+            "effort" => "effort",
+            "betas" => "betas",
+            _ => "setting",
+        },
+        _ => match kind {
+            "model_changed" => "model",
+            "tools_changed" => tools,
+            _ => "messages",
+        },
+    };
+    (phrase("A01", "cause", key), phrase("A01", "habit", key))
 }
 
 /// The status line's own deltas for its last miss (`tools_added`,
@@ -229,13 +280,26 @@ impl Rule for CacheExpiry {
     fn id(&self) -> &'static str {
         "A02"
     }
+    fn name(&self) -> &'static str {
+        "The cache expired"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "You were away for {gap} before turn {turn}, longer than the cache's {ttl} lifetime, so {tokens} tokens were written again{usd}. Answering within that time, or batching questions into one message, keeps the cache warm; when the task is done, a hand-off note and /clear is cheaper.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "cache-expiry"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let ttl_ms = state.cache_ttl_ms();
         let turns: Vec<_> = state.agg.turns.iter().filter(|t| t.api_calls > 0).collect();
         let parse = crate::metrics::cost::parse_ts_ms;
@@ -271,6 +335,18 @@ impl Rule for CacheExpiry {
         );
         a.saving = Saving::OneOff(write);
         a.window_turns = 3;
+        a.hole("gap", spoken(gap));
+        a.hole("turn", turn.to_string());
+        a.hole(
+            "ttl",
+            if ttl_ms >= 3_600_000 {
+                "1-hour"
+            } else {
+                "5-minute"
+            },
+        );
+        a.hole("tokens", fmt::tokens(write));
+        a.hole("usd", about_usd(state, write, PriceKind::CacheWrite));
         Some(a)
     }
 }
@@ -283,13 +359,26 @@ impl Rule for RunawayResult {
     fn id(&self) -> &'static str {
         "A03"
     }
+    fn name(&self) -> &'static str {
+        "Large tool results"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{tool} results take up {tokens} tokens since the last /clear or compaction, {share} of the window. They stay in context and every later call re-reads them. Narrow the command (head, grep, Glob), or let a subagent read it and return a summary.",
+                fix_prompt: Some("Keep tool output small from here on: pipe long commands through head or grep, use Glob and ranged reads, and hand big explorations to a subagent that returns a summary."),
+                foot: "goes away at the next /clear or compaction",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "runaway-result"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let since = state.since_boundary_turn();
         let window = state.context().window.max(1);
         let calls: Vec<&crate::tools::Call> = state
@@ -348,9 +437,8 @@ impl Rule for RunawayResult {
             .unwrap_or_default();
         let mut a = Advice::new("A03", "runaway-result", Urgency::Later);
         let single_line = format!(
-            "`{} {}` pushed {} tokens into context{produced}",
-            biggest.name,
-            fmt::clip(&biggest.input_summary, 24),
+            "`{}` pushed {} tokens into context{produced}",
+            crate::tools::call_shape(biggest),
             fmt::tokens(biggest.result_tokens_est)
         );
         let type_line = format!(
@@ -371,6 +459,15 @@ impl Rule for RunawayResult {
         a.saving = Saving::Tokens(total);
         a.window_turns = state.agg.human_turns().saturating_sub(since).max(1);
         a.retires_on = "the next boundary";
+        // The tool type's sum leads; with only one big result, that result.
+        let shown = if tool.is_some() {
+            total
+        } else {
+            biggest.result_tokens_est
+        };
+        a.hole("tool", super::ident(&name));
+        a.hole("tokens", fmt::tokens(shown));
+        a.hole("share", percent(shown as f64 / window as f64 * 100.0));
         Some(a)
     }
 }
@@ -383,13 +480,32 @@ impl Rule for Rereads {
     fn id(&self) -> &'static str {
         "A04"
     }
+    fn name(&self) -> &'static str {
+        "The same file read again"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "churn",
+                body: "{file} went through edit, re-read, edit {n} times. The Edit result already shows the new text, so each re-read puts about {tokens} tokens into the context again.",
+                fix_prompt: Some("After an Edit, trust the tool result — don't re-read the file before the next edit."),
+                foot: "goes away after three turns",
+            },
+            Words {
+                variant: "",
+                body: "{file} was read {n} times with no edit in between, and each read puts about {tokens} tokens into the context again. A ranged read (offset and limit) costs a fraction; better, Claude keeps the lines it needs in its own notes.",
+                fix_prompt: Some("You already have {file} in context: don't read it whole again. Read only the lines you need, with offset and limit."),
+                foot: "goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "reread"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let short = |p: &str| {
             std::path::Path::new(p)
                 .file_name()
@@ -433,6 +549,10 @@ impl Rule for Rereads {
                     .into();
             a.action_kind = ActionKind::Prompt;
             a.saving = Saving::Tokens(tokens);
+            a.variant = "churn";
+            a.hole("file", super::ident(&short(&f.path)));
+            a.hole("n", f.edit_reread_edit.to_string());
+            a.hole("tokens", fmt::tokens(tokens));
             return Some(a);
         }
         let f = state
@@ -458,6 +578,9 @@ impl Rule for Rereads {
         );
         a.action = "read once with an offset/limit, or ask Claude to keep the relevant lines in its summary".into();
         a.saving = Saving::Tokens(tokens);
+        a.hole("file", super::ident(&short(&f.path)));
+        a.hole("n", f.reads_since_edit.to_string());
+        a.hole("tokens", fmt::tokens(tokens));
         Some(a)
     }
 }
@@ -470,13 +593,26 @@ impl Rule for ExploreRun {
     fn id(&self) -> &'static str {
         "A25"
     }
+    fn name(&self) -> &'static str {
+        "Searching in the main thread"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Claude made {n} read-only calls in a row in the main thread, adding {tokens} tokens to the context. Those files ride along on every later request. An Explore subagent does the same search in its own context and hands back a short summary.",
+                fix_prompt: Some("Use an Explore subagent for the rest of this search and give me a short summary."),
+                foot: "goes away when the search ends or an agent starts",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "explore-delegate"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let (n, tokens) = state.tools.explore_run();
         if !((n >= 8 && tokens >= 20_000) || (n >= 6 && tokens >= 25_000)) {
             return None;
@@ -495,6 +631,8 @@ impl Rule for ExploreRun {
         a.saving = Saving::Tokens(tokens);
         a.retires_on = "the run ending or an Agent spawn";
         a.mark = agent_calls(state);
+        a.hole("n", n.to_string());
+        a.hole("tokens", fmt::tokens(tokens));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -519,13 +657,32 @@ impl Rule for IdleMcp {
     fn id(&self) -> &'static str {
         "A07"
     }
+    fn name(&self) -> &'static str {
+        "Unused tools in every request"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{server} has been idle for {idle}, yet its {count}, about {tokens} tokens, ride along in every request{loads}. Turn it off for this project with /mcp (or list it under disabledMcpjsonServers in your settings), or rely on deferred tool loading.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+            Words {
+                variant: "plugin",
+                body: "The plugin {plugin} adds about {tokens} always-on tokens to every request and has not been used for {startups} startups. Disable it for this project with /plugin.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "idle-mcp"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let now = state.clock_ms();
         let stats = state.tools.by_name();
         let session_start = state
@@ -578,10 +735,25 @@ impl Rule for IdleMcp {
                     }
                 );
                 a.action =
-                    "disable it for this project (.mcp.json) or rely on deferred tool loading"
-                        .into();
-                a.action_kind = ActionKind::Setting;
+                    "/mcp — turn it off for this project, or rely on deferred tool loading".into();
+                a.action_text = "/mcp".into();
+                a.action_kind = ActionKind::Slash;
                 a.saving = Saving::Tokens(tokens);
+                a.hole("server", super::ident(&server));
+                a.hole("idle", spoken(idle_ms));
+                a.hole("count", super::count(count, "tool schema", "tool schemas"));
+                a.hole("tokens", fmt::tokens(tokens));
+                a.hole(
+                    "loads",
+                    if loads > 0 {
+                        format!(
+                            ", and {} rebuilt the cache",
+                            super::count(loads, "ToolSearch load", "ToolSearch loads")
+                        )
+                    } else {
+                        String::new()
+                    },
+                );
             }
             (_, Some((name, tokens, unused))) => {
                 a.headline = format!(
@@ -594,6 +766,10 @@ impl Rule for IdleMcp {
                 a.action_text = "/plugin".into();
                 a.action_kind = ActionKind::Slash;
                 a.saving = Saving::Tokens(tokens);
+                a.variant = "plugin";
+                a.hole("plugin", super::ident(&name));
+                a.hole("tokens", fmt::tokens(tokens));
+                a.hole("startups", unused.unwrap_or(0).to_string());
             }
             _ => return None,
         }
@@ -631,13 +807,32 @@ impl Rule for ThinkingShare {
     fn id(&self) -> &'static str {
         "A08"
     }
+    fn name(&self) -> &'static str {
+        "Deep thinking on routine edits"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "fable",
+                body: "{share} of Claude's output over the last five turns was thinking, at effort {effort}, on turns that were mostly edits. Thinking is billed as output and routine edits rarely need it. Use /effort medium for this stretch and raise it again for design or debugging.",
+                fix_prompt: None,
+                foot: "goes away when the effort level drops",
+            },
+            Words {
+                variant: "",
+                body: "{share} of Claude's output over the last five turns was thinking, at effort {effort}, on turns that were mostly edits. Thinking is billed as output and routine edits rarely need it. On this model the effort level is part of the system prompt, so a change mid-session rebuilds the cache: switch to /effort medium at the next /clear.",
+                fix_prompt: None,
+                foot: "goes away when the effort level drops",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "thinking"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         if state.status_facts.thinking_enabled == Some(false) {
             return None;
         }
@@ -697,6 +892,11 @@ impl Rule for ThinkingShare {
         a.saving = Saving::Tokens(per_turn.max(1));
         a.window_turns = 5;
         a.mark = effort_rank(&effort);
+        if model.contains("fable") {
+            a.variant = "fable";
+        }
+        a.hole("share", percent(think as f64 / out as f64 * 100.0));
+        a.hole("effort", effort.clone());
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -756,13 +956,32 @@ impl Rule for FreshInputSpike {
     fn id(&self) -> &'static str {
         "A11"
     }
+    fn name(&self) -> &'static str {
+        "A large paste"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "paste",
+                body: "Turn {turn} carried a paste of about {tokens} tokens ({lines}){usd}. It was written to the cache on that turn's first call and every later call re-reads it. For a file, give Claude the path and let it read the part it needs; for a log, paste the last 100 lines.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+            Words {
+                variant: "",
+                body: "Turn {turn} sent about {tokens} tokens of uncached input on its first call{usd}, and they stay in context for the rest of the session. For a file, give Claude the path and let it read the part it needs; for a log, paste the last 100 lines.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "fresh-input"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let (t, fresh, approx, paste) = state
             .agg
             .turns
@@ -813,6 +1032,13 @@ impl Rule for FreshInputSpike {
         a.action = "for files, give the path and let Claude read the relevant range; for logs, paste the last 100 lines".into();
         a.saving = Saving::OneOff(fresh.saturating_sub(1_000));
         a.window_turns = 3;
+        if let Some(p) = paste {
+            a.variant = "paste";
+            a.hole("lines", count(p.lines, "line", "lines"));
+        }
+        a.hole("turn", t.number.to_string());
+        a.hole("tokens", fmt::tokens(fresh));
+        a.hole("usd", about_usd(state, fresh, PriceKind::Input));
         Some(a)
     }
 }
@@ -823,13 +1049,26 @@ impl Rule for ChattyTurns {
     fn id(&self) -> &'static str {
         "A12"
     }
+    fn name(&self) -> &'static str {
+        "Many tiny prompts"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "You sent {n} prompts in the last hour, with a median of {median} characters. Every turn re-reads the whole {ctx}-token context{usd}, so many small prompts multiply that cost. One message with several instructions pays it once, and usually gets a more coherent answer.",
+                fix_prompt: None,
+                foot: "a tip, nothing to type · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "chatty"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let now = state.clock_ms();
         let parse = crate::metrics::cost::parse_ts_ms;
         let recent: Vec<_> = state
@@ -868,6 +1107,10 @@ impl Rule for ChattyTurns {
             "batch related instructions into one prompt; queue follow-ups while a turn runs".into();
         a.saving = Saving::Tokens(ctx / 10);
         a.window_turns = recent.len();
+        a.hole("n", recent.len().to_string());
+        a.hole("median", median.to_string());
+        a.hole("ctx", fmt::tokens(ctx));
+        a.hole("usd", about_usd(state, ctx, PriceKind::CacheRead));
         Some(a)
     }
 }
@@ -879,13 +1122,26 @@ impl Rule for SubagentModel {
     fn id(&self) -> &'static str {
         "A14"
     }
+    fn name(&self) -> &'static str {
+        "A search agent ran on Opus"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "The {agent} agent made {searches} searches and no edits on Opus, about {opus}. The same work on Sonnet would have cost about {sonnet}. Search and summary agents rarely need the most capable model; keep Opus for the main thread.",
+                fix_prompt: Some("Run search and summary subagents on sonnet (model: \"sonnet\"), keep opus for the main thread."),
+                foot: "a tip · goes away after three turns",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "subagent-model"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let ag = state
             .agents
             .values()
@@ -915,6 +1171,10 @@ impl Rule for SubagentModel {
         a.action_text = "Run search and summary subagents on sonnet (model: \"sonnet\"), keep opus for the main thread.".into();
         a.action_kind = ActionKind::Prompt;
         a.saving = Saving::Tokens(saved_tokens.max(1));
+        a.hole("agent", super::ident(&ag.agent_type));
+        a.hole("searches", ag.search_calls().to_string());
+        a.hole("opus", money(opus));
+        a.hole("sonnet", money(sonnet));
         Some(a)
     }
 }
@@ -955,13 +1215,26 @@ impl Rule for AgentsWaste {
     fn id(&self) -> &'static str {
         "A48"
     }
+    fn name(&self) -> &'static str {
+        "Agents that didn't pay off"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Agents cost about {total} this session and about {waste} of it ({share}) went to agents whose work did not come back; most of it, about {top_usd}, to {top}. Before launching more of the same kind, open the agents view (6, then Enter) to see why: a prompt that asks for a result, or a narrower task, usually fixes it.",
+                fix_prompt: None,
+                foot: "goes away when you open the agents view or the waste drops under 10 %",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "agents-waste"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let (t, rows) = waste_figures(state);
         if t.classified < 2
             || t.waste_usd < WASTE_FIRE_USD
@@ -1007,6 +1280,21 @@ impl Rule for AgentsWaste {
         a.saving = Saving::OneOff(wasted_tokens.max(1));
         a.retires_on = "the view opened or the waste share under 10 %";
         a.mark = state.agents_view_opens;
+        let why = match top {
+            crate::agent_ledger::WasteReason::Failed => "failed",
+            crate::agent_ledger::WasteReason::Killed => "killed",
+            crate::agent_ledger::WasteReason::NoReturn => "no_return",
+            crate::agent_ledger::WasteReason::Idle => "idle",
+        };
+        let why = (
+            phrase("A48", "why_one", why),
+            phrase("A48", "why_many", why),
+        );
+        a.hole("total", money(t.cost.usd));
+        a.hole("waste", money(t.waste_usd));
+        a.hole("share", percent(waste_ratio(&t) * 100.0));
+        a.hole("top_usd", money(top_usd));
+        a.hole("top", count(top_n, why.0, why.1));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -1040,13 +1328,26 @@ impl Rule for BigPrefix {
     fn id(&self) -> &'static str {
         "A17"
     }
+    fn name(&self) -> &'static str {
+        "Heavy always-on context"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "Every request starts with the same {prefix} tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about {per_turn} a turn at {calls} per turn.{biggest} /context shows what fills it, and i on cctop's Context panel breaks the prefix down. Then trim CLAUDE.md, move rarely used rules into skills, and turn off the MCP servers (/mcp) and plugins (/plugin) this project doesn't use.",
+                fix_prompt: None,
+                foot: "goes away when you open the breakdown (i or m on Context)",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "prefix-tip"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Later
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let r = state.residency();
         let prefix = r.prefix;
         if prefix == 0 {
@@ -1079,13 +1380,35 @@ impl Rule for BigPrefix {
         );
         a.evidence = format!("{biggest}{captured}");
         a.action =
-            "trim CLAUDE.md, move rarely-used rules to skills, disable unused MCP servers and plugins — i on Context shows what the prefix is, m what else fills the window"
+            "/context or i on Context shows the prefix; trim CLAUDE.md, move rarely-used rules to skills, turn off unused MCP servers and plugins"
                 .into();
-        a.action_kind = ActionKind::Setting;
+        a.action_text = "/context".into();
+        a.action_kind = ActionKind::Slash;
         // Assumes a fifth of the prefix is trimmable.
         a.saving = Saving::Tokens(per_turn_tokens / 5);
         a.retires_on = "an inspector opened (i or m on Context)";
         a.mark = state.inspector_opens;
+        a.hole("prefix", fmt::tokens(prefix));
+        a.hole(
+            "per_turn",
+            per_turn_usd.map(money).unwrap_or_else(|| "?".into()),
+        );
+        a.hole("calls", count(cpt.round() as usize, "call", "calls"));
+        a.hole(
+            "biggest",
+            rows.iter()
+                .find(|r| {
+                    r.kind != crate::prefix::Kind::Other && r.name != crate::prefix::DEFERRED_ROW
+                })
+                .map(|r| {
+                    format!(
+                        " The largest part is {} ({} tokens).",
+                        super::ident(&r.name),
+                        fmt::tokens(r.tokens_est)
+                    )
+                })
+                .unwrap_or_default(),
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -1101,6 +1424,7 @@ impl Rule for BigPrefix {
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{prompt, response, tool};
+    use super::super::witness::{self, *};
     use super::*;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
@@ -1120,6 +1444,20 @@ mod tests {
         );
         assert_eq!(a.saving, Saving::OneOff(427_000));
         assert_eq!(a.urgency, Urgency::Later);
+        // A tip: the full words say what changed and the habit; got it.
+        assert_eq!(a.name, "The cache was rebuilt");
+        assert!(
+            a.body.starts_with("At turn 1 the model changed, so 427k cached tokens were written again at the cache-write price, about $"),
+            "{}",
+            a.body
+        );
+        assert!(a
+            .body
+            .ends_with("switch right after /clear while the context is small."));
+        assert_eq!(
+            a.actions.iter().map(|x| x.kind.id()).collect::<Vec<_>>(),
+            ["read"]
+        );
         // Three human turns later it is history.
         for i in 1..=3 {
             s.apply(&prompt(&format!("2026-01-01T00:0{i}:00Z")));
@@ -1798,7 +2136,7 @@ mod tests {
         let a = RunawayResult.evaluate(&s).expect("fires");
         assert!(
             a.headline
-                .starts_with("`Bash find / -name x` pushed 12k tokens into context"),
+                .starts_with("`find` pushed 12k tokens into context"),
             "{}",
             a.headline
         );
@@ -1831,8 +2169,7 @@ mod tests {
             "Grep results: 32k since the last boundary (16 % of the window)"
         );
         assert!(
-            a.evidence
-                .starts_with("biggest: `Grep todo` pushed 8.0k tokens"),
+            a.evidence.starts_with("biggest: `Grep` pushed 8.0k tokens"),
             "{}",
             a.evidence
         );
@@ -1845,18 +2182,7 @@ mod tests {
 
     #[test]
     fn a04_rereads_and_edit_reread_edit_churn() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..3 {
-            for l in tool(
-                &format!("r{i}"),
-                "2026-01-01T00:00:00Z",
-                "Read",
-                "/p/src/render.rs",
-                8_000,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let mut s = a04_reads();
         let a = Rereads.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "render.rs was read 3× with no edit in between");
         assert_eq!(a.saving, Saving::Tokens(2_000));
@@ -1865,26 +2191,7 @@ mod tests {
         }
         assert!(Rereads.evaluate(&s).is_none(), "an edit resets the run");
         // edit → re-read → edit, twice: the churn headline.
-        for i in 0..2 {
-            for l in tool(
-                &format!("rr{i}"),
-                "2026-01-01T00:00:00Z",
-                "Read",
-                "/p/src/render.rs",
-                8_000,
-            ) {
-                s.apply(&l);
-            }
-            for l in tool(
-                &format!("ee{i}"),
-                "2026-01-01T00:00:00Z",
-                "Edit",
-                "/p/src/render.rs",
-                10,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let s = a04_churn();
         let a = Rereads.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "render.rs: edit → re-read → edit ×2");
         assert_eq!(a.action_kind, ActionKind::Prompt);
@@ -1893,23 +2200,7 @@ mod tests {
 
     #[test]
     fn a25_explore_run_is_bash_aware_and_retires_on_an_agent_spawn() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..8 {
-            let (name, input) = if i % 2 == 0 {
-                ("Read", "/p/f.rs")
-            } else {
-                ("Bash", "rg -n todo src")
-            };
-            for l in tool(
-                &format!("g{i}"),
-                "2026-01-01T00:00:00Z",
-                name,
-                input,
-                12_000,
-            ) {
-                s.apply(&l);
-            }
-        }
+        let mut s = a25();
         let a = ExploreRun.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "EXPLORING ×8 · +24k ctx this run");
         assert_eq!(a.urgency, Urgency::Next);
@@ -1957,12 +2248,7 @@ mod tests {
 
     #[test]
     fn a07_idle_mcp_and_unused_plugin() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&Line::from_value(serde_json::json!({"type":"attachment","attachment":{"type":"deferred_tools_delta","addedNames":["mcp__playwright__click","mcp__playwright__snapshot"],"addedLines":["x".repeat(6000),"y".repeat(6000)]}})));
-        s.session.alive = true;
-        let t0 = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:00Z").unwrap();
-        s.now_ms = t0 + 25 * 60_000;
+        let mut s = a07_mcp();
         let a = IdleMcp.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "mcp:playwright idle for 25:00");
         assert!(
@@ -1983,13 +2269,7 @@ mod tests {
         }
         assert!(IdleMcp.evaluate(&s).is_none());
         // An enabled plugin unused for 38 startups with 4k always-on tokens.
-        let mut p = State::new(Pricing::bundled());
-        p.prefix.scan_plugins(
-            &serde_json::json!({"enabledPlugins": {"frontend-design@claude-plugins-official": true}}),
-            Some(&serde_json::json!({"catalog": [{"plugin": "frontend-design", "tokens": {"claude-opus-5": {"always_on": 4100}}}]})),
-            Some(&serde_json::json!({"numStartups": 438, "pluginUsage": {"frontend-design@claude-plugins-official": {"lastUsedNumStartups": 400}}})),
-            "claude-opus-5",
-        );
+        let p = a07_plugin();
         let a = IdleMcp.evaluate(&p).expect("fires");
         assert_eq!(
             a.headline,
@@ -2000,23 +2280,10 @@ mod tests {
 
     #[test]
     fn a08_thinking_share_on_edit_heavy_turns_prices_the_effort_step() {
-        let think = |id: &str, out: u64, thinking: u64| -> Line {
-            Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","perTurnEffort":"high","message":{{"id":"{id}","model":"claude-sonnet-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"output_tokens":{out},"output_tokens_details":{{"thinking_tokens":{thinking}}}}}}}}}"#)).unwrap()
+        let think = |id: &str, out: u64, thinking: u64| {
+            witness::think(id, "claude-sonnet-5", out, thinking)
         };
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..5 {
-            s.apply(&prompt("2026-01-01T00:00:00Z"));
-            for l in tool(
-                &format!("e{i}"),
-                "2026-01-01T00:00:00Z",
-                "Edit",
-                "/p/a.rs",
-                10,
-            ) {
-                s.apply(&l);
-            }
-            s.apply(&think(&format!("t{i}"), 1_000, 600));
-        }
+        let mut s = a08_sonnet();
         let a = ThinkingShare.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -2055,9 +2322,7 @@ mod tests {
 
     #[test]
     fn a11_fresh_input_uses_the_first_call_only() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&response("f1", "2026-01-01T00:00:01Z", 6_000, 0, 50_000));
+        let s = a11_input();
         let a = FreshInputSpike.evaluate(&s).expect("fires");
         assert!(
             a.headline
@@ -2090,14 +2355,7 @@ mod tests {
         // before the transcript line): it is the turn's. On a cached session
         // the first call shows it as a cache write, not as input_tokens, so
         // the size comes from the history and the headline names the paste.
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T00:00:00Z"));
-        s.apply(&response("f1", "2026-01-01T00:00:01Z", 2, 9_800, 50_000));
-        s.history.pastes.push(Paste {
-            at_ms: t("2026-01-01T00:00:00Z") - 300,
-            chars: 38_000,
-            lines: 412,
-        });
+        let s = a11_paste();
         let a = FreshInputSpike.evaluate(&s).expect("fires");
         assert!(
             a.headline
@@ -2188,19 +2446,7 @@ mod tests {
 
     #[test]
     fn a12_chatty_turns_counts_human_prompts_only() {
-        let mut s = State::new(Pricing::bundled());
-        for i in 0..25 {
-            s.apply(&Line::parse(&format!(r#"{{"type":"user","timestamp":"2026-01-01T00:{i:02}:00Z","promptSource":"typed","message":{{"role":"user","content":"ok go"}}}}"#)).unwrap());
-            s.apply(&response(
-                &format!("c{i}"),
-                &format!("2026-01-01T00:{i:02}:01Z"),
-                10,
-                0,
-                100_000,
-            ));
-        }
-        s.session.alive = true;
-        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T00:30:00Z").unwrap();
+        let s = a12();
         let a = ChattyTurns.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "25 prompts in the last hour, median 5 chars");
         // Task notifications are machine turns and never count.
@@ -2226,47 +2472,8 @@ mod tests {
 
     #[test]
     fn a48_agents_waste_fires_on_two_classified_agents_over_a_dollar_and_a_quarter() {
-        let mut s = State::new(Pricing::bundled());
-        // Four opus agents at ≈$1.25 each (1.5 M cache read at $0.50/M,
-        // 20 k output at $25/M).
-        let mk = |id: &str| {
-            let mut a = crate::agents::Agent::new(
-                id,
-                crate::agents::Meta {
-                    agent_type: "Explore".into(),
-                    ..Default::default()
-                },
-            );
-            a.model = "claude-opus-5".into();
-            a.usage.cache_read = 1_500_000;
-            a.usage.output = 20_000;
-            a
-        };
-        let notify = |s: &mut State, id: &str, status: &str, result: &str| {
-            let text = format!(
-                "<task-notification><task-id>{id}</task-id><status>{status}</status><summary>s</summary><result>{result}</result></task-notification>"
-            );
-            s.apply(&Line::parse(&format!(
-                r#"{{"type":"user","timestamp":"2026-01-01T00:10:00Z","promptSource":"system","origin":{{"kind":"task-notification"}},"message":{{"role":"user","content":{}}}}}"#,
-                serde_json::to_string(&text).unwrap()
-            )).unwrap());
-        };
-        for id in [
-            "0000000000000000a",
-            "0000000000000000b",
-            "0000000000000000c",
-            "0000000000000000d",
-        ] {
-            s.agents.insert(id.into(), mk(id));
-        }
-        for id in [
-            "0000000000000000a",
-            "0000000000000000b",
-            "0000000000000000c",
-            "0000000000000000d",
-        ] {
-            notify(&mut s, id, "completed", &"r".repeat(800));
-        }
+        let mut s = a48_returned();
+        let mk = costly_agent;
         assert!(AgentsWaste.evaluate(&s).is_none(), "nothing wasted");
         // One failed agent: ≈$1.25 of ≈$5 is 25 %, but one classified.
         notify(&mut s, "0000000000000000a", "failed", "");
@@ -2342,25 +2549,8 @@ mod tests {
 
     #[test]
     fn a14_subagent_model_reads_tool_stats_not_descriptions() {
-        let mut s = State::new(Pricing::bundled());
-        let mk = |id: &str, kind: &str, tools: &[(&str, usize)]| {
-            let mut a = crate::agents::Agent::new(
-                id,
-                crate::agents::Meta {
-                    agent_type: kind.into(),
-                    ..Default::default()
-                },
-            );
-            a.model = "claude-opus-5".into();
-            a.usage.cache_read = 400_000;
-            a.usage.output = 5_000;
-            for (t, n) in tools {
-                a.tools_by_name.insert((*t).into(), *n);
-            }
-            a
-        };
-        s.agents
-            .insert("x".into(), mk("x", "Explore", &[("Grep", 4), ("Read", 3)]));
+        let mut s = a14();
+        let mk = search_agent;
         let adv = SubagentModel.evaluate(&s).expect("fires");
         assert_eq!(
             adv.headline,
@@ -2411,7 +2601,10 @@ mod tests {
             a.headline
         );
         assert!(a.headline.ends_with("/turn at 1 calls"), "{}", a.headline);
-        assert_eq!(a.action_kind, ActionKind::Setting);
+        // The action matches the advice: /context shows what fills it.
+        assert_eq!(a.action_kind, ActionKind::Slash);
+        assert_eq!(a.action_text, "/context");
+        assert!(a.body.contains("at 1 call per turn."), "{}", a.body);
         assert_eq!(a.saving, Saving::Tokens(24_000));
         // A raw 60k on Opus at one call per turn is every session's on a
         // plugin-heavy setup and $0.03/turn: quiet. Decision 9 of the
@@ -2442,13 +2635,26 @@ impl Rule for CacheCountdown {
     fn id(&self) -> &'static str {
         "A19"
     }
+    fn name(&self) -> &'static str {
+        "The cache is about to expire"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "The cache holding your {tokens}-token context expires in {left}. A reply before then is a cache read{warm}; after that, the next message writes it all again{cold}. If the task is done, a hand-off note and /clear is cheaper than keeping it warm.",
+                fix_prompt: None,
+                foot: "goes away with the next API call",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "cache-countdown"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let clock = state.cache_clock()?;
         if clock.remaining_ms <= 0 {
             return None;
@@ -2515,6 +2721,14 @@ impl Rule for CacheCountdown {
         a.saving = Saving::OneOff(rewrite);
         a.retires_on = "the next API call";
         a.mark = state.agg.api_calls() as u64;
+        let clause = |v: Option<f64>| {
+            v.map(|v| format!(", about {}", money(v)))
+                .unwrap_or_default()
+        };
+        a.hole("tokens", fmt::tokens(rewrite));
+        a.hole("left", spoken(clock.remaining_ms));
+        a.hole("warm", clause(warm));
+        a.hole("cold", clause(cold));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2534,13 +2748,26 @@ impl Rule for SwitchWindow {
     fn id(&self) -> &'static str {
         "A21"
     }
+    fn name(&self) -> &'static str {
+        "A model switch on a warm cache"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "{what} while the cache was warm. The new model can't read the old one's cache, so the next request writes all {tokens} tokens again{usd}. Switch back with /model before the cache expires{left}, or switch right after a /clear when the context is small.",
+                fix_prompt: None,
+                foot: "goes away after a switch back or a /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "warm-switch"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Now
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let now = state.clock_ms();
         let warm = state.cache_warm().is_some_and(|(w, _)| w);
         let ctx = if state.cache.from_shim && state.cache.recache_tokens_if_cold > 0 {
@@ -2615,6 +2842,32 @@ impl Rule for SwitchWindow {
         a.saving = Saving::OneOff(tokens);
         a.retires_on = "a /model back or a /clear";
         a.mark = at as u64;
+        a.hole(
+            "what",
+            match hook {
+                Some(s) => format!(
+                    "You switched from {} to {}",
+                    fmt::model_short(&s.from),
+                    fmt::model_short(&s.to)
+                ),
+                None => "You switched the model".to_string(),
+            },
+        );
+        a.hole("tokens", fmt::tokens(tokens));
+        a.hole(
+            "usd",
+            price
+                .map(|p| format!(", about {}", money(p)))
+                .unwrap_or_default(),
+        );
+        a.hole(
+            "left",
+            state
+                .cache_clock()
+                .filter(|c| c.remaining_ms > 0)
+                .map(|c| format!(" (in {})", spoken(c.remaining_ms)))
+                .unwrap_or_default(),
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2648,13 +2901,26 @@ impl Rule for ColdSwitch {
     fn id(&self) -> &'static str {
         "A21b"
     }
+    fn name(&self) -> &'static str {
+        "A free moment to switch models"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "The cache is cold, so the next request writes the whole {ctx}-token context again whatever you do: a /model or /effort change costs nothing extra right now. This project switches often ({n} times); pick the model for the next stretch and hold it until the next /clear.",
+                fix_prompt: None,
+                foot: "goes away with the next API call",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "cold-switch"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let cold = state.cache_warm().is_some_and(|(w, _)| !w);
         if !cold || state.history.project_switches < 3 || state.context().size < 100_000 {
             return None;
@@ -2672,6 +2938,8 @@ impl Rule for ColdSwitch {
         a.saving = Saving::OneOff(state.context().size);
         a.retires_on = "the next API call";
         a.mark = state.agg.api_calls() as u64;
+        a.hole("ctx", fmt::tokens(state.context().size));
+        a.hole("n", state.history.project_switches.to_string());
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2687,13 +2955,26 @@ impl Rule for ContextCost {
     fn id(&self) -> &'static str {
         "A23"
     }
+    fn name(&self) -> &'static str {
+        "The context is getting expensive"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "At {ctx} tokens every call re-reads the whole context: about {per_call} a call and {per_turn} a turn at this session's {calls} per turn, against {at_100k} a turn at 100k. The next 30 calls cost about {next30}. {when}: /compact with a focus, or a hand-off note and /clear, brings it back down.",
+                fix_prompt: None,
+                foot: "goes away after a /compact or /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "context-reset"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let v = state.context();
         if v.size < 200_000 {
             return None;
@@ -2733,6 +3014,19 @@ impl Rule for ContextCost {
         a.next_row_only = !(big && clean);
         a.retires_on = "a /compact or /clear";
         a.mark = boundaries_and_compacts(state);
+        a.hole("ctx", fmt::tokens(v.size));
+        a.hole("per_call", money(g.per_call));
+        a.hole("per_turn", money(g.per_turn));
+        a.hole(
+            "calls",
+            count(g.calls_per_turn.round() as usize, "call", "calls"),
+        );
+        a.hole("at_100k", money(at_100k));
+        a.hole("next30", money(g.next_30_calls));
+        a.hole(
+            "when",
+            phrase("A23", "when", if clean { "clean" } else { "not_clean" }),
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2776,13 +3070,26 @@ impl Rule for LoopArmed {
     fn id(&self) -> &'static str {
         "A27"
     }
+    fn name(&self) -> &'static str {
+        "A loop on a large context"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "A /loop or /goal wakes this session on a timer, and every wake-up re-reads the whole {ctx}-token context even when nothing changed: about {per_hour} tokens an hour at one wake-up every {interval}. /clear before arming the loop, widen the interval, or narrow it to the check it needs.",
+                fix_prompt: None,
+                foot: "goes away after a /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "loop-armed"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let ctx = state.context().size;
         if ctx <= 150_000 {
             return None;
@@ -2828,6 +3135,9 @@ impl Rule for LoopArmed {
             .iter()
             .filter(|b| b.kind == crate::metrics::usage::BoundaryKind::Clear)
             .count() as u64;
+        a.hole("ctx", fmt::tokens(ctx));
+        a.hole("per_hour", fmt::tokens(per_hour));
+        a.hole("interval", spoken((minutes * 60_000.0) as i64));
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2851,13 +3161,32 @@ impl Rule for ColdResume {
     fn id(&self) -> &'static str {
         "A30"
     }
+    fn name(&self) -> &'static str {
+        "Coming back to a cold cache"
+    }
+    fn words(&self) -> &'static [Words] {
+        &[
+            Words {
+                variant: "",
+                body: "No call for {idle}, longer than the cache's {ttl} lifetime: the cache is gone and your next message writes all {tokens} tokens again{usd}. If the task is done, a hand-off note and /clear start the next one at a fraction of the size; if not, /compact halves what comes back.",
+                fix_prompt: None,
+                foot: "goes away with the next API call or a /clear",
+            },
+            Words {
+                variant: "resume",
+                body: "Claude Code's resume says the cache has likely expired, so your next message writes all {tokens} tokens again{usd}. If the task is done, a hand-off note and /clear start the next one at a fraction of the size; if not, /compact halves what comes back.",
+                fix_prompt: None,
+                foot: "goes away with the next API call or a /clear",
+            },
+        ]
+    }
     fn family(&self) -> &'static str {
         "cold-resume"
     }
     fn urgency(&self) -> Urgency {
         Urgency::Next
     }
-    fn evaluate(&self, state: &State) -> Option<Advice> {
+    fn fire(&self, state: &State) -> Option<Advice> {
         let ctx = state.context().size;
         if ctx <= 100_000 {
             return None;
@@ -2912,6 +3241,27 @@ impl Rule for ColdResume {
         a.saving = Saving::OneOff(rewrite / 2);
         a.retires_on = "the next API call or a /clear";
         a.mark = state.agg.api_calls() as u64;
+        if !primary {
+            a.variant = "resume";
+        }
+        a.hole("idle", spoken(idle));
+        a.hole(
+            "ttl",
+            if state.cache_ttl_ms() >= 3_600_000 {
+                "1-hour"
+            } else {
+                "5-minute"
+            },
+        );
+        a.hole("tokens", fmt::tokens(rewrite));
+        a.hole(
+            "usd",
+            secondary
+                .and_then(|r| r.estimated_cache_write_usd)
+                .or_else(|| super::usd(state, rewrite, super::PriceKind::CacheWrite))
+                .map(|u| format!(", about {}", money(u)))
+                .unwrap_or_default(),
+        );
         Some(a)
     }
     fn acted(&self, state: &State, fired: &Advice) -> bool {
@@ -2927,24 +3277,10 @@ impl Rule for ColdResume {
 #[cfg(test)]
 mod phase5_tests {
     use super::super::fixtures::{prompt, response};
+    use super::super::witness::*;
     use super::*;
     use crate::metrics::Pricing;
     use crate::transcript::Line;
-
-    fn t(ts: &str) -> i64 {
-        crate::metrics::cost::parse_ts_ms(ts).unwrap()
-    }
-
-    /// A session of one turn with a 150k context, the cache written at
-    /// 10:00:05 on the 5 m TTL, a question pending since 10:00:06.
-    fn asked() -> State {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":150000,"cache_read_input_tokens":0,"output_tokens":10}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:06Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"tool_use","id":"q","name":"AskUserQuestion","input":{"questions":[]}}],"usage":{"input_tokens":2,"cache_read_input_tokens":150000,"output_tokens":10}}}"#).unwrap());
-        s
-    }
 
     #[test]
     fn a19_cache_countdown_in_the_band_while_asked() {
@@ -2954,7 +3290,7 @@ mod phase5_tests {
             CacheCountdown.evaluate(&s).is_none(),
             "outside the 2-minute band of a 5 m TTL"
         );
-        s.now_ms = t("2026-01-01T10:03:30Z"); // 1:36 left
+        let mut s = a19(); // 1:36 left
         let a = CacheCountdown.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -2994,7 +3330,7 @@ mod phase5_tests {
         s.now_ms = t("2026-01-01T10:01:00Z");
         assert!(SwitchWindow.evaluate(&s).is_none());
         // The hook: a warm switch on 150k.
-        s.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:50Z"), serde_json::json!({"hook_event_name":"PreModelSwitch","from_model":"claude-opus-5","to_model":"claude-sonnet-5","source":"command","prompt_cache_warm":true,"context_tokens":150000,"estimated_cache_write_usd":0.9})).unwrap());
+        let mut s = a21();
         let a = SwitchWindow.evaluate(&s).expect("fires");
         assert_eq!(a.headline, "Switch re-reads 150k uncached (≈$.90)");
         assert!(
@@ -3027,9 +3363,7 @@ mod phase5_tests {
             a.evidence
         );
         // Cold and a switching project: the free-moment hint.
-        let mut cold = asked();
-        cold.now_ms = t("2026-01-01T10:20:00Z");
-        cold.history.project_switches = 4;
+        let mut cold = a21b();
         let c = ColdSwitch.evaluate(&cold).expect("cold hint");
         assert_eq!(
             c.headline,
@@ -3093,11 +3427,10 @@ mod phase5_tests {
 
     #[test]
     fn a27_loop_armed_on_a_large_context_once() {
-        let mut s = State::new(Pricing::bundled());
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 180_000));
+        let mut s = a27();
+        s.session.session_crons = 0;
         assert!(LoopArmed.evaluate(&s).is_none(), "nothing armed");
-        s.session.session_crons = 1;
+        let s = a27();
         let a = LoopArmed.evaluate(&s).expect("fires");
         assert_eq!(
             a.headline,
@@ -3128,11 +3461,7 @@ mod phase5_tests {
 
     #[test]
     fn a30_cold_resume_from_the_idle_gap_or_the_resume_hook() {
-        let mut s = State::new(Pricing::bundled());
-        s.session.alive = true;
-        s.apply(&prompt("2026-01-01T10:00:00Z"));
-        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","message":{"id":"m1","model":"claude-opus-5","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
-        s.apply(&Line::parse(r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T10:00:06Z","durationMs":6000}"#).unwrap());
+        let mut s = a30_idle();
         s.now_ms = t("2026-01-01T10:03:00Z");
         assert!(ColdResume.evaluate(&s).is_none(), "still warm");
         s.now_ms = t("2026-01-01T12:14:06Z");
@@ -3153,12 +3482,7 @@ mod phase5_tests {
         s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T12:15:05Z","message":{"id":"m2","model":"claude-opus-5","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":182000,"output_tokens":10}}}"#).unwrap());
         assert!(ColdResume.acted(&s, &a));
         // The resume hook's own verdict.
-        let mut r = State::new(Pricing::bundled());
-        r.session.alive = true;
-        r.apply(&prompt("2026-01-01T10:00:00Z"));
-        r.apply(&response("m1", "2026-01-01T10:00:05Z", 2, 0, 150_000));
-        r.apply_hook(&crate::hooks::HookEvent::from_stdin(t("2026-01-01T10:00:10Z"), serde_json::json!({"hook_event_name":"SessionStart","source":"resume","seconds_since_last_response":7200,"context_tokens":150000,"prompt_cache_likely_expired":true,"estimated_cache_write_usd":1.1})).unwrap());
-        r.now_ms = t("2026-01-01T10:00:20Z");
+        let r = a30_resume();
         let a = ColdResume.evaluate(&r).expect("fires");
         assert!(
             a.evidence
