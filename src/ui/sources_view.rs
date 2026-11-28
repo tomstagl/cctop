@@ -220,6 +220,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         dim,
     )));
     lines.extend(workspace_lines(state, w));
+    lines.extend(otel_line(state));
     if !state.hooks_missing.is_empty() {
         lines.push(Line::from(Span::styled(
             format!(
@@ -230,6 +231,28 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         )));
     }
     frame.render_widget(Paragraph::new(lines), inner);
+}
+
+/// `otel: metrics · logs · traces`, each lit once that signal has delivered
+/// data. Absent without a receiver.
+fn otel_line<'a>(state: &State) -> Option<Line<'a>> {
+    let (m, l, t) = state.otel_signals()?;
+    let lit = |on: bool| {
+        if on {
+            state.theme.accent()
+        } else {
+            state.theme.dim()
+        }
+    };
+    let dot = Span::styled(" · ", state.theme.dim());
+    Some(Line::from(vec![
+        Span::styled(" otel: ", state.theme.dim()),
+        Span::styled("metrics", lit(m)),
+        dot.clone(),
+        Span::styled("logs", lit(l)),
+        dot,
+        Span::styled("traces", lit(t)),
+    ]))
 }
 
 /// The workspace the status line reports: the repo, the worktree and the
@@ -369,6 +392,57 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
         assert_eq!(app.state.context_view, ContextView::Prefix);
         assert_eq!(app.state.inspector_opens, 2);
+    }
+
+    #[test]
+    fn sources_view_lights_the_otel_signals_that_arrived() {
+        use crate::otel::SessionData;
+        let mut app = app_on("session-a");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 30).contains("otel:"));
+        let mut d = SessionData {
+            cost_usd: 0.4,
+            api_errors: 1,
+            ..Default::default()
+        };
+        app.state.apply_otel(&d);
+        assert_eq!(app.state.otel_signals(), Some((true, true, false)));
+        insta::assert_snapshot!(
+            "sources_otel_metrics_logs_110x30",
+            render_to_string(&app, 110, 30)
+        );
+        d.spans = crate::ui::state::tests_support::trace_spans(&["user"]).into();
+        app.state.apply_otel(&d);
+        assert_eq!(app.state.otel_signals(), Some((true, true, true)));
+        // The text is the same as above; the difference is the style.
+        let styles = |st: &State| -> Vec<(String, ratatui::style::Style)> {
+            super::otel_line(st)
+                .unwrap()
+                .spans
+                .iter()
+                .filter(|sp| ["metrics", "logs", "traces"].contains(&sp.content.as_ref()))
+                .map(|sp| (sp.content.to_string(), sp.style))
+                .collect()
+        };
+        let (lit, dim) = (app.state.theme.accent(), app.state.theme.dim());
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), lit)
+            ]
+        );
+        d.spans.clear();
+        app.state.apply_otel(&d);
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), dim)
+            ]
+        );
     }
 
     #[test]
