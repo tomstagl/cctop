@@ -198,7 +198,7 @@ pub fn short_duration(ms: i64) -> String {
     }
 }
 
-fn ago(ms: i64) -> String {
+pub(crate) fn ago(ms: i64) -> String {
     let s = ms.max(0) / 1000;
     if s < 60 {
         format!("{s}s")

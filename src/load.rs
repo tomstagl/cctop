@@ -146,6 +146,9 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
     if let Some(s) = status.latest.as_ref() {
         state.apply_status(s, &status.series_5h);
     }
+    if let Some(s) = crate::context_spool::read(&state.session.session_id) {
+        state.apply_context_spool(s);
+    }
     // Account facts only for a session of this machine, never for a fixture
     // file (the pane fixtures are generated from one).
     if state.session.pid.is_some() {

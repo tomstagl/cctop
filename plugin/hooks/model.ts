@@ -61,6 +61,8 @@ export type Model = {
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
   usageAt: number | null;
+  /** When the context breakdown was last read for the spool (the debounce's clock); null before one. */
+  lastBreakdownAt: number | null;
   /** `$.session.model()`, read once after session.start. */
   modelName: string | null;
   turn: Turn;
@@ -134,6 +136,7 @@ export type Action =
   | { type: 'tool.end'; name: string; startedAt: number; at: number; isError: boolean; resultChars: number }
   | { type: 'session.compact' }
   | { type: 'usage'; usage: SessionUsage; at: number }
+  | { type: 'breakdown.read'; at: number }
   | { type: 'session.model'; name: string }
   | { type: 'binary'; binary: Binary }
   | { type: 'session.id'; id: string }
@@ -153,10 +156,19 @@ export type Action =
   | { type: 'overview.keys'; keys: boolean }
   | { type: 'agents.run'; run: string | null };
 
+/** The least time between two reads of /context's breakdown for the spool. */
+export const BREAKDOWN_DEBOUNCE_MS = 15_000;
+
+/** Whether a breakdown read is due at `now`: none yet, or the debounce has passed. */
+export function breakdownDue(model: Model, now: number): boolean {
+  return model.lastBreakdownAt === null || now - model.lastBreakdownAt >= BREAKDOWN_DEBOUNCE_MS;
+}
+
 export function initialModel(): Model {
   return {
     usage: null,
     usageAt: null,
+    lastBreakdownAt: null,
     modelName: null,
     turn: {
       number: 0,
@@ -256,6 +268,8 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, compactions: model.compactions + 1 };
     case 'usage':
       return { ...model, usage: action.usage, usageAt: action.at };
+    case 'breakdown.read':
+      return { ...model, lastBreakdownAt: action.at };
     case 'session.model':
       return { ...model, modelName: action.name };
     case 'binary':
@@ -273,6 +287,7 @@ export function reduce(model: Model, action: Action): Model {
         sessionId: action.id,
         usage: null,
         usageAt: null,
+        lastBreakdownAt: null,
         turn: { ...model.turn, number: model.turn.state === 'idle' ? 0 : 1, lastDurationMs: null, lastReason: null },
         tools: {},
         compactions: 0,

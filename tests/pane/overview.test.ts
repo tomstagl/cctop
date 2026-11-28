@@ -342,6 +342,16 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
   }
 });
 
+// The window's composition (PRD 3): the context body's row, from the dashboard
+// object, is the TUI's row character for character; the label names the source.
+test('the context body draws the composition row identically to the TUI at 85 columns', () => {
+  const snap = readFileSync(join(repo, 'src', 'snapshots', 'cctop__theme__fixture_b_snapshots__fixture_b_console_context_85x24.snap'), 'utf8');
+  const tuiRow = snap.split('\n').find((l) => l.startsWith('  per /context'));
+  assert.ok(tuiRow !== undefined, 'the TUI snapshot has the composition row');
+  const pane = raw(build({ dashboard: fixture('dashboard-b'), body: 'context' }), 85).map((l) => l.replace(/\s+$/, ''));
+  assert.ok(pane.includes(tuiRow!.replace(/\s+$/, '')), `pane rows: ${JSON.stringify(pane)}`);
+});
+
 // The status-bearing header (PRD 2): the TUI's `header_workspace_*` insta
 // snapshots (src/ui/snapshots/) hold the row `ui/dashboard.rs` draws for a
 // header whose line carries workspace items between the session facts and the

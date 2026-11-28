@@ -71,6 +71,16 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let r = state.residency();
     let dim = state.theme.dim();
     let est = if v.window_exact { "" } else { " est" };
+    // A calibrated prefix says how old its `/context` table is.
+    let calibrated = match (&r.mode, state.context_capture()) {
+        (Mode::Calibrated { .. }, Some((_, _, _, at))) if at > 0 => format!(
+            ", calibrated {} ago",
+            crate::coach::ago(state.clock_ms() - at)
+        ),
+        // A table without a timestamp is still a calibration.
+        (Mode::Calibrated { .. }, _) => ", calibrated".to_string(),
+        _ => String::new(),
+    };
     let title = if state.sources_files {
         format!(
             " Sources › files — {} in the window, since {}  (← back · Esc close) ",
@@ -79,11 +89,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         )
     } else {
         format!(
-            " Sources — {} of {}{}, since {}  (Esc back) ",
+            " Sources — {} of {}{}, since {}{}  (Esc back) ",
             fmt::tokens(r.size),
             fmt::tokens(v.window),
             est,
-            since_text(&r)
+            since_text(&r),
+            calibrated
         )
     };
     let block = Block::default().borders(Borders::ALL).title(title);
@@ -388,5 +399,26 @@ mod tests {
         assert!(out.contains("since model switch (−"), "{out}");
         assert!(out.contains("the compaction summary"), "{out}");
         insta::assert_snapshot!("sources_b_162x30", out);
+    }
+
+    /// A calibrated prefix says how old its `/context` table is; a table
+    /// with no timestamp is still called calibrated.
+    #[test]
+    fn a_calibrated_title_says_how_long_ago() {
+        let mut app = app_on("session-d");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated ") && title.contains(" ago"),
+            "{title}"
+        );
+        app.state.prefix.context_capture_at_ms = None;
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated") && !title.contains(" ago"),
+            "{title}"
+        );
     }
 }

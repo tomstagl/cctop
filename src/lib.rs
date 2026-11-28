@@ -14,6 +14,7 @@ pub mod claude_home;
 pub mod coach;
 pub mod coach_stats;
 pub mod config;
+pub mod context_spool;
 pub mod dashboard;
 pub mod discover;
 pub mod events;

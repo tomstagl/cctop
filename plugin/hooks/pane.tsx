@@ -6,6 +6,7 @@
 // the model; the Overview is the default.
 import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
 import {
+  breakdownDue,
   HIDDEN_STATUS,
   initialModel,
   outcomeText,
@@ -18,6 +19,7 @@ import {
   type Model,
   type View,
 } from './model';
+import { spoolText } from './breakdown';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
@@ -72,6 +74,10 @@ let model: Model = initialModel();
 // once after session.start and turn.complete: never inside a hook's own
 // path before `next(e)`, so the pane costs the turn nothing.
 let usageTimer: Timer | null = null;
+// Whether this session's failed breakdown read or spool write is logged
+// already: once per session, and never retried in a loop (the next turn
+// simply tries again).
+let breakdownFailureLogged = false;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -453,6 +459,8 @@ function followSession($: EngineInterface): void {
   poller
     ?.sync()
     .then((rotated) => {
+      // A new session is a new spool: its first failure is worth one line too.
+      if (rotated) breakdownFailureLogged = false;
       if (!rotated || !model.open) return;
       readUsage($);
       void poller?.tick();
@@ -464,6 +472,31 @@ function readUsage($: EngineInterface): void {
   Promise.all([$.session.usage(), clockNow($)])
     .then(([usage, at]) => apply($, { type: 'usage', usage, at }))
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
+}
+
+// Reads /context's breakdown (`summary`: an estimate, no token-count
+// request, never `full`) and writes the spool cctop reads. Called after a
+// turn.complete or session.compact has run `next(e)`, at most once per
+// BREAKDOWN_DEBOUNCE_MS, and only with a session bound.
+async function writeBreakdown($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  if (sessionId === null) return;
+  const at = await clockNow($);
+  if (!breakdownDue(model, at)) return;
+  // Bookkeeping only (the debounce's clock): nothing on screen changes, so no redraw.
+  model = reduce(model, { type: 'breakdown.read', at });
+  try {
+    const usage = await $.session.usage({ breakdown: 'summary' });
+    const text = spoolText(usage, at);
+    if (text === null) return;
+    const home = await $.env.get('HOME');
+    if (typeof home !== 'string' || home === '') return;
+    await $.fs.write(`${home}/.cctop/context/${sessionId}.json`, text);
+  } catch (err) {
+    if (breakdownFailureLogged) return;
+    breakdownFailureLogged = true;
+    $.ui.log(`cctop: context breakdown spool failed: ${String(err)}`);
+  }
 }
 
 // The model's name for the header, read once after session.start's `next(e)`.
@@ -694,6 +727,7 @@ export const register: Register = (on) => {
   // session.start checks the surfaces first and says once what it found.
   on('session.start', async ($, e, next) => {
     const check = await selfCheck($);
+    breakdownFailureLogged = false;
     apply($, { type: 'session.start', at: check.now, selfCheck: check.problems.length === 0 ? 'ok' : check.problems.join('; ') });
     poller = makePoller($);
     await $.command.register({
@@ -731,15 +765,18 @@ export const register: Register = (on) => {
     poller?.reschedule();
     const result = await next(e);
     if (model.open) readUsage($);
+    void writeBreakdown($);
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
   });
 
-  on('session.compact', ($, e, next) => {
+  on('session.compact', async ($, e, next) => {
     apply($, { type: 'session.compact' });
-    return next(e);
+    const result = await next(e);
+    void writeBreakdown($);
+    return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: session.compact failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
