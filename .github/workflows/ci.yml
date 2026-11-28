@@ -20,10 +20,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      # charts.wasm must still build (the committed one is checked for
+      # freshness by tests/wasm_fresh.rs; bytes differ between rustc versions,
+      # so CI does not diff them).
+      - run: make wasm
+        if: matrix.os == 'ubuntu-latest'
   pane:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
