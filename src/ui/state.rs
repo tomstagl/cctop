@@ -244,8 +244,20 @@ pub struct CacheState {
     pub misses: u64,
     pub expected_rebuilds: u64,
     pub last_miss_cause: Option<String>,
+    /// Every cause the shim listed for the last miss, in its order.
+    pub last_miss_causes: Vec<String>,
     pub miss_causes: std::collections::BTreeMap<String, u64>,
     pub hit_ratio: Option<f64>,
+    /// Tools the last miss added / removed, and the system prompt's change in
+    /// characters, as Claude Code diagnosed them.
+    pub last_miss_tools_added: Option<u64>,
+    pub last_miss_tools_removed: Option<u64>,
+    pub last_miss_system_delta: Option<i64>,
+    /// When Claude Code recorded that miss (epoch ms), if it said.
+    pub last_miss_at_ms: Option<i64>,
+    pub requests: u64,
+    pub cache_write_tokens: u64,
+    pub miss_recache_tokens: u64,
     /// When the status file that carried this was written (epoch ms).
     pub sample_at_ms: i64,
 }
@@ -263,6 +275,17 @@ pub struct StatusFacts {
     pub pr_number: Option<u64>,
     pub pr_review_state: Option<String>,
     pub spend_limit_pct: Option<f64>,
+    /// `(used, limit)` in USD; follows the latest sample. Gateway accounts
+    /// with an overage only.
+    pub spend_limit_usd: Option<(f64, Option<f64>)>,
+    pub spend_limit_period: Option<String>,
+    pub spend_limit_resets_at_ms: Option<i64>,
+    pub workspace: Option<crate::status::Workspace>,
+    pub output_style: Option<String>,
+    pub agent_name: Option<String>,
+    pub remote_session_id: Option<String>,
+    pub pr_url: Option<String>,
+    pub pr_kind: Option<String>,
 }
 
 /// What the model waits on.
@@ -1118,8 +1141,23 @@ impl State {
                 misses: pc.misses,
                 expected_rebuilds: pc.expected_rebuilds,
                 last_miss_cause: pc.last_cause().map(str::to_string),
+                last_miss_causes: pc
+                    .last_miss_cause
+                    .as_ref()
+                    .map(|c| c.causes.clone())
+                    .unwrap_or_default(),
                 miss_causes: pc.miss_causes.clone(),
                 hit_ratio: pc.hit_ratio,
+                last_miss_tools_added: pc.last_miss_cause.as_ref().and_then(|c| c.tools_added),
+                last_miss_tools_removed: pc.last_miss_cause.as_ref().and_then(|c| c.tools_removed),
+                last_miss_system_delta: pc
+                    .last_miss_cause
+                    .as_ref()
+                    .and_then(|c| c.system_char_delta),
+                last_miss_at_ms: pc.last_miss_at.map(|t| (t * 1000.0) as i64),
+                requests: pc.requests,
+                cache_write_tokens: pc.cache_write_tokens,
+                miss_recache_tokens: pc.miss_recache_tokens,
                 sample_at_ms: s.at_ms,
             };
         }
@@ -1147,11 +1185,33 @@ impl State {
         if let Some(r) = s.pr_review_state() {
             facts.pr_review_state = Some(r.to_string());
         }
-        facts.spend_limit_pct = s
+        let spend = s
             .rate_limits
             .as_ref()
-            .and_then(|rl| rl.spend_limit.as_ref())
-            .map(|l| l.used_percentage);
+            .and_then(|rl| rl.spend_limit.as_ref());
+        facts.spend_limit_pct = spend.map(|l| l.used_percentage);
+        facts.spend_limit_usd = spend.and_then(|l| l.used_usd.map(|u| (u, l.limit_usd)));
+        facts.spend_limit_period = spend.and_then(|l| l.period.clone());
+        facts.spend_limit_resets_at_ms =
+            spend.and_then(|l| l.resets_at).map(|x| (x * 1000.0) as i64);
+        if let Some(w) = &s.workspace {
+            facts.workspace = Some(w.clone());
+        }
+        if let Some(n) = s.output_style.as_ref().and_then(|n| n.name.clone()) {
+            facts.output_style = Some(n);
+        }
+        if let Some(n) = s.agent.as_ref().and_then(|n| n.name.clone()) {
+            facts.agent_name = Some(n);
+        }
+        if let Some(id) = s.remote.as_ref().and_then(|r| r.session_id.clone()) {
+            facts.remote_session_id = Some(id);
+        }
+        if let Some(u) = s.pr_url() {
+            facts.pr_url = Some(u.to_string());
+        }
+        if let Some(k) = s.pr_kind() {
+            facts.pr_kind = Some(k.to_string());
+        }
         if let Some(rl) = &s.rate_limits {
             let to_ms = |secs: Option<f64>| secs.map(|x| (x * 1000.0) as i64);
             self.limits = Some(Limits {
@@ -2150,6 +2210,52 @@ mod tests {
         );
         assert_eq!(s.cache_warm(), Some((false, false)));
         assert_eq!(s.cache.recache_tokens_if_cold, 300_000);
+    }
+
+    #[test]
+    fn status_fields_survive_a_sparse_sample() {
+        let mut s = State::new(Pricing::bundled());
+        let full = crate::status::Sample::parse(r#"{"session_id":"s","workspace":{"added_dirs":["/a"],"git_worktree":"feat"},"output_style":{"name":"Concise"},"agent":{"name":"reviewer"},"remote":{"session_id":"r-1"},"pr":{"number":1,"url":"u","kind":"github"},"prompt_cache":{"warm":true,"requests":9,"miss_recache_tokens":5,"last_miss_cause":{"causes":["tools_changed"],"tools_added":1,"tools_removed":2,"system_char_delta":-3}}}"#).unwrap();
+        s.apply_status(&full, &[]);
+        assert_eq!(s.cache.requests, 9);
+        assert_eq!(s.cache.miss_recache_tokens, 5);
+        assert_eq!(s.cache.last_miss_tools_added, Some(1));
+        assert_eq!(s.cache.last_miss_tools_removed, Some(2));
+        assert_eq!(s.cache.last_miss_system_delta, Some(-3));
+        let sparse = crate::status::Sample::parse(r#"{"session_id":"s"}"#).unwrap();
+        s.apply_status(&sparse, &[]);
+        let f = &s.status_facts;
+        assert_eq!(
+            f.workspace.as_ref().unwrap().added_dirs,
+            vec!["/a".to_string()]
+        );
+        assert_eq!(
+            f.workspace.as_ref().unwrap().git_worktree.as_deref(),
+            Some("feat")
+        );
+        assert_eq!(f.output_style.as_deref(), Some("Concise"));
+        assert_eq!(f.agent_name.as_deref(), Some("reviewer"));
+        assert_eq!(f.remote_session_id.as_deref(), Some("r-1"));
+        assert_eq!(f.pr_url.as_deref(), Some("u"));
+        assert_eq!(f.pr_kind.as_deref(), Some("github"));
+    }
+
+    #[test]
+    fn spend_limit_follows_latest() {
+        let mut s = State::new(Pricing::bundled());
+        let a = crate::status::Sample::parse(r#"{"session_id":"s","rate_limits":{"five_hour":{"used_percentage":1},"seven_day":{"used_percentage":1},"spend_limit":{"used_percentage":82,"resets_at":1790000000,"used_usd":412.0,"limit_usd":500.0,"period":"monthly"}}}"#).unwrap();
+        s.apply_status(&a, &[]);
+        let f = &s.status_facts;
+        assert_eq!(f.spend_limit_usd, Some((412.0, Some(500.0))));
+        assert_eq!(f.spend_limit_period.as_deref(), Some("monthly"));
+        assert_eq!(f.spend_limit_resets_at_ms, Some(1_790_000_000_000));
+        let b = crate::status::Sample::parse(r#"{"session_id":"s","rate_limits":{"five_hour":{"used_percentage":1},"seven_day":{"used_percentage":1}}}"#).unwrap();
+        s.apply_status(&b, &[]);
+        let f = &s.status_facts;
+        assert_eq!(f.spend_limit_usd, None);
+        assert_eq!(f.spend_limit_pct, None);
+        assert_eq!(f.spend_limit_period, None);
+        assert_eq!(f.spend_limit_resets_at_ms, None);
     }
 
     /// The main-transcript side of an agent: its `Agent` launch (the call

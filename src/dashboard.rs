@@ -159,6 +159,12 @@ pub struct Header {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
     pub phase: PhaseCell,
+    /// What the status line says about where the session runs, in priority
+    /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
+    /// Inside `line`, before the PR and the version; both surfaces drop
+    /// items from the right to fit (`fit_workspace`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub workspace: Vec<String>,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
     pub line: String,
     /// The header's second row while a workflow run is live or recently
@@ -342,6 +348,10 @@ fn header(state: &State, c: &Coach) -> Header {
     if let Some(t) = &team {
         parts.push(t.clone());
     }
+    // The workspace items come before the PR and the version, so a narrow
+    // row cuts those first (`fit_workspace` then drops items from the right).
+    let workspace = workspace_items(&state.status_facts);
+    parts.extend(workspace.iter().cloned());
     if let Some(n) = pr {
         parts.push(format!("PR #{n}"));
     }
@@ -368,9 +378,79 @@ fn header(state: &State, c: &Coach) -> Header {
                 .unwrap_or_else(|| "—".into()),
             tokens: c.state.tokens.clone(),
         },
+        workspace,
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),
     }
+}
+
+/// The header facts (`line` without its `cctop  ` lead) with as many
+/// workspace items as leave the facts before them and those items within
+/// `room`: the items sit between the session facts and the PR / version,
+/// highest priority first, and are dropped from the right (`remote` first,
+/// the repo last). What follows them is cut by the caller's clip. The pane
+/// (`views/overview.tsx` `fitWorkspace`) mirrors this character for character.
+pub fn fit_workspace(facts: &str, items: &[String], room: usize) -> String {
+    if items.is_empty() {
+        return facts.to_string();
+    }
+    let mid = format!(" · {}", items.join(" · "));
+    let Some(at) = facts.rfind(&mid) else {
+        return facts.to_string();
+    };
+    let (base, after) = (&facts[..at], &facts[at + mid.len()..]);
+    for n in (0..=items.len()).rev() {
+        let mut out = base.to_string();
+        for i in &items[..n] {
+            out.push_str(" · ");
+            out.push_str(i);
+        }
+        if out.chars().count() <= room || n == 0 {
+            out.push_str(after);
+            return out;
+        }
+    }
+    facts.to_string()
+}
+
+/// The header's workspace items, highest priority first: `owner/name`,
+/// `wt <worktree>`, `+N dirs` (a count; the paths are in the sources view),
+/// `style <name>` unless `default`, `agent: <name>`, `remote` (the id is a
+/// badge, never shown).
+pub fn workspace_items(f: &crate::ui::state::StatusFacts) -> Vec<String> {
+    let mut items = Vec::new();
+    if let Some(w) = &f.workspace {
+        if let Some(crate::status::Repo {
+            owner: Some(o),
+            name: Some(n),
+            ..
+        }) = &w.repo
+        {
+            items.push(format!("{o}/{n}"));
+        }
+        if let Some(wt) = w.git_worktree.as_deref().filter(|t| !t.is_empty()) {
+            items.push(format!("wt {wt}"));
+        }
+        match w.added_dirs.len() {
+            0 => {}
+            1 => items.push("+1 dir".into()),
+            n => items.push(format!("+{n} dirs")),
+        }
+    }
+    if let Some(s) = f
+        .output_style
+        .as_deref()
+        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("default"))
+    {
+        items.push(format!("style {s}"));
+    }
+    if let Some(a) = f.agent_name.as_deref().filter(|a| !a.is_empty()) {
+        items.push(format!("agent: {a}"));
+    }
+    if f.remote_session_id.is_some() {
+        items.push("remote".into());
+    }
+    items
 }
 
 /// The header's workflow row; the ledger is read only when a run exists.
@@ -864,6 +944,28 @@ fn body_context(state: &State, c: &Coach) -> Body {
     }
 }
 
+/// The spend limit as one line for the limits panel and the dashboard's
+/// limits cell: dollars with the period and the reset when the status line
+/// carries them, else the percentage alone.
+pub fn spend_limit_text(facts: &crate::ui::state::StatusFacts) -> Option<String> {
+    let Some((used, limit)) = facts.spend_limit_usd else {
+        return facts
+            .spend_limit_pct
+            .map(|p| format!("spend limit {p:.0} %"));
+    };
+    let mut t = format!("spend ${used:.0}");
+    if let Some(l) = limit {
+        t.push_str(&format!(" / ${l:.0}"));
+    }
+    if let Some(p) = &facts.spend_limit_period {
+        t.push_str(&format!(" · {p}"));
+    }
+    if let Some(ms) = facts.spend_limit_resets_at_ms {
+        t.push_str(&format!(" · resets {}", fmt::day_month_local(ms)));
+    }
+    Some(t)
+}
+
 /// The limits body: the two windows as meters, then what the light says.
 fn body_limits(state: &State, c: &Coach) -> Body {
     let now = state.clock_ms();
@@ -949,8 +1051,16 @@ fn body_limits(state: &State, c: &Coach) -> Body {
             dim(" of usage was above 150k context"),
         ]);
     }
-    if let Some(p) = state.status_facts.spend_limit_pct {
-        rows.push(vec![dim("  spend limit "), fg(format!("{p:.0} %"))]);
+    if let Some(t) = spend_limit_text(&state.status_facts) {
+        // The label stays dim, the figures are the value.
+        let (label, value) = match t.strip_prefix("spend limit ") {
+            Some(v) => ("  spend limit ", v.to_string()),
+            None => (
+                "  spend ",
+                t.strip_prefix("spend ").unwrap_or(&t).to_string(),
+            ),
+        };
+        rows.push(vec![dim(label), fg(value)]);
     }
     if state.other_live_sessions > 0 {
         rows.push(vec![dim(format!(
@@ -1718,6 +1828,131 @@ fn body_events(state: &State, engine: &Engine) -> Body {
 mod tests {
     use super::*;
     use crate::metrics::Pricing;
+
+    fn spend_facts() -> crate::ui::state::StatusFacts {
+        crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            spend_limit_usd: Some((412.0, Some(500.0))),
+            spend_limit_period: Some("monthly".into()),
+            // 3 Dec 2026 12:00 UTC: the same local day in any time zone.
+            spend_limit_resets_at_ms: Some(1_796_299_200_000),
+            ..Default::default()
+        }
+    }
+
+    fn facts_with_workspace() -> crate::ui::state::StatusFacts {
+        crate::ui::state::StatusFacts {
+            workspace: Some(crate::status::Workspace {
+                added_dirs: vec!["/x/y".into(), "/z".into()],
+                git_worktree: Some("feat".into()),
+                repo: Some(crate::status::Repo {
+                    host: Some("github.com".into()),
+                    owner: Some("acme".into()),
+                    name: Some("shop".into()),
+                }),
+                ..Default::default()
+            }),
+            output_style: Some("Concise".into()),
+            agent_name: Some("reviewer".into()),
+            remote_session_id: Some("r-1".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn header_workspace_items() {
+        assert_eq!(
+            workspace_items(&facts_with_workspace()),
+            [
+                "acme/shop",
+                "wt feat",
+                "+2 dirs",
+                "style Concise",
+                "agent: reviewer",
+                "remote"
+            ]
+        );
+        let mut f = facts_with_workspace();
+        f.workspace.as_mut().unwrap().added_dirs = vec!["/x".into()];
+        assert!(workspace_items(&f).contains(&"+1 dir".to_string()));
+        // Empty or absent added dirs, a `default` or absent style: no item.
+        f.workspace.as_mut().unwrap().added_dirs.clear();
+        f.output_style = Some("default".into());
+        let items = workspace_items(&f);
+        assert!(
+            !items
+                .iter()
+                .any(|i| i.contains("dir") || i.starts_with("style")),
+            "{items:?}"
+        );
+        f.output_style = None;
+        assert!(!workspace_items(&f).iter().any(|i| i.starts_with("style")));
+        f.workspace = None;
+        assert_eq!(workspace_items(&f), ["agent: reviewer", "remote"]);
+        assert!(workspace_items(&Default::default()).is_empty());
+        // The line carries them after the session facts, before the PR and version; the object lists them.
+        let (mut s, e) = fixture_b();
+        s.status_facts = facts_with_workspace();
+        let h = snapshot(&s, &e).header;
+        assert!(
+            h.line.contains(
+                " · acme/shop · wt feat · +2 dirs · style Concise · agent: reviewer · remote"
+            ),
+            "{}",
+            h.line
+        );
+        assert_eq!(h.workspace.len(), 6);
+        let (s, e) = fixture_b();
+        let json = serde_json::to_value(snapshot(&s, &e).header).unwrap();
+        assert!(json.get("workspace").is_none());
+    }
+
+    #[test]
+    fn body_limits_shows_spend_in_dollars() {
+        let (mut s, e) = fixture_b();
+        s.status_facts = spend_facts();
+        let c = coach::snapshot(&s, &e);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(
+            text.contains("  spend $412 / $500 · monthly · resets 3 Dec"),
+            "{text}"
+        );
+        // Percentage only: the old row.
+        s.status_facts.spend_limit_usd = None;
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(text.contains("  spend limit 82 %"), "{text}");
+    }
+
+    #[test]
+    fn spend_text_full() {
+        assert_eq!(
+            spend_limit_text(&spend_facts()).as_deref(),
+            Some("spend $412 / $500 · monthly · resets 3 Dec")
+        );
+    }
+
+    #[test]
+    fn spend_text_no_limit() {
+        let mut f = spend_facts();
+        f.spend_limit_usd = Some((412.0, None));
+        assert_eq!(
+            spend_limit_text(&f).as_deref(),
+            Some("spend $412 · monthly · resets 3 Dec")
+        );
+        f.spend_limit_period = None;
+        f.spend_limit_resets_at_ms = None;
+        assert_eq!(spend_limit_text(&f).as_deref(), Some("spend $412"));
+    }
+
+    #[test]
+    fn spend_text_pct_only() {
+        let f = crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            ..Default::default()
+        };
+        assert_eq!(spend_limit_text(&f).as_deref(), Some("spend limit 82 %"));
+        assert_eq!(spend_limit_text(&Default::default()), None);
+    }
 
     fn fixture_b() -> (State, Engine) {
         fixture_at("b", usize::MAX)
