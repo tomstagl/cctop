@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far ≈$10.03 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "396k ▇▇▇▇▁▁▁▁▁▁ 40% · re-reads 396k/call",
@@ -75,10 +76,24 @@
   },
   "model": "claude-sonnet-5",
   "next": {
+    "actions": [
+      {
+        "kind": "slash",
+        "label": "Put /compact in the box",
+        "payload": "/compact "
+      }
+    ],
+    "body": "At 396k tokens every call re-reads the whole context: about $0.08 a call and $0.66 a turn at this session's 8 calls per turn, against $0.18 a turn at 100k. The next 30 calls cost about $2.47. At the next clean stop: /compact with a focus, or a hand-off note and /clear, brings it back down.",
     "class": "NEXT",
+    "evidence": [
+      "8 calls per turn on this session · next 30 calls ≈$2.5"
+    ],
     "family": "context-reset",
+    "fix_prompt": null,
+    "foot": "goes away after a /compact or /clear",
     "headline": "ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
     "id": "A23",
+    "name": "The context is getting expensive",
     "promotes": "next-row only",
     "row": "next     context-reset → next-row only · ctx 396k →…"
   },
@@ -87,14 +102,29 @@
     "acting": false,
     "action_kind": "prompt",
     "action_text": "Run make check and fix any failures before continuing.",
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "Run make check and fix any failures before continuing."
+      }
+    ],
+    "body": "Claude edited 1 source file 21 minutes ago (1 edit over 126 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
     "class": "NEXT",
-    "evidence": "  NEXT · since turn 14 · +2 queued (n)",
+    "evidence": [
+      "1 edits since the last check · 20:41 · 126 calls"
+    ],
     "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
     "family": "verify-gap",
     "fired_at_ms": 1787825847564,
+    "fix_prompt": "Run make check and fix any failures before continuing.",
+    "foot": "goes away after a test run or a read of an edited file",
+    "headline": "Edited 1 src file, no test/build run yet",
     "id": "A32",
     "line1": "▸ Edited 1 src file, no test/build run yet",
     "line2": "  queue: 'run make check, fix failures' or /goal",
+    "line3": "  NEXT · since turn 14 · +2 queued (n)",
+    "name": "Edits not tested yet",
     "queued": 2,
     "retires_on": "a test run or a read of an edited file",
     "saving": "avoids a hard stop",
@@ -104,7 +134,7 @@
   "queued": 2,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-a",
   "session_mode": "interactive",
   "snoozed": [],

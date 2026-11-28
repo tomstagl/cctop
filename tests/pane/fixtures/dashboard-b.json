@@ -9,7 +9,7 @@
         "tone": "fg"
       },
       {
-        "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+        "text": "A shell command blocked the turn for 9:09",
         "tone": "bold"
       },
       {
@@ -29,7 +29,7 @@
         "tone": "fg"
       },
       {
-        "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+        "text": "A shell command blocked the turn for 9:09",
         "tone": "bold"
       }
     ],
@@ -39,7 +39,7 @@
     {
       "id": "context",
       "key": "1",
-      "keys": "Enter panel",
+      "keys": "j k PgUp PgDn scroll  ·  Enter panel",
       "rows": [
         [
           {
@@ -79,7 +79,12 @@
             "tone": "dim"
           }
         ],
-        [],
+        [
+          {
+            "text": "  per /context sys 10k tools 31k msgs 42k free 877k …",
+            "tone": "dim"
+          }
+        ],
         [
           {
             "text": "  ",
@@ -1308,7 +1313,7 @@
             "tone": "ok"
           },
           {
-            "text": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+            "text": "A shell command blocked the turn for 9:09",
             "tone": "bold"
           }
         ],
@@ -1440,7 +1445,7 @@
             "tone": "dim"
           },
           {
-            "text": "LATER A10 fired · `cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+            "text": "LATER A10 fired · A shell command blocked the turn for 9:09",
             "tone": "fg"
           }
         ],
@@ -2413,6 +2418,36 @@
   ],
   "cells": [
     {
+      "composition": {
+        "items": [
+          {
+            "name": "System prompt",
+            "tokens": 10200
+          },
+          {
+            "name": "System tools",
+            "tokens": 31200
+          },
+          {
+            "name": "Skills",
+            "tokens": 4800
+          },
+          {
+            "name": "Messages",
+            "tokens": 42900
+          },
+          {
+            "name": "free",
+            "tokens": 877900
+          },
+          {
+            "name": "buffer",
+            "tokens": 33000
+          }
+        ],
+        "line": "per /context sys 10k tools 31k msgs 42k free 877k …",
+        "source": "per /context"
+      },
       "id": "context",
       "key": "1",
       "label": [
@@ -2695,6 +2730,35 @@
       ]
     }
   ],
+  "composition": [
+    {
+      "name": "System prompt",
+      "tokens": 10200
+    },
+    {
+      "name": "System tools",
+      "tokens": 31200
+    },
+    {
+      "name": "Skills",
+      "tokens": 4800
+    },
+    {
+      "name": "Messages",
+      "tokens": 42900
+    },
+    {
+      "name": "free",
+      "tokens": 877900
+    },
+    {
+      "name": "buffer",
+      "tokens": 33000
+    }
+  ],
+  "composition_metric_id": "context_composition",
+  "composition_note": "per /context, 2m ago",
+  "composition_source": "per /context",
   "cost_combined": {
     "approx": false,
     "metric_id": "cost_combined",

@@ -4,12 +4,24 @@
       "action": "queue: 'run builds and test suites longer than a minute in the background'",
       "action_kind": "prompt",
       "action_text": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+      "actions": [
+        {
+          "kind": "prompt",
+          "label": "Put the fix prompt in the box",
+          "payload": "Run builds and test suites longer than a minute in the background and keep working meanwhile."
+        }
+      ],
+      "body": "A shell command ran in the foreground for 9 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
       "class": "LATER",
       "doc_key": "A10",
       "evidence": "a foreground Bash call longer than a minute; Claude waited for it",
+      "evidence_rows": [],
       "explain": "A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background (`run_in_background`): Claude keeps working and is notified when the command finishes. Calls Claude Code backgrounded itself do not count.",
       "family": "long-foreground",
-      "headline": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+      "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+      "foot": "goes away when Claude backgrounds a command, or after three turns",
+      "headline": "A shell command blocked the turn for 9:09",
+      "name": "A long command blocked the turn",
       "retires_on": "3 turns",
       "rule": "A10",
       "saving": "~9:09/turn",
@@ -23,13 +35,25 @@
     "action": "queue: 'run builds and test suites longer than a minute in the background'",
     "action_kind": "prompt",
     "action_text": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "Run builds and test suites longer than a minute in the background and keep working meanwhile."
+      }
+    ],
+    "body": "A shell command ran in the foreground for 9 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
     "class": "LATER",
     "doc_key": "A10",
     "evidence": "a foreground Bash call longer than a minute; Claude waited for it",
+    "evidence_rows": [],
     "explain": "A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background (`run_in_background`): Claude keeps working and is notified when the command finishes. Calls Claude Code backgrounded itself do not count.",
     "family": "long-foreground",
     "fired_at_ms": 1789428525471,
-    "headline": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+    "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+    "foot": "goes away when Claude backgrounds a command, or after three turns",
+    "headline": "A shell command blocked the turn for 9:09",
+    "name": "A long command blocked the turn",
     "retires_on": "3 turns",
     "rule": "A10",
     "saving": "~9:09/turn",

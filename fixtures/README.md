@@ -94,6 +94,49 @@ Layout mirrors `~/.claude`:
   `--lines 20` it is the closed attempt, at `--lines 27` the first response
   that reopens the turn.
 
+- `session-r.jsonl` — the request-ledger fixture (577 lines, Claude Code
+  2.1.310): a session whose transcript carries the three request lines and
+  three real cache misses, located by `requests.rs` (prefix shrank by 20 k or
+  more, previous request = the last paired main-thread request): a
+  `shapeHash` change at about line 118 (a tool added or removed:
+  `tools_changed`), a betas change after a 6-day gap at about line 519
+  (`expired`: the gap passed the TTL, which is checked before the params),
+  and one with no changed setting, shape or prefix at about line 565
+  (`expired`). `ParamsChanged` and `PrefixRewritten` are covered by synthetic
+  unit tests only. The anonymiser fills the
+  shapes' `system[].text`, tool `description` and `input_schema` strings and
+  the blobs' content with same-length filler (uncapped, because the lines are
+  read for their sizes; `--max-str` still caps the rest of the transcript),
+  keeps Claude Code's built-in tool names (an allowlist in the script;
+  `mcp__` names become `mcp__server<N>__tool<M>`, any other tool `tool<N>`
+  with its parameter names `p<N>`), built-in agent types and bundled skill
+  names (others become `agent<N>` / `skill<N>`), keeps `cacheControl` and
+  `querySource` and, of `params`, only `model`, `betas`, `max_tokens`,
+  `thinking`, `context_management` and `output_config` (Claude Code's own words),
+  and rewrites `shapeHash`, `hash`, `tail[]`, `requestDigest` with one keyed
+  SHA-256 so equalities survive, and request ids (`id`, `base`, an assistant
+  line's `requestRef`) with the UUID hash so the links agree.
+
+- `session-s.jsonl` — the budget fixture (320 lines, Claude Code 2.1.332):
+  one whole print / SDK session run with `--max-budget-usd 12`. Carries 317
+  `budget_usd` attachments (`used`, `total`, `remaining`, repeated every
+  turn, each with a `rendered` reminder block) and the `derived-from` line
+  on line 2 (`via: subprocess`; its `started` is the session's own id).
+  The anonymiser keeps the numbers and `via`, fills `rendered[].content`
+  with same-length filler and rewrites the ids with the session-id map.
+
+- `session-t.jsonl` — the thinking-drop fixture (1216 lines, 2.1.325): the
+  first 1216 lines of a team lead's session (the anonymiser's `--lines`, a
+  point in time; neither tool can cut a segment from the middle, and the
+  drop needs the lines before it) with `--team` so the team name follows the
+  lead's hashed id. Line 1211 is a `thinking_drop` attachment (ten blocks
+  dropped, `reason: prefix_mismatch`, `clientChange.kinds:
+  messagesHistoryChanged`). The anonymiser removes `blockHashes`,
+  `newlyDropped.first` / `last` and `clientChange.baseline` and keeps the
+  counts and Claude Code's own tokens; a plugin-qualified `agentType`
+  becomes `agent<N>` and an environment change's `from` / `to` directories
+  are rewritten like every path.
+
 - `session-w.jsonl` + `session-w/` — the workflow fixture (2.1.269): one
   real `Workflow` run, `wf_0aa065ff-0a0`, over six invocations (a launch
   stopped with `TaskStop`, then five resumes, the script edited from v2 to
@@ -176,6 +219,13 @@ a `/login` between them is the shape):
 
 ```
 python3 scripts/anonymise-transcript.py <session> fixtures/session-e.jsonl --max-str 2000 --lines 66
+```
+
+To rebuild `session-r.jsonl` (the source is any session of 2.1.302 or later
+with real cache misses: a main-thread `shapeHash` change, a params change):
+
+```
+python3 scripts/anonymise-transcript.py <session>.jsonl fixtures/session-r.jsonl --max-str 2000
 ```
 
 To rebuild `session-w` and its live cut (the source is the session whose

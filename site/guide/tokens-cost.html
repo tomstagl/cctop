@@ -375,6 +375,62 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd><code>prompt_cache.misses</code> with <code>miss_causes</code> (model_changed, tools_changed, messages_rewritten, ttl_expired_1h/5m, likely_server_side…) and <code>expected_rebuilds</code></dd>
 <dt>Measured</dt><dd class="meta">count · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_misses">how</a></dd>
 </dl></article>
+<article class="entry" id="cache_requests">
+<div class="mg">
+<h3>Cache requests</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.requests</code> from the status line: the API requests Claude Code has counted for the session's cache diagnosis</dd>
+<dt>Measured</dt><dd class="meta">count · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_requests">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_write_shim">
+<div class="mg">
+<h3>Cache written (status line)</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.cache_write_tokens</code> from the status line: tokens Claude Code counts as written to the cache over the session</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_write_shim">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_miss_recache">
+<div class="mg">
+<h3>Re-written by misses</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.miss_recache_tokens</code> from the status line: tokens the cache misses so far made Claude Code re-write</dd>
+<dt>Measured</dt><dd class="meta">tokens · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_miss_recache">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_miss_tools_delta">
+<div class="mg">
+<h3>Last miss: tools added / removed</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.last_miss_cause.tools_added</code> and <code>tools_removed</code> from the status line</dd>
+<dt>Measured</dt><dd class="meta">count · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_miss_tools_delta">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_miss_system_delta">
+<div class="mg">
+<h3>Last miss: system prompt change</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>prompt_cache.last_miss_cause.system_char_delta</code> from the status line: characters the system prompt grew (negative: shrank)</dd>
+<dt>Measured</dt><dd class="meta">chars · from the status line (after cctop install) · exact · <a href="../metrics.html#cache_miss_system_delta">how</a></dd>
+</dl></article>
+<article class="entry" id="thinking_dropped">
+<div class="mg">
+<h3>Thinking dropped</h3>
+</div><dl>
+<dt>What it means</dt><dd>Σ <code>thinking_drop</code> attachments: <code>newlyDropped.blockCount</code> (blocks) and <code>turnCount</code> (turns) Claude Code removed from a request because the history it re-sent no longer matched, per turn in the ledger and in total (<code>by_kind</code>: blocks by <code>clientChange.kinds</code>, e.g. <code>messagesHistoryChanged</code>). A located cache miss with no other cause takes the drop's kind (<code>thinking_drop</code>)</dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#thinking_dropped">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_miss_located">
+<div class="mg">
+<h3>Located cache misses</h3>
+</div><dl>
+<dt>What it means</dt><dd>One row per cache miss, with the located cause: the request's <code>api-request</code> line compared with the request sent just before it — idle past the TTL first (a lost cache entry explains the miss whatever else changed), then params (model, effort, betas, max tokens) › tool list (<code>api-request-shape</code>: names added, removed, resized) › system block sizes › messages re-sent (<code>keep</code> shrank). A miss is a response named by <code>diagnostics.cache_miss_reason</code> (not <code>unavailable</code>), or whose cached prefix shrank by ≥ 20 000 tokens</dd>
+<dt>Measured</dt><dd class="meta">count · from the transcript · exact · <a href="../metrics.html#cache_miss_located">how</a></dd>
+</dl></article>
+<article class="entry" id="cache_miss_cost">
+<div class="mg">
+<h3>Re-write cost of a located miss</h3>
+</div><dl>
+<dt>What it means</dt><dd>The located miss's <code>cache_write</code> tokens × the cache-write price of the model that wrote them (the price A01 and the overview use)</dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · Claude Code's own cost record · always · <a href="../metrics.html#cache_miss_cost">how</a></dd>
+</dl></article>
 <article class="entry" id="cost">
 <div class="mg">
 <h3>Cost</h3>
@@ -470,6 +526,13 @@ tr:target td{background:var(--spot-soft)}
 <dt class="act">What to do</dt><dd>Many tiny prompts cost more in aggregate than one prompt that bundles the same instructions.</dd>
 <dt>Advisor</dt><dd class="meta"><a href="advisor.html#A12">A12 Chatty turns</a></dd>
 <dt>Measured</dt><dd class="meta">tokens/min · from the transcript · exact · <a href="../metrics.html#input_rate">how</a></dd>
+</dl></article>
+<article class="entry" id="exceeds_200k_tokens">
+<div class="mg">
+<h3>Long-context flag</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>exceeds_200k_tokens</code> from the status line: the session's context passed 200 k tokens</dd>
+<dt>Measured</dt><dd class="meta">bool · from the status line (after cctop install) · exact · <a href="../metrics.html#exceeds_200k_tokens">how</a></dd>
 </dl></article>
 <nav class="pager" aria-label="Panels"><a href="context.html">← 1 Context</a><a href="limits.html">3 Limits →</a></nav>
 <footer class="colophon">

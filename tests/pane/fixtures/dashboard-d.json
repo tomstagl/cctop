@@ -17,7 +17,7 @@
         "tone": "dim"
       },
       {
-        "text": "queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+        "text": "queue: 'run cargo test, fix failures' or /goal",
         "tone": "fg"
       }
     ],
@@ -39,7 +39,7 @@
     {
       "id": "context",
       "key": "1",
-      "keys": "Enter panel",
+      "keys": "j k PgUp PgDn scroll  ·  Enter panel",
       "rows": [
         [
           {
@@ -79,7 +79,12 @@
             "tone": "dim"
           }
         ],
-        [],
+        [
+          {
+            "text": "  per /context sys 10k tools 31k msgs 42k free 877k …",
+            "tone": "dim"
+          }
+        ],
         [
           {
             "text": "  ",
@@ -1317,7 +1322,7 @@
         ],
         [
           {
-            "text": "    queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+            "text": "    queue: 'run cargo test, fix failures' or /goal",
             "tone": "dim"
           }
         ],
@@ -1375,7 +1380,7 @@
         ],
         [
           {
-            "text": "  LATER A10 `lorem_ipsum_dolor_sit_amet_co…` blocked the turn for 1:38",
+            "text": "  LATER A10 `lorem_ipsum_dolor_sit_a…` blocked the turn for 1:38",
             "tone": "dim"
           }
         ]
@@ -2435,6 +2440,36 @@
   ],
   "cells": [
     {
+      "composition": {
+        "items": [
+          {
+            "name": "System prompt",
+            "tokens": 10200
+          },
+          {
+            "name": "System tools",
+            "tokens": 31200
+          },
+          {
+            "name": "Skills",
+            "tokens": 4800
+          },
+          {
+            "name": "Messages",
+            "tokens": 42900
+          },
+          {
+            "name": "free",
+            "tokens": 877900
+          },
+          {
+            "name": "buffer",
+            "tokens": 33000
+          }
+        ],
+        "line": "per /context sys 10k tools 31k msgs 42k free 877k …",
+        "source": "per /context"
+      },
       "id": "context",
       "key": "1",
       "label": [
@@ -2717,6 +2752,35 @@
       ]
     }
   ],
+  "composition": [
+    {
+      "name": "System prompt",
+      "tokens": 10200
+    },
+    {
+      "name": "System tools",
+      "tokens": 31200
+    },
+    {
+      "name": "Skills",
+      "tokens": 4800
+    },
+    {
+      "name": "Messages",
+      "tokens": 42900
+    },
+    {
+      "name": "free",
+      "tokens": 877900
+    },
+    {
+      "name": "buffer",
+      "tokens": 33000
+    }
+  ],
+  "composition_metric_id": "context_composition",
+  "composition_note": "per /context, 36m ago",
+  "composition_source": "per /context",
   "cost_combined": {
     "approx": true,
     "metric_id": "cost_combined",
@@ -2747,7 +2811,7 @@
     "version": "2.1.269"
   },
   "lines": {
-    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test --lib lorem_i 2>&1, fix fa…",
+    "l0": "○140k ≈$.06 · ○cache 59m · ○5h — · ◐edits 3 · ▸ queue: 'run cargo test, fix failures' or /goal",
     "l1": "○14% ○— ○59m ◐3 unchecked ▸",
     "l2": "○○○◐"
   },

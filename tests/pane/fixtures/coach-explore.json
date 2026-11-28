@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far ≈$4.19 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "193k ▇▇▁▁▁▁▁▁▁▁ 19% · re-reads 193k/call",
@@ -81,7 +82,7 @@
   "queued": 0,
   "quiet_row": "  quiet · nothing to act on · 0 nudges this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-b",
   "session_mode": "interactive",
   "snoozed": [],

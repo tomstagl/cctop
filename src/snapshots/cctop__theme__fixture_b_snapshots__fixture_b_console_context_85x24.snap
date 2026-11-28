@@ -5,24 +5,24 @@ expression: "render_to_string(&app, 85, 24)"
  cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
  1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
  4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
- ▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn… — queue: 'run       a: advisor
-   builds and test suites longer than a …  LATER · turn 6
+ ▸ A shell command blocked the turn for 9:09 — queue: 'run builds and     a: advisor
+   test suites longer than a …  LATER · turn 6
 ─── context ────────────────────────────────────────────────── 0: home  ·  ? keys ───
-  142k of 1.00M est   autocompact 567k   425k left   +146k/turn
+ Context window  142k of 1M · 14 %                              per /context, 2m ago
+ Good Plenty of room: 857k free.
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ■ System prompt 10k  ■ System tools 31k  ■ Skills 4.8k  ■ Messages 42k  ■ free 877k
+ ■ buffer 33k
+ ■ context so far  ■ system + tools (now)  ■ auto-compact at 567k
+ 1.00M
 
-  prefix    ≈49k  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇
-  harness     ≈0  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  thinking    ≈0  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  inputs    ≈221  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  results   ≈131  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-
-  since model switch (−58k) · 3 calls
-  bash output        ≈48   0%
-  other results      ≈83   0%
-  other             ≈92k  64%
-  prefix ≈ the first call's cached part — run /context once to calibrate it
-
-  compactions 1   re-reads 0   stale 0   autocompact in ~3 turns
-
-  next 15c ≈$.50 · fresh ≈$.38
-  threshold 567k · 425k left · prefix 49k (35 %)
+                                                                  ▄▄▄▄
+ 500k  ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀ ▀▄▀▀▀▀▀▀▀▀▀▄▀ ▀ ▀ ▀ ▀ ▀
+                                                        ▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄▄
+                                           ▄▄▄▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄
+         ▄▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄▀
+ 0     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+       turn 1                                                                      6
+ Turn 6 · 142k (−578k) · compacted
+ ───────────────────────────────────────────────────────────────────────────────────
+ ↓ 50 more

@@ -1,0 +1,3765 @@
+{
+  "charts": [
+    {
+      "fallback_cells": {
+        "cells": "IAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABIAAAAAAAAAEAAAABhCUAAF+v1wAAAAABhCUAANfXXwAAAAABhCUAAF+v1wAAAAABhCUAANfXXwAAAAABhCUAAF+v1wAAAAABhCUAANfXXwAAAAABhCUAAF+v1wAAAAABhCUAANfXXwAAAAABhCUAAF+v1wAAAAABhCUAANfXXwAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABhCUAAF+v1wAAAAABgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cAgCUAANfXXwBfr9cA",
+        "cols": 98,
+        "rows": 8
+      },
+      "figure": "170k of 1M · 17 %",
+      "id": "context",
+      "legend": [
+        {
+          "role": "accent",
+          "text": "context so far"
+        },
+        {
+          "role": "warn",
+          "text": "auto-compact at 170k"
+        }
+      ],
+      "readouts": [
+        {
+          "text": "Turn 3 · 22k · compacted",
+          "x": 3.0
+        },
+        {
+          "text": "Turn 6 · 23k (+1.5k) · compacted",
+          "x": 6.0
+        },
+        {
+          "text": "Turn 9 · 25k (+1.5k) · compacted",
+          "x": 9.0
+        },
+        {
+          "text": "Turn 12 · 26k (+1.5k) · compacted",
+          "x": 12.0
+        },
+        {
+          "text": "Turn 15 · 28k (+1.5k) · compacted",
+          "x": 15.0
+        },
+        {
+          "text": "Turn 18 · 29k (+1.5k) · compacted",
+          "x": 18.0
+        },
+        {
+          "text": "Turn 21 · 31k (+1.5k) · compacted",
+          "x": 21.0
+        },
+        {
+          "text": "Turn 24 · 32k (+1.5k) · compacted",
+          "x": 24.0
+        },
+        {
+          "text": "Turn 27 · 34k (+1.5k) · compacted",
+          "x": 27.0
+        },
+        {
+          "text": "Turn 30 · 35k (+1.5k) · compacted",
+          "x": 30.0
+        },
+        {
+          "text": "Turn 33 · 37k (+1.5k) · compacted",
+          "x": 33.0
+        },
+        {
+          "text": "Turn 36 · 38k (+1.5k) · compacted",
+          "x": 36.0
+        },
+        {
+          "text": "Turn 39 · 40k (+1.5k) · compacted",
+          "x": 39.0
+        },
+        {
+          "text": "Turn 42 · 41k (+1.5k) · compacted",
+          "x": 42.0
+        },
+        {
+          "text": "Turn 45 · 43k (+1.5k) · compacted",
+          "x": 45.0
+        },
+        {
+          "text": "Turn 48 · 44k (+1.5k) · compacted",
+          "x": 48.0
+        },
+        {
+          "text": "Turn 51 · 46k (+1.5k) · compacted",
+          "x": 51.0
+        },
+        {
+          "text": "Turn 54 · 47k (+1.5k) · compacted",
+          "x": 54.0
+        },
+        {
+          "text": "Turn 57 · 49k (+1.5k) · compacted",
+          "x": 57.0
+        },
+        {
+          "text": "Turn 60 · 50k (+1.5k) · compacted",
+          "x": 60.0
+        },
+        {
+          "text": "Turn 63 · 52k (+1.5k) · compacted",
+          "x": 63.0
+        },
+        {
+          "text": "Turn 66 · 53k (+1.5k) · compacted",
+          "x": 66.0
+        },
+        {
+          "text": "Turn 69 · 55k (+1.5k) · compacted",
+          "x": 69.0
+        },
+        {
+          "text": "Turn 72 · 56k (+1.5k) · compacted",
+          "x": 72.0
+        },
+        {
+          "text": "Turn 75 · 58k (+1.5k) · compacted",
+          "x": 75.0
+        },
+        {
+          "text": "Turn 78 · 59k (+1.5k) · compacted",
+          "x": 78.0
+        },
+        {
+          "text": "Turn 81 · 61k (+1.5k) · compacted",
+          "x": 81.0
+        },
+        {
+          "text": "Turn 84 · 62k (+1.5k) · compacted",
+          "x": 84.0
+        },
+        {
+          "text": "Turn 87 · 64k (+1.5k) · compacted",
+          "x": 87.0
+        },
+        {
+          "text": "Turn 90 · 65k (+1.5k) · compacted",
+          "x": 90.0
+        },
+        {
+          "text": "Turn 93 · 67k (+1.5k) · compacted",
+          "x": 93.0
+        },
+        {
+          "text": "Turn 96 · 68k (+1.5k) · compacted",
+          "x": 96.0
+        },
+        {
+          "text": "Turn 99 · 70k (+1.5k) · compacted",
+          "x": 99.0
+        },
+        {
+          "text": "Turn 102 · 71k (+1.5k) · compacted",
+          "x": 102.0
+        },
+        {
+          "text": "Turn 105 · 73k (+1.5k) · compacted",
+          "x": 105.0
+        },
+        {
+          "text": "Turn 108 · 74k (+1.5k) · compacted",
+          "x": 108.0
+        },
+        {
+          "text": "Turn 111 · 76k (+1.5k) · compacted",
+          "x": 111.0
+        },
+        {
+          "text": "Turn 114 · 77k (+1.5k) · compacted",
+          "x": 114.0
+        },
+        {
+          "text": "Turn 117 · 79k (+1.5k) · compacted",
+          "x": 117.0
+        },
+        {
+          "text": "Turn 120 · 80k (+1.5k) · compacted",
+          "x": 120.0
+        },
+        {
+          "text": "Turn 123 · 82k (+1.5k) · compacted",
+          "x": 123.0
+        },
+        {
+          "text": "Turn 126 · 83k (+1.5k) · compacted",
+          "x": 126.0
+        },
+        {
+          "text": "Turn 129 · 85k (+1.5k) · compacted",
+          "x": 129.0
+        },
+        {
+          "text": "Turn 132 · 86k (+1.5k) · compacted",
+          "x": 132.0
+        },
+        {
+          "text": "Turn 135 · 88k (+1.5k) · compacted",
+          "x": 135.0
+        },
+        {
+          "text": "Turn 138 · 89k (+1.5k) · compacted",
+          "x": 138.0
+        },
+        {
+          "text": "Turn 141 · 91k (+1.5k) · compacted",
+          "x": 141.0
+        },
+        {
+          "text": "Turn 144 · 92k (+1.5k) · compacted",
+          "x": 144.0
+        },
+        {
+          "text": "Turn 147 · 94k (+1.5k) · compacted",
+          "x": 147.0
+        },
+        {
+          "text": "Turn 150 · 95k (+1.5k) · compacted",
+          "x": 150.0
+        },
+        {
+          "text": "Turn 153 · 97k (+1.5k) · compacted",
+          "x": 153.0
+        },
+        {
+          "text": "Turn 156 · 98k (+1.5k) · compacted",
+          "x": 156.0
+        },
+        {
+          "text": "Turn 159 · 100k (+1.5k) · compacted",
+          "x": 159.0
+        },
+        {
+          "text": "Turn 162 · 101k (+1.5k) · compacted",
+          "x": 162.0
+        },
+        {
+          "text": "Turn 165 · 103k (+1.5k) · compacted",
+          "x": 165.0
+        },
+        {
+          "text": "Turn 168 · 104k (+1.5k) · compacted",
+          "x": 168.0
+        },
+        {
+          "text": "Turn 171 · 106k (+1.5k) · compacted",
+          "x": 171.0
+        },
+        {
+          "text": "Turn 174 · 107k (+1.5k) · compacted",
+          "x": 174.0
+        },
+        {
+          "text": "Turn 177 · 109k (+1.5k) · compacted",
+          "x": 177.0
+        },
+        {
+          "text": "Turn 180 · 110k (+1.5k) · compacted",
+          "x": 180.0
+        },
+        {
+          "text": "Turn 183 · 112k (+1.5k) · compacted",
+          "x": 183.0
+        },
+        {
+          "text": "Turn 186 · 113k (+1.5k) · compacted",
+          "x": 186.0
+        },
+        {
+          "text": "Turn 189 · 115k (+1.5k) · compacted",
+          "x": 189.0
+        },
+        {
+          "text": "Turn 192 · 116k (+1.5k) · compacted",
+          "x": 192.0
+        },
+        {
+          "text": "Turn 195 · 118k (+1.5k) · compacted",
+          "x": 195.0
+        },
+        {
+          "text": "Turn 198 · 119k (+1.5k) · compacted",
+          "x": 198.0
+        },
+        {
+          "text": "Turn 201 · 121k (+1.5k) · compacted",
+          "x": 201.0
+        },
+        {
+          "text": "Turn 204 · 122k (+1.5k) · compacted",
+          "x": 204.0
+        },
+        {
+          "text": "Turn 207 · 124k (+1.5k) · compacted",
+          "x": 207.0
+        },
+        {
+          "text": "Turn 210 · 125k (+1.5k) · compacted",
+          "x": 210.0
+        },
+        {
+          "text": "Turn 213 · 127k (+1.5k) · compacted",
+          "x": 213.0
+        },
+        {
+          "text": "Turn 216 · 128k (+1.5k) · compacted",
+          "x": 216.0
+        },
+        {
+          "text": "Turn 219 · 130k (+1.5k) · compacted",
+          "x": 219.0
+        },
+        {
+          "text": "Turn 222 · 131k (+1.5k) · compacted",
+          "x": 222.0
+        },
+        {
+          "text": "Turn 225 · 133k (+1.5k) · compacted",
+          "x": 225.0
+        },
+        {
+          "text": "Turn 228 · 134k (+1.5k) · compacted",
+          "x": 228.0
+        },
+        {
+          "text": "Turn 231 · 136k (+1.5k) · compacted",
+          "x": 231.0
+        },
+        {
+          "text": "Turn 234 · 137k (+1.5k) · compacted",
+          "x": 234.0
+        },
+        {
+          "text": "Turn 237 · 139k (+1.5k) · compacted",
+          "x": 237.0
+        },
+        {
+          "text": "Turn 240 · 140k (+1.5k) · compacted",
+          "x": 240.0
+        },
+        {
+          "text": "Turn 243 · 142k (+1.5k) · compacted",
+          "x": 243.0
+        },
+        {
+          "text": "Turn 246 · 143k (+1.5k) · compacted",
+          "x": 246.0
+        },
+        {
+          "text": "Turn 249 · 145k (+1.5k) · compacted",
+          "x": 249.0
+        },
+        {
+          "text": "Turn 252 · 146k (+1.5k) · compacted",
+          "x": 252.0
+        },
+        {
+          "text": "Turn 255 · 148k (+1.5k) · compacted",
+          "x": 255.0
+        },
+        {
+          "text": "Turn 258 · 149k (+1.5k) · compacted",
+          "x": 258.0
+        },
+        {
+          "text": "Turn 261 · 151k (+1.5k) · compacted",
+          "x": 261.0
+        },
+        {
+          "text": "Turn 264 · 152k (+1.5k) · compacted",
+          "x": 264.0
+        },
+        {
+          "text": "Turn 267 · 154k (+1.5k) · compacted",
+          "x": 267.0
+        },
+        {
+          "text": "Turn 270 · 155k (+1.5k) · compacted",
+          "x": 270.0
+        },
+        {
+          "text": "Turn 273 · 157k (+1.5k) · compacted",
+          "x": 273.0
+        },
+        {
+          "text": "Turn 276 · 158k (+1.5k) · compacted",
+          "x": 276.0
+        },
+        {
+          "text": "Turn 279 · 160k (+1.5k) · compacted",
+          "x": 279.0
+        },
+        {
+          "text": "Turn 282 · 161k (+1.5k) · compacted",
+          "x": 282.0
+        },
+        {
+          "text": "Turn 285 · 163k (+1.5k) · compacted",
+          "x": 285.0
+        },
+        {
+          "text": "Turn 288 · 164k (+1.5k) · compacted",
+          "x": 288.0
+        },
+        {
+          "text": "Turn 291 · 166k (+1.5k) · compacted",
+          "x": 291.0
+        },
+        {
+          "text": "Turn 294 · 167k (+1.5k) · compacted",
+          "x": 294.0
+        },
+        {
+          "text": "Turn 297 · 169k (+1.5k) · compacted",
+          "x": 297.0
+        },
+        {
+          "text": "Turn 300 · 170k (+1.5k) · compacted",
+          "x": 300.0
+        }
+      ],
+      "spec": {
+        "forecast": null,
+        "kind": "area_forecast",
+        "markers": [
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 2.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 3.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 4.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 5.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 6.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 7.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 8.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 9.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 10.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 11.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 12.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 13.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 14.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 15.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 16.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 17.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 18.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 19.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 20.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 21.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 22.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 23.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 24.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 25.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 26.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 27.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 28.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 29.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 30.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 31.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 32.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 33.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 34.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 35.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 36.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 37.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 38.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 39.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 40.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 41.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 42.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 43.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 44.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 45.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 46.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 47.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 48.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 49.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 50.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 51.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 52.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 53.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 54.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 55.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 56.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 57.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 58.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 59.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 60.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 61.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 62.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 63.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 64.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 65.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 66.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 67.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 68.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 69.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 70.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 71.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 72.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 73.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 74.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 75.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 76.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 77.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 78.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 79.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 80.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 81.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 82.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 83.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 84.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 85.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 86.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 87.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 88.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 89.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 90.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 91.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 92.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 93.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 94.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 95.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 96.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 97.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 98.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 99.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 100.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 101.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 102.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 103.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 104.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 105.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 106.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 107.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 108.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 109.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 110.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 111.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 112.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 113.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 114.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 115.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 116.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 117.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 118.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 119.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 120.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 121.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 122.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 123.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 124.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 125.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 126.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 127.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 128.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 129.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 130.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 131.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 132.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 133.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 134.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 135.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 136.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 137.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 138.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 139.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 140.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 141.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 142.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 143.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 144.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 145.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 146.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 147.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 148.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 149.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 150.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 151.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 152.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 153.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 154.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 155.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 156.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 157.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 158.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 159.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 160.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 161.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 162.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 163.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 164.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 165.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 166.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 167.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 168.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 169.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 170.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 171.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 172.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 173.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 174.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 175.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 176.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 177.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 178.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 179.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 180.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 181.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 182.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 183.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 184.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 185.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 186.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 187.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 188.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 189.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 190.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 191.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 192.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 193.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 194.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 195.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 196.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 197.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 198.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 199.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 200.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 201.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 202.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 203.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 204.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 205.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 206.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 207.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 208.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 209.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 210.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 211.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 212.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 213.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 214.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 215.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 216.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 217.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 218.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 219.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 220.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 221.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 222.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 223.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 224.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 225.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 226.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 227.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 228.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 229.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 230.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 231.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 232.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 233.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 234.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 235.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 236.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 237.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 238.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 239.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 240.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 241.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 242.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 243.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 244.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 245.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 246.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 247.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 248.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 249.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 250.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 251.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 252.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 253.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 254.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 255.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 256.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 257.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 258.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 259.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 260.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 261.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 262.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 263.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 264.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 265.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 266.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 267.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 268.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 269.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 270.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 271.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 272.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 273.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 274.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 275.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 276.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 277.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 278.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 279.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 280.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 281.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 282.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 283.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 284.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 285.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 286.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 287.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 288.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 289.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 290.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 291.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 292.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 293.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 294.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 295.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 296.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 297.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 298.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 299.0,
+            "y": 0.0
+          },
+          {
+            "kind": "compaction",
+            "role": "warn",
+            "x": 300.0,
+            "y": 0.0
+          },
+          {
+            "kind": "now",
+            "role": "fg",
+            "x": 300.0,
+            "y": 170505.0
+          }
+        ],
+        "roles": [
+          "accent",
+          "warn",
+          "fg"
+        ],
+        "series": [
+          {
+            "name": "context",
+            "points": [
+              {
+                "x": 3.0,
+                "y": 22005.0
+              },
+              {
+                "x": 6.0,
+                "y": 23505.0
+              },
+              {
+                "x": 9.0,
+                "y": 25005.0
+              },
+              {
+                "x": 12.0,
+                "y": 26505.0
+              },
+              {
+                "x": 15.0,
+                "y": 28005.0
+              },
+              {
+                "x": 18.0,
+                "y": 29505.0
+              },
+              {
+                "x": 21.0,
+                "y": 31005.0
+              },
+              {
+                "x": 24.0,
+                "y": 32505.0
+              },
+              {
+                "x": 27.0,
+                "y": 34005.0
+              },
+              {
+                "x": 30.0,
+                "y": 35505.0
+              },
+              {
+                "x": 33.0,
+                "y": 37005.0
+              },
+              {
+                "x": 36.0,
+                "y": 38505.0
+              },
+              {
+                "x": 39.0,
+                "y": 40005.0
+              },
+              {
+                "x": 42.0,
+                "y": 41505.0
+              },
+              {
+                "x": 45.0,
+                "y": 43005.0
+              },
+              {
+                "x": 48.0,
+                "y": 44505.0
+              },
+              {
+                "x": 51.0,
+                "y": 46005.0
+              },
+              {
+                "x": 54.0,
+                "y": 47505.0
+              },
+              {
+                "x": 57.0,
+                "y": 49005.0
+              },
+              {
+                "x": 60.0,
+                "y": 50505.0
+              },
+              {
+                "x": 63.0,
+                "y": 52005.0
+              },
+              {
+                "x": 66.0,
+                "y": 53505.0
+              },
+              {
+                "x": 69.0,
+                "y": 55005.0
+              },
+              {
+                "x": 72.0,
+                "y": 56505.0
+              },
+              {
+                "x": 75.0,
+                "y": 58005.0
+              },
+              {
+                "x": 78.0,
+                "y": 59505.0
+              },
+              {
+                "x": 81.0,
+                "y": 61005.0
+              },
+              {
+                "x": 84.0,
+                "y": 62505.0
+              },
+              {
+                "x": 87.0,
+                "y": 64005.0
+              },
+              {
+                "x": 90.0,
+                "y": 65505.0
+              },
+              {
+                "x": 93.0,
+                "y": 67005.0
+              },
+              {
+                "x": 96.0,
+                "y": 68505.0
+              },
+              {
+                "x": 99.0,
+                "y": 70005.0
+              },
+              {
+                "x": 102.0,
+                "y": 71505.0
+              },
+              {
+                "x": 105.0,
+                "y": 73005.0
+              },
+              {
+                "x": 108.0,
+                "y": 74505.0
+              },
+              {
+                "x": 111.0,
+                "y": 76005.0
+              },
+              {
+                "x": 114.0,
+                "y": 77505.0
+              },
+              {
+                "x": 117.0,
+                "y": 79005.0
+              },
+              {
+                "x": 120.0,
+                "y": 80505.0
+              },
+              {
+                "x": 123.0,
+                "y": 82005.0
+              },
+              {
+                "x": 126.0,
+                "y": 83505.0
+              },
+              {
+                "x": 129.0,
+                "y": 85005.0
+              },
+              {
+                "x": 132.0,
+                "y": 86505.0
+              },
+              {
+                "x": 135.0,
+                "y": 88005.0
+              },
+              {
+                "x": 138.0,
+                "y": 89505.0
+              },
+              {
+                "x": 141.0,
+                "y": 91005.0
+              },
+              {
+                "x": 144.0,
+                "y": 92505.0
+              },
+              {
+                "x": 147.0,
+                "y": 94005.0
+              },
+              {
+                "x": 150.0,
+                "y": 95505.0
+              },
+              {
+                "x": 153.0,
+                "y": 97005.0
+              },
+              {
+                "x": 156.0,
+                "y": 98505.0
+              },
+              {
+                "x": 159.0,
+                "y": 100005.0
+              },
+              {
+                "x": 162.0,
+                "y": 101505.0
+              },
+              {
+                "x": 165.0,
+                "y": 103005.0
+              },
+              {
+                "x": 168.0,
+                "y": 104505.0
+              },
+              {
+                "x": 171.0,
+                "y": 106005.0
+              },
+              {
+                "x": 174.0,
+                "y": 107505.0
+              },
+              {
+                "x": 177.0,
+                "y": 109005.0
+              },
+              {
+                "x": 180.0,
+                "y": 110505.0
+              },
+              {
+                "x": 183.0,
+                "y": 112005.0
+              },
+              {
+                "x": 186.0,
+                "y": 113505.0
+              },
+              {
+                "x": 189.0,
+                "y": 115005.0
+              },
+              {
+                "x": 192.0,
+                "y": 116505.0
+              },
+              {
+                "x": 195.0,
+                "y": 118005.0
+              },
+              {
+                "x": 198.0,
+                "y": 119505.0
+              },
+              {
+                "x": 201.0,
+                "y": 121005.0
+              },
+              {
+                "x": 204.0,
+                "y": 122505.0
+              },
+              {
+                "x": 207.0,
+                "y": 124005.0
+              },
+              {
+                "x": 210.0,
+                "y": 125505.0
+              },
+              {
+                "x": 213.0,
+                "y": 127005.0
+              },
+              {
+                "x": 216.0,
+                "y": 128505.0
+              },
+              {
+                "x": 219.0,
+                "y": 130005.0
+              },
+              {
+                "x": 222.0,
+                "y": 131505.0
+              },
+              {
+                "x": 225.0,
+                "y": 133005.0
+              },
+              {
+                "x": 228.0,
+                "y": 134505.0
+              },
+              {
+                "x": 231.0,
+                "y": 136005.0
+              },
+              {
+                "x": 234.0,
+                "y": 137505.0
+              },
+              {
+                "x": 237.0,
+                "y": 139005.0
+              },
+              {
+                "x": 240.0,
+                "y": 140505.0
+              },
+              {
+                "x": 243.0,
+                "y": 142005.0
+              },
+              {
+                "x": 246.0,
+                "y": 143505.0
+              },
+              {
+                "x": 249.0,
+                "y": 145005.0
+              },
+              {
+                "x": 252.0,
+                "y": 146505.0
+              },
+              {
+                "x": 255.0,
+                "y": 148005.0
+              },
+              {
+                "x": 258.0,
+                "y": 149505.0
+              },
+              {
+                "x": 261.0,
+                "y": 151005.0
+              },
+              {
+                "x": 264.0,
+                "y": 152505.0
+              },
+              {
+                "x": 267.0,
+                "y": 154005.0
+              },
+              {
+                "x": 270.0,
+                "y": 155505.0
+              },
+              {
+                "x": 273.0,
+                "y": 157005.0
+              },
+              {
+                "x": 276.0,
+                "y": 158505.0
+              },
+              {
+                "x": 279.0,
+                "y": 160005.0
+              },
+              {
+                "x": 282.0,
+                "y": 161505.0
+              },
+              {
+                "x": 285.0,
+                "y": 163005.0
+              },
+              {
+                "x": 288.0,
+                "y": 164505.0
+              },
+              {
+                "x": 291.0,
+                "y": 166005.0
+              },
+              {
+                "x": 294.0,
+                "y": 167505.0
+              },
+              {
+                "x": 297.0,
+                "y": 169005.0
+              },
+              {
+                "x": 300.0,
+                "y": 170505.0
+              }
+            ],
+            "role": "accent"
+          }
+        ],
+        "thresholds": [
+          {
+            "name": "auto-compact",
+            "role": "warn",
+            "y": 170005.0
+          }
+        ],
+        "x": {
+          "from": 1.0,
+          "to": 300.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1000000.0,
+          "unit": "tokens"
+        }
+      },
+      "title": "Context window",
+      "verdict": {
+        "level": "watch",
+        "metric_id": "verdict_context",
+        "text": "170k of 1M: inside the last 20k before Claude Code compacts on its own.",
+        "todo": "Do: /compact at the next break, not mid-task."
+      }
+    },
+    {
+      "fallback_cells": {
+        "cells": "IAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAAF9fAAAAAAABhCUAAF9fAAAAAAABgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAAF9fAAAAAAABgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAAgCUAAF9fAABfXwAA",
+        "cols": 46,
+        "rows": 8
+      },
+      "figure": "$16.18 · ≈ $21.90 in an hour",
+      "id": "spend",
+      "legend": [
+        {
+          "role": "accent",
+          "text": "spent"
+        },
+        {
+          "role": "accent",
+          "text": "forecast · $0.10 a minute"
+        }
+      ],
+      "readouts": [],
+      "spec": {
+        "forecast": {
+          "from": {
+            "x": 299.3333333333333,
+            "y": 16.177500000000002
+          },
+          "high": 21.9007,
+          "low": 19.420206013363032,
+          "role": "accent",
+          "to": {
+            "x": 359.3333333333333,
+            "y": 21.9007
+          }
+        },
+        "kind": "cumulative_forecast",
+        "markers": [],
+        "roles": [
+          "accent"
+        ],
+        "series": [
+          {
+            "name": "spend",
+            "points": [
+              {
+                "x": 1.3333333333333333,
+                "y": 0.03335
+              },
+              {
+                "x": 4.333333333333333,
+                "y": 0.08524999999999999
+              },
+              {
+                "x": 7.333333333333333,
+                "y": 0.1394
+              },
+              {
+                "x": 10.333333333333334,
+                "y": 0.19580000000000003
+              },
+              {
+                "x": 13.333333333333334,
+                "y": 0.25445000000000007
+              },
+              {
+                "x": 16.333333333333332,
+                "y": 0.3153500000000001
+              },
+              {
+                "x": 19.333333333333332,
+                "y": 0.37850000000000006
+              },
+              {
+                "x": 22.333333333333332,
+                "y": 0.4439000000000001
+              },
+              {
+                "x": 25.333333333333332,
+                "y": 0.5115500000000001
+              },
+              {
+                "x": 28.333333333333332,
+                "y": 0.58145
+              },
+              {
+                "x": 31.333333333333332,
+                "y": 0.6536000000000001
+              },
+              {
+                "x": 34.333333333333336,
+                "y": 0.7280000000000001
+              },
+              {
+                "x": 37.333333333333336,
+                "y": 0.8046500000000001
+              },
+              {
+                "x": 40.333333333333336,
+                "y": 0.8835500000000001
+              },
+              {
+                "x": 43.333333333333336,
+                "y": 0.9647000000000001
+              },
+              {
+                "x": 46.333333333333336,
+                "y": 1.0481
+              },
+              {
+                "x": 49.333333333333336,
+                "y": 1.13375
+              },
+              {
+                "x": 52.333333333333336,
+                "y": 1.2216500000000001
+              },
+              {
+                "x": 55.333333333333336,
+                "y": 1.3118
+              },
+              {
+                "x": 58.333333333333336,
+                "y": 1.4042000000000001
+              },
+              {
+                "x": 61.333333333333336,
+                "y": 1.4988500000000002
+              },
+              {
+                "x": 64.33333333333333,
+                "y": 1.5957500000000002
+              },
+              {
+                "x": 67.33333333333333,
+                "y": 1.6949000000000003
+              },
+              {
+                "x": 70.33333333333333,
+                "y": 1.7963000000000002
+              },
+              {
+                "x": 73.33333333333333,
+                "y": 1.8999500000000002
+              },
+              {
+                "x": 76.33333333333333,
+                "y": 2.0058500000000006
+              },
+              {
+                "x": 79.33333333333333,
+                "y": 2.1140000000000008
+              },
+              {
+                "x": 82.33333333333333,
+                "y": 2.2244000000000006
+              },
+              {
+                "x": 85.33333333333333,
+                "y": 2.3370500000000005
+              },
+              {
+                "x": 88.33333333333333,
+                "y": 2.4519500000000005
+              },
+              {
+                "x": 91.33333333333333,
+                "y": 2.5691000000000006
+              },
+              {
+                "x": 94.33333333333333,
+                "y": 2.688500000000001
+              },
+              {
+                "x": 97.33333333333333,
+                "y": 2.8101500000000006
+              },
+              {
+                "x": 100.33333333333333,
+                "y": 2.9340500000000005
+              },
+              {
+                "x": 103.33333333333333,
+                "y": 3.0602000000000005
+              },
+              {
+                "x": 106.33333333333333,
+                "y": 3.1886000000000005
+              },
+              {
+                "x": 109.33333333333333,
+                "y": 3.3192500000000007
+              },
+              {
+                "x": 112.33333333333333,
+                "y": 3.4521500000000005
+              },
+              {
+                "x": 115.33333333333333,
+                "y": 3.5873000000000004
+              },
+              {
+                "x": 118.33333333333333,
+                "y": 3.7247000000000003
+              },
+              {
+                "x": 121.33333333333333,
+                "y": 3.8643500000000004
+              },
+              {
+                "x": 124.33333333333333,
+                "y": 4.0062500000000005
+              },
+              {
+                "x": 127.33333333333333,
+                "y": 4.1504
+              },
+              {
+                "x": 130.33333333333334,
+                "y": 4.2968
+              },
+              {
+                "x": 133.33333333333334,
+                "y": 4.44545
+              },
+              {
+                "x": 136.33333333333334,
+                "y": 4.59635
+              },
+              {
+                "x": 139.33333333333334,
+                "y": 4.7495
+              },
+              {
+                "x": 142.33333333333334,
+                "y": 4.9049000000000005
+              },
+              {
+                "x": 145.33333333333334,
+                "y": 5.062550000000001
+              },
+              {
+                "x": 148.33333333333334,
+                "y": 5.222450000000001
+              },
+              {
+                "x": 151.33333333333334,
+                "y": 5.384600000000001
+              },
+              {
+                "x": 154.33333333333334,
+                "y": 5.549
+              },
+              {
+                "x": 157.33333333333334,
+                "y": 5.71565
+              },
+              {
+                "x": 160.33333333333334,
+                "y": 5.88455
+              },
+              {
+                "x": 163.33333333333334,
+                "y": 6.0557
+              },
+              {
+                "x": 166.33333333333334,
+                "y": 6.2291
+              },
+              {
+                "x": 169.33333333333334,
+                "y": 6.40475
+              },
+              {
+                "x": 172.33333333333334,
+                "y": 6.58265
+              },
+              {
+                "x": 175.33333333333334,
+                "y": 6.7628
+              },
+              {
+                "x": 178.33333333333334,
+                "y": 6.945200000000001
+              },
+              {
+                "x": 181.33333333333334,
+                "y": 7.129850000000001
+              },
+              {
+                "x": 184.33333333333334,
+                "y": 7.316750000000001
+              },
+              {
+                "x": 187.33333333333334,
+                "y": 7.5059000000000005
+              },
+              {
+                "x": 190.33333333333334,
+                "y": 7.6973
+              },
+              {
+                "x": 193.33333333333334,
+                "y": 7.89095
+              },
+              {
+                "x": 196.33333333333334,
+                "y": 8.08685
+              },
+              {
+                "x": 199.33333333333334,
+                "y": 8.285
+              },
+              {
+                "x": 202.33333333333334,
+                "y": 8.4854
+              },
+              {
+                "x": 205.33333333333334,
+                "y": 8.68805
+              },
+              {
+                "x": 208.33333333333334,
+                "y": 8.89295
+              },
+              {
+                "x": 211.33333333333334,
+                "y": 9.100100000000001
+              },
+              {
+                "x": 214.33333333333334,
+                "y": 9.309500000000002
+              },
+              {
+                "x": 217.33333333333334,
+                "y": 9.521150000000002
+              },
+              {
+                "x": 220.33333333333334,
+                "y": 9.735050000000003
+              },
+              {
+                "x": 223.33333333333334,
+                "y": 9.951200000000004
+              },
+              {
+                "x": 226.33333333333334,
+                "y": 10.169600000000004
+              },
+              {
+                "x": 229.33333333333334,
+                "y": 10.390250000000004
+              },
+              {
+                "x": 232.33333333333334,
+                "y": 10.613150000000003
+              },
+              {
+                "x": 235.33333333333334,
+                "y": 10.838300000000002
+              },
+              {
+                "x": 238.33333333333334,
+                "y": 11.065700000000001
+              },
+              {
+                "x": 241.33333333333334,
+                "y": 11.295350000000001
+              },
+              {
+                "x": 244.33333333333334,
+                "y": 11.52725
+              },
+              {
+                "x": 247.33333333333334,
+                "y": 11.7614
+              },
+              {
+                "x": 250.33333333333334,
+                "y": 11.9978
+              },
+              {
+                "x": 253.33333333333334,
+                "y": 12.23645
+              },
+              {
+                "x": 256.3333333333333,
+                "y": 12.47735
+              },
+              {
+                "x": 259.3333333333333,
+                "y": 12.7205
+              },
+              {
+                "x": 262.3333333333333,
+                "y": 12.9659
+              },
+              {
+                "x": 265.3333333333333,
+                "y": 13.21355
+              },
+              {
+                "x": 268.3333333333333,
+                "y": 13.46345
+              },
+              {
+                "x": 271.3333333333333,
+                "y": 13.7156
+              },
+              {
+                "x": 274.3333333333333,
+                "y": 13.97
+              },
+              {
+                "x": 277.3333333333333,
+                "y": 14.226650000000001
+              },
+              {
+                "x": 280.3333333333333,
+                "y": 14.485550000000002
+              },
+              {
+                "x": 283.3333333333333,
+                "y": 14.746700000000002
+              },
+              {
+                "x": 286.3333333333333,
+                "y": 15.010100000000003
+              },
+              {
+                "x": 289.3333333333333,
+                "y": 15.275750000000004
+              },
+              {
+                "x": 292.3333333333333,
+                "y": 15.543650000000003
+              },
+              {
+                "x": 295.3333333333333,
+                "y": 15.813800000000002
+              },
+              {
+                "x": 298.3333333333333,
+                "y": 16.0862
+              },
+              {
+                "x": 299.3333333333333,
+                "y": 16.177500000000002
+              }
+            ],
+            "role": "accent"
+          }
+        ],
+        "thresholds": [],
+        "x": {
+          "from": 0.0,
+          "to": 359.3333333333333,
+          "unit": "min"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 21.9007,
+          "unit": "USD"
+        }
+      },
+      "title": "Spend",
+      "verdict": {
+        "level": "good",
+        "metric_id": "verdict_spend",
+        "text": "$0.10 a minute.",
+        "todo": "Do: /clear between unrelated tasks to keep it that way."
+      }
+    },
+    {
+      "fallback_cells": {
+        "cells": "hCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABIAAAAAAAAAEAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABhCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAABgCUAANfXXwDX118AgCUAANfXXwDX118AIAAAAAAAAAEAAAAB",
+        "cols": 46,
+        "rows": 8
+      },
+      "figure": "≈ $0.05 typical",
+      "id": "cost_per_turn",
+      "label": "last 18 turns",
+      "legend": [
+        {
+          "role": "accent",
+          "text": "a turn"
+        }
+      ],
+      "readouts": [
+        {
+          "text": "Turn 283 · $0.09. A normal turn.",
+          "x": 283.0
+        },
+        {
+          "text": "Turn 284 · $0.09. A normal turn.",
+          "x": 284.0
+        },
+        {
+          "text": "Turn 285 · $0.09. A normal turn.",
+          "x": 285.0
+        },
+        {
+          "text": "Turn 286 · $0.09. A normal turn.",
+          "x": 286.0
+        },
+        {
+          "text": "Turn 287 · $0.09. A normal turn.",
+          "x": 287.0
+        },
+        {
+          "text": "Turn 288 · $0.09. A normal turn.",
+          "x": 288.0
+        },
+        {
+          "text": "Turn 289 · $0.09. A normal turn.",
+          "x": 289.0
+        },
+        {
+          "text": "Turn 290 · $0.09. A normal turn.",
+          "x": 290.0
+        },
+        {
+          "text": "Turn 291 · $0.09. A normal turn.",
+          "x": 291.0
+        },
+        {
+          "text": "Turn 292 · $0.09. A normal turn.",
+          "x": 292.0
+        },
+        {
+          "text": "Turn 293 · $0.09. A normal turn.",
+          "x": 293.0
+        },
+        {
+          "text": "Turn 294 · $0.09. A normal turn.",
+          "x": 294.0
+        },
+        {
+          "text": "Turn 295 · $0.09. A normal turn.",
+          "x": 295.0
+        },
+        {
+          "text": "Turn 296 · $0.09. A normal turn.",
+          "x": 296.0
+        },
+        {
+          "text": "Turn 297 · $0.09. A normal turn.",
+          "x": 297.0
+        },
+        {
+          "text": "Turn 298 · $0.09. A normal turn.",
+          "x": 298.0
+        },
+        {
+          "text": "Turn 299 · $0.09. A normal turn.",
+          "x": 299.0
+        },
+        {
+          "text": "Turn 300 · $0.09. A normal turn.",
+          "x": 300.0
+        }
+      ],
+      "spec": {
+        "forecast": null,
+        "kind": "bars",
+        "markers": [],
+        "roles": [
+          "accent"
+        ],
+        "series": [
+          {
+            "name": "cost",
+            "points": [
+              {
+                "x": 283.0,
+                "y": 0.08705
+              },
+              {
+                "x": 284.0,
+                "y": 0.0873
+              },
+              {
+                "x": 285.0,
+                "y": 0.08755
+              },
+              {
+                "x": 286.0,
+                "y": 0.0878
+              },
+              {
+                "x": 287.0,
+                "y": 0.08805
+              },
+              {
+                "x": 288.0,
+                "y": 0.0883
+              },
+              {
+                "x": 289.0,
+                "y": 0.08855
+              },
+              {
+                "x": 290.0,
+                "y": 0.0888
+              },
+              {
+                "x": 291.0,
+                "y": 0.08905
+              },
+              {
+                "x": 292.0,
+                "y": 0.0893
+              },
+              {
+                "x": 293.0,
+                "y": 0.08955
+              },
+              {
+                "x": 294.0,
+                "y": 0.0898
+              },
+              {
+                "x": 295.0,
+                "y": 0.09005
+              },
+              {
+                "x": 296.0,
+                "y": 0.0903
+              },
+              {
+                "x": 297.0,
+                "y": 0.09055
+              },
+              {
+                "x": 298.0,
+                "y": 0.0908
+              },
+              {
+                "x": 299.0,
+                "y": 0.09105
+              },
+              {
+                "x": 300.0,
+                "y": 0.0913
+              }
+            ],
+            "role": "accent"
+          }
+        ],
+        "thresholds": [],
+        "x": {
+          "from": 283.0,
+          "to": 300.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 0.0913,
+          "unit": "USD"
+        }
+      },
+      "title": "Cost per turn",
+      "verdict": {
+        "level": "good",
+        "metric_id": "verdict_cost_per_turn",
+        "text": "Turns cost about $0.05 each.",
+        "todo": "Do: keep unrelated tasks apart with /clear; turns get dearer as the context grows."
+      }
+    },
+    {
+      "bar": {
+        "forecast": null,
+        "kind": "progress",
+        "markers": [],
+        "roles": [
+          "ok"
+        ],
+        "series": [
+          {
+            "name": "warm",
+            "points": [
+              {
+                "x": 300000.0,
+                "y": 1.0
+              }
+            ],
+            "role": "ok"
+          }
+        ],
+        "thresholds": [],
+        "x": {
+          "from": 0.0,
+          "to": 300000.0,
+          "unit": "ms"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.0,
+          "unit": "ms"
+        }
+      },
+      "bar_fallback_cells": {
+        "cells": "gCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118A",
+        "cols": 30,
+        "rows": 1
+      },
+      "fallback_cells": {
+        "cells": "gCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAABgCUAAIfXXwCH118AgCUAAIfXXwCH118AIAAAAAAAAAEAAAAB",
+        "cols": 46,
+        "rows": 2
+      },
+      "figure": "reused 99 %",
+      "id": "cache",
+      "label": "last 18 turns",
+      "legend": [
+        {
+          "role": "ok",
+          "text": "reused"
+        }
+      ],
+      "note": "stays warm ≈ 5 minutes",
+      "readouts": [
+        {
+          "text": "Turn 283: the cache was reused.",
+          "x": 283.0
+        },
+        {
+          "text": "Turn 284: the cache was reused.",
+          "x": 284.0
+        },
+        {
+          "text": "Turn 285: the cache was reused.",
+          "x": 285.0
+        },
+        {
+          "text": "Turn 286: the cache was reused.",
+          "x": 286.0
+        },
+        {
+          "text": "Turn 287: the cache was reused.",
+          "x": 287.0
+        },
+        {
+          "text": "Turn 288: the cache was reused.",
+          "x": 288.0
+        },
+        {
+          "text": "Turn 289: the cache was reused.",
+          "x": 289.0
+        },
+        {
+          "text": "Turn 290: the cache was reused.",
+          "x": 290.0
+        },
+        {
+          "text": "Turn 291: the cache was reused.",
+          "x": 291.0
+        },
+        {
+          "text": "Turn 292: the cache was reused.",
+          "x": 292.0
+        },
+        {
+          "text": "Turn 293: the cache was reused.",
+          "x": 293.0
+        },
+        {
+          "text": "Turn 294: the cache was reused.",
+          "x": 294.0
+        },
+        {
+          "text": "Turn 295: the cache was reused.",
+          "x": 295.0
+        },
+        {
+          "text": "Turn 296: the cache was reused.",
+          "x": 296.0
+        },
+        {
+          "text": "Turn 297: the cache was reused.",
+          "x": 297.0
+        },
+        {
+          "text": "Turn 298: the cache was reused.",
+          "x": 298.0
+        },
+        {
+          "text": "Turn 299: the cache was reused.",
+          "x": 299.0
+        },
+        {
+          "text": "Turn 300: the cache was reused.",
+          "x": 300.0
+        }
+      ],
+      "spec": {
+        "forecast": null,
+        "kind": "pills",
+        "markers": [],
+        "roles": [
+          "ok"
+        ],
+        "series": [
+          {
+            "name": "turns",
+            "points": [
+              {
+                "x": 283.0,
+                "y": 1.0
+              },
+              {
+                "x": 284.0,
+                "y": 1.0
+              },
+              {
+                "x": 285.0,
+                "y": 1.0
+              },
+              {
+                "x": 286.0,
+                "y": 1.0
+              },
+              {
+                "x": 287.0,
+                "y": 1.0
+              },
+              {
+                "x": 288.0,
+                "y": 1.0
+              },
+              {
+                "x": 289.0,
+                "y": 1.0
+              },
+              {
+                "x": 290.0,
+                "y": 1.0
+              },
+              {
+                "x": 291.0,
+                "y": 1.0
+              },
+              {
+                "x": 292.0,
+                "y": 1.0
+              },
+              {
+                "x": 293.0,
+                "y": 1.0
+              },
+              {
+                "x": 294.0,
+                "y": 1.0
+              },
+              {
+                "x": 295.0,
+                "y": 1.0
+              },
+              {
+                "x": 296.0,
+                "y": 1.0
+              },
+              {
+                "x": 297.0,
+                "y": 1.0
+              },
+              {
+                "x": 298.0,
+                "y": 1.0
+              },
+              {
+                "x": 299.0,
+                "y": 1.0
+              },
+              {
+                "x": 300.0,
+                "y": 1.0
+              }
+            ],
+            "role": "ok"
+          }
+        ],
+        "thresholds": [],
+        "x": {
+          "from": 283.0,
+          "to": 300.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.0,
+          "unit": "turn"
+        }
+      },
+      "title": "Prompt cache",
+      "verdict": {
+        "level": "good",
+        "metric_id": "verdict_cache",
+        "text": "Reused 99 %.",
+        "todo": "Do: reply within 5 minutes so the cache stays warm."
+      }
+    },
+    {
+      "fallback_cells": {
+        "cells": "gCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAABgCUAANfXXwAAAAABgCUAANfXXwAAAAABIAAAAAAAAAEAAAAB",
+        "cols": 46,
+        "rows": 1
+      },
+      "figure": "300 calls",
+      "id": "tool_calls",
+      "label": "last 18 turns",
+      "legend": [
+        {
+          "role": "accent",
+          "text": "brighter = more calls"
+        }
+      ],
+      "readouts": [
+        {
+          "text": "Turn 283 · 1 call: Bash 1.",
+          "x": 283.0
+        },
+        {
+          "text": "Turn 284 · 1 call: Bash 1.",
+          "x": 284.0
+        },
+        {
+          "text": "Turn 285 · 1 call: Bash 1.",
+          "x": 285.0
+        },
+        {
+          "text": "Turn 286 · 1 call: Bash 1.",
+          "x": 286.0
+        },
+        {
+          "text": "Turn 287 · 1 call: Bash 1.",
+          "x": 287.0
+        },
+        {
+          "text": "Turn 288 · 1 call: Bash 1.",
+          "x": 288.0
+        },
+        {
+          "text": "Turn 289 · 1 call: Bash 1.",
+          "x": 289.0
+        },
+        {
+          "text": "Turn 290 · 1 call: Bash 1.",
+          "x": 290.0
+        },
+        {
+          "text": "Turn 291 · 1 call: Bash 1.",
+          "x": 291.0
+        },
+        {
+          "text": "Turn 292 · 1 call: Bash 1.",
+          "x": 292.0
+        },
+        {
+          "text": "Turn 293 · 1 call: Bash 1.",
+          "x": 293.0
+        },
+        {
+          "text": "Turn 294 · 1 call: Bash 1.",
+          "x": 294.0
+        },
+        {
+          "text": "Turn 295 · 1 call: Bash 1.",
+          "x": 295.0
+        },
+        {
+          "text": "Turn 296 · 1 call: Bash 1.",
+          "x": 296.0
+        },
+        {
+          "text": "Turn 297 · 1 call: Bash 1.",
+          "x": 297.0
+        },
+        {
+          "text": "Turn 298 · 1 call: Bash 1.",
+          "x": 298.0
+        },
+        {
+          "text": "Turn 299 · 1 call: Bash 1.",
+          "x": 299.0
+        },
+        {
+          "text": "Turn 300 · 1 call: Bash 1.",
+          "x": 300.0
+        }
+      ],
+      "spec": {
+        "forecast": null,
+        "kind": "heat",
+        "markers": [],
+        "roles": [
+          "accent"
+        ],
+        "series": [
+          {
+            "name": "Bash",
+            "points": [
+              {
+                "x": 283.0,
+                "y": 1.0
+              },
+              {
+                "x": 284.0,
+                "y": 1.0
+              },
+              {
+                "x": 285.0,
+                "y": 1.0
+              },
+              {
+                "x": 286.0,
+                "y": 1.0
+              },
+              {
+                "x": 287.0,
+                "y": 1.0
+              },
+              {
+                "x": 288.0,
+                "y": 1.0
+              },
+              {
+                "x": 289.0,
+                "y": 1.0
+              },
+              {
+                "x": 290.0,
+                "y": 1.0
+              },
+              {
+                "x": 291.0,
+                "y": 1.0
+              },
+              {
+                "x": 292.0,
+                "y": 1.0
+              },
+              {
+                "x": 293.0,
+                "y": 1.0
+              },
+              {
+                "x": 294.0,
+                "y": 1.0
+              },
+              {
+                "x": 295.0,
+                "y": 1.0
+              },
+              {
+                "x": 296.0,
+                "y": 1.0
+              },
+              {
+                "x": 297.0,
+                "y": 1.0
+              },
+              {
+                "x": 298.0,
+                "y": 1.0
+              },
+              {
+                "x": 299.0,
+                "y": 1.0
+              },
+              {
+                "x": 300.0,
+                "y": 1.0
+              }
+            ],
+            "role": "accent"
+          }
+        ],
+        "thresholds": [],
+        "x": {
+          "from": 283.0,
+          "to": 300.0,
+          "unit": "turn"
+        },
+        "y": {
+          "from": 0.0,
+          "to": 1.0,
+          "unit": "calls"
+        }
+      },
+      "title": "Tool calls per turn",
+      "verdict": {
+        "level": "good",
+        "metric_id": "verdict_tool_calls",
+        "text": "300 calls, 0 failed.",
+        "todo": "Do: ask Claude to search (grep) before it reads whole files."
+      }
+    }
+  ],
+  "footer": "spent so far ≈$16.18 · what this session would cost at API prices",
+  "schema": 1
+}
