@@ -137,6 +137,8 @@ pub struct Inputs {
     pub columns: Option<u16>,
     /// `diffSidebarOpen` from `~/.claude.json`.
     pub diff_sidebar_open: Option<bool>,
+    /// Hook events an old `cctop install` lacks (`install::hooks_missing_of_install`).
+    pub hooks_missing: usize,
     pub now_ms: i64,
 }
 
@@ -483,6 +485,16 @@ pub fn report(inputs: &Inputs) -> Report {
         }
     }
 
+    // 8. An old `cctop install`: events added since are not subscribed.
+    if inputs.hooks_missing > 0 {
+        checks.push(check(
+            "hooks-events",
+            Verdict::Warn,
+            crate::install::hooks_missing_text(inputs.hooks_missing),
+            None,
+        ));
+    }
+
     let next = if !loaded {
         "not ready: fix the ✗ lines, restart Claude Code, then run /cctop-pane".to_string()
     } else if !marker_open(inputs) {
@@ -818,6 +830,10 @@ pub fn gather(session: Option<&str>) -> Inputs {
         columns: terminal_columns(session_pid),
         diff_sidebar_open: read_json(&home.join(".claude.json"))
             .and_then(|v| v.get("diffSidebarOpen")?.as_bool()),
+        hooks_missing: crate::install::hooks_missing_of_install(&crate::install::read_settings(
+            &crate::install::settings_path(),
+        ))
+        .len(),
         now_ms: crate::app::now_ms(),
     }
 }
@@ -904,6 +920,7 @@ mod tests {
             tui: Some(("fullscreen".into(), "~/.claude/settings.json".into())),
             columns: Some(162),
             diff_sidebar_open: Some(false),
+            hooks_missing: 0,
             now_ms: T0 + 1_000,
         }
     }
@@ -1182,6 +1199,18 @@ mod tests {
     }
 
     #[test]
+    fn an_old_hooks_install_is_a_warning_with_the_count() {
+        let mut inputs = ready_inputs();
+        inputs.hooks_missing = 7;
+        let r = report(&inputs);
+        let c = r.checks.iter().find(|c| c.id == "hooks-events").unwrap();
+        assert_eq!(c.verdict, Verdict::Warn);
+        assert_eq!(c.text, "hooks: 7 new events, run cctop install");
+        assert!(r.ready, "a warning does not make the pane unready");
+        assert!(render(&r).contains("! hooks: 7 new events, run cctop install"));
+    }
+
+    #[test]
     fn this_machine_before_the_fix_names_every_action() {
         // 2026-09-14: flag unset, marketplace plugin 0.1.0 without the module,
         // fullscreen pinned, /diff left open, 162 columns, no marker.
@@ -1202,6 +1231,7 @@ mod tests {
             tui: Some(("fullscreen".into(), "~/.claude/settings.json".into())),
             columns: Some(162),
             diff_sidebar_open: Some(true),
+            hooks_missing: 0,
             now_ms: T0,
         };
         let report = super::report(&inputs);

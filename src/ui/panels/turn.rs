@@ -101,6 +101,9 @@ impl Panel for TurnPanel {
                 WaitingKind::Question => format!("◆ waiting {since} · Claude asked a question"),
                 WaitingKind::Notification => format!("◆ waiting {since} · needs your input"),
                 WaitingKind::Asked => format!("◆ asked a question {since} ago · no reply yet"),
+                WaitingKind::Elicitation => {
+                    format!("◆ {} · {since}", crate::coach::elicitation_text(state))
+                }
             };
             l2.push(Span::styled(text, amber));
         } else if let Some(c) = state.tools.running() {
@@ -295,6 +298,22 @@ mod tests {
         assert!(out.contains("unchecked"), "{out}");
         assert!(out.contains("interrupts 1 ("), "{out}");
         assert!(out.contains("out cut)"), "{out}");
+    }
+
+    #[test]
+    fn an_open_mcp_prompt_is_waiting_on_you() {
+        use crate::ui::state::WaitingKind;
+        let mut app = fixture_b_app();
+        app.state.open = Some(4);
+        let now = app.state.clock_ms();
+        app.state
+            .elicitations
+            .insert("github".into(), [now - 75_000].into());
+        let w = app.state.waiting().unwrap();
+        assert_eq!(w.kind, WaitingKind::Elicitation);
+        let out = render_to_string(&app, 100, 20);
+        assert!(out.contains("◆ waiting on you · MCP github asks"), "{out}");
+        insta::assert_snapshot!(out);
     }
 
     #[test]

@@ -196,6 +196,7 @@ expression: "serde_json::to_string_pretty(&sum).unwrap()"
     "value": 31228823
   },
   "hooks_installed": false,
+  "hooks_missing": [],
   "input_rate": {
     "approx": false,
     "metric_id": "input_rate",

@@ -299,6 +299,19 @@ pub enum WaitingKind {
     Notification,
     /// The turn ended with a question mark and nothing came back.
     Asked,
+    /// An MCP server's elicitation prompt is open (`State::elicitations`).
+    Elicitation,
+}
+
+/// Elicitation prompts that were answered: how many, how long the person
+/// took, and how each ended.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ElicitationWaits {
+    pub count: usize,
+    pub total_wait_ms: i64,
+    pub accept: usize,
+    pub decline: usize,
+    pub cancel: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -441,6 +454,25 @@ pub struct State {
     /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
     hook_pre: std::collections::HashMap<String, i64>,
     hook_perm: std::collections::HashMap<String, i64>,
+    /// Open MCP elicitation prompts: when each was raised (epoch ms), oldest
+    /// first, per server. An `ElicitationResult` pops the server's oldest;
+    /// `Stop` and `UserPromptSubmit` clear them all.
+    pub elicitations: std::collections::BTreeMap<String, std::collections::VecDeque<i64>>,
+    /// The completed prompts' accounting.
+    pub elicitation_waits: ElicitationWaits,
+    /// `ConfigChange` hooks: `(epoch ms, source)`, in arrival order. The
+    /// first cache miss after each is marked (`mark_config_changes`).
+    pub config_changes: Vec<(i64, String)>,
+    /// The folder the session moved to (`CwdChanged`): git and file paths
+    /// follow it; `session.cwd` (the project's identity) does not.
+    pub cwd_now: Option<PathBuf>,
+    /// Folders `DirectoryAdded` reported, merged into the status line's
+    /// `workspace.added_dirs` (no folder twice).
+    hook_dirs: Vec<String>,
+    /// `PreSkillShellCommand` count per skill (`command_name`).
+    pub skill_shell: std::collections::BTreeMap<String, u32>,
+    /// `TeammateIdle` times by member name, for members not yet in the team.
+    teammate_idle: std::collections::BTreeMap<String, i64>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -511,6 +543,10 @@ pub struct State {
     pub inspector_opens: u64,
     /// The sources inspector shows its per-file list.
     pub sources_files: bool,
+    /// Events `cctop install` would add to an old install (`hooks::EVENTS`
+    /// without a `cctop hook` entry in settings). Empty when nothing is
+    /// installed, when the install is current, and for a fixture.
+    pub hooks_missing: Vec<&'static str>,
     pub prefix: crate::prefix::Prefix,
     /// The pane's latest breakdown spool, raw: anchored and checked against
     /// compactions when read, since the transcript may lag it.
@@ -723,6 +759,27 @@ pub struct ToolsUi {
     pub selected: usize,
 }
 
+fn merge_dirs(facts: &mut StatusFacts, dirs: &[String]) {
+    if dirs.is_empty() {
+        return;
+    }
+    let w = facts.workspace.get_or_insert_with(Default::default);
+    for d in dirs {
+        if !w.added_dirs.iter().any(|x| x.trim_end_matches('/') == d) {
+            w.added_dirs.push(d.clone());
+        }
+    }
+}
+
+/// The last path segment, whichever separator the host uses (`\` on
+/// Windows); `None` for an empty path.
+fn last_segment(path: &str) -> Option<&str> {
+    path.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|s| !s.is_empty())
+}
+
 impl State {
     pub fn new(pricing: Pricing) -> State {
         State {
@@ -755,7 +812,10 @@ impl State {
         }
         // A subagent's event is the agent's, not the session's.
         if let Some(agent_id) = pstr("agent_id").filter(|a| !a.is_empty()) {
-            if !matches!(ev.event.as_str(), "SubagentStart" | "SubagentStop") {
+            if !matches!(
+                ev.event.as_str(),
+                "SubagentStart" | "SubagentStop" | "TeammateIdle"
+            ) {
                 let agent = self.agents.entry(agent_id.clone()).or_insert_with(|| {
                     crate::agents::Agent::new(
                         &agent_id,
@@ -929,7 +989,56 @@ impl State {
                     text: crate::ui::fmt::clip(&msg, 80),
                 });
             }
+            "Elicitation" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                self.elicitations
+                    .entry(server.clone())
+                    .or_default()
+                    .push_back(at);
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("MCP {server} asks"),
+                });
+            }
+            "ElicitationResult" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                let action = pstr("action").unwrap_or_default();
+                let opened = self
+                    .elicitations
+                    .get_mut(&server)
+                    .and_then(|q| q.pop_front());
+                if self.elicitations.get(&server).is_some_and(|q| q.is_empty()) {
+                    self.elicitations.remove(&server);
+                }
+                // A result with nothing open (an unseen or already-cleared
+                // prompt) is not a completed wait.
+                if let Some(opened) = opened {
+                    let w = &mut self.elicitation_waits;
+                    w.count += 1;
+                    w.total_wait_ms += (at - opened).max(0);
+                    match action.as_str() {
+                        "accept" => w.accept += 1,
+                        "decline" => w.decline += 1,
+                        "cancel" => w.cancel += 1,
+                        _ => {}
+                    }
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!(
+                        "MCP {server} {}",
+                        if action.is_empty() {
+                            "answered"
+                        } else {
+                            action.as_str()
+                        }
+                    ),
+                });
+            }
             "UserPromptSubmit" => {
+                self.elicitations.clear();
                 self.session.notification = None;
                 self.events.push(crate::events::Event {
                     at,
@@ -974,6 +1083,7 @@ impl State {
                 });
             }
             "Stop" => {
+                self.elicitations.clear();
                 self.session.background_tasks = p
                     .get("background_tasks")
                     .and_then(|v| v.as_array())
@@ -1118,7 +1228,179 @@ impl State {
                     other => other.to_string(),
                 },
             }),
+            "ConfigChange" => {
+                let source = pstr("source").unwrap_or_else(|| "settings".into());
+                let file = pstr("file_path")
+                    .as_deref()
+                    .and_then(last_segment)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| "settings".into());
+                let text = format!("settings changed · {file} ({source})");
+                self.config_changes.push((at, source));
+                self.mark_config_changes();
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text,
+                });
+            }
+            "CwdChanged" => {
+                if let Some(new) = pstr("new_cwd").filter(|c| !c.is_empty()) {
+                    let new = PathBuf::from(&new);
+                    self.files.move_cwd(&new);
+                    self.cwd_now = Some(new);
+                }
+                let name = |k: &str| {
+                    pstr(k)
+                        .as_deref()
+                        .and_then(last_segment)
+                        .map(str::to_string)
+                };
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: match (name("old_cwd"), name("new_cwd")) {
+                        (Some(a), Some(b)) => format!("cwd {a} → {b}"),
+                        (None, Some(b)) => format!("cwd → {b}"),
+                        _ => "cwd changed".into(),
+                    },
+                });
+            }
+            "DirectoryAdded" => {
+                let dir = pstr("directory").unwrap_or_default();
+                let dir = dir.trim_end_matches('/').to_string();
+                if !dir.is_empty() && !self.hook_dirs.contains(&dir) {
+                    self.hook_dirs.push(dir.clone());
+                    self.merge_hook_dirs();
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("dir added · {}", last_segment(&dir).unwrap_or(&dir)),
+                });
+            }
+            "TeammateIdle" => {
+                if let Some(name) = pstr("teammate_name") {
+                    if let Some(t) = self.team.as_mut() {
+                        t.note_idle(&name, at);
+                    }
+                    self.teammate_idle.insert(name.clone(), at);
+                    self.events.push(crate::events::Event {
+                        at,
+                        kind: Kind::Agent,
+                        text: format!("{name} idle"),
+                    });
+                }
+            }
+            "PreSkillShellCommand" => {
+                let skill = pstr("command_name").unwrap_or_else(|| "skill".into());
+                *self.skill_shell.entry(skill.clone()).or_default() += 1;
+                let cmd = p
+                    .get("tool_input")
+                    .and_then(|i| i.get("command"))
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("");
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: if cmd.is_empty() {
+                        format!("skill shell: {skill}")
+                    } else {
+                        format!("skill shell: {skill} · {}", crate::ui::fmt::clip(cmd, 60))
+                    },
+                });
+            }
             _ => {}
+        }
+    }
+
+    /// Re-apply the `TeammateIdle` hooks to a team that was (re)loaded or
+    /// grew a member after they arrived.
+    pub fn sync_teammate_idle(&mut self) {
+        if let Some(t) = self.team.as_mut() {
+            for (name, at) in &self.teammate_idle {
+                t.note_idle(name, *at);
+            }
+        }
+    }
+
+    /// The folder git and file paths are read in: where the session moved
+    /// to, else where it started.
+    pub fn work_dir(&self) -> &Path {
+        self.cwd_now.as_deref().unwrap_or(&self.session.cwd)
+    }
+
+    /// Folders added to the session: the status line's `added_dirs` and the
+    /// `DirectoryAdded` hooks, each folder once.
+    pub fn added_dirs_count(&self) -> usize {
+        // The hook's folders are merged into the workspace on arrival.
+        self.status_facts
+            .workspace
+            .as_ref()
+            .map_or(0, |w| w.added_dirs.len())
+    }
+
+    /// Fold the hook's folders into `workspace.added_dirs`, which every
+    /// surface already reads. A folder both sources name stays one.
+    fn merge_hook_dirs(&mut self) {
+        merge_dirs(&mut self.status_facts, &self.hook_dirs);
+    }
+
+    /// Mark the first cache miss after each `ConfigChange` and before the
+    /// next: both the located and the named record of that request. Derived
+    /// from the two collectors' data each time, so the order they arrive in
+    /// does not matter.
+    pub fn mark_config_changes(&mut self) {
+        if self.config_changes.is_empty() {
+            return;
+        }
+        let parse = crate::metrics::cost::parse_ts_ms;
+        let mut windows: Vec<(i64, i64, String)> = Vec::new();
+        let mut sorted = self.config_changes.clone();
+        sorted.sort_by_key(|c| c.0);
+        for (i, (at, src)) in sorted.iter().enumerate() {
+            let end = sorted.get(i + 1).map_or(i64::MAX, |n| n.0);
+            windows.push((*at, end, src.clone()));
+        }
+        // The first request (hit or miss) after each change; it is marked
+        // only if it missed, and not for an expired TTL.
+        let first_request = |start: i64, end: i64| -> Option<&String> {
+            self.requests
+                .responses()
+                .iter()
+                .filter_map(|(id, at)| Some((at.as_deref().and_then(parse)?, id)))
+                .filter(|(t, _)| *t > start && *t < end)
+                .min_by_key(|(t, _)| *t)
+                .map(|(_, id)| id)
+        };
+        let marks: Vec<(String, String)> = windows
+            .iter()
+            .filter_map(|(start, end, src)| {
+                let id = first_request(*start, *end)?;
+                let located = self.requests.miss_for(id);
+                let named = self.agg.cache_misses.iter().any(|m| m.message_id == *id);
+                if located.is_none() && !named {
+                    return None;
+                }
+                if located.is_some_and(|m| {
+                    matches!(m.cause, crate::requests::LocatedCause::Expired { .. })
+                }) {
+                    return None;
+                }
+                Some((id.clone(), src.clone()))
+            })
+            .collect();
+        for m in self.requests.misses_mut() {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
+        }
+        for m in &mut self.agg.cache_misses {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
         }
     }
 
@@ -1209,6 +1491,7 @@ impl State {
             spend.and_then(|l| l.resets_at).map(|x| (x * 1000.0) as i64);
         if let Some(w) = &s.workspace {
             facts.workspace = Some(w.clone());
+            merge_dirs(facts, &self.hook_dirs);
         }
         if let Some(n) = s.output_style.as_ref().and_then(|n| n.name.clone()) {
             facts.output_style = Some(n);
@@ -1436,6 +1719,7 @@ impl State {
         let ttl = self.cache_ttl_ms().max(0) as u64;
         let turn = self.agg.current_turn().map(|t| t.number);
         self.requests.apply(line, turn, ttl);
+        self.mark_config_changes();
         if self.agg.turns.len() > turns_before {
             self.files.new_turn();
         }
@@ -1923,6 +2207,15 @@ impl State {
             .count()
     }
 
+    /// The server with the oldest open elicitation prompt, and when it was
+    /// raised.
+    pub fn open_elicitation(&self) -> Option<(&str, i64)> {
+        self.elicitations
+            .iter()
+            .filter_map(|(server, q)| q.front().map(|at| (server.as_str(), *at)))
+            .min_by_key(|(_, at)| *at)
+    }
+
     /// What the model is waiting on, if anything.
     pub fn waiting(&self) -> Option<Waiting> {
         if self.session.permission_pending {
@@ -1932,6 +2225,12 @@ impl State {
                     .session
                     .permission_waiting_since_ms
                     .unwrap_or(self.clock_ms()),
+            });
+        }
+        if let Some((_, since_ms)) = self.open_elicitation() {
+            return Some(Waiting {
+                kind: WaitingKind::Elicitation,
+                since_ms,
             });
         }
         if let Some(c) = self.tools.running() {
@@ -2159,6 +2458,13 @@ impl State {
             self.other_live_sessions + 1,
             active_ms,
         )
+    }
+
+    /// Read which of cctop's hook events the settings lack (an old install).
+    pub fn load_hooks_missing(&mut self) {
+        self.hooks_missing = crate::install::hooks_missing_of_install(
+            &crate::install::read_settings(&crate::install::settings_path()),
+        );
     }
 
     /// Read the autocompact overrides for a live session: settings.json and

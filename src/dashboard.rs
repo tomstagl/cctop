@@ -163,6 +163,11 @@ pub struct Header {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
     pub phase: PhaseCell,
+    /// `hooks: 7 new`, amber, between the facts and the phase cell: the
+    /// installed hooks lack events this cctop would add (`cctop install`).
+    /// Absent when the install is current, not installed, or a fixture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<String>,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
     /// Inside `line`, before the PR and the version; both surfaces drop
@@ -500,6 +505,8 @@ fn header(state: &State, c: &Coach) -> Header {
                 .unwrap_or_else(|| "—".into()),
             tokens: c.state.tokens.clone(),
         },
+        hooks: (!state.hooks_missing.is_empty())
+            .then(|| format!("hooks: {} new", state.hooks_missing.len())),
         workspace,
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),
@@ -818,10 +825,13 @@ fn act(state: &State, c: &Coach) -> Act {
         use crate::ui::state::WaitingKind;
         let since = coach::short_duration(state.clock_ms() - w.since_ms);
         let what = match w.kind {
-            WaitingKind::Permission => "permission prompt open",
-            WaitingKind::Question => "Claude asked a question",
-            WaitingKind::Notification => "Claude needs your input",
-            WaitingKind::Asked => "Claude asked, no reply yet",
+            WaitingKind::Permission => "permission prompt open".to_string(),
+            WaitingKind::Question => "Claude asked a question".to_string(),
+            WaitingKind::Notification => "Claude needs your input".to_string(),
+            WaitingKind::Asked => "Claude asked, no reply yet".to_string(),
+            WaitingKind::Elicitation => {
+                crate::coach::elicitation_ask(state, &format!("◆ WAITING {since} — "))
+            }
         };
         return Act {
             key: 'a',
