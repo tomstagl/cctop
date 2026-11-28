@@ -10,7 +10,9 @@
 // into functions declared in pane.tsx, so it receives `PollerEngine`, the
 // slice of `$` it uses, built there by a top-level function.
 import type { EngineInterface, Timer } from 'claude-code';
-import { IDLE_ONLY_VERBS, QUERY_VERBS, TESTED_WITH, isSupported, reduce, type Action, type Model, type QueryVerb } from './model';
+import { chartsMarker } from './charts';
+import { IDLE_ONLY_VERBS, QUERY_VERBS, SHOWN_ONLY_VERBS, TESTED_WITH, isSupported, overviewShown, reduce, type Action, type Model, type QueryVerb } from './model';
+import { maxTurnsFor } from './views/overview-charts';
 
 export type PollerEngine = {
   /** `now` resolves a Promise: a host round trip since Claude Code 2.1.271 (issue #3). */
@@ -35,6 +37,12 @@ export type Poller = {
    * no-op while stopped.
    */
   pollNow(): void;
+  /**
+   * One verb now, outside the rounds (the overview when its charts come
+   * into view or the turns that fit change); a no-op while stopped, before
+   * the session is known, without the binary or for a verb it lacks.
+   */
+  queryNow(verb: QueryVerb): Promise<void>;
   /** Re-arms the timer when the cadence changed with the turn state; a no-op while stopped. */
   reschedule(): void;
   running(): boolean;
@@ -120,8 +128,20 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
     bodyColumns: model.bodyColumns,
     viewportColumns: model.viewportColumns,
     facts: markerFacts(model),
+    // Pictures or cells, and whether charts.wasm loaded (`cctop pane status` prints it).
+    charts: model.charts === null ? undefined : chartsMarker(model.charts),
   };
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
+}
+
+/**
+ * What a verb takes beyond the session: the overview keeps as many turns as
+ * the pane's body draws at two cells a turn, the TUI's sizing for the same
+ * width (none before the first render: the binary's default).
+ */
+export function verbArgs(verb: QueryVerb, model: Model): string[] {
+  if (verb !== 'overview' || model.bodyColumns === null) return [];
+  return ['--max-turns', String(maxTurnsFor(model.bodyColumns))];
 }
 
 export function createPoller($: PollerEngine, getModel: () => Model, setModel: (model: Model) => void): Poller {
@@ -129,6 +149,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   let timer: Timer | null = null;
   let timerMs = 0;
   let inflight: Promise<void> | null = null;
+  // Counts the stops: an answer from a query begun before the last stop is dropped.
+  let generation = 0;
   // A pollNow arrived while a round ran: one more round follows it.
   let followUp = false;
   // When the poller started; stands in for `queryAt` until the first success.
@@ -162,14 +184,19 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   const queryKey = (sessionId: string): string => getModel().sessionFacts?.transcriptPath || sessionId;
 
   const query = async (verb: QueryVerb, sessionId: string): Promise<boolean> => {
+    const gen = generation;
     try {
       // `--surface pane`: a fire the binary promotes for this pane (no
       // dashboard running) is recorded as shown here.
-      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane'];
+      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane', ...verbArgs(verb, getModel())];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.
       if (getModel().sessionId !== sessionId) return false;
+      // The poller stopped (the pane closed) while the binary ran: the
+      // answer predates the next start, whose first answers are the
+      // pane's baseline, so it is dropped.
+      if (generation !== gen) return false;
       if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}: ${result.stderr.trim()}`);
       dispatch({ type: 'query', verb, data: JSON.parse(result.stdout) as unknown });
       failing.delete(verb);
@@ -223,6 +250,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
       if (!isSupported(getModel(), verb)) continue;
       // The busy tick is the coach's: the slow verbs wait for the idle one.
       if (busy && IDLE_ONLY_VERBS.includes(verb)) continue;
+      // The overview's charts are read only while body 1 shows them.
+      if (SHOWN_ONLY_VERBS.includes(verb) && !overviewShown(getModel())) continue;
       called += 1;
       if (!(await query(verb, sessionId))) ok = false;
     }
@@ -248,6 +277,7 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     },
     stop() {
       active = false;
+      generation += 1;
       timer?.cancel();
       timer = null;
     },
@@ -263,6 +293,11 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
           }
         });
       return inflight;
+    },
+    async queryNow(verb) {
+      const model = getModel();
+      if (!active || model.sessionId === null || model.binary !== 'present' || !isSupported(model, verb)) return;
+      await query(verb, model.sessionId);
     },
     pollNow() {
       if (!active) return;

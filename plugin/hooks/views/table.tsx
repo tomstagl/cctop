@@ -4,7 +4,7 @@
 // is, and the row cap they keep to. A cell that shows a metric carries its
 // id as the row's `key` (docs/metrics.md).
 import type { RenderElement } from 'claude-code';
-import { THEME, clip, frame, innerWidth, pad, width, type FrameElements, type Line, type Press, type Seg } from './frame';
+import { THEME, clip, frame, innerWidth, pad, width, type FrameButton, type FrameElements, type Line, type Press, type Seg } from './frame';
 import type { Color } from './overview';
 
 /** The most rows a view's frame holds: longer lists are cut, the pane scrolls the rest. */
@@ -25,8 +25,8 @@ export type Cell = {
   key?: string;
 };
 
-/** One row of a framed panel: its segments, the metric id it shows, and its press when it is a Button. */
-export type FrameRow = { line: Line; key?: string; press?: Press };
+/** One row of a framed panel: its segments, the metric id it shows, its press when it is a Button, or a row of Buttons. */
+export type FrameRow = { line: Line; key?: string; press?: Press; buttons?: FrameButton[] };
 
 /** `text` kept from its end when it overflows `cells` (a path), else cut at the end. */
 function clipTail(text: string, cells: number): string {
