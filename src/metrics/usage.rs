@@ -115,6 +115,8 @@ pub struct Turn {
     pub reopened: usize,
     /// Distinct API responses.
     pub api_calls: usize,
+    /// `requestId` of each counted response, the key a trace span joins on.
+    pub request_ids: Vec<String>,
     /// API-error lines seen in this turn (never counted as calls).
     pub api_errors: usize,
     pub usage: Usage,
@@ -916,6 +918,9 @@ impl Aggregate {
             });
         }
         t.api_calls += 1;
+        if let Some(r) = &a.request_id {
+            t.request_ids.push(r.clone());
+        }
         t.usage.add(&u);
         t.context_size = u.total_input();
         t.effort = a.effective_effort().map(str::to_string).or(t.effort.take());

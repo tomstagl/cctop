@@ -79,16 +79,31 @@ impl Panel for TurnPanel {
                 dim,
             ));
         }
-        if let Some(c) = &state.cost.authoritative {
+        let traced_retries = turn.and_then(|t| state.turn_retries(t));
+        // The session-level figure from the cost-state; beside a traced
+        // turn's own retries it is labelled, so neither number is lost.
+        let session_retry = state.cost.authoritative.as_ref().and_then(|c| {
             let retry = c
                 .total_api_duration
                 .saturating_sub(c.total_api_duration_without_retries);
-            if retry > 0 {
+            (retry > 0).then_some(retry)
+        });
+        if let Some((n, ms)) = traced_retries {
+            l1.push(Span::styled(
+                format!(" · retries {n} (+{})", fmt::added_s(ms)),
+                amber,
+            ));
+            if let Some(retry) = session_retry {
                 l1.push(Span::styled(
-                    format!(" · retries {}", fmt::duration_ms(retry as i64)),
+                    format!(" · session retries {}", fmt::duration_ms(retry as i64)),
                     amber,
                 ));
             }
+        } else if let Some(retry) = session_retry {
+            l1.push(Span::styled(
+                format!(" · retries {}", fmt::duration_ms(retry as i64)),
+                amber,
+            ));
         }
 
         // Line 2: what is running, or what the model waits on
@@ -200,7 +215,19 @@ impl Panel for TurnPanel {
             _ => l3.push(Span::styled("hooks —", dim)),
         }
         l3.push(Span::styled("   ", dim));
-        if state.session.hooks_installed {
+        if let Some((waits, groups)) = state.permission_split() {
+            use std::fmt::Write as _;
+            let split = groups.iter().fold(String::new(), |mut acc, (g, n)| {
+                let _ = write!(acc, " · {g} {n}");
+                acc
+            });
+            let dur = if state.session.hooks_installed {
+                format!(" · {}", fmt::duration_ms(state.session.permission_wait_ms))
+            } else {
+                String::new()
+            };
+            l3.push(Span::raw(format!("permission waits {waits}{split}{dur}")));
+        } else if state.session.hooks_installed {
             l3.push(Span::raw(format!(
                 "permission waits {} · {}",
                 state.session.permission_waits,
@@ -395,6 +422,16 @@ mod tests {
         let out = render_to_string(&app, 64, 60);
         assert!(out.contains("◆ waiting for permission for 0:05"), "{out}");
         assert!(out.contains("permission waits 1 · 0:12"), "{out}");
+        // With traces, the split joins in; without, the line is as before.
+        let data = crate::otel::SessionData {
+            spans: crate::ui::state::tests_support::trace_spans(&["user"]).into(),
+            ..Default::default()
+        };
+        app.state.session.permission_records = vec![Default::default()];
+        app.state.session.permission_records[0].tool_use_id = "t0".into();
+        app.state.apply_otel(&data);
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("permission waits 1 · you 1 · 0:12"), "{out}");
         // Queued prompt.
         app.feed(Line::parse(r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-08-27T10:20:10Z"}"#).unwrap());
         assert!(render_to_string(&app, 64, 60).contains("queued 1"));
@@ -417,5 +454,29 @@ mod tests {
         early.state.open = Some(4);
         let out = render_to_string(&early, 64, 60);
         assert!(out.contains("hooks 1 runs · 60ms"), "{out}");
+    }
+
+    #[test]
+    fn turn_panel_shows_traced_retries_and_the_added_time() {
+        let mut app = fixture_app();
+        app.state.open = Some(4);
+        let before = render_to_string(&app, 100, 60);
+        assert!(before.contains("retries 0:02"), "{before}");
+        let t = app.state.agg.current_turn().unwrap().clone();
+        let rid = t
+            .request_ids
+            .first()
+            .cloned()
+            .expect("fixture has requestIds");
+        app.state.apply_otel(&crate::otel::SessionData {
+            spans: vec![crate::ui::state::tests_support::llm_span(&rid, 3, 16)].into(),
+            ..Default::default()
+        });
+        let out = render_to_string(&app, 130, 60);
+        assert!(out.contains("retries 2 (+3.0 s)"), "{out}");
+        assert!(
+            out.contains("retries 2 (+3.0 s) · session retries 0:02"),
+            "{out}"
+        );
     }
 }

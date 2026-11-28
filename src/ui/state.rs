@@ -56,6 +56,9 @@ pub struct SessionInfo {
     /// Permission prompts per rule-shaped key (`Bash(gh api)`, `Edit`),
     /// with the rule Claude Code itself suggested, verbatim.
     pub permission_asks: std::collections::BTreeMap<String, PermissionAsk>,
+    /// One record per measured permission wait; `decision` / `source` are
+    /// joined from OpenTelemetry trace spans when they arrive.
+    pub permission_records: Vec<PermissionRecord>,
     /// The last `Notification` hook: `(notification_type, epoch ms)` —
     /// `permission_prompt`, `idle_prompt`, `agent_needs_input`…; cleared by
     /// the next prompt or tool result.
@@ -97,6 +100,37 @@ pub struct PermissionAsk {
     /// `permission_suggestions[].rules[].ruleContent` as `Tool(content)`.
     pub rule: Option<String>,
 }
+
+/// One measured permission wait and, when traces exist, who decided it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PermissionRecord {
+    pub tool_use_id: String,
+    /// The rule-shaped key (`Bash(gh api)`, `Edit`).
+    pub key: String,
+    pub wait_ms: i64,
+    /// `accept` / `reject`, from the `blocked_on_user` span.
+    pub decision: Option<String>,
+    /// `user`, `config`, `classifier`, `hook`… verbatim from the span.
+    pub source: Option<String>,
+}
+
+/// The display group of a permission `source`: `you`, `rule`, `classifier`,
+/// `hook`; anything else (including an unknown value) is `other`.
+pub fn decider_group(source: &str) -> &'static str {
+    match source {
+        "user" => "you",
+        "config" => "rule",
+        "classifier" => "classifier",
+        "hook" => "hook",
+        _ => "other",
+    }
+}
+
+/// A turn's hooks become an events row above this many milliseconds.
+pub const HOOK_ROW_MS: u64 = 500;
+
+/// Order the groups are shown in.
+pub const DECIDER_GROUPS: [&str; 5] = ["you", "rule", "classifier", "hook", "other"];
 
 /// The rule-shaped key of a permission prompt: `Bash(<argv0> <sub>)` for
 /// Bash (the subcommand only when it is a word, not a flag or a path),
@@ -453,7 +487,7 @@ pub struct State {
     pub rotated_to: Option<crate::registry::Session>,
     /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
     hook_pre: std::collections::HashMap<String, i64>,
-    hook_perm: std::collections::HashMap<String, i64>,
+    hook_perm: std::collections::HashMap<String, (i64, String)>,
     /// Open MCP elicitation prompts: when each was raised (epoch ms), oldest
     /// first, per server. An `ElicitationResult` pops the server's oldest;
     /// `Stop` and `UserPromptSubmit` clear them all.
@@ -558,6 +592,9 @@ pub struct State {
     pub context_view: ContextView,
     /// OpenTelemetry data for this session, when the receiver is running.
     pub otel: Option<crate::otel::SessionData>,
+    /// The `hooks +…` events row already shown per turn number (time, text),
+    /// so a later span replaces it instead of adding a second.
+    pub hook_rows: std::collections::HashMap<usize, (i64, String)>,
     /// Colours and glyphs for this terminal.
     pub theme: crate::theme::Theme,
     /// Session picker overlay (`L`).
@@ -865,7 +902,7 @@ impl State {
                             _ => tool.to_string(),
                         })
                     });
-                let ask = self.session.permission_asks.entry(key).or_default();
+                let ask = self.session.permission_asks.entry(key.clone()).or_default();
                 ask.count += 1;
                 if suggested.is_some() {
                     ask.rule = suggested;
@@ -873,7 +910,7 @@ impl State {
                 self.session.permission_pending = true;
                 self.session.permission_waiting_since_ms = Some(at);
                 if !id.is_empty() {
-                    self.hook_perm.insert(id.clone(), at);
+                    self.hook_perm.insert(id.clone(), (at, key.clone()));
                 }
                 self.events.push(crate::events::Event {
                     at,
@@ -900,7 +937,7 @@ impl State {
                 } else if let Some(start) = start {
                     self.tools.set_exact_duration(&id, start, at);
                 }
-                if let Some(perm_at) = self.hook_perm.remove(&id) {
+                if let Some((perm_at, key)) = self.hook_perm.remove(&id) {
                     // ≈ wait: the tool's own median duration is subtracted.
                     let median = name
                         .as_deref()
@@ -909,6 +946,18 @@ impl State {
                     let wait = (at - perm_at - median).max(0);
                     self.session.permission_waits += 1;
                     self.session.permission_wait_ms += wait;
+                    self.session.permission_records.push(PermissionRecord {
+                        tool_use_id: id.clone(),
+                        key,
+                        wait_ms: wait,
+                        decision: None,
+                        source: None,
+                    });
+                    // A record landing after the last batch joins now.
+                    if let Some(o) = self.otel.take() {
+                        self.join_permission_spans(&o);
+                        self.otel = Some(o);
+                    }
                     self.events.push(crate::events::Event {
                         at,
                         kind: Kind::Perm,
@@ -1423,7 +1472,250 @@ impl State {
             }
         }
         self.tools.otel_durations = data.durations_by_tool();
+        self.join_permission_spans(data);
         self.otel = Some(data.clone());
+        self.sync_hook_rows();
+    }
+
+    /// Hook time per turn and event, from `claude_code.hook` spans. A span
+    /// belongs to the turn whose start (the user line's timestamp) is the
+    /// latest one not after the span's start; spans before the first turn
+    /// are not assigned. Returns `(turn number, by_event ms, last span end ms)`.
+    pub fn hook_ms_by_turn(&self) -> Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> {
+        let Some(o) = &self.otel else {
+            return Vec::new();
+        };
+        let starts: Vec<(usize, i64)> = self
+            .agg
+            .turns
+            .iter()
+            .filter_map(|t| {
+                let at = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref()?)?;
+                Some((t.number, at))
+            })
+            .collect();
+        let mut out: Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> = Vec::new();
+        for sp in &o.spans {
+            let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            else {
+                continue;
+            };
+            let start_ms = (ids.start_ns / 1_000_000) as i64;
+            let Some((number, _)) = starts.iter().rev().find(|(_, at)| *at <= start_ms) else {
+                continue;
+            };
+            let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+            let end_ms = (ids.end_ns / 1_000_000) as i64;
+            let ev = hook_event.clone().unwrap_or_else(|| "other".into());
+            match out.iter_mut().find(|(n, _, _)| n == number) {
+                Some((_, m, e)) => {
+                    {
+                        let e = m.entry(ev).or_default();
+                        *e = e.saturating_add(ms);
+                    }
+                    *e = (*e).max(end_ms);
+                }
+                None => out.push((*number, [(ev, ms)].into(), end_ms)),
+            }
+        }
+        out
+    }
+
+    /// Which OTel signals have delivered data: `(metrics, logs, traces)`;
+    /// `None` when no receiver data was ever applied.
+    pub fn otel_signals(&self) -> Option<(bool, bool, bool)> {
+        let o = self.otel.as_ref()?;
+        Some((
+            !o.tokens.is_empty()
+                || o.cost_usd > 0.0
+                || o.active_time_s > 0.0
+                || o.lines_added > 0.0
+                || o.lines_removed > 0.0,
+            !o.api_requests.is_empty() || o.api_errors > 0 || !o.tool_results.is_empty(),
+            !o.spans.is_empty() || o.unknown_spans > 0,
+        ))
+    }
+
+    /// Session hook overhead for `cctop query dashboard`: `None` without
+    /// trace spans, else the total and the time per `hook_event`.
+    pub fn hook_overhead(&self) -> Option<(u64, std::collections::BTreeMap<String, u64>)> {
+        let o = self.otel.as_ref().filter(|o| !o.spans.is_empty())?;
+        let mut by: std::collections::BTreeMap<String, u64> = Default::default();
+        let mut any = false;
+        for sp in &o.spans {
+            if let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            {
+                any = true;
+                let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+                let e = by
+                    .entry(hook_event.clone().unwrap_or_else(|| "other".into()))
+                    .or_default();
+                *e = e.saturating_add(ms);
+            }
+        }
+        any.then(|| (by.values().fold(0, |a: u64, b| a.saturating_add(*b)), by))
+    }
+
+    /// One `hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s` row per turn whose
+    /// hooks exceed 500 ms, events by descending time; replaced when more
+    /// hook time arrives for the same turn.
+    fn sync_hook_rows(&mut self) {
+        for (number, by, end_ms) in self.hook_ms_by_turn() {
+            let total: u64 = by.values().fold(0, |a: u64, b| a.saturating_add(*b));
+            if total <= HOOK_ROW_MS {
+                continue;
+            }
+            let mut ev: Vec<(&String, &u64)> = by.iter().collect();
+            ev.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            let mut text = format!("hooks +{}", crate::ui::fmt::added_s(total));
+            for (name, ms) in ev {
+                text.push_str(&format!(" · {name} {}", crate::ui::fmt::added_s(*ms)));
+            }
+            if let Some((at, old)) = self.hook_rows.get(&number) {
+                if *at == end_ms && *old == text {
+                    continue;
+                }
+                self.events.remove(*at, crate::events::Kind::Hook, old);
+            }
+            self.events.push(crate::events::Event {
+                at: end_ms,
+                kind: crate::events::Kind::Hook,
+                text: text.clone(),
+            });
+            self.hook_rows.insert(number, (end_ms, text));
+        }
+    }
+
+    /// Permission spans hang under their tool span, which carries the
+    /// `tool_use_id`; join through `parent_span_id` over the whole ring, so a
+    /// child that arrived before its parent still joins on a later call.
+    fn join_permission_spans(&mut self, data: &crate::otel::SessionData) {
+        use crate::otel::Span;
+        let mut tool_of: std::collections::HashMap<&str, &str> = Default::default();
+        for sp in &data.spans {
+            if let Span::Tool {
+                ids,
+                tool_use_id: Some(t),
+                ..
+            } = sp
+            {
+                tool_of.insert(ids.span_id.as_str(), t.as_str());
+            }
+        }
+        let mut decided: std::collections::HashMap<&str, (&Option<String>, &Option<String>)> =
+            Default::default();
+        for sp in &data.spans {
+            if let Span::Permission {
+                ids,
+                decision,
+                source,
+                ..
+            } = sp
+            {
+                if let Some(t) = ids.parent_span_id.as_deref().and_then(|p| tool_of.get(p)) {
+                    decided.insert(t, (decision, source));
+                }
+            }
+        }
+        for r in &mut self.session.permission_records {
+            if let Some((d, s)) = decided.get(r.tool_use_id.as_str()) {
+                r.decision = (*d).clone();
+                r.source = (*s).clone();
+            }
+        }
+    }
+
+    /// Retries in a turn, from `llm_request` spans joined to the turn's
+    /// responses by `requestId` (= `gen_ai.response.id`): the extra attempts
+    /// and the time they added (its last attempt event − the request's start:
+    /// Claude Code stamps `gen_ai.request.attempt` when an attempt begins, so the
+    /// final attempt's own duration is not time the retries cost).
+    /// `None` without traces or when nothing was retried.
+    pub fn turn_retries(&self, turn: &crate::metrics::usage::Turn) -> Option<(u32, u64)> {
+        let o = self.otel.as_ref()?;
+        let (mut n, mut ns) = (0u32, 0u64);
+        for sp in &o.spans {
+            if let crate::otel::Span::LlmRequest {
+                ids,
+                response_id: Some(r),
+                attempts,
+                attempt_times_ns,
+                ..
+            } = sp
+            {
+                if *attempts > 1 && turn.request_ids.iter().any(|q| q == r) {
+                    n += attempts - 1;
+                    if let Some(last) = attempt_times_ns.last() {
+                        ns = ns.saturating_add(last.saturating_sub(ids.start_ns));
+                    }
+                }
+            }
+        }
+        (n > 0).then_some((n, ns / 1_000_000))
+    }
+
+    /// Who decided the permission waits: `(waits, [(group, count)])`, zero
+    /// groups omitted. `None` without trace spans (every surface then reads
+    /// as before). With hooks, waits are the measured records that a span
+    /// joined to; without them, the spans that were a real wait (a person
+    /// decided, or the span lasted).
+    pub fn permission_split(&self) -> Option<(usize, Vec<(&'static str, usize)>)> {
+        let sources: Vec<&str> = if self.session.hooks_installed {
+            self.session
+                .permission_records
+                .iter()
+                .filter_map(|r| r.source.as_deref())
+                .collect()
+        } else {
+            self.otel
+                .iter()
+                .flat_map(|o| o.spans.iter())
+                .filter_map(|sp| match sp {
+                    crate::otel::Span::Permission {
+                        source,
+                        duration_ms,
+                        ids,
+                        ..
+                    } => {
+                        let src = source.as_deref().unwrap_or("");
+                        let dur = duration_ms
+                            .map(|d| d.saturating_mul(1_000_000))
+                            .unwrap_or(ids.end_ns.saturating_sub(ids.start_ns));
+                        (src == "user" || dur > 0).then_some(src)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        if sources.is_empty() {
+            return None;
+        }
+        let groups = DECIDER_GROUPS
+            .iter()
+            .map(|g| {
+                (
+                    *g,
+                    sources.iter().filter(|s| decider_group(s) == *g).count(),
+                )
+            })
+            .filter(|(_, n)| *n > 0)
+            .collect();
+        let waits = if self.session.hooks_installed {
+            self.session.permission_waits
+        } else {
+            sources.len()
+        };
+        Some((waits, groups))
     }
 
     /// Take a status-line sample: exact context, rate limits, the cache
@@ -2563,6 +2855,71 @@ pub mod tests_support {
         }
         s
     }
+
+    /// A state with hooks on and `n` measured Bash(gh api) waits, tool_use_ids `t0..`.
+    pub fn state_with_waits(n: usize) -> State {
+        let mut s = State::new(Pricing::bundled());
+        for i in 0..n {
+            for (ev, at) in [("PermissionRequest", 1_000), ("PostToolUse", 6_000)] {
+                let p = serde_json::json!({"hook_event_name": ev, "tool_name": "Bash",
+                    "tool_use_id": format!("t{i}"), "tool_input": {"command": "gh api x"}});
+                s.apply_hook(&crate::hooks::HookEvent::from_stdin(at + i as i64, p).unwrap());
+            }
+        }
+        s
+    }
+
+    /// An `llm_request` span for `response_id` with `attempts` attempt events
+    /// at 1 s, 2 s, … after a start of 0, ending at `end_s`.
+    pub fn llm_span(response_id: &str, attempts: u32, end_s: u64) -> crate::otel::Span {
+        crate::otel::Span::LlmRequest {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("llm-{response_id}"),
+                parent_span_id: None,
+                start_ns: 0,
+                end_ns: end_s * 1_000_000_000,
+            },
+            model: None,
+            query_source: None,
+            response_id: Some(response_id.into()),
+            attempts,
+            attempt_times_ns: (1..=attempts as u64).map(|i| i * 1_000_000_000).collect(),
+            ttft_ms: None,
+            first_content_ms: None,
+            status_code: None,
+            success: Some(true),
+            duration_ms: None,
+        }
+    }
+
+    /// Tool span `tool-i` (carrying `t{i}`) with a permission span under it.
+    pub fn trace_spans(sources: &[&str]) -> Vec<crate::otel::Span> {
+        use crate::otel::{Span, SpanIds};
+        let mut v = Vec::new();
+        for (i, src) in sources.iter().enumerate() {
+            let ids = |id: String, parent: Option<String>| SpanIds {
+                trace_id: "tr".into(),
+                span_id: id,
+                parent_span_id: parent,
+                start_ns: 0,
+                end_ns: 3_000_000_000,
+            };
+            v.push(Span::Tool {
+                ids: ids(format!("tool-{i}"), None),
+                tool_name: Some("Bash".into()),
+                mcp_server: None,
+                tool_use_id: Some(format!("t{i}")),
+            });
+            v.push(Span::Permission {
+                ids: ids(format!("perm-{i}"), Some(format!("tool-{i}"))),
+                decision: Some("accept".into()),
+                source: Some((*src).into()),
+                duration_ms: Some(3000),
+            });
+        }
+        v
+    }
 }
 
 #[cfg(test)]
@@ -3035,5 +3392,337 @@ mod tests {
         ));
         assert!(s.session.permission_pending);
         assert!(s.session.notification.is_some());
+    }
+
+    #[test]
+    fn permission_spans_join_through_the_parent_tool_span() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        let mut s = state_with_waits(3);
+        assert!(s.permission_split().is_none(), "no traces: nothing new");
+        let data = crate::otel::SessionData {
+            spans: trace_spans(&["user", "config", "weird"]).into(),
+            ..Default::default()
+        };
+        s.apply_otel(&data);
+        let r = &s.session.permission_records;
+        assert_eq!(r[0].source.as_deref(), Some("user"));
+        assert_eq!(r[0].decision.as_deref(), Some("accept"));
+        assert_eq!(r[1].source.as_deref(), Some("config"));
+        assert_eq!(
+            s.permission_split(),
+            Some((3, vec![("you", 1), ("rule", 1), ("other", 1)]))
+        );
+    }
+
+    #[test]
+    fn a_permission_span_before_its_parent_joins_on_the_next_batch() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        let mut s = state_with_waits(1);
+        let both = trace_spans(&["classifier"]);
+        // Batch 1: the child only.
+        let mut data = crate::otel::SessionData {
+            spans: both[1..].iter().cloned().collect(),
+            ..Default::default()
+        };
+        s.apply_otel(&data);
+        assert!(s.session.permission_records[0].source.is_none());
+        assert!(s.permission_split().is_none());
+        // Batch 2: the parent arrives.
+        data.spans.push_front(both[0].clone());
+        s.apply_otel(&data);
+        assert_eq!(
+            s.session.permission_records[0].source.as_deref(),
+            Some("classifier")
+        );
+        assert_eq!(s.permission_split(), Some((1, vec![("classifier", 1)])));
+    }
+
+    #[test]
+    fn without_hooks_only_real_waits_count() {
+        use super::tests_support::trace_spans;
+        use crate::otel::Span;
+        let mut s = State::new(Pricing::bundled());
+        let mut spans = trace_spans(&["user", "config", "config"]);
+        // The auto-allowed call (config, zero duration) is not a wait.
+        for sp in &mut spans {
+            if let Span::Permission {
+                ids, duration_ms, ..
+            } = sp
+            {
+                if ids.span_id == "perm-1" {
+                    ids.end_ns = ids.start_ns;
+                    *duration_ms = Some(0);
+                }
+            }
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+        // user (a person) + the config span that lasted; the instant one is out.
+        assert_eq!(
+            s.permission_split(),
+            Some((2, vec![("you", 1), ("rule", 1)]))
+        );
+    }
+
+    fn two_responses() -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(
+            &Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:00Z","message":{"role":"user","content":"go"}}"#)
+                .unwrap(),
+        );
+        for (id, req) in [("m1", "req_1"), ("m2", "req_2")] {
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","requestId":"{req}","message":{{"id":"{id}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":1}}}}}}"#
+            ))
+            .unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn retries_join_by_request_id_and_sum_the_time_they_added() {
+        use super::tests_support::llm_span;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        assert_eq!(turn.request_ids, ["req_1", "req_2"]);
+        assert_eq!(s.turn_retries(&turn), None, "no traces: nothing");
+        let spans = vec![
+            llm_span("req_1", 3, 16), // 2 retries; last attempt starts at 3 s → +3 s
+            llm_span("req_2", 2, 12), // 1 retry; last attempt starts at 2 s → +2 s
+            llm_span("req_9", 4, 99), // another turn's request: ignored
+        ];
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+        assert_eq!(s.turn_retries(&turn), Some((3, 5_000)));
+    }
+
+    #[test]
+    fn a_request_with_zero_attempt_events_is_one_attempt_and_no_retry() {
+        use crate::otel::{ingest_traces, Store};
+        use serde_json::json;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        // Built through ingest: a span with no attempt events at all.
+        let spans: Vec<_> = ["req_1", "req_2"]
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                json!({
+                    "traceId": "tr", "spanId": format!("s{i}"), "name": "claude_code.llm_request",
+                    "startTimeUnixNano": "0", "endTimeUnixNano": "5000000000",
+                    "attributes": [{"key": "gen_ai.response.id", "value": {"stringValue": r}}],
+                    "events": []
+                })
+            })
+            .collect();
+        let body = json!({"resourceSpans": [{
+            "resource": {"attributes": [{"key": "session.id", "value": {"stringValue": "a"}}]},
+            "scopeSpans": [{"spans": spans}]
+        }]});
+        let mut st = Store::default();
+        ingest_traces(&mut st, &body);
+        let d = st.sessions["a"].clone();
+        assert!(matches!(
+            &d.spans[0],
+            crate::otel::Span::LlmRequest { attempts: 1, .. }
+        ));
+        s.apply_otel(&d);
+        assert_eq!(s.turn_retries(&turn), None);
+    }
+
+    #[test]
+    fn a_permission_record_after_the_last_batch_joins_without_waiting() {
+        use super::tests_support::trace_spans;
+        let mut s = State::new(Pricing::bundled());
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        for (ev, at) in [("PermissionRequest", 1_000), ("PostToolUse", 6_000)] {
+            let p = serde_json::json!({"hook_event_name": ev, "tool_name": "Bash",
+                "tool_use_id": "t0", "tool_input": {"command": "gh api x"}});
+            s.apply_hook(&crate::hooks::HookEvent::from_stdin(at, p).unwrap());
+        }
+        assert_eq!(
+            s.session.permission_records[0].source.as_deref(),
+            Some("user")
+        );
+    }
+
+    #[test]
+    fn huge_wire_durations_saturate_instead_of_overflowing() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, u64::MAX),
+                hook_span("Stop", 6, u64::MAX),
+                hook_span("Notification", 7, 10),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!((total, by["Stop"]), (u64::MAX, u64::MAX));
+        assert_eq!(s.hook_ms_by_turn()[0].1["Stop"], u64::MAX);
+        // A permission span with a huge duration_ms.
+        let mut p = super::tests_support::trace_spans(&["user"]);
+        if let crate::otel::Span::Permission { duration_ms, .. } = &mut p[1] {
+            *duration_ms = Some(u64::MAX);
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: p.into_iter().collect(),
+            ..Default::default()
+        });
+        assert!(s.permission_split().is_some());
+    }
+
+    /// Two turns starting at 10:00:00 and 10:10:00 (2026-08-27 UTC), and a
+    /// `claude_code.hook` span of `ms` for `event` starting `at_s` seconds
+    /// after 10:00:00.
+    fn hooked_state() -> State {
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        for (t, id) in [("10:00:00", "p1"), ("10:10:00", "p2")] {
+            s.apply(&crate::transcript::Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"2026-08-27T{t}Z","promptId":"{id}","message":{{"role":"user","content":"go"}}}}"#
+            )).unwrap());
+        }
+        s
+    }
+
+    fn hook_span(event: &str, at_s: u64, ms: u64) -> crate::otel::Span {
+        // 2026-08-27T10:00:00Z in epoch seconds.
+        let base = crate::metrics::cost::parse_ts_ms("2026-08-27T10:00:00Z").unwrap() as u64;
+        let start_ns = (base + at_s * 1000) * 1_000_000;
+        crate::otel::Span::Hook {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("h-{event}-{at_s}"),
+                parent_span_id: None,
+                start_ns,
+                end_ns: start_ns.saturating_add(ms.saturating_mul(1_000_000)),
+            },
+            hook_event: Some(event.into()),
+            hook_name: None,
+            num_hooks: Some(1),
+            duration_ms: Some(ms),
+            num_blocking: None,
+        }
+    }
+
+    fn apply_hooks(s: &mut State, spans: Vec<crate::otel::Span>) {
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+    }
+
+    fn hook_rows(s: &State) -> Vec<String> {
+        s.events
+            .iter()
+            .filter(|e| e.kind == crate::events::Kind::Hook)
+            .map(|e| e.text.clone())
+            .collect()
+    }
+
+    #[test]
+    fn hook_row_appears_at_501_ms_and_not_at_500() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 500)]);
+        assert!(hook_rows(&s).is_empty());
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 501)]);
+        assert_eq!(hook_rows(&s), ["hooks +0.5 s · Stop 0.5 s"]);
+    }
+
+    #[test]
+    fn hook_row_orders_events_by_descending_time_and_sums_per_turn() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 20, 300),
+                hook_span("PreToolUse", 5, 500),
+                hook_span("PreToolUse", 9, 400),
+                // second turn: under the threshold, no row
+                hook_span("Stop", 610, 400),
+            ],
+        );
+        assert_eq!(
+            hook_rows(&s),
+            ["hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s"]
+        );
+        let by = s.hook_ms_by_turn();
+        assert_eq!(by.len(), 2);
+        assert_eq!(by[0].0, 1);
+        assert_eq!(by[0].1["PreToolUse"], 900);
+        assert_eq!(by[1].1["Stop"], 400);
+    }
+
+    #[test]
+    fn hook_row_is_replaced_not_duplicated_when_more_time_arrives() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 600)]);
+        apply_hooks(
+            &mut s,
+            vec![hook_span("Stop", 5, 600), hook_span("Stop", 8, 600)],
+        );
+        assert_eq!(hook_rows(&s), ["hooks +1.2 s · Stop 1.2 s"]);
+    }
+
+    #[test]
+    fn hook_overhead_is_none_without_traces_and_sums_by_event_with_them() {
+        let mut s = hooked_state();
+        assert!(s.hook_overhead().is_none());
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, 300),
+                hook_span("Stop", 15, 200),
+                hook_span("Notification", 700, 50),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!(total, 550);
+        assert_eq!(by["Stop"], 500);
+        assert_eq!(by["Notification"], 50);
+        assert!(hook_rows(&s).is_empty());
+    }
+
+    #[test]
+    fn hook_overhead_is_none_when_spans_arrived_but_none_is_a_hook() {
+        use super::tests_support::trace_spans;
+        let mut s = hooked_state();
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert!(s.hook_overhead().is_none());
+    }
+
+    #[test]
+    fn unjoined_user_keyed_waits_still_count_as_the_persons_own() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        use crate::advisor::rules::events::PermissionWaits;
+        use crate::advisor::Rule;
+        let mut s = state_with_waits(3);
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert_eq!(
+            s.session
+                .permission_records
+                .iter()
+                .filter(|r| r.source.is_some())
+                .count(),
+            1
+        );
+        assert!(
+            PermissionWaits.evaluate(&s).is_some(),
+            "3 waits, only 1 joined"
+        );
     }
 }

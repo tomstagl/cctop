@@ -179,6 +179,12 @@ struct RunArgs {
     /// Host an OTLP/HTTP receiver (loopback only) for Claude Code telemetry.
     #[arg(long, value_name = "ADDR", num_args = 0..=1, default_missing_value = cctop::otel::DEFAULT_ADDR)]
     otlp: Option<String>,
+    /// With --otlp, write each raw OTLP request body to DIR as
+    /// `<unix-ms>-<path-tail>.json` (for learning what Claude Code sends).
+    /// The bodies contain account identifiers and prompt text: the directory
+    /// is created private (0700); keep it so and delete it afterwards.
+    #[arg(long, value_name = "DIR", requires = "otlp")]
+    dump_otel: Option<PathBuf>,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -522,6 +528,7 @@ fn run(args: RunArgs) {
         theme,
         refresh_ms,
         otlp,
+        dump_otel,
     } = args;
     let (transcript, session_info): (PathBuf, SessionInfo) =
         match cctop::load::resolve(&target(&attach)) {
@@ -612,7 +619,7 @@ fn run(args: RunArgs) {
         .and_then(|home| cctop::split::PidFile::write(&home, &session_info.session_id));
     cctop::attach::attach(&mut app, &transcript, session_info, true);
     if let Some(addr) = otlp {
-        match cctop::otel::serve(&addr) {
+        match cctop::otel::serve(&addr, dump_otel) {
             Ok((store, bound)) => {
                 app.state.set_toast(format!("OTLP receiver on {bound}"));
                 app.tick_hooks.push(Box::new(move |state: &mut State| {

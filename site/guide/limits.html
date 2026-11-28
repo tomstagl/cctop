@@ -322,6 +322,27 @@ tr:target td{background:var(--spot-soft)}
 <dt>What it means</dt><dd><code>rate_limits.spend_limit.used_percentage</code> from the status line, for accounts with a monthly limit</dd>
 <dt>Measured</dt><dd class="meta">% · from the status line (after cctop install) · exact · <a href="../metrics.html#spend_limit">how</a></dd>
 </dl></article>
+<article class="entry" id="spend_limit_usd">
+<div class="mg">
+<h3>Spend limit (USD)</h3>
+</div><dl>
+<dt>What it means</dt><dd><code>rate_limits.spend_limit.used_usd</code> and <code>limit_usd</code> from the status line, with its <code>period</code> and <code>resets_at</code>; follows the latest sample</dd>
+<dt>Measured</dt><dd class="meta">USD · from the status line (after cctop install) · exact · <a href="../metrics.html#spend_limit_usd">how</a></dd>
+</dl></article>
+<article class="entry" id="budget_usd">
+<div class="mg">
+<h3>Budget (USD)</h3>
+</div><dl>
+<dt>What it means</dt><dd>The latest <code>budget_usd</code> attachment of a <code>--max-budget-usd</code> / SDK run: <code>used</code> and <code>total</code> dollars, repeated every turn (the latest wins); the ratio used ÷ total is clamped to 0–1 and drawn red from 90 %</dd>
+<dt>Measured</dt><dd class="meta">USD · from the transcript · exact · <a href="../metrics.html#budget_usd">how</a></dd>
+</dl></article>
+<article class="entry" id="budget_halt_eta">
+<div class="mg">
+<h3>Budget halt ETA</h3>
+</div><dl>
+<dt>What it means</dt><dd>(total − used) ÷ the burn rate (<code>burn_rate</code>, the trailing 15 minutes), shown as <code>halts in ~N min</code> only while it is under 60 minutes</dd>
+<dt>Measured</dt><dd class="meta">duration · from the transcript · ≈ (the burn rate is priced from the table) · <a href="../metrics.html#budget_halt_eta">how</a></dd>
+</dl></article>
 <article class="entry" id="other_sessions">
 <div class="mg">
 <h3>Other sessions</h3>
