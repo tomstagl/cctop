@@ -8,7 +8,7 @@ import { chartsRenderer, register } from '../../plugin/hooks/pane';
 import { initialModel, reduce } from '../../plugin/hooks/model';
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { IMAGE_MAX_CELLS, drawPicture, instantiateCharts, type ChartRenderer, type ChartsMode, type Picture } from '../../plugin/hooks/charts';
+import { IMAGE_MAX_CELLS, clipCells, drawPicture, fromBase64, toBase64, instantiateCharts, type ChartRenderer, type ChartsMode, type Picture } from '../../plugin/hooks/charts';
 import {
   PAIRS,
   SPARKLINE,
@@ -238,6 +238,25 @@ test('a box wider than an Image may be is drawn as cells; the query\'s cells nev
   assert.equal(job.fallback!.rows > 1, true);
   assert.equal(drawPicture(null, { ...job, rows: 1, cells: true }, 'cells'), null);
   assert.equal(drawPicture(null, job, 'cells')?.rows, job.fallback!.rows);
+});
+
+test('no wasm: the query\'s cells are cut to a narrower box, row by row, never drawn past it', () => {
+  const o = B();
+  const job = pictureJobs(o, 122).find((j) => j.key === chartKey('context'))!;
+  const fb = job.fallback!;
+  const narrow = drawPicture(null, { ...job, cols: fb.cols - 5 }, 'cells')!;
+  assert.equal(narrow.kind, 'raster');
+  assert.deepEqual([narrow.cols, narrow.rows], [fb.cols - 5, fb.rows]);
+  const all = fromBase64(fb.cells)!;
+  const cut = fromBase64((narrow as { cells: string }).cells)!;
+  assert.equal(cut.length, (fb.cols - 5) * fb.rows * 12);
+  // Row 2 starts with row 2 of the query's cells.
+  const row = (fb.cols - 5) * 12;
+  assert.deepEqual([...cut.subarray(2 * row, 2 * row + 12)], [...all.subarray(2 * fb.cols * 12, 2 * fb.cols * 12 + 12)]);
+  // A box as wide or wider keeps the cells as they are; cells that don't decode draw nothing.
+  assert.equal((drawPicture(null, { ...job, cols: fb.cols + 3 }, 'cells') as { cells: string }).cells, fb.cells);
+  assert.equal(clipCells({ cols: 4, rows: 1, cells: 'AAAA' }, 2), null);
+  assert.equal(toBase64(fromBase64(fb.cells)!), fb.cells);
 });
 
 test('before the pictures are drawn: blank boxes of their size, the labels already there', () => {

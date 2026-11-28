@@ -249,8 +249,8 @@ export const IMAGE_MAX_CELLS = 255;
 /**
  * The picture for one job: a PNG in image mode (one wasm call) when the box
  * is one an `Image` can take, else cells at the job's size (one wasm call),
- * else the query's cells at their own size when they are no taller than the
- * box (the sparkline form keeps its one row); null when there is none of these.
+ * else the query's cells when they are no taller than the box (the sparkline
+ * form keeps its one row), cut to the box's width; null when there is none of these.
  */
 export function drawPicture(renderer: ChartRenderer | null, job: PictureJob, mode: ChartsMode): Picture | null {
   if (mode === 'image' && !job.cells && renderer !== null && job.cols <= IMAGE_MAX_CELLS && job.rows <= IMAGE_MAX_CELLS) {
@@ -260,7 +260,52 @@ export function drawPicture(renderer: ChartRenderer | null, job: PictureJob, mod
   const cells = renderer?.cells(job.spec, job.cols, job.rows) ?? null;
   if (cells !== null) return { kind: 'raster', cells, cols: job.cols, rows: job.rows };
   if (job.fallback === undefined || job.fallback.rows > job.rows) return null;
-  return { kind: 'raster', cells: job.fallback.cells, cols: job.fallback.cols, rows: job.fallback.rows };
+  const fit = clipCells(job.fallback, job.cols);
+  return fit === null ? null : { kind: 'raster', cells: fit.cells, cols: fit.cols, rows: fit.rows };
+}
+
+/** Bytes per Raster cell: three little-endian u32s (char, fg, bg). */
+const CELL_BYTES = 12;
+
+/** The bytes of standard base64 (the inverse of `toBase64`); null when it is not base64. */
+export function fromBase64(text: string): Uint8Array | null {
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const body = text.replace(/=+$/, '');
+  if (body.length % 4 === 1) return null;
+  const out = new Uint8Array(Math.floor((body.length * 3) / 4));
+  let n = 0;
+  let bits = 0;
+  let o = 0;
+  for (let i = 0; i < body.length; i++) {
+    const v = abc.indexOf(body.charAt(i));
+    if (v < 0) return null;
+    n = (n << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[o++] = (n >> bits) & 255;
+    }
+  }
+  return out;
+}
+
+/**
+ * The query's cells cut to a box `cols` wide: each row keeps its first
+ * `cols` cells (the left of the chart, where the axis is). Cells no wider
+ * than the box come back as they are; null when the cells don't decode to
+ * `cols × rows` cells.
+ */
+export function clipCells(cells: RasterCells, cols: number): RasterCells | null {
+  if (cells.cols <= cols) return cells;
+  if (cols < 1) return null;
+  const bytes = fromBase64(cells.cells);
+  if (bytes === null || bytes.length !== cells.cols * cells.rows * CELL_BYTES) return null;
+  const out = new Uint8Array(cols * cells.rows * CELL_BYTES);
+  for (let r = 0; r < cells.rows; r++) {
+    const from = r * cells.cols * CELL_BYTES;
+    out.set(bytes.subarray(from, from + cols * CELL_BYTES), r * cols * CELL_BYTES);
+  }
+  return { cols, rows: cells.rows, cells: toBase64(out) };
 }
 
 /**
