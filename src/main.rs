@@ -20,6 +20,19 @@ enum Command {
     Query(QueryArgs),
     /// Print the metrics registry as Markdown.
     Metrics(MetricsArgs),
+    /// The coach's words as a Markdown table for review (docs/coach-copy.md).
+    Coach {
+        /// Print the table (the only output; the flag is for explicitness).
+        #[arg(long)]
+        copy_md: bool,
+    },
+    /// The overview's verdict thresholds and sentences as Markdown
+    /// (docs/verdicts.md).
+    Verdicts {
+        /// Print the tables (the only output; the flag is for explicitness).
+        #[arg(long)]
+        md: bool,
+    },
     /// Install the status-line shim and hooks into ~/.claude/settings.json.
     Install(InstallArgs),
     /// Remove what `install` added.
@@ -117,6 +130,14 @@ enum QueryWhat {
     Advice,
     /// The Console object: header, six cells, the act line, eight bodies.
     Dashboard,
+    /// The overview: per chart a title, figure, verdict, chart spec,
+    /// readouts and legend.
+    Overview {
+        /// Per-turn charts keep this many of the latest turns.
+        #[arg(long, default_value_t = cctop::overview::DEFAULT_MAX_TURNS as u64,
+              value_parser = clap::value_parser!(u64).range(1..))]
+        max_turns: u64,
+    },
     /// The coach object: state line, four lights, the nudge, next, snoozed.
     Coach {
         /// Print the one-line status form instead of JSON.
@@ -148,6 +169,8 @@ enum QueryWhat {
     },
     /// Definition of a metric id (see docs/metrics.md).
     Explain { metric_id: String },
+    /// The settings the pane reads from config.toml (`[pane] charts`).
+    Config,
     /// Medians over your last 7 days of sessions.
     Baseline,
 }
@@ -317,6 +340,22 @@ fn main() {
     match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
         Command::Run(args) => run(args),
         Command::Query(q) => query(q),
+        Command::Coach { copy_md } => {
+            let _ = copy_md;
+            let dir = cctop::copy_docs::fixtures_dir();
+            if !dir.is_dir() {
+                eprintln!(
+                    "cctop: coach --copy-md fires the rules on the repository's fixture sessions, and {} is not there; run it from a checkout of the cctop repository built from source",
+                    dir.display()
+                );
+                std::process::exit(1);
+            }
+            print!("{}", cctop::copy_docs::coach_copy_md());
+        }
+        Command::Verdicts { md } => {
+            let _ = md;
+            print!("{}", cctop::copy_docs::verdicts_md());
+        }
         Command::Metrics(args) => {
             use cctop::metrics::registry;
             if let Some(path) = args.readme {
@@ -677,16 +716,8 @@ fn query(q: QueryArgs) {
     }
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
-        QueryWhat::Lineage => {
-            let (path, _) = match cctop::load::resolve(&target(&q.attach)) {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("cctop: {e}");
-                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
-                }
-            };
-            qy::lineage(&path)
-        }
+        QueryWhat::Config => qy::config(&cctop::config::Config::load()),
+        QueryWhat::Lineage => qy::lineage(&load_state(&q.attach)),
         QueryWhat::Coach {
             line: true,
             columns,
@@ -709,6 +740,10 @@ fn query(q: QueryArgs) {
                 QueryWhat::Agents => qy::agents(&state),
                 QueryWhat::Advice => qy::advice(&state),
                 QueryWhat::Dashboard => qy::dashboard(&state),
+                QueryWhat::Overview { max_turns } => {
+                    state.refresh_lineage();
+                    qy::overview(&state, *max_turns as usize)
+                }
                 QueryWhat::Coach {
                     snooze,
                     snooze_session,
@@ -736,7 +771,9 @@ fn query(q: QueryArgs) {
                     };
                     qy::events(&state, since_ms)
                 }
-                QueryWhat::Explain { .. } | QueryWhat::Lineage => unreachable!(),
+                QueryWhat::Explain { .. } | QueryWhat::Config | QueryWhat::Lineage => {
+                    unreachable!()
+                }
             }
         }
     };

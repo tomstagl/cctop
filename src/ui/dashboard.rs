@@ -29,7 +29,7 @@ pub const ACT_TAIL: u16 = 66;
 /// The act line's full copy from this width; the short one below.
 pub const ACT_FULL: u16 = 72;
 
-fn tone_style(t: &Theme, tone: Tone) -> Style {
+pub(super) fn tone_style(t: &Theme, tone: Tone) -> Style {
     match tone {
         Tone::Fg => Style::default().fg(t.fg),
         Tone::Dim => t.dim(),
@@ -180,7 +180,7 @@ fn cell_rows<'a>(t: &Theme, d: &Dashboard, width: u16, open: usize) -> Vec<Line<
 
 /// Word-wrap a line's segments into rows of at most `width` cells, never
 /// cutting mid-fact (FR-7): a break falls at a space, or at a segment edge.
-fn wrap<'a>(t: &Theme, segs: &[Seg], width: usize, indent: usize) -> Vec<Line<'a>> {
+pub(super) fn wrap<'a>(t: &Theme, segs: &[Seg], width: usize, indent: usize) -> Vec<Line<'a>> {
     let mut rows: Vec<Vec<Span>> = vec![Vec::new()];
     let mut used = 0usize;
     for s in segs {
@@ -319,6 +319,53 @@ pub fn compose<'a>(
     open: usize,
     keys: bool,
 ) -> Vec<Line<'a>> {
+    compose_scrolled(t, d, width, height, open, keys).0
+}
+
+/// The overview's rows from `scroll`, in `room` rows: a dim `↑ N more`
+/// when rows are scrolled off the top and `↓ N more` when the bottom is
+/// cut. Also the furthest `scroll` that still fills the room.
+fn scrolled<'a>(
+    t: &Theme,
+    all: Vec<Line<'a>>,
+    scroll: usize,
+    room: usize,
+) -> (Vec<Line<'a>>, usize) {
+    let total = all.len();
+    if total <= room || room < 3 {
+        return (all.into_iter().take(room).collect(), 0);
+    }
+    let max = total - (room - 1);
+    let off = scroll.min(max);
+    let up = usize::from(off > 0);
+    let mut cap = room - up;
+    let down = off + cap < total;
+    if down {
+        cap -= 1;
+    }
+    let (up_ch, down_ch) = if t.ascii { ('^', 'v') } else { ('↑', '↓') };
+    let hint =
+        |arrow: char, n: usize| Line::from(Span::styled(format!(" {arrow} {n} more"), t.dim()));
+    let mut out = Vec::new();
+    if up == 1 {
+        out.push(hint(up_ch, off));
+    }
+    out.extend(all.into_iter().skip(off).take(cap));
+    if down {
+        out.push(hint(down_ch, total - (off + cap)));
+    }
+    (out, max)
+}
+
+/// [`compose`], and how far the body can scroll (0 when it fits).
+pub fn compose_scrolled<'a>(
+    t: &Theme,
+    d: &Dashboard,
+    width: u16,
+    height: u16,
+    open: usize,
+    keys: bool,
+) -> (Vec<Line<'a>>, usize) {
     let w = width as usize;
     let h = height as usize;
     let open = open.min(d.bodies.len().saturating_sub(1));
@@ -332,6 +379,21 @@ pub fn compose<'a>(
     out.extend(act_rows(t, d, width, open));
     if let Some(body) = d.bodies.get(open) {
         out.push(rule_line(t, body, w, body.id == "events", keys));
+        // Body 1 is the overview: the charts, drawn from the overview object
+        // (built by the caller, which knows the width); the body's own rows
+        // are drawn by neither surface.
+        if body.id == "context" {
+            let all = d
+                .overview
+                .as_ref()
+                .map(|o| crate::ui::overview_view::rows(t, o, width))
+                .unwrap_or_default();
+            let room = h.saturating_sub(out.len());
+            let (rows, max) = scrolled(t, all, d.scroll, room);
+            out.extend(rows);
+            out.truncate(h);
+            return (out, max);
+        }
         for row in &body.rows {
             if out.len() >= h {
                 break;
@@ -344,12 +406,21 @@ pub fn compose<'a>(
         }
     }
     out.truncate(h);
-    out
+    (out, 0)
 }
 
 /// Draw Console into `area`: the whole of it, there is no footer.
-pub fn render(frame: &mut Frame, area: Rect, d: &Dashboard, t: &Theme, open: usize, keys: bool) {
-    let lines = compose(t, d, area.width, area.height, open, keys);
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    d: &Dashboard,
+    t: &Theme,
+    open: usize,
+    keys: bool,
+    max_scroll: &std::cell::Cell<usize>,
+) {
+    let (lines, max) = compose_scrolled(t, d, area.width, area.height, open, keys);
+    max_scroll.set(max);
     frame.render_widget(Paragraph::new(lines), area);
 }
 

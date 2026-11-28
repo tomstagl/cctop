@@ -10,6 +10,7 @@ pub mod coach_view;
 pub mod dashboard;
 pub mod fmt;
 pub mod ledger_view;
+pub mod overview_view;
 pub mod panels;
 pub mod picker;
 pub mod prefix_view;
