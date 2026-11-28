@@ -15,8 +15,10 @@
 // compiles against (`h`, `Fragment`): the engine provides them in its own
 // environment, Node does not, so they must exist before a render hook runs.
 import type {
+  AgentInfo,
   CommandSpec,
   Elements,
+  NotifyOptions,
   ElementTable,
   EngineInterface,
   FsReadCall,
@@ -32,8 +34,12 @@ import type {
   RenderInput,
   RenderNode,
   ResolveInput,
+  SessionInfo,
   SessionUsage,
+  SiteView,
   Timer,
+  UiNotifyResult,
+  UiViewResult,
 } from 'claude-code';
 
 type Props = Record<string, unknown>;
@@ -130,7 +136,12 @@ export type ScriptedSession = {
   turns: number;
   cwd: string;
   usage: SessionUsage;
+  /** What `$.session.info()` answers; an empty `transcriptPath` is a session that keeps none. */
+  info: SessionInfo;
 };
+
+/** What `$.agent.limits()` answers, unless a test replaces `agent.limits`. */
+export type ScriptedAgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
 
 export type FakeEngineOptions = {
   /** Clock start in ms since the epoch; default 2026-09-12T12:00:00Z. */
@@ -157,6 +168,11 @@ export type FakeExtras = {
     invalidates: Record<string, number>;
     logs: string[];
     toasts: string[];
+    /** Every `$.ui.notify` call, in order; the next calls answer `notifyAnswer`. */
+    notifies: { text: string; options: NotifyOptions | undefined }[];
+    notifyAnswer: { current: UiNotifyResult };
+    /** Every `$.ui.cancelNotify` key, in order. */
+    cancels: string[];
     statuses: (string | undefined)[];
     opens: PaneOpenArgs[];
     closes: PaneCloseArgs[];
@@ -165,6 +181,9 @@ export type FakeExtras = {
     /** `onPress` of every Button drawn, by key; `press(key)` runs one. */
     presses: Map<string, () => void>;
     press: (key: string) => void;
+    /** Every `$.ui.view` argument, in order; the next calls answer `viewAnswer`. */
+    views: SiteView[];
+    viewAnswer: UiViewResult;
     /** Run on every `$.ui.invalidate("ui.render")`: how `fakeOn`'s surface learns to draw. */
     renderListeners: (() => void)[];
   };
@@ -178,6 +197,8 @@ export type FakeExtras = {
   fs: { files: Map<string, string> };
   process: { calls: string[][]; script: Record<string, ProcessScript> };
   session: { scripted: ScriptedSession };
+  /** `live` is what `$.agent.list()` answers. */
+  agent: { scripted: ScriptedAgentLimits; live: AgentInfo[] };
   command: { registered: CommandSpec[] };
   env: { values: Record<string, string> };
 };
@@ -239,17 +260,25 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
     turns: 0,
     cwd: '/home/user/project',
     usage: { startedAt: 0, context: { window: 200000 }, rateLimits: [] },
+    info: { transcriptPath: '' },
     ...opts.session,
   };
+  const agentLimits: ScriptedAgentLimits = { concurrent: 20, depth: 3, isBackgroundEnabled: true };
   const env = { ...(opts.env ?? {}) };
   const registered: CommandSpec[] = [];
   const logs: string[] = [];
   const toasts: string[] = [];
+  const notifies: { text: string; options: NotifyOptions | undefined }[] = [];
+  const notifyAnswer: { current: UiNotifyResult } = { current: { isSent: true, channel: 'iterm2' } };
+  const cancels: string[] = [];
   const statuses: (string | undefined)[] = [];
   const opens: PaneOpenArgs[] = [];
   const closes: PaneCloseArgs[] = [];
   const renderListeners: (() => void)[] = [];
   const fills: string[] = [];
+  const views: SiteView[] = [];
+  const viewAnswer: UiViewResult = {};
+  const live: AgentInfo[] = [];
 
   const engine = {
     plugin: { name: opts.plugin?.name ?? 'cctop', root: opts.plugin?.root ?? '/plugins/cctop' },
@@ -257,6 +286,17 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       invalidates,
       logs,
       toasts,
+      notifies,
+      notifyAnswer,
+      cancels,
+      notify: async (text: string, options?: NotifyOptions): Promise<UiNotifyResult> => {
+        notifies.push({ text, options });
+        return notifyAnswer.current;
+      },
+      cancelNotify: async (key: string) => {
+        cancels.push(key);
+        return { isSent: true };
+      },
       statuses,
       opens,
       closes,
@@ -273,6 +313,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (event === 'ui.render') for (const fn of renderListeners) fn();
       },
       renderListeners,
+      views,
+      viewAnswer,
+      view: async (view: SiteView): Promise<UiViewResult> => {
+        views.push({ ...view });
+        return { ...viewAnswer };
+      },
       // Only the terminal's table exists here: the pane draws on no other
       // surface, and a test that asks for one should hear so.
       resolve: <E extends ResolveInput>(e: E): Elements[E['surface']] => {
@@ -299,6 +345,12 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         openIds.delete(pane.id);
       },
     },
+    agent: {
+      scripted: agentLimits,
+      live,
+      list: async () => live.map((a) => ({ ...a })),
+      limits: async () => ({ ...agentLimits }),
+    },
     session: {
       scripted,
       messages: async () => [],
@@ -306,6 +358,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       model: async () => scripted.model,
       turns: async () => scripted.turns,
       id: async () => scripted.id,
+      info: async () => JSON.parse(JSON.stringify(scripted.info)) as SessionInfo,
       repo: async () => null,
       surfaces: async () => ['terminal'] as const,
       surface: async () => 'terminal' as const,
@@ -397,6 +450,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       set: async (name: string, value: string | undefined) => {
         if (value === undefined) delete env[name];
         else env[name] = value;
+        return {};
       },
     },
   } satisfies Implemented & FakeExtras;
@@ -464,7 +518,7 @@ export type FakeSurface = {
   /** The whole screen's width (`e.viewport.columns`). */
   columns: number;
   rows?: number;
-  placement?: 'dock' | 'inline';
+  placement?: 'dock' | 'inline' | 'widget';
   /** The pane body's width; defaults to `columns`. */
   bodyColumns?: number;
   hidden?: boolean;
@@ -543,11 +597,13 @@ export function paneRender(
   columns: number,
   extra: {
     rows?: number;
-    placement?: 'dock' | 'inline';
+    placement?: 'dock' | 'inline' | 'widget';
     isFocused?: boolean;
     title?: string;
     /** Cells across the pane body; defaults to `columns` (the whole screen). */
     bodyColumns?: number;
+    /** The view in force (`agentId` of the agent shown); default the main conversation. */
+    view?: SiteView;
   } = {},
 ): RenderInput<'Pane', 'terminal'> {
   const rows = extra.rows ?? 40;
@@ -563,7 +619,7 @@ export function paneRender(
       placement: extra.placement ?? 'dock',
       scroll: { offset: 0, bodyRows: rows },
       // The main conversation in view (2.1.272: `agentId` names an agent's).
-      view: {},
+      view: extra.view ?? {},
     },
   };
 }

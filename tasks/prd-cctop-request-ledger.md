@@ -81,6 +81,8 @@ For each closed request after the first, `locate(prev, cur, shapes, usage, ttl_m
 | 5 | `Expired{gap_ms}` | none of the above, and the gap since the previous request's timestamp > TTL (from the breakpoint's `ttl`, else `state.cache_ttl_ms()`) | gap |
 | 6 | `Unlocated` | none of the above | — |
 
+Note: Expired is checked first when the gap exceeds the TTL — ruled 2026-11-27 after fixture R showed a 6-day-gap miss labelled betas changed while a betas change elsewhere held the cache. The rest of the order is unchanged.
+
 A request counts as a miss when its usage shows `cache_creation_input_tokens` above the threshold A01 already uses (`token.rs:38`), or its assistant line carries `cache_miss_reason`. `locate` runs only for misses. The API's own `cache_miss_reason`, when present, is kept beside the located cause. If the two disagree (e.g. the API says `tools_changed` but no shape changed), the ledger shows both.
 
 ### 3.3 Surfaces

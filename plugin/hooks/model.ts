@@ -2,10 +2,11 @@
 // touches `$`: the hooks in pane.tsx turn engine events into actions, the
 // views draw the model. Kept pure so it is testable from plain data.
 import type { RenderElement, SessionUsage } from 'claude-code';
+import type { LiveAgent } from './agentmap';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
-export type Placement = 'dock' | 'inline';
+export type Placement = 'dock' | 'inline' | 'widget';
 export type Binary = 'unknown' | 'present' | 'missing';
 /** Whether the engine is drawing the pane: `hidden` once an open pane got
  * no `ui.render` for a while (the /diff panel holds the dock), `unknown`
@@ -15,7 +16,7 @@ export type Visibility = 'unknown' | 'visible' | 'hidden';
 /** The Claude Code version this hooks module's `$` contract was checked
  * against (`plugin/.claude/types/claude-code.d.ts`'s own first line);
  * `scripts/check-plugin-types.sh` catches drift, the header badge shows it. */
-export const TESTED_WITH = '2.1.284';
+export const TESTED_WITH = '2.1.332';
 
 /** The narrowest terminal (whole screen, columns) at which the fullscreen
  * renderer docks a pane beside the transcript; below it the pane is drawn
@@ -57,10 +58,24 @@ export type Turn = {
   toolMs: number;
 };
 
+/** What `$.session.info()` said that cctop uses; `transcriptPath` is absent when the engine keeps none. */
+export type SessionFacts = {
+  transcriptPath?: string;
+  platform?: string;
+  isScreenReader?: boolean;
+  /** Absent: not known; the d.ts says to treat that, and a name not known, as a rule in force. */
+  dataRules?: string[];
+};
+
+/** What `$.agent.limits()` said: how many agents run at once, how deep they nest, whether they may run in the background. */
+export type AgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
+
 export type Model = {
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
   usageAt: number | null;
+  /** When the context breakdown was last read for the spool (the debounce's clock); null before one. */
+  lastBreakdownAt: number | null;
   /** `$.session.model()`, read once after session.start. */
   modelName: string | null;
   turn: Turn;
@@ -71,6 +86,13 @@ export type Model = {
    * poller tick: `/clear` rotates it in place (a new transcript, the registry
    * entry rewritten) and no session.start says so. */
   sessionId: string | null;
+  /** `$.session.info()`, read after session.start and on every turn: the
+   * transcript path the poller queries by, and the facts the marker carries.
+   * Null before the first read and after `/clear` rotated the id. */
+  sessionFacts: SessionFacts | null;
+  /** `$.agent.limits()`, read after session.start and on every turn.complete;
+   * null before the first read and after `/clear` rotated the id. */
+  agentLimits: AgentLimits | null;
   // Precedence between the two sources: the Context and Limits rows come
   // from `usage` (engine-native, live) when it is present, else from
   // `query.summary`; every other figure (tokens & cost breakdown, burn rate,
@@ -119,6 +141,10 @@ export type Model = {
   keys: boolean;
   /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
   openRun: string | null;
+  /** `$.agent.list()` as last read: what the agent rows' ids are mapped against (agentmap.ts). */
+  liveAgents: LiveAgent[];
+  /** The agent whose transcript the main view shows (a press, or the render's `view.agentId`); null = the main conversation. */
+  viewedAgent: string | null;
 };
 
 /** How many turn-end context sizes the model keeps for the sparkline. */
@@ -128,15 +154,20 @@ export type Action =
   | { type: 'session.start'; at: number; selfCheck?: string }
   | { type: 'turn.start'; at: number }
   | { type: 'turn.complete'; at: number; durationMs: number; reason: string }
+  /** `session.stop`: the person's Stop; ends a running turn like turn.complete, with no duration. */
+  | { type: 'turn.stop'; at: number }
   | { type: 'tool.start'; name: string; at: number }
   // `startedAt` is the matching `tool.start`'s `at`: the hook keeps it in its
   // closure, so concurrent calls of the same tool time themselves apart.
   | { type: 'tool.end'; name: string; startedAt: number; at: number; isError: boolean; resultChars: number }
   | { type: 'session.compact' }
   | { type: 'usage'; usage: SessionUsage; at: number }
+  | { type: 'breakdown.read'; at: number }
   | { type: 'session.model'; name: string }
   | { type: 'binary'; binary: Binary }
   | { type: 'session.id'; id: string }
+  | { type: 'session.info'; facts: SessionFacts }
+  | { type: 'agent.limits'; limits: AgentLimits }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
@@ -151,12 +182,23 @@ export type Action =
   | { type: 'coach.status'; status: string | null }
   | { type: 'overview.body'; id: string }
   | { type: 'overview.keys'; keys: boolean }
-  | { type: 'agents.run'; run: string | null };
+  | { type: 'agents.run'; run: string | null }
+  | { type: 'agents.live'; agents: LiveAgent[] }
+  | { type: 'agents.viewed'; id: string | null };
+
+/** The least time between two reads of /context's breakdown for the spool. */
+export const BREAKDOWN_DEBOUNCE_MS = 15_000;
+
+/** Whether a breakdown read is due at `now`: none yet, or the debounce has passed. */
+export function breakdownDue(model: Model, now: number): boolean {
+  return model.lastBreakdownAt === null || now - model.lastBreakdownAt >= BREAKDOWN_DEBOUNCE_MS;
+}
 
 export function initialModel(): Model {
   return {
     usage: null,
     usageAt: null,
+    lastBreakdownAt: null,
     modelName: null,
     turn: {
       number: 0,
@@ -171,6 +213,8 @@ export function initialModel(): Model {
     compactions: 0,
     binary: 'unknown',
     sessionId: null,
+    sessionFacts: null,
+    agentLimits: null,
     query: {},
     queryAt: null,
     verbs: null,
@@ -196,6 +240,8 @@ export function initialModel(): Model {
     body: 'events',
     keys: false,
     openRun: null,
+    liveAgents: [],
+    viewedAgent: null,
   };
 }
 
@@ -232,6 +278,10 @@ export function reduce(model: Model, action: Action): Model {
         },
       };
     }
+    case 'turn.stop':
+      // No turn under way: nothing to end (and no duration to compute).
+      if (model.turn.state !== 'busy') return model;
+      return { ...model, turn: { ...model.turn, state: 'idle', startedAt: null, runningTool: null } };
     case 'tool.start':
       return { ...model, turn: { ...model.turn, runningTool: { name: action.name, startedAt: action.at } } };
     case 'tool.end': {
@@ -256,10 +306,16 @@ export function reduce(model: Model, action: Action): Model {
       return { ...model, compactions: model.compactions + 1 };
     case 'usage':
       return { ...model, usage: action.usage, usageAt: action.at };
+    case 'breakdown.read':
+      return { ...model, lastBreakdownAt: action.at };
     case 'session.model':
       return { ...model, modelName: action.name };
     case 'binary':
       return { ...model, binary: action.binary };
+    case 'session.info':
+      return JSON.stringify(model.sessionFacts) === JSON.stringify(action.facts) ? model : { ...model, sessionFacts: action.facts };
+    case 'agent.limits':
+      return JSON.stringify(model.agentLimits) === JSON.stringify(action.limits) ? model : { ...model, agentLimits: action.limits };
     case 'session.id':
       if (model.sessionId === action.id) return model;
       if (model.sessionId === null) return { ...model, sessionId: action.id };
@@ -271,8 +327,12 @@ export function reduce(model: Model, action: Action): Model {
       return {
         ...model,
         sessionId: action.id,
+        // The old transcript's path and rules: the next read is the new session's.
+        sessionFacts: null,
+        agentLimits: null,
         usage: null,
         usageAt: null,
+        lastBreakdownAt: null,
         turn: { ...model.turn, number: model.turn.state === 'idle' ? 0 : 1, lastDurationMs: null, lastReason: null },
         tools: {},
         compactions: 0,
@@ -284,6 +344,8 @@ export function reduce(model: Model, action: Action): Model {
         coachToastTurn: null,
         coachStatus: null,
         openRun: null,
+        liveAgents: [],
+        viewedAgent: null,
       };
     case 'verbs':
       return { ...model, verbs: action.verbs };
@@ -318,6 +380,10 @@ export function reduce(model: Model, action: Action): Model {
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
     case 'agents.run':
       return model.openRun === action.run ? model : { ...model, openRun: action.run };
+    case 'agents.live':
+      return JSON.stringify(model.liveAgents) === JSON.stringify(action.agents) ? model : { ...model, liveAgents: action.agents };
+    case 'agents.viewed':
+      return model.viewedAgent === action.id ? model : { ...model, viewedAgent: action.id };
   }
 }
 
@@ -361,7 +427,7 @@ export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const rank = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
-  return sorted[rank];
+  return sorted[rank] ?? 0;
 }
 
 /** `2h 30m`, `45m`, `30s`; `now` once the instant has passed. */

@@ -56,6 +56,9 @@ pub struct SessionInfo {
     /// Permission prompts per rule-shaped key (`Bash(gh api)`, `Edit`),
     /// with the rule Claude Code itself suggested, verbatim.
     pub permission_asks: std::collections::BTreeMap<String, PermissionAsk>,
+    /// One record per measured permission wait; `decision` / `source` are
+    /// joined from OpenTelemetry trace spans when they arrive.
+    pub permission_records: Vec<PermissionRecord>,
     /// The last `Notification` hook: `(notification_type, epoch ms)` —
     /// `permission_prompt`, `idle_prompt`, `agent_needs_input`…; cleared by
     /// the next prompt or tool result.
@@ -97,6 +100,37 @@ pub struct PermissionAsk {
     /// `permission_suggestions[].rules[].ruleContent` as `Tool(content)`.
     pub rule: Option<String>,
 }
+
+/// One measured permission wait and, when traces exist, who decided it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PermissionRecord {
+    pub tool_use_id: String,
+    /// The rule-shaped key (`Bash(gh api)`, `Edit`).
+    pub key: String,
+    pub wait_ms: i64,
+    /// `accept` / `reject`, from the `blocked_on_user` span.
+    pub decision: Option<String>,
+    /// `user`, `config`, `classifier`, `hook`… verbatim from the span.
+    pub source: Option<String>,
+}
+
+/// The display group of a permission `source`: `you`, `rule`, `classifier`,
+/// `hook`; anything else (including an unknown value) is `other`.
+pub fn decider_group(source: &str) -> &'static str {
+    match source {
+        "user" => "you",
+        "config" => "rule",
+        "classifier" => "classifier",
+        "hook" => "hook",
+        _ => "other",
+    }
+}
+
+/// A turn's hooks become an events row above this many milliseconds.
+pub const HOOK_ROW_MS: u64 = 500;
+
+/// Order the groups are shown in.
+pub const DECIDER_GROUPS: [&str; 5] = ["you", "rule", "classifier", "hook", "other"];
 
 /// The rule-shaped key of a permission prompt: `Bash(<argv0> <sub>)` for
 /// Bash (the subcommand only when it is a word, not a flag or a path),
@@ -244,8 +278,20 @@ pub struct CacheState {
     pub misses: u64,
     pub expected_rebuilds: u64,
     pub last_miss_cause: Option<String>,
+    /// Every cause the shim listed for the last miss, in its order.
+    pub last_miss_causes: Vec<String>,
     pub miss_causes: std::collections::BTreeMap<String, u64>,
     pub hit_ratio: Option<f64>,
+    /// Tools the last miss added / removed, and the system prompt's change in
+    /// characters, as Claude Code diagnosed them.
+    pub last_miss_tools_added: Option<u64>,
+    pub last_miss_tools_removed: Option<u64>,
+    pub last_miss_system_delta: Option<i64>,
+    /// When Claude Code recorded that miss (epoch ms), if it said.
+    pub last_miss_at_ms: Option<i64>,
+    pub requests: u64,
+    pub cache_write_tokens: u64,
+    pub miss_recache_tokens: u64,
     /// When the status file that carried this was written (epoch ms).
     pub sample_at_ms: i64,
 }
@@ -263,6 +309,17 @@ pub struct StatusFacts {
     pub pr_number: Option<u64>,
     pub pr_review_state: Option<String>,
     pub spend_limit_pct: Option<f64>,
+    /// `(used, limit)` in USD; follows the latest sample. Gateway accounts
+    /// with an overage only.
+    pub spend_limit_usd: Option<(f64, Option<f64>)>,
+    pub spend_limit_period: Option<String>,
+    pub spend_limit_resets_at_ms: Option<i64>,
+    pub workspace: Option<crate::status::Workspace>,
+    pub output_style: Option<String>,
+    pub agent_name: Option<String>,
+    pub remote_session_id: Option<String>,
+    pub pr_url: Option<String>,
+    pub pr_kind: Option<String>,
 }
 
 /// What the model waits on.
@@ -276,6 +333,19 @@ pub enum WaitingKind {
     Notification,
     /// The turn ended with a question mark and nothing came back.
     Asked,
+    /// An MCP server's elicitation prompt is open (`State::elicitations`).
+    Elicitation,
+}
+
+/// Elicitation prompts that were answered: how many, how long the person
+/// took, and how each ended.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ElicitationWaits {
+    pub count: usize,
+    pub total_wait_ms: i64,
+    pub accept: usize,
+    pub decline: usize,
+    pub cancel: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -344,12 +414,21 @@ pub struct AgentLink {
     pub sync_result_chars: Option<usize>,
 }
 
+/// Where [`State::context_capture`] read its table from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureSource {
+    Transcript,
+    Spool,
+}
+
 #[derive(Debug, Default)]
 pub struct State {
     // -- collectors
     pub session: SessionInfo,
     /// Claude Code's prompt-cache diagnosis (shim).
     pub cache: CacheState,
+    /// Main-thread requests paired with their responses; one located cause per cache miss.
+    pub requests: crate::requests::RequestChain,
     pub status_facts: StatusFacts,
     /// The previous session in this directory, from `~/.claude.json`.
     pub previous_session: Option<crate::claude_home::PreviousSession>,
@@ -390,6 +469,9 @@ pub struct State {
     /// (`deferred_tools_delta`).
     pub mcp_needs_auth: Vec<String>,
     pub mcp_failed: Vec<String>,
+    /// The latest `--max-budget-usd` budget `(used, total, remaining)`, repeated
+    /// by Claude Code every turn; `None` for a session without one.
+    pub budget_usd: Option<(f64, f64, f64)>,
     /// Rate limits, when the status-line shim is installed.
     pub limits: Option<Limits>,
     /// `(epoch ms, 5 h used %)` samples for the exhaustion projection.
@@ -405,7 +487,26 @@ pub struct State {
     pub rotated_to: Option<crate::registry::Session>,
     /// PreToolUse / PermissionRequest timestamps awaiting their PostToolUse.
     hook_pre: std::collections::HashMap<String, i64>,
-    hook_perm: std::collections::HashMap<String, i64>,
+    hook_perm: std::collections::HashMap<String, (i64, String)>,
+    /// Open MCP elicitation prompts: when each was raised (epoch ms), oldest
+    /// first, per server. An `ElicitationResult` pops the server's oldest;
+    /// `Stop` and `UserPromptSubmit` clear them all.
+    pub elicitations: std::collections::BTreeMap<String, std::collections::VecDeque<i64>>,
+    /// The completed prompts' accounting.
+    pub elicitation_waits: ElicitationWaits,
+    /// `ConfigChange` hooks: `(epoch ms, source)`, in arrival order. The
+    /// first cache miss after each is marked (`mark_config_changes`).
+    pub config_changes: Vec<(i64, String)>,
+    /// The folder the session moved to (`CwdChanged`): git and file paths
+    /// follow it; `session.cwd` (the project's identity) does not.
+    pub cwd_now: Option<PathBuf>,
+    /// Folders `DirectoryAdded` reported, merged into the status line's
+    /// `workspace.added_dirs` (no folder twice).
+    hook_dirs: Vec<String>,
+    /// `PreSkillShellCommand` count per skill (`command_name`).
+    pub skill_shell: std::collections::BTreeMap<String, u32>,
+    /// `TeammateIdle` times by member name, for members not yet in the team.
+    teammate_idle: std::collections::BTreeMap<String, i64>,
     /// MCP servers whose process disappeared since the last evaluation.
     pub mcp_exited: Vec<String>,
     /// Latest process-tree sample (live sessions only).
@@ -476,11 +577,24 @@ pub struct State {
     pub inspector_opens: u64,
     /// The sources inspector shows its per-file list.
     pub sources_files: bool,
+    /// Events `cctop install` would add to an old install (`hooks::EVENTS`
+    /// without a `cctop hook` entry in settings). Empty when nothing is
+    /// installed, when the install is current, and for a fixture.
+    pub hooks_missing: Vec<&'static str>,
+    /// The pane marker's `facts` (data rules, platform, screen reader, agent
+    /// limits); `None` while no pane has written one for this session.
+    pub pane_facts: Option<crate::pane::PaneFacts>,
     pub prefix: crate::prefix::Prefix,
+    /// The pane's latest breakdown spool, raw: anchored and checked against
+    /// compactions when read, since the transcript may lag it.
+    pub context_spool: Option<crate::context_spool::SpoolCapture>,
     /// Which full-screen view the Context panel shows when it owns the overlay.
     pub context_view: ContextView,
     /// OpenTelemetry data for this session, when the receiver is running.
     pub otel: Option<crate::otel::SessionData>,
+    /// The `hooks +…` events row already shown per turn number (time, text),
+    /// so a later span replaces it instead of adding a second.
+    pub hook_rows: std::collections::HashMap<usize, (i64, String)>,
     /// Colours and glyphs for this terminal.
     pub theme: crate::theme::Theme,
     /// Session picker overlay (`L`).
@@ -685,6 +799,27 @@ pub struct ToolsUi {
     pub selected: usize,
 }
 
+fn merge_dirs(facts: &mut StatusFacts, dirs: &[String]) {
+    if dirs.is_empty() {
+        return;
+    }
+    let w = facts.workspace.get_or_insert_with(Default::default);
+    for d in dirs {
+        if !w.added_dirs.iter().any(|x| x.trim_end_matches('/') == d) {
+            w.added_dirs.push(d.clone());
+        }
+    }
+}
+
+/// The last path segment, whichever separator the host uses (`\` on
+/// Windows); `None` for an empty path.
+fn last_segment(path: &str) -> Option<&str> {
+    path.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|s| !s.is_empty())
+}
+
 impl State {
     pub fn new(pricing: Pricing) -> State {
         State {
@@ -717,7 +852,10 @@ impl State {
         }
         // A subagent's event is the agent's, not the session's.
         if let Some(agent_id) = pstr("agent_id").filter(|a| !a.is_empty()) {
-            if !matches!(ev.event.as_str(), "SubagentStart" | "SubagentStop") {
+            if !matches!(
+                ev.event.as_str(),
+                "SubagentStart" | "SubagentStop" | "TeammateIdle"
+            ) {
                 let agent = self.agents.entry(agent_id.clone()).or_insert_with(|| {
                     crate::agents::Agent::new(
                         &agent_id,
@@ -764,7 +902,7 @@ impl State {
                             _ => tool.to_string(),
                         })
                     });
-                let ask = self.session.permission_asks.entry(key).or_default();
+                let ask = self.session.permission_asks.entry(key.clone()).or_default();
                 ask.count += 1;
                 if suggested.is_some() {
                     ask.rule = suggested;
@@ -772,7 +910,7 @@ impl State {
                 self.session.permission_pending = true;
                 self.session.permission_waiting_since_ms = Some(at);
                 if !id.is_empty() {
-                    self.hook_perm.insert(id.clone(), at);
+                    self.hook_perm.insert(id.clone(), (at, key.clone()));
                 }
                 self.events.push(crate::events::Event {
                     at,
@@ -799,7 +937,7 @@ impl State {
                 } else if let Some(start) = start {
                     self.tools.set_exact_duration(&id, start, at);
                 }
-                if let Some(perm_at) = self.hook_perm.remove(&id) {
+                if let Some((perm_at, key)) = self.hook_perm.remove(&id) {
                     // ≈ wait: the tool's own median duration is subtracted.
                     let median = name
                         .as_deref()
@@ -808,6 +946,18 @@ impl State {
                     let wait = (at - perm_at - median).max(0);
                     self.session.permission_waits += 1;
                     self.session.permission_wait_ms += wait;
+                    self.session.permission_records.push(PermissionRecord {
+                        tool_use_id: id.clone(),
+                        key,
+                        wait_ms: wait,
+                        decision: None,
+                        source: None,
+                    });
+                    // A record landing after the last batch joins now.
+                    if let Some(o) = self.otel.take() {
+                        self.join_permission_spans(&o);
+                        self.otel = Some(o);
+                    }
                     self.events.push(crate::events::Event {
                         at,
                         kind: Kind::Perm,
@@ -870,6 +1020,10 @@ impl State {
                 kind: Kind::Agent,
                 text: ev.event.trim_start_matches("Subagent").to_lowercase(),
             }),
+            // A Notification raised by a plugin's `$.ui.notify` (cctop's own
+            // opt-in pane notifications included) carries `plugin_notification`;
+            // it says nothing of Claude Code waiting on the person.
+            "Notification" if p.get("plugin_notification").is_some_and(|v| !v.is_null()) => {}
             "Notification" => {
                 let kind = pstr("notification_type").unwrap_or_else(|| "notification".into());
                 let msg = ev
@@ -891,7 +1045,56 @@ impl State {
                     text: crate::ui::fmt::clip(&msg, 80),
                 });
             }
+            "Elicitation" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                self.elicitations
+                    .entry(server.clone())
+                    .or_default()
+                    .push_back(at);
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("MCP {server} asks"),
+                });
+            }
+            "ElicitationResult" => {
+                let server = pstr("mcp_server_name").unwrap_or_else(|| "unknown".into());
+                let action = pstr("action").unwrap_or_default();
+                let opened = self
+                    .elicitations
+                    .get_mut(&server)
+                    .and_then(|q| q.pop_front());
+                if self.elicitations.get(&server).is_some_and(|q| q.is_empty()) {
+                    self.elicitations.remove(&server);
+                }
+                // A result with nothing open (an unseen or already-cleared
+                // prompt) is not a completed wait.
+                if let Some(opened) = opened {
+                    let w = &mut self.elicitation_waits;
+                    w.count += 1;
+                    w.total_wait_ms += (at - opened).max(0);
+                    match action.as_str() {
+                        "accept" => w.accept += 1,
+                        "decline" => w.decline += 1,
+                        "cancel" => w.cancel += 1,
+                        _ => {}
+                    }
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!(
+                        "MCP {server} {}",
+                        if action.is_empty() {
+                            "answered"
+                        } else {
+                            action.as_str()
+                        }
+                    ),
+                });
+            }
             "UserPromptSubmit" => {
+                self.elicitations.clear();
                 self.session.notification = None;
                 self.events.push(crate::events::Event {
                     at,
@@ -936,6 +1139,7 @@ impl State {
                 });
             }
             "Stop" => {
+                self.elicitations.clear();
                 self.session.background_tasks = p
                     .get("background_tasks")
                     .and_then(|v| v.as_array())
@@ -1080,7 +1284,179 @@ impl State {
                     other => other.to_string(),
                 },
             }),
+            "ConfigChange" => {
+                let source = pstr("source").unwrap_or_else(|| "settings".into());
+                let file = pstr("file_path")
+                    .as_deref()
+                    .and_then(last_segment)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| "settings".into());
+                let text = format!("settings changed · {file} ({source})");
+                self.config_changes.push((at, source));
+                self.mark_config_changes();
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text,
+                });
+            }
+            "CwdChanged" => {
+                if let Some(new) = pstr("new_cwd").filter(|c| !c.is_empty()) {
+                    let new = PathBuf::from(&new);
+                    self.files.move_cwd(&new);
+                    self.cwd_now = Some(new);
+                }
+                let name = |k: &str| {
+                    pstr(k)
+                        .as_deref()
+                        .and_then(last_segment)
+                        .map(str::to_string)
+                };
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: match (name("old_cwd"), name("new_cwd")) {
+                        (Some(a), Some(b)) => format!("cwd {a} → {b}"),
+                        (None, Some(b)) => format!("cwd → {b}"),
+                        _ => "cwd changed".into(),
+                    },
+                });
+            }
+            "DirectoryAdded" => {
+                let dir = pstr("directory").unwrap_or_default();
+                let dir = dir.trim_end_matches('/').to_string();
+                if !dir.is_empty() && !self.hook_dirs.contains(&dir) {
+                    self.hook_dirs.push(dir.clone());
+                    self.merge_hook_dirs();
+                }
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: format!("dir added · {}", last_segment(&dir).unwrap_or(&dir)),
+                });
+            }
+            "TeammateIdle" => {
+                if let Some(name) = pstr("teammate_name") {
+                    if let Some(t) = self.team.as_mut() {
+                        t.note_idle(&name, at);
+                    }
+                    self.teammate_idle.insert(name.clone(), at);
+                    self.events.push(crate::events::Event {
+                        at,
+                        kind: Kind::Agent,
+                        text: format!("{name} idle"),
+                    });
+                }
+            }
+            "PreSkillShellCommand" => {
+                let skill = pstr("command_name").unwrap_or_else(|| "skill".into());
+                *self.skill_shell.entry(skill.clone()).or_default() += 1;
+                let cmd = p
+                    .get("tool_input")
+                    .and_then(|i| i.get("command"))
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("");
+                self.events.push(crate::events::Event {
+                    at,
+                    kind: Kind::Hook,
+                    text: if cmd.is_empty() {
+                        format!("skill shell: {skill}")
+                    } else {
+                        format!("skill shell: {skill} · {}", crate::ui::fmt::clip(cmd, 60))
+                    },
+                });
+            }
             _ => {}
+        }
+    }
+
+    /// Re-apply the `TeammateIdle` hooks to a team that was (re)loaded or
+    /// grew a member after they arrived.
+    pub fn sync_teammate_idle(&mut self) {
+        if let Some(t) = self.team.as_mut() {
+            for (name, at) in &self.teammate_idle {
+                t.note_idle(name, *at);
+            }
+        }
+    }
+
+    /// The folder git and file paths are read in: where the session moved
+    /// to, else where it started.
+    pub fn work_dir(&self) -> &Path {
+        self.cwd_now.as_deref().unwrap_or(&self.session.cwd)
+    }
+
+    /// Folders added to the session: the status line's `added_dirs` and the
+    /// `DirectoryAdded` hooks, each folder once.
+    pub fn added_dirs_count(&self) -> usize {
+        // The hook's folders are merged into the workspace on arrival.
+        self.status_facts
+            .workspace
+            .as_ref()
+            .map_or(0, |w| w.added_dirs.len())
+    }
+
+    /// Fold the hook's folders into `workspace.added_dirs`, which every
+    /// surface already reads. A folder both sources name stays one.
+    fn merge_hook_dirs(&mut self) {
+        merge_dirs(&mut self.status_facts, &self.hook_dirs);
+    }
+
+    /// Mark the first cache miss after each `ConfigChange` and before the
+    /// next: both the located and the named record of that request. Derived
+    /// from the two collectors' data each time, so the order they arrive in
+    /// does not matter.
+    pub fn mark_config_changes(&mut self) {
+        if self.config_changes.is_empty() {
+            return;
+        }
+        let parse = crate::metrics::cost::parse_ts_ms;
+        let mut windows: Vec<(i64, i64, String)> = Vec::new();
+        let mut sorted = self.config_changes.clone();
+        sorted.sort_by_key(|c| c.0);
+        for (i, (at, src)) in sorted.iter().enumerate() {
+            let end = sorted.get(i + 1).map_or(i64::MAX, |n| n.0);
+            windows.push((*at, end, src.clone()));
+        }
+        // The first request (hit or miss) after each change; it is marked
+        // only if it missed, and not for an expired TTL.
+        let first_request = |start: i64, end: i64| -> Option<&String> {
+            self.requests
+                .responses()
+                .iter()
+                .filter_map(|(id, at)| Some((at.as_deref().and_then(parse)?, id)))
+                .filter(|(t, _)| *t > start && *t < end)
+                .min_by_key(|(t, _)| *t)
+                .map(|(_, id)| id)
+        };
+        let marks: Vec<(String, String)> = windows
+            .iter()
+            .filter_map(|(start, end, src)| {
+                let id = first_request(*start, *end)?;
+                let located = self.requests.miss_for(id);
+                let named = self.agg.cache_misses.iter().any(|m| m.message_id == *id);
+                if located.is_none() && !named {
+                    return None;
+                }
+                if located.is_some_and(|m| {
+                    matches!(m.cause, crate::requests::LocatedCause::Expired { .. })
+                }) {
+                    return None;
+                }
+                Some((id.clone(), src.clone()))
+            })
+            .collect();
+        for m in self.requests.misses_mut() {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
+        }
+        for m in &mut self.agg.cache_misses {
+            m.after_config_change = marks
+                .iter()
+                .find(|(id, _)| *id == m.message_id)
+                .map(|(_, s)| s.clone());
         }
     }
 
@@ -1096,7 +1472,250 @@ impl State {
             }
         }
         self.tools.otel_durations = data.durations_by_tool();
+        self.join_permission_spans(data);
         self.otel = Some(data.clone());
+        self.sync_hook_rows();
+    }
+
+    /// Hook time per turn and event, from `claude_code.hook` spans. A span
+    /// belongs to the turn whose start (the user line's timestamp) is the
+    /// latest one not after the span's start; spans before the first turn
+    /// are not assigned. Returns `(turn number, by_event ms, last span end ms)`.
+    pub fn hook_ms_by_turn(&self) -> Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> {
+        let Some(o) = &self.otel else {
+            return Vec::new();
+        };
+        let starts: Vec<(usize, i64)> = self
+            .agg
+            .turns
+            .iter()
+            .filter_map(|t| {
+                let at = crate::metrics::cost::parse_ts_ms(t.started_at.as_deref()?)?;
+                Some((t.number, at))
+            })
+            .collect();
+        let mut out: Vec<(usize, std::collections::BTreeMap<String, u64>, i64)> = Vec::new();
+        for sp in &o.spans {
+            let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            else {
+                continue;
+            };
+            let start_ms = (ids.start_ns / 1_000_000) as i64;
+            let Some((number, _)) = starts.iter().rev().find(|(_, at)| *at <= start_ms) else {
+                continue;
+            };
+            let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+            let end_ms = (ids.end_ns / 1_000_000) as i64;
+            let ev = hook_event.clone().unwrap_or_else(|| "other".into());
+            match out.iter_mut().find(|(n, _, _)| n == number) {
+                Some((_, m, e)) => {
+                    {
+                        let e = m.entry(ev).or_default();
+                        *e = e.saturating_add(ms);
+                    }
+                    *e = (*e).max(end_ms);
+                }
+                None => out.push((*number, [(ev, ms)].into(), end_ms)),
+            }
+        }
+        out
+    }
+
+    /// Which OTel signals have delivered data: `(metrics, logs, traces)`;
+    /// `None` when no receiver data was ever applied.
+    pub fn otel_signals(&self) -> Option<(bool, bool, bool)> {
+        let o = self.otel.as_ref()?;
+        Some((
+            !o.tokens.is_empty()
+                || o.cost_usd > 0.0
+                || o.active_time_s > 0.0
+                || o.lines_added > 0.0
+                || o.lines_removed > 0.0,
+            !o.api_requests.is_empty() || o.api_errors > 0 || !o.tool_results.is_empty(),
+            !o.spans.is_empty() || o.unknown_spans > 0,
+        ))
+    }
+
+    /// Session hook overhead for `cctop query dashboard`: `None` without
+    /// trace spans, else the total and the time per `hook_event`.
+    pub fn hook_overhead(&self) -> Option<(u64, std::collections::BTreeMap<String, u64>)> {
+        let o = self.otel.as_ref().filter(|o| !o.spans.is_empty())?;
+        let mut by: std::collections::BTreeMap<String, u64> = Default::default();
+        let mut any = false;
+        for sp in &o.spans {
+            if let crate::otel::Span::Hook {
+                ids,
+                hook_event,
+                duration_ms,
+                ..
+            } = sp
+            {
+                any = true;
+                let ms = duration_ms.unwrap_or(ids.end_ns.saturating_sub(ids.start_ns) / 1_000_000);
+                let e = by
+                    .entry(hook_event.clone().unwrap_or_else(|| "other".into()))
+                    .or_default();
+                *e = e.saturating_add(ms);
+            }
+        }
+        any.then(|| (by.values().fold(0, |a: u64, b| a.saturating_add(*b)), by))
+    }
+
+    /// One `hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s` row per turn whose
+    /// hooks exceed 500 ms, events by descending time; replaced when more
+    /// hook time arrives for the same turn.
+    fn sync_hook_rows(&mut self) {
+        for (number, by, end_ms) in self.hook_ms_by_turn() {
+            let total: u64 = by.values().fold(0, |a: u64, b| a.saturating_add(*b));
+            if total <= HOOK_ROW_MS {
+                continue;
+            }
+            let mut ev: Vec<(&String, &u64)> = by.iter().collect();
+            ev.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            let mut text = format!("hooks +{}", crate::ui::fmt::added_s(total));
+            for (name, ms) in ev {
+                text.push_str(&format!(" · {name} {}", crate::ui::fmt::added_s(*ms)));
+            }
+            if let Some((at, old)) = self.hook_rows.get(&number) {
+                if *at == end_ms && *old == text {
+                    continue;
+                }
+                self.events.remove(*at, crate::events::Kind::Hook, old);
+            }
+            self.events.push(crate::events::Event {
+                at: end_ms,
+                kind: crate::events::Kind::Hook,
+                text: text.clone(),
+            });
+            self.hook_rows.insert(number, (end_ms, text));
+        }
+    }
+
+    /// Permission spans hang under their tool span, which carries the
+    /// `tool_use_id`; join through `parent_span_id` over the whole ring, so a
+    /// child that arrived before its parent still joins on a later call.
+    fn join_permission_spans(&mut self, data: &crate::otel::SessionData) {
+        use crate::otel::Span;
+        let mut tool_of: std::collections::HashMap<&str, &str> = Default::default();
+        for sp in &data.spans {
+            if let Span::Tool {
+                ids,
+                tool_use_id: Some(t),
+                ..
+            } = sp
+            {
+                tool_of.insert(ids.span_id.as_str(), t.as_str());
+            }
+        }
+        let mut decided: std::collections::HashMap<&str, (&Option<String>, &Option<String>)> =
+            Default::default();
+        for sp in &data.spans {
+            if let Span::Permission {
+                ids,
+                decision,
+                source,
+                ..
+            } = sp
+            {
+                if let Some(t) = ids.parent_span_id.as_deref().and_then(|p| tool_of.get(p)) {
+                    decided.insert(t, (decision, source));
+                }
+            }
+        }
+        for r in &mut self.session.permission_records {
+            if let Some((d, s)) = decided.get(r.tool_use_id.as_str()) {
+                r.decision = (*d).clone();
+                r.source = (*s).clone();
+            }
+        }
+    }
+
+    /// Retries in a turn, from `llm_request` spans joined to the turn's
+    /// responses by `requestId` (= `gen_ai.response.id`): the extra attempts
+    /// and the time they added (its last attempt event − the request's start:
+    /// Claude Code stamps `gen_ai.request.attempt` when an attempt begins, so the
+    /// final attempt's own duration is not time the retries cost).
+    /// `None` without traces or when nothing was retried.
+    pub fn turn_retries(&self, turn: &crate::metrics::usage::Turn) -> Option<(u32, u64)> {
+        let o = self.otel.as_ref()?;
+        let (mut n, mut ns) = (0u32, 0u64);
+        for sp in &o.spans {
+            if let crate::otel::Span::LlmRequest {
+                ids,
+                response_id: Some(r),
+                attempts,
+                attempt_times_ns,
+                ..
+            } = sp
+            {
+                if *attempts > 1 && turn.request_ids.iter().any(|q| q == r) {
+                    n += attempts - 1;
+                    if let Some(last) = attempt_times_ns.last() {
+                        ns = ns.saturating_add(last.saturating_sub(ids.start_ns));
+                    }
+                }
+            }
+        }
+        (n > 0).then_some((n, ns / 1_000_000))
+    }
+
+    /// Who decided the permission waits: `(waits, [(group, count)])`, zero
+    /// groups omitted. `None` without trace spans (every surface then reads
+    /// as before). With hooks, waits are the measured records that a span
+    /// joined to; without them, the spans that were a real wait (a person
+    /// decided, or the span lasted).
+    pub fn permission_split(&self) -> Option<(usize, Vec<(&'static str, usize)>)> {
+        let sources: Vec<&str> = if self.session.hooks_installed {
+            self.session
+                .permission_records
+                .iter()
+                .filter_map(|r| r.source.as_deref())
+                .collect()
+        } else {
+            self.otel
+                .iter()
+                .flat_map(|o| o.spans.iter())
+                .filter_map(|sp| match sp {
+                    crate::otel::Span::Permission {
+                        source,
+                        duration_ms,
+                        ids,
+                        ..
+                    } => {
+                        let src = source.as_deref().unwrap_or("");
+                        let dur = duration_ms
+                            .map(|d| d.saturating_mul(1_000_000))
+                            .unwrap_or(ids.end_ns.saturating_sub(ids.start_ns));
+                        (src == "user" || dur > 0).then_some(src)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        if sources.is_empty() {
+            return None;
+        }
+        let groups = DECIDER_GROUPS
+            .iter()
+            .map(|g| {
+                (
+                    *g,
+                    sources.iter().filter(|s| decider_group(s) == *g).count(),
+                )
+            })
+            .filter(|(_, n)| *n > 0)
+            .collect();
+        let waits = if self.session.hooks_installed {
+            self.session.permission_waits
+        } else {
+            sources.len()
+        };
+        Some((waits, groups))
     }
 
     /// Take a status-line sample: exact context, rate limits, the cache
@@ -1116,8 +1735,23 @@ impl State {
                 misses: pc.misses,
                 expected_rebuilds: pc.expected_rebuilds,
                 last_miss_cause: pc.last_cause().map(str::to_string),
+                last_miss_causes: pc
+                    .last_miss_cause
+                    .as_ref()
+                    .map(|c| c.causes.clone())
+                    .unwrap_or_default(),
                 miss_causes: pc.miss_causes.clone(),
                 hit_ratio: pc.hit_ratio,
+                last_miss_tools_added: pc.last_miss_cause.as_ref().and_then(|c| c.tools_added),
+                last_miss_tools_removed: pc.last_miss_cause.as_ref().and_then(|c| c.tools_removed),
+                last_miss_system_delta: pc
+                    .last_miss_cause
+                    .as_ref()
+                    .and_then(|c| c.system_char_delta),
+                last_miss_at_ms: pc.last_miss_at.map(|t| (t * 1000.0) as i64),
+                requests: pc.requests,
+                cache_write_tokens: pc.cache_write_tokens,
+                miss_recache_tokens: pc.miss_recache_tokens,
                 sample_at_ms: s.at_ms,
             };
         }
@@ -1145,11 +1779,34 @@ impl State {
         if let Some(r) = s.pr_review_state() {
             facts.pr_review_state = Some(r.to_string());
         }
-        facts.spend_limit_pct = s
+        let spend = s
             .rate_limits
             .as_ref()
-            .and_then(|rl| rl.spend_limit.as_ref())
-            .map(|l| l.used_percentage);
+            .and_then(|rl| rl.spend_limit.as_ref());
+        facts.spend_limit_pct = spend.map(|l| l.used_percentage);
+        facts.spend_limit_usd = spend.and_then(|l| l.used_usd.map(|u| (u, l.limit_usd)));
+        facts.spend_limit_period = spend.and_then(|l| l.period.clone());
+        facts.spend_limit_resets_at_ms =
+            spend.and_then(|l| l.resets_at).map(|x| (x * 1000.0) as i64);
+        if let Some(w) = &s.workspace {
+            facts.workspace = Some(w.clone());
+            merge_dirs(facts, &self.hook_dirs);
+        }
+        if let Some(n) = s.output_style.as_ref().and_then(|n| n.name.clone()) {
+            facts.output_style = Some(n);
+        }
+        if let Some(n) = s.agent.as_ref().and_then(|n| n.name.clone()) {
+            facts.agent_name = Some(n);
+        }
+        if let Some(id) = s.remote.as_ref().and_then(|r| r.session_id.clone()) {
+            facts.remote_session_id = Some(id);
+        }
+        if let Some(u) = s.pr_url() {
+            facts.pr_url = Some(u.to_string());
+        }
+        if let Some(k) = s.pr_kind() {
+            facts.pr_kind = Some(k.to_string());
+        }
         if let Some(rl) = &s.rate_limits {
             let to_ms = |secs: Option<f64>| secs.map(|x| (x * 1000.0) as i64);
             self.limits = Some(Limits {
@@ -1358,6 +2015,10 @@ impl State {
     pub fn apply(&mut self, line: &Line) {
         let turns_before = self.agg.turns.len();
         self.agg.push(line);
+        let ttl = self.cache_ttl_ms().max(0) as u64;
+        let turn = self.agg.current_turn().map(|t| t.number);
+        self.requests.apply(line, turn, ttl);
+        self.mark_config_changes();
         if self.agg.turns.len() > turns_before {
             self.files.new_turn();
         }
@@ -1396,6 +2057,14 @@ impl State {
             {
                 self.mcp_needs_auth = needs_auth_mcp_servers;
                 self.mcp_failed = failed_mcp_servers;
+            }
+            if let crate::transcript::AttachmentKind::BudgetUsd {
+                used,
+                total,
+                remaining,
+            } = att.kind()
+            {
+                self.budget_usd = Some((used, total, remaining));
             }
         }
         self.cost.push(line);
@@ -1479,12 +2148,18 @@ impl State {
             .unwrap_or(1)
     }
 
-    /// What is in the window right now and what put it there: the per-call
-    /// model behind the bar (PRD context-residency §4).
-    pub fn residency(&self) -> crate::metrics::context::Residency {
-        let v = self.context();
-        let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
-        let capture = self.prefix.context_capture.as_ref().map(|c| {
+    /// The newer of the `/context` table in the transcript and the pane's
+    /// spool, with the turn it is anchored to, where it came from and its
+    /// time (epoch ms). A spool wins a tie: it is the fresher read.
+    pub fn context_capture(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let transcript = self.prefix.context_capture.as_ref().map(|c| {
             let turn = self
                 .agg
                 .slash_commands
@@ -1493,8 +2168,90 @@ impl State {
                 .find(|(_, cmd)| cmd == "/context")
                 .map(|(t, _)| *t)
                 .unwrap_or(0);
-            (c, turn)
+            let at = self.prefix.context_capture_at_ms.unwrap_or(0);
+            (c, turn, CaptureSource::Transcript, at)
         });
+        let spool = self.anchored_spool();
+        match (transcript, spool) {
+            (Some(t), Some(s)) => Some(if s.3 >= t.3 { s } else { t }),
+            (t, s) => t.or(s),
+        }
+    }
+
+    /// The time of the last Compact or Microcompact boundary, epoch ms.
+    pub fn last_compaction_ms(&self) -> Option<i64> {
+        self.agg
+            .boundaries
+            .iter()
+            .rev()
+            .find(|b| {
+                matches!(
+                    b.kind,
+                    crate::metrics::usage::BoundaryKind::Compact
+                        | crate::metrics::usage::BoundaryKind::Microcompact
+                )
+            })
+            .and_then(|b| b.at.as_deref())
+            .and_then(crate::metrics::cost::parse_ts_ms)
+    }
+
+    /// Like [`State::context_capture`], for what describes the window as it
+    /// is: a capture taken before the last compaction describes a window
+    /// that is gone, whichever surface it came from. (Residency keeps
+    /// calibrating from the transcript capture regardless.)
+    pub fn current_context_capture(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let c = self.context_capture()?;
+        // An unknown time (0) is not evidence of staleness.
+        match self.last_compaction_ms() {
+            Some(b) if c.3 > 0 && c.3 < b => None,
+            _ => Some(c),
+        }
+    }
+
+    /// Keep the pane's latest spool; it is anchored when read.
+    pub fn apply_context_spool(&mut self, s: crate::context_spool::SpoolCapture) {
+        self.context_spool = Some(s);
+    }
+
+    /// The spool anchored to the turn of the last API call at or before its
+    /// time; none while no such call is known, or when it predates the last
+    /// compaction (it describes a window that is gone).
+    fn anchored_spool(
+        &self,
+    ) -> Option<(
+        &crate::transcript::ContextCapture,
+        usize,
+        CaptureSource,
+        i64,
+    )> {
+        let s = self.context_spool.as_ref()?;
+        let compacted_at = self.last_compaction_ms();
+        if compacted_at.is_some_and(|c| s.at_ms < c) {
+            return None;
+        }
+        let turn = self
+            .agg
+            .calls
+            .iter()
+            .rev()
+            .find(|c| c.at_ms.is_some_and(|t| t <= s.at_ms))
+            .map(|c| c.turn)?;
+        Some((&s.capture, turn, CaptureSource::Spool, s.at_ms))
+    }
+
+    /// What is in the window right now and what put it there: the per-call
+    /// model behind the bar (PRD context-residency §4).
+    pub fn residency(&self) -> crate::metrics::context::Residency {
+        let v = self.context();
+        let cwd = (!self.session.cwd.as_os_str().is_empty()).then_some(self.session.cwd.as_path());
+        let capture = self.context_capture().map(|(c, turn, _, _)| (c, turn));
         crate::metrics::context::residency(&self.agg, &self.tools, v.prefix, v.size, cwd, capture)
     }
 
@@ -1749,6 +2506,15 @@ impl State {
             .count()
     }
 
+    /// The server with the oldest open elicitation prompt, and when it was
+    /// raised.
+    pub fn open_elicitation(&self) -> Option<(&str, i64)> {
+        self.elicitations
+            .iter()
+            .filter_map(|(server, q)| q.front().map(|at| (server.as_str(), *at)))
+            .min_by_key(|(_, at)| *at)
+    }
+
     /// What the model is waiting on, if anything.
     pub fn waiting(&self) -> Option<Waiting> {
         if self.session.permission_pending {
@@ -1758,6 +2524,12 @@ impl State {
                     .session
                     .permission_waiting_since_ms
                     .unwrap_or(self.clock_ms()),
+            });
+        }
+        if let Some((_, since_ms)) = self.open_elicitation() {
+            return Some(Waiting {
+                kind: WaitingKind::Elicitation,
+                since_ms,
             });
         }
         if let Some(c) = self.tools.running() {
@@ -1987,6 +2759,24 @@ impl State {
         )
     }
 
+    /// Read which of cctop's hook events the settings lack (an old install).
+    pub fn load_hooks_missing(&mut self) {
+        self.hooks_missing = crate::install::hooks_missing_of_install(
+            &crate::install::read_settings(&crate::install::settings_path()),
+        );
+    }
+
+    /// Read the pane marker's `facts` for this session (a fixture has none).
+    pub fn load_pane_facts(&mut self) {
+        // A marker read that fails (the pane is rewriting it) keeps what was
+        // known: the badges do not blink out and back.
+        match crate::pane::read_facts(&self.session.session_id) {
+            crate::pane::ReadFacts::Facts(f) => self.pane_facts = Some(f),
+            crate::pane::ReadFacts::Absent => self.pane_facts = None,
+            crate::pane::ReadFacts::Unreadable => {}
+        }
+    }
+
     /// Read the autocompact overrides for a live session: settings.json and
     /// the claude process environment; price the enabled plugins with the
     /// catalog cache.
@@ -2064,6 +2854,71 @@ pub mod tests_support {
             s.apply(&l);
         }
         s
+    }
+
+    /// A state with hooks on and `n` measured Bash(gh api) waits, tool_use_ids `t0..`.
+    pub fn state_with_waits(n: usize) -> State {
+        let mut s = State::new(Pricing::bundled());
+        for i in 0..n {
+            for (ev, at) in [("PermissionRequest", 1_000), ("PostToolUse", 6_000)] {
+                let p = serde_json::json!({"hook_event_name": ev, "tool_name": "Bash",
+                    "tool_use_id": format!("t{i}"), "tool_input": {"command": "gh api x"}});
+                s.apply_hook(&crate::hooks::HookEvent::from_stdin(at + i as i64, p).unwrap());
+            }
+        }
+        s
+    }
+
+    /// An `llm_request` span for `response_id` with `attempts` attempt events
+    /// at 1 s, 2 s, … after a start of 0, ending at `end_s`.
+    pub fn llm_span(response_id: &str, attempts: u32, end_s: u64) -> crate::otel::Span {
+        crate::otel::Span::LlmRequest {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("llm-{response_id}"),
+                parent_span_id: None,
+                start_ns: 0,
+                end_ns: end_s * 1_000_000_000,
+            },
+            model: None,
+            query_source: None,
+            response_id: Some(response_id.into()),
+            attempts,
+            attempt_times_ns: (1..=attempts as u64).map(|i| i * 1_000_000_000).collect(),
+            ttft_ms: None,
+            first_content_ms: None,
+            status_code: None,
+            success: Some(true),
+            duration_ms: None,
+        }
+    }
+
+    /// Tool span `tool-i` (carrying `t{i}`) with a permission span under it.
+    pub fn trace_spans(sources: &[&str]) -> Vec<crate::otel::Span> {
+        use crate::otel::{Span, SpanIds};
+        let mut v = Vec::new();
+        for (i, src) in sources.iter().enumerate() {
+            let ids = |id: String, parent: Option<String>| SpanIds {
+                trace_id: "tr".into(),
+                span_id: id,
+                parent_span_id: parent,
+                start_ns: 0,
+                end_ns: 3_000_000_000,
+            };
+            v.push(Span::Tool {
+                ids: ids(format!("tool-{i}"), None),
+                tool_name: Some("Bash".into()),
+                mcp_server: None,
+                tool_use_id: Some(format!("t{i}")),
+            });
+            v.push(Span::Permission {
+                ids: ids(format!("perm-{i}"), Some(format!("tool-{i}"))),
+                decision: Some("accept".into()),
+                source: Some((*src).into()),
+                duration_ms: Some(3000),
+            });
+        }
+        v
     }
 }
 
@@ -2145,6 +3000,52 @@ mod tests {
         );
         assert_eq!(s.cache_warm(), Some((false, false)));
         assert_eq!(s.cache.recache_tokens_if_cold, 300_000);
+    }
+
+    #[test]
+    fn status_fields_survive_a_sparse_sample() {
+        let mut s = State::new(Pricing::bundled());
+        let full = crate::status::Sample::parse(r#"{"session_id":"s","workspace":{"added_dirs":["/a"],"git_worktree":"feat"},"output_style":{"name":"Concise"},"agent":{"name":"reviewer"},"remote":{"session_id":"r-1"},"pr":{"number":1,"url":"u","kind":"github"},"prompt_cache":{"warm":true,"requests":9,"miss_recache_tokens":5,"last_miss_cause":{"causes":["tools_changed"],"tools_added":1,"tools_removed":2,"system_char_delta":-3}}}"#).unwrap();
+        s.apply_status(&full, &[]);
+        assert_eq!(s.cache.requests, 9);
+        assert_eq!(s.cache.miss_recache_tokens, 5);
+        assert_eq!(s.cache.last_miss_tools_added, Some(1));
+        assert_eq!(s.cache.last_miss_tools_removed, Some(2));
+        assert_eq!(s.cache.last_miss_system_delta, Some(-3));
+        let sparse = crate::status::Sample::parse(r#"{"session_id":"s"}"#).unwrap();
+        s.apply_status(&sparse, &[]);
+        let f = &s.status_facts;
+        assert_eq!(
+            f.workspace.as_ref().unwrap().added_dirs,
+            vec!["/a".to_string()]
+        );
+        assert_eq!(
+            f.workspace.as_ref().unwrap().git_worktree.as_deref(),
+            Some("feat")
+        );
+        assert_eq!(f.output_style.as_deref(), Some("Concise"));
+        assert_eq!(f.agent_name.as_deref(), Some("reviewer"));
+        assert_eq!(f.remote_session_id.as_deref(), Some("r-1"));
+        assert_eq!(f.pr_url.as_deref(), Some("u"));
+        assert_eq!(f.pr_kind.as_deref(), Some("github"));
+    }
+
+    #[test]
+    fn spend_limit_follows_latest() {
+        let mut s = State::new(Pricing::bundled());
+        let a = crate::status::Sample::parse(r#"{"session_id":"s","rate_limits":{"five_hour":{"used_percentage":1},"seven_day":{"used_percentage":1},"spend_limit":{"used_percentage":82,"resets_at":1790000000,"used_usd":412.0,"limit_usd":500.0,"period":"monthly"}}}"#).unwrap();
+        s.apply_status(&a, &[]);
+        let f = &s.status_facts;
+        assert_eq!(f.spend_limit_usd, Some((412.0, Some(500.0))));
+        assert_eq!(f.spend_limit_period.as_deref(), Some("monthly"));
+        assert_eq!(f.spend_limit_resets_at_ms, Some(1_790_000_000_000));
+        let b = crate::status::Sample::parse(r#"{"session_id":"s","rate_limits":{"five_hour":{"used_percentage":1},"seven_day":{"used_percentage":1}}}"#).unwrap();
+        s.apply_status(&b, &[]);
+        let f = &s.status_facts;
+        assert_eq!(f.spend_limit_usd, None);
+        assert_eq!(f.spend_limit_pct, None);
+        assert_eq!(f.spend_limit_period, None);
+        assert_eq!(f.spend_limit_resets_at_ms, None);
     }
 
     /// The main-transcript side of an agent: its `Agent` launch (the call
@@ -2334,5 +3235,494 @@ mod tests {
             "keyed like the notification, at the line's time"
         );
         assert!(s.agents.is_empty(), "a workflow run is not an agent");
+    }
+
+    fn spool_at(at_ms: i64, tokens: u64) -> crate::context_spool::SpoolCapture {
+        crate::context_spool::SpoolCapture {
+            at_ms,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: tokens,
+                window_tokens: 1_000_000,
+                ..Default::default()
+            },
+        }
+    }
+
+    fn with_calls(times: &[(usize, i64)]) -> State {
+        let mut s = State::new(Pricing::default());
+        for (turn, at) in times {
+            s.agg.calls.push(crate::metrics::usage::CallRecord {
+                turn: *turn,
+                at_ms: Some(*at),
+                model: "m".into(),
+                usage: Default::default(),
+                machine: false,
+            });
+        }
+        s
+    }
+
+    #[test]
+    fn anchors_to_previous_call() {
+        let mut s = with_calls(&[(1, 1000), (2, 2000), (3, 3000)]);
+        s.apply_context_spool(spool_at(2500, 50_000));
+        let (c, turn, src, at) = s.context_capture().unwrap();
+        assert_eq!(
+            (c.used_tokens, turn, src, at),
+            (50_000, 2, CaptureSource::Spool, 2500)
+        );
+    }
+
+    #[test]
+    fn before_first_call() {
+        let mut s = with_calls(&[(1, 1000)]);
+        s.apply_context_spool(spool_at(500, 1));
+        assert!(s.context_capture().is_none());
+        State::new(Pricing::default()).apply_context_spool(spool_at(500, 1));
+    }
+
+    #[test]
+    fn newer_wins_both_orders() {
+        let mut s = with_calls(&[(1, 1000), (2, 5000)]);
+        s.prefix.context_capture = Some(crate::transcript::ContextCapture {
+            used_tokens: 7,
+            ..Default::default()
+        });
+        s.prefix.context_capture_at_ms = Some(3000);
+        s.apply_context_spool(spool_at(4000, 9));
+        assert_eq!(s.context_capture().unwrap().2, CaptureSource::Spool);
+        s.prefix.context_capture_at_ms = Some(4500);
+        let (c, _, src, at) = s.context_capture().unwrap();
+        assert_eq!(
+            (c.used_tokens, src, at),
+            (7, CaptureSource::Transcript, 4500)
+        );
+    }
+
+    #[test]
+    fn stale_after_compaction_ignored() {
+        let mut s = with_calls(&[(1, 1_000), (2, 1_785_000_000_000)]);
+        s.agg.boundaries.push(crate::metrics::usage::Boundary {
+            at: Some("2026-08-01T00:00:00.000Z".into()),
+            turn: 2,
+            kind: crate::metrics::usage::BoundaryKind::Compact,
+        });
+        let boundary = crate::metrics::cost::parse_ts_ms("2026-08-01T00:00:00.000Z").unwrap();
+        s.apply_context_spool(spool_at(boundary - 1, 1));
+        assert!(s.context_capture().is_none());
+        // Written just after the compaction: counts.
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 2,
+            at_ms: Some(boundary + 500),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        s.apply_context_spool(spool_at(boundary + 1000, 2));
+        assert_eq!(s.context_capture().unwrap().0.used_tokens, 2);
+    }
+
+    #[test]
+    fn apply_then_boundary_hides_the_spool() {
+        let mut s = with_calls(&[(1, 1_000)]);
+        s.apply_context_spool(spool_at(2_000, 5));
+        assert!(s.context_capture().is_some());
+        s.agg.boundaries.push(crate::metrics::usage::Boundary {
+            at: Some("2026-08-01T00:00:00.000Z".into()),
+            turn: 2,
+            kind: crate::metrics::usage::BoundaryKind::Compact,
+        });
+        assert!(s.context_capture().is_none());
+    }
+
+    #[test]
+    fn spool_before_its_call_anchors_once_the_call_arrives() {
+        let mut s = State::new(Pricing::default());
+        s.apply_context_spool(spool_at(2_000, 5));
+        assert!(s.context_capture().is_none());
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 4,
+            at_ms: Some(1_500),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        assert_eq!(s.context_capture().unwrap().1, 4);
+    }
+
+    #[test]
+    fn lagging_tailer_reanchors() {
+        let mut s = with_calls(&[(1, 1_000)]);
+        s.apply_context_spool(spool_at(3_000, 5));
+        assert_eq!(s.context_capture().unwrap().1, 1);
+        s.agg.calls.push(crate::metrics::usage::CallRecord {
+            turn: 2,
+            at_ms: Some(2_900),
+            model: "m".into(),
+            usage: Default::default(),
+            machine: false,
+        });
+        assert_eq!(s.context_capture().unwrap().1, 2);
+    }
+
+    #[test]
+    fn a_plugin_notification_is_not_claude_codes_attention_request() {
+        let mut s = State::new(Pricing::bundled());
+        let ev = |payload: serde_json::Value| crate::hooks::HookEvent {
+            at: 5_000,
+            event: "Notification".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload,
+        };
+        // What `$.ui.notify` raises: the person's Notification hooks see it,
+        // marked by `plugin_notification`, and it changes nothing here.
+        s.apply_hook(&ev(serde_json::json!({
+            "notification_type": "permission_prompt",
+            "message": "▸ Rate limit",
+            "plugin_notification": {"plugin": "cctop"}
+        })));
+        assert!(!s.session.permission_pending);
+        assert!(s.session.notification.is_none());
+        assert!(s.events.is_empty());
+        // Claude Code's own still counts.
+        s.apply_hook(&ev(
+            serde_json::json!({"notification_type": "permission_prompt", "message": "needs you"}),
+        ));
+        assert!(s.session.permission_pending);
+        assert!(s.session.notification.is_some());
+    }
+
+    #[test]
+    fn permission_spans_join_through_the_parent_tool_span() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        let mut s = state_with_waits(3);
+        assert!(s.permission_split().is_none(), "no traces: nothing new");
+        let data = crate::otel::SessionData {
+            spans: trace_spans(&["user", "config", "weird"]).into(),
+            ..Default::default()
+        };
+        s.apply_otel(&data);
+        let r = &s.session.permission_records;
+        assert_eq!(r[0].source.as_deref(), Some("user"));
+        assert_eq!(r[0].decision.as_deref(), Some("accept"));
+        assert_eq!(r[1].source.as_deref(), Some("config"));
+        assert_eq!(
+            s.permission_split(),
+            Some((3, vec![("you", 1), ("rule", 1), ("other", 1)]))
+        );
+    }
+
+    #[test]
+    fn a_permission_span_before_its_parent_joins_on_the_next_batch() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        let mut s = state_with_waits(1);
+        let both = trace_spans(&["classifier"]);
+        // Batch 1: the child only.
+        let mut data = crate::otel::SessionData {
+            spans: both[1..].iter().cloned().collect(),
+            ..Default::default()
+        };
+        s.apply_otel(&data);
+        assert!(s.session.permission_records[0].source.is_none());
+        assert!(s.permission_split().is_none());
+        // Batch 2: the parent arrives.
+        data.spans.push_front(both[0].clone());
+        s.apply_otel(&data);
+        assert_eq!(
+            s.session.permission_records[0].source.as_deref(),
+            Some("classifier")
+        );
+        assert_eq!(s.permission_split(), Some((1, vec![("classifier", 1)])));
+    }
+
+    #[test]
+    fn without_hooks_only_real_waits_count() {
+        use super::tests_support::trace_spans;
+        use crate::otel::Span;
+        let mut s = State::new(Pricing::bundled());
+        let mut spans = trace_spans(&["user", "config", "config"]);
+        // The auto-allowed call (config, zero duration) is not a wait.
+        for sp in &mut spans {
+            if let Span::Permission {
+                ids, duration_ms, ..
+            } = sp
+            {
+                if ids.span_id == "perm-1" {
+                    ids.end_ns = ids.start_ns;
+                    *duration_ms = Some(0);
+                }
+            }
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+        // user (a person) + the config span that lasted; the instant one is out.
+        assert_eq!(
+            s.permission_split(),
+            Some((2, vec![("you", 1), ("rule", 1)]))
+        );
+    }
+
+    fn two_responses() -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(
+            &Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:00Z","message":{"role":"user","content":"go"}}"#)
+                .unwrap(),
+        );
+        for (id, req) in [("m1", "req_1"), ("m2", "req_2")] {
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T10:00:05Z","requestId":"{req}","message":{{"id":"{id}","model":"claude-opus-5","content":[{{"type":"text","text":"ok"}}],"usage":{{"input_tokens":1}}}}}}"#
+            ))
+            .unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn retries_join_by_request_id_and_sum_the_time_they_added() {
+        use super::tests_support::llm_span;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        assert_eq!(turn.request_ids, ["req_1", "req_2"]);
+        assert_eq!(s.turn_retries(&turn), None, "no traces: nothing");
+        let spans = vec![
+            llm_span("req_1", 3, 16), // 2 retries; last attempt starts at 3 s → +3 s
+            llm_span("req_2", 2, 12), // 1 retry; last attempt starts at 2 s → +2 s
+            llm_span("req_9", 4, 99), // another turn's request: ignored
+        ];
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+        assert_eq!(s.turn_retries(&turn), Some((3, 5_000)));
+    }
+
+    #[test]
+    fn a_request_with_zero_attempt_events_is_one_attempt_and_no_retry() {
+        use crate::otel::{ingest_traces, Store};
+        use serde_json::json;
+        let mut s = two_responses();
+        let turn = s.agg.current_turn().unwrap().clone();
+        // Built through ingest: a span with no attempt events at all.
+        let spans: Vec<_> = ["req_1", "req_2"]
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                json!({
+                    "traceId": "tr", "spanId": format!("s{i}"), "name": "claude_code.llm_request",
+                    "startTimeUnixNano": "0", "endTimeUnixNano": "5000000000",
+                    "attributes": [{"key": "gen_ai.response.id", "value": {"stringValue": r}}],
+                    "events": []
+                })
+            })
+            .collect();
+        let body = json!({"resourceSpans": [{
+            "resource": {"attributes": [{"key": "session.id", "value": {"stringValue": "a"}}]},
+            "scopeSpans": [{"spans": spans}]
+        }]});
+        let mut st = Store::default();
+        ingest_traces(&mut st, &body);
+        let d = st.sessions["a"].clone();
+        assert!(matches!(
+            &d.spans[0],
+            crate::otel::Span::LlmRequest { attempts: 1, .. }
+        ));
+        s.apply_otel(&d);
+        assert_eq!(s.turn_retries(&turn), None);
+    }
+
+    #[test]
+    fn a_permission_record_after_the_last_batch_joins_without_waiting() {
+        use super::tests_support::trace_spans;
+        let mut s = State::new(Pricing::bundled());
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        for (ev, at) in [("PermissionRequest", 1_000), ("PostToolUse", 6_000)] {
+            let p = serde_json::json!({"hook_event_name": ev, "tool_name": "Bash",
+                "tool_use_id": "t0", "tool_input": {"command": "gh api x"}});
+            s.apply_hook(&crate::hooks::HookEvent::from_stdin(at, p).unwrap());
+        }
+        assert_eq!(
+            s.session.permission_records[0].source.as_deref(),
+            Some("user")
+        );
+    }
+
+    #[test]
+    fn huge_wire_durations_saturate_instead_of_overflowing() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, u64::MAX),
+                hook_span("Stop", 6, u64::MAX),
+                hook_span("Notification", 7, 10),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!((total, by["Stop"]), (u64::MAX, u64::MAX));
+        assert_eq!(s.hook_ms_by_turn()[0].1["Stop"], u64::MAX);
+        // A permission span with a huge duration_ms.
+        let mut p = super::tests_support::trace_spans(&["user"]);
+        if let crate::otel::Span::Permission { duration_ms, .. } = &mut p[1] {
+            *duration_ms = Some(u64::MAX);
+        }
+        s.apply_otel(&crate::otel::SessionData {
+            spans: p.into_iter().collect(),
+            ..Default::default()
+        });
+        assert!(s.permission_split().is_some());
+    }
+
+    /// Two turns starting at 10:00:00 and 10:10:00 (2026-08-27 UTC), and a
+    /// `claude_code.hook` span of `ms` for `event` starting `at_s` seconds
+    /// after 10:00:00.
+    fn hooked_state() -> State {
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        for (t, id) in [("10:00:00", "p1"), ("10:10:00", "p2")] {
+            s.apply(&crate::transcript::Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"2026-08-27T{t}Z","promptId":"{id}","message":{{"role":"user","content":"go"}}}}"#
+            )).unwrap());
+        }
+        s
+    }
+
+    fn hook_span(event: &str, at_s: u64, ms: u64) -> crate::otel::Span {
+        // 2026-08-27T10:00:00Z in epoch seconds.
+        let base = crate::metrics::cost::parse_ts_ms("2026-08-27T10:00:00Z").unwrap() as u64;
+        let start_ns = (base + at_s * 1000) * 1_000_000;
+        crate::otel::Span::Hook {
+            ids: crate::otel::SpanIds {
+                trace_id: "tr".into(),
+                span_id: format!("h-{event}-{at_s}"),
+                parent_span_id: None,
+                start_ns,
+                end_ns: start_ns.saturating_add(ms.saturating_mul(1_000_000)),
+            },
+            hook_event: Some(event.into()),
+            hook_name: None,
+            num_hooks: Some(1),
+            duration_ms: Some(ms),
+            num_blocking: None,
+        }
+    }
+
+    fn apply_hooks(s: &mut State, spans: Vec<crate::otel::Span>) {
+        s.apply_otel(&crate::otel::SessionData {
+            spans: spans.into(),
+            ..Default::default()
+        });
+    }
+
+    fn hook_rows(s: &State) -> Vec<String> {
+        s.events
+            .iter()
+            .filter(|e| e.kind == crate::events::Kind::Hook)
+            .map(|e| e.text.clone())
+            .collect()
+    }
+
+    #[test]
+    fn hook_row_appears_at_501_ms_and_not_at_500() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 500)]);
+        assert!(hook_rows(&s).is_empty());
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 501)]);
+        assert_eq!(hook_rows(&s), ["hooks +0.5 s · Stop 0.5 s"]);
+    }
+
+    #[test]
+    fn hook_row_orders_events_by_descending_time_and_sums_per_turn() {
+        let mut s = hooked_state();
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 20, 300),
+                hook_span("PreToolUse", 5, 500),
+                hook_span("PreToolUse", 9, 400),
+                // second turn: under the threshold, no row
+                hook_span("Stop", 610, 400),
+            ],
+        );
+        assert_eq!(
+            hook_rows(&s),
+            ["hooks +1.2 s · PreToolUse 0.9 s · Stop 0.3 s"]
+        );
+        let by = s.hook_ms_by_turn();
+        assert_eq!(by.len(), 2);
+        assert_eq!(by[0].0, 1);
+        assert_eq!(by[0].1["PreToolUse"], 900);
+        assert_eq!(by[1].1["Stop"], 400);
+    }
+
+    #[test]
+    fn hook_row_is_replaced_not_duplicated_when_more_time_arrives() {
+        let mut s = hooked_state();
+        apply_hooks(&mut s, vec![hook_span("Stop", 5, 600)]);
+        apply_hooks(
+            &mut s,
+            vec![hook_span("Stop", 5, 600), hook_span("Stop", 8, 600)],
+        );
+        assert_eq!(hook_rows(&s), ["hooks +1.2 s · Stop 1.2 s"]);
+    }
+
+    #[test]
+    fn hook_overhead_is_none_without_traces_and_sums_by_event_with_them() {
+        let mut s = hooked_state();
+        assert!(s.hook_overhead().is_none());
+        apply_hooks(
+            &mut s,
+            vec![
+                hook_span("Stop", 5, 300),
+                hook_span("Stop", 15, 200),
+                hook_span("Notification", 700, 50),
+            ],
+        );
+        let (total, by) = s.hook_overhead().unwrap();
+        assert_eq!(total, 550);
+        assert_eq!(by["Stop"], 500);
+        assert_eq!(by["Notification"], 50);
+        assert!(hook_rows(&s).is_empty());
+    }
+
+    #[test]
+    fn hook_overhead_is_none_when_spans_arrived_but_none_is_a_hook() {
+        use super::tests_support::trace_spans;
+        let mut s = hooked_state();
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert!(s.hook_overhead().is_none());
+    }
+
+    #[test]
+    fn unjoined_user_keyed_waits_still_count_as_the_persons_own() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        use crate::advisor::rules::events::PermissionWaits;
+        use crate::advisor::Rule;
+        let mut s = state_with_waits(3);
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user"]).into(),
+            ..Default::default()
+        });
+        assert_eq!(
+            s.session
+                .permission_records
+                .iter()
+                .filter(|r| r.source.is_some())
+                .count(),
+            1
+        );
+        assert!(
+            PermissionWaits.evaluate(&s).is_some(),
+            "3 waits, only 1 joined"
+        );
     }
 }

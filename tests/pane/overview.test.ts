@@ -341,3 +341,84 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
     }
   }
 });
+
+// The window's composition (PRD 3): the context body's row, from the dashboard
+// object, is the TUI's row character for character; the label names the source.
+test('the context body draws the composition row identically to the TUI at 85 columns', () => {
+  const snap = readFileSync(join(repo, 'src', 'snapshots', 'cctop__theme__fixture_b_snapshots__fixture_b_console_context_85x24.snap'), 'utf8');
+  const tuiRow = snap.split('\n').find((l) => l.startsWith('  per /context'));
+  assert.ok(tuiRow !== undefined, 'the TUI snapshot has the composition row');
+  const pane = raw(build({ dashboard: fixture('dashboard-b'), body: 'context' }), 85).map((l) => l.replace(/\s+$/, ''));
+  assert.ok(pane.includes(tuiRow!.replace(/\s+$/, '')), `pane rows: ${JSON.stringify(pane)}`);
+});
+
+// The status-bearing header (PRD 2): the TUI's `header_workspace_*` insta
+// snapshots (src/ui/snapshots/) hold the row `ui/dashboard.rs` draws for a
+// header whose line carries workspace items between the session facts and the
+// PR / version. The pane, given the same object, draws the same row at 80, 120
+// and 200 columns: items dropped from the right, the phase cell kept.
+test('a status-bearing header renders row-identical on both surfaces at 80, 120 and 200 columns', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  const model = build({ dashboard: dash });
+  const rows = new Map<number, string>();
+  for (const columns of [80, 120, 200]) {
+    const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', `cctop__ui__dashboard__tests__header_workspace_${columns}.snap`), 'utf8');
+    const tui = snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+    const pane = raw(model, columns)[0].replace(/\s+$/, '');
+    assert.equal(pane, tui, `${columns} columns`);
+    rows.set(columns, pane);
+  }
+  assert.match(rows.get(200) ?? '', /acme\/shop · wt feat · \+1 dir · style Concise · agent: reviewer · remote · PR #121 · v2\.1\.270/);
+  assert.match(rows.get(120) ?? '', /\/home\/user\/project · acme\/shop/);
+  assert.doesNotMatch(rows.get(120) ?? '', /remote/);
+});
+
+// The hooks badge (PRD 5): an old `cctop install` lacks events, the object's
+// `header.hooks` is `hooks: 7 new`, and both surfaces draw it between the
+// facts and the phase cell. The TUI's insta snapshot is the reference row.
+test('the hooks badge renders row-identical on both surfaces and is absent without it', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 120)[0], /hooks:/);
+  dash.header.hooks = 'hooks: 7 new';
+  const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__header_hooks_missing_120.snap'), 'utf8');
+  const tui = snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), tui);
+  // Too narrow: the badge goes before the phase cell does, on both surfaces.
+  const snap40 = readFileSync(join(repo, 'src', 'ui', 'snapshots', 'cctop__ui__dashboard__tests__header_hooks_missing_40.snap'), 'utf8');
+  const tui40 = snap40.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
+  assert.doesNotMatch(pane40, /hooks:/);
+  assert.match(pane40, /COMMITTING/);
+  assert.equal(pane40, tui40);
+});
+
+// The data rules (PRD 6): the marker's `facts.dataRules` become the object's
+// `header.rules`, drawn beside the hooks badge; the TUI's insta snapshots
+// are the reference rows.
+test('the rules badge renders row-identical on both surfaces and is absent without it', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 120)[0], /ZDR/);
+  const snapRow = (name: string): string => {
+    const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', `cctop__ui__dashboard__tests__${name}.snap`), 'utf8');
+    return snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  };
+  dash.header.rules = 'ZDR HIPAA rules';
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), snapRow('header_rules_120'));
+  dash.header.hooks = 'hooks: 7 new';
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), snapRow('header_rules_hooks_120'));
+  const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
+  assert.doesNotMatch(pane40, /ZDR/);
+  assert.equal(pane40, snapRow('header_rules_hooks_40'));
+});

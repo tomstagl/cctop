@@ -56,8 +56,20 @@ impl Panel for LimitsPanel {
             }
             Line::from(spans)
         });
+        // The budget a `--max-budget-usd` run was given: one formatter, shared
+        // with the dashboard's limits cell.
+        let budget_line = crate::dashboard::budget_line(state).map(|(t, ratio, eta)| {
+            let style = band_style(&state.theme, ratio, 0.6, 0.9);
+            let mut spans = vec![Span::styled(format!(" {t}  "), style)];
+            spans.extend(gauge(&state.theme, ratio, 10, style));
+            if let Some(e) = eta {
+                spans.push(Span::styled(format!("  {e}"), dim));
+            }
+            Line::from(spans)
+        });
         let Some(l) = &state.limits else {
             let mut lines = vec![Line::from(Span::styled(" — run cctop install", dim))];
+            lines.extend(budget_line);
             if let Some(h) = hit_line {
                 lines.insert(0, h);
             }
@@ -120,6 +132,7 @@ impl Panel for LimitsPanel {
         }
         lines.push(Line::from(l2));
         lines.push(row("7 d", l.seven_day_pct, l.seven_day_resets_at_ms));
+        lines.extend(budget_line);
         // The 429 state when hit; else the spend limit and the other sessions.
         if let Some(h) = hit_line {
             lines.push(h);
@@ -127,12 +140,13 @@ impl Panel for LimitsPanel {
             return;
         }
         let mut l4: Vec<Span> = Vec::new();
-        if let Some(p) = state.status_facts.spend_limit_pct {
-            l4.push(Span::raw(" spend limit "));
-            l4.push(Span::styled(
-                format!("{p:.0} %"),
-                band_style(&state.theme, p / 100.0, 0.6, 0.85),
-            ));
+        if let Some(t) = crate::dashboard::spend_limit_text(&state.status_facts) {
+            let style = match state.status_facts.spend_limit_pct {
+                Some(p) => band_style(&state.theme, p / 100.0, 0.6, 0.85),
+                None => ratatui::style::Style::default(),
+            };
+            l4.push(Span::raw(" "));
+            l4.push(Span::styled(t, style));
         }
         if !state.other_sessions.is_empty() {
             let mut parts: Vec<String> = state
@@ -224,6 +238,16 @@ mod tests {
             out.contains("spend limit 40 %  others: pane-work idle 10:00"),
             "{out}"
         );
+        app.state.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        app.state.status_facts.spend_limit_period = Some("monthly".into());
+        app.state.status_facts.spend_limit_resets_at_ms = Some(1_796_299_200_000);
+        let out = render_to_string(&app, 120, 70);
+        assert!(
+            out.contains(
+                "spend $412 / $500 · monthly · resets 3 Dec  others: pane-work idle 10:00"
+            ),
+            "{out}"
+        );
     }
     use std::path::Path;
 
@@ -240,6 +264,36 @@ mod tests {
         }
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         app
+    }
+
+    #[test]
+    fn a_budget_row_shows_with_and_without_the_shim() {
+        let mut app = fixture_app();
+        app.state.open = Some(3);
+        assert!(!render_to_string(&app, 64, 60).contains("budget"));
+        app.state.budget_usd = Some((3.2, 5.0, 1.8));
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("budget $3.20 / $5.00  ▇"), "{out}");
+        let now = app.state.clock_ms();
+        app.state.limits = Some(Limits {
+            five_hour_pct: 62.0,
+            seven_day_pct: 23.0,
+            five_hour_resets_at_ms: Some(now + 6_480_000),
+            seven_day_resets_at_ms: None,
+            exhaustion_ms: None,
+            exhaustion_in_active_hours: None,
+        });
+        let out = render_to_string(&app, 64, 60);
+        assert!(out.contains("budget $3.20 / $5.00  ▇"), "{out}");
+    }
+
+    #[test]
+    fn the_budget_bar_is_red_from_ninety_percent() {
+        use crate::ui::widgets::band_style;
+        let app = fixture_app();
+        let t = &app.state.theme;
+        assert_eq!(band_style(t, 0.9, 0.6, 0.9), t.crit());
+        assert_ne!(band_style(t, 0.89, 0.6, 0.9), t.crit());
     }
 
     #[test]

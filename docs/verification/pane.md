@@ -69,12 +69,18 @@ Expected:
   wrote `null` here in a `-p` run), `testedWith` and `selfCheck: "ok"`.
 
 The same check without a model call, and so without credentials — what CI
-runs (`.github/workflows/ci.yml`, the `contract` job): the prompt is the
-native `/plugin-types` command, which fires `session.start` like any run and
-writes the contract beside it.
+runs (`.github/workflows/ci.yml`, the `contract` job) through
+`scripts/check-contract.sh`: the prompt is `noop`, with `</dev/null` and
+`HOME` and `CLAUDE_CONFIG_DIR` pointing at a temp dir. `session.start` fires
+like in any run, and the run then stops at "Not logged in". That non-zero
+exit is the expected pass path; the checks above read the debug log and the
+marker. The contract surface is read from the installed binary by
+`scripts/extract-dts.py` (needs `zstd`) and diffed against the checked-in d.ts.
+The script's result line has the shape of the Result line below, with
+`exit 1 (Not logged in, expected without credentials)` in place of `exit 0`.
 
 ```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin '/plugin-types /tmp/types'
+HOME=$(mktemp -d) CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin "noop" </dev/null
 ```
 
 Known benign line: `[WARN] plugin cctop: options requested but its manifest
@@ -635,6 +641,120 @@ hooks are off or before its module is accepted.
     indented two cells, the `→ <file>:<line> <call>()` pointer under it —
     and the same rows as `cctop query agents --session <id> | jq
     '.workflows[0].detail_narrow'`; `back` returns to the list.
+    Claude Code version:
+    Result: pending
+
+39. **An interactive session rewrites
+    `plugin/.claude-plugin/types/claude-code/index.d.ts`** (PRD 0 §8).
+    Setup: `claude --plugin-dir ./plugin` in a real terminal, then quit.
+    Expected: the file exists and line 1 names the running version.
+    Claude Code version:
+    Result: pending
+
+40. **A `/model` or `/effort` switch mid-session shows `ParamsChanged` in
+    A01** (request ledger PRD §9).
+    Setup: a real session on Claude Code 2.1.302 or later; switch effort
+    (`/effort`) or model (`/model`) part-way through, send another prompt,
+    then `cctop query dashboard --session <id>`.
+    Expected: `cache.located_misses` has an entry whose cause is
+    `params_changed`.
+    Claude Code version:
+    Result: pending
+
+41. **After a turn the TUI's context cell shows `per Claude Code` while the
+    pane is loaded** (context breakdown PRD 3, US-003).
+    Setup: a real session with the pane loaded and `cctop run` in another
+    terminal; finish one turn.
+    Expected: the composition row appears in the context body, labelled
+    `per Claude Code`, within a minute, and
+    `cctop query dashboard --session <id> | jq .composition_source` says
+    the same.
+    Claude Code version:
+    Result: pending
+
+42. **An MCP elicitation with cctop's silent hook installed still shows
+    the person the prompt unchanged** (hook events PRD, §6).
+    Setup: an MCP server that elicits, and cctop's hooks installed
+    (`cctop install`, so `Elicitation` and `ElicitationResult` have a
+    `cctop hook` entry).
+    Expected: the prompt appears and works as it does without cctop;
+    cctop shows it until it is answered: the TUI's turn panel reads
+    `waiting on you · MCP <server> asks`, the dashboard and the pane read
+    `◆ WAITING … — MCP <server> asks`.
+    Claude Code version:
+    Result: pending
+
+43. **A teammate going idle shows `idle` on the lead's team view at once
+    (`TeammateIdle`)** (hook events PRD, §6).
+    Setup: a lead session running a team of two or more teammates, cctop's
+    hooks installed (`cctop install`) and the Agents view open (or
+    `cctop query agents --session <lead id>`); let one teammate finish its
+    turn and wait for work.
+    Expected: that teammate's row shows `idle <age>` within a few seconds
+    of the turn ending, not after the five-minute inference window, and
+    `~/.cctop/events/<teammate session id>.jsonl` holds the `TeammateIdle`
+    event (it is in the teammate's own spool, not the lead's). Its money
+    counts as idle waste only after five minutes.
+    Claude Code version:
+    Result: pending
+
+44. **Pressing an agent row shows its transcript; back to main returns**
+    (the pane-APIs PRD, US-003).
+    Setup: a session with a running `Explore` agent (ask it to explore
+    something slow in the background), the pane docked on the Agents view.
+    Expected: the agent's row is a Button; pressing it puts that agent's
+    transcript in Claude Code's main view and `back to main` appears in the
+    pane's view bar; pressing that returns to the main conversation. A row
+    for an agent the engine refuses (a teammate in a pane of its own, a
+    stopped one) raises one toast with the reason and does not move the
+    view. Record whether cctop's agent ids equal `AgentInfo.id` (a press on
+    a row with no match draws no Button: the mapping falls back on
+    description and type only for a running agent whose pair is unique,
+    so two running agents alike show no button).
+    Claude Code version:
+    Result: pending
+
+45. **Notifications on a real terminal: a NOW nudge once, a reset at the
+    reset time** (the pane-APIs PRD, notifications).
+    Setup: `CCTOP_PANE_NOTIFY=1` in the environment Claude Code starts in,
+    a terminal with a notification channel (iTerm2, kitty, Ghostty), the
+    pane open; a window at 90 % or more with a `resets_at` a few minutes
+    ahead.
+    Expected: a NOW nudge taking the slot notifies once; the reset
+    notification `rate limit resets now` arrives at the reset time, not
+    before (nothing when the window first crosses 90 %).
+    Claude Code version:
+    Result: pending
+
+46. **A session with traces on: span names, `blocked_on_user` `source`
+    values, and whether `mcp.rpc` / `bash.subprocess` appear** (the OTel
+    traces PRD, §8).
+    Setup: the env from `cctop install --otel` (after the traces task adds
+    `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` and `OTEL_TRACES_EXPORTER=otlp`
+    to it) in the environment Claude Code starts in, and `cctop run --otlp
+    --dump-otel /tmp/otel` for that session in a real terminal; accept one
+    permission prompt, call one MCP tool, run one Bash command. The dumped
+    bodies contain account identifiers (email, user and organization ids)
+    and prompt text: cctop creates the directory 0700 and the files 0600;
+    keep it private and delete it afterwards.
+    Expected: `blocked_on_user` spans with `source` `user` for the prompt
+    you accepted; note every other `source` value, and whether
+    `claude_code.mcp.rpc` and `claude_code.bash.subprocess` spans appear in
+    `/tmp/otel/*-traces.json`.
+    Headless capture (Claude Code 2.1.332, `claude -p --max-turns 2`, one
+    `ls`, OTLP/JSON to a throwaway receiver; keys and enum values only):
+    spans `claude_code.interaction` (`parent.source` `none`),
+    `claude_code.llm_request` (two, `llm_request.context` `interaction`,
+    one `gen_ai.request.attempt` event each), `claude_code.tool` (`Bash`),
+    `claude_code.tool.blocked_on_user` (`decision` `accept`, `source`
+    `config`: a rule allowed it, no prompt), `claude_code.tool.execution`.
+    No `hook`, `compaction`, `mcp.rpc` or `bash.subprocess` span appeared
+    (no hooks configured, no MCP call, no compaction). Every span carried
+    `session.id` and account attributes (`user.email`, `user.id`,
+    `organization.id`), and `interaction` carried `user_prompt` and
+    `user_prompt_length`: the PRD's allowlist must drop those. `llm_request`
+    carries `query_source_safe` (not `query_source`), `tool` carries
+    `tool_name_safe`, `bash_argv0` and `bash_command_class`.
     Claude Code version:
     Result: pending
 

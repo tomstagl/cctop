@@ -34,6 +34,8 @@ pub struct Row {
     pub api_errors: usize,
     pub steers: usize,
     pub interrupted: bool,
+    /// Thinking blocks Claude Code dropped from this turn's requests.
+    pub thinking_dropped: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -78,6 +80,31 @@ impl Sort {
     }
 }
 
+/// Does the API's own reason name the same thing as the located cause?
+fn reason_agrees(api: &str, kind: &str) -> bool {
+    match api {
+        "tools_changed" => kind == "tools_changed",
+        "model_changed" => kind == "params_changed",
+        "system_changed" => kind == "system_changed",
+        "messages_changed" | "previous_message_not_found" => {
+            matches!(kind, "prefix_rewritten" | "expired" | "thinking_drop")
+        }
+        r if r.starts_with("ttl_expired") => kind == "expired",
+        _ => false,
+    }
+}
+
+/// The compact located cause; when the API named a different reason, that
+/// reason follows in parentheses (`unavailable` names nothing).
+fn miss_label(m: &crate::requests::LocatedMiss) -> String {
+    match m.api_reason.as_deref() {
+        Some(r) if r != "unavailable" && !reason_agrees(r, m.cause.kind()) => {
+            format!("{} (API: {r})", m.cause.compact())
+        }
+        _ => m.cause.compact(),
+    }
+}
+
 /// Build the rows from the state, in turn order.
 pub fn rows(state: &State) -> Vec<Row> {
     let compacted: Vec<usize> = state.context().compactions.iter().map(|c| c.turn).collect();
@@ -85,6 +112,15 @@ pub fn rows(state: &State) -> Vec<Row> {
     let mut misses: std::collections::HashMap<usize, String> = Default::default();
     for (turn, cause) in &state.agg.miss_causes_by_turn {
         misses.entry(*turn).or_insert_with(|| cause.clone());
+    }
+    // A located cause (api-request lines, 2.1.302+) names what changed;
+    // the first one of a turn replaces the API's own label.
+    let mut located: std::collections::HashSet<usize> = Default::default();
+    for m in state.requests.misses() {
+        let Some(turn) = m.turn else { continue };
+        if m.cause.kind() != "unlocated" && located.insert(turn) {
+            misses.insert(turn, miss_label(m));
+        }
     }
     let price = state
         .model()
@@ -157,6 +193,7 @@ pub fn rows(state: &State) -> Vec<Row> {
                 api_errors: t.api_errors,
                 steers: t.steers,
                 interrupted: t.interrupted_after_calls.is_some(),
+                thinking_dropped: t.thinking_dropped_blocks,
             }
         })
         .collect()
@@ -215,6 +252,68 @@ mod tests {
     }
 
     #[test]
+    fn miss_turn_carries_the_located_short_form() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-r.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let s = crate::load::state_from(&path, info);
+        let r = rows(&s);
+        let first = &s.requests.misses()[0];
+        let row = r.iter().find(|x| Some(x.turn) == first.turn).unwrap();
+        assert_eq!(
+            row.miss_cause.as_deref(),
+            Some(first.cause.compact().as_str())
+        );
+        assert!(row.miss_cause.as_deref().unwrap().starts_with('+'));
+    }
+
+    fn located(
+        cause: crate::requests::LocatedCause,
+        api: Option<&str>,
+    ) -> crate::requests::LocatedMiss {
+        crate::requests::LocatedMiss {
+            message_id: "m".into(),
+            request_id: None,
+            turn: Some(1),
+            at: None,
+            tokens: 30_000,
+            cause,
+            api_reason: api.map(String::from),
+            after_config_change: None,
+        }
+    }
+
+    #[test]
+    fn miss_label_adds_the_api_reason_only_when_it_disagrees() {
+        use crate::requests::LocatedCause::*;
+        let tools = || ToolsChanged {
+            added: vec!["x".into()],
+            removed: vec![],
+            resized: vec![],
+        };
+        let expired = || Expired {
+            gap_ms: 400_000,
+            ttl_ms: 300_000,
+        };
+        // Agree: the compact cause alone.
+        assert_eq!(miss_label(&located(tools(), Some("tools_changed"))), "+x");
+        assert_eq!(
+            miss_label(&located(expired(), Some("ttl_expired_5m"))),
+            "cache expired"
+        );
+        assert_eq!(miss_label(&located(tools(), None)), "+x");
+        assert_eq!(miss_label(&located(tools(), Some("unavailable"))), "+x");
+        // Disagree: the API's reason follows.
+        assert_eq!(
+            miss_label(&located(expired(), Some("tools_changed"))),
+            "cache expired (API: tools_changed)"
+        );
+        assert_eq!(
+            miss_label(&located(tools(), Some("messages_changed"))),
+            "+x (API: messages_changed)"
+        );
+    }
+
+    #[test]
     fn fixture_rows() {
         let s = state();
         let r = rows(&s);
@@ -234,5 +333,25 @@ mod tests {
         let by_turn_asc = sorted(&s, Sort::Turn, true);
         assert_eq!(by_turn_asc[0].turn, 1);
         assert_eq!(calls_of(&s, 3).len(), 7);
+    }
+
+    #[test]
+    fn thinking_drop_lands_on_its_turn_only() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-t.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let s = crate::load::state_from(&path, info);
+        let dropped: Vec<(usize, u64)> = rows(&s)
+            .iter()
+            .filter(|r| r.thinking_dropped > 0)
+            .map(|r| (r.turn, r.thinking_dropped))
+            .collect();
+        assert_eq!(dropped.len(), 1, "{dropped:?}");
+        assert_eq!(dropped[0].1, 10);
+        assert_eq!(dropped[0].0, s.agg.turns.last().unwrap().number);
+        let j = crate::query::ledger_json(&s, None);
+        let last = j.as_array().unwrap().last().unwrap();
+        assert_eq!(last["thinking_dropped"]["value"], 10);
+        assert_eq!(last["thinking_dropped"]["metric_id"], "thinking_dropped");
+        assert!(j[0]["thinking_dropped"].is_null());
     }
 }

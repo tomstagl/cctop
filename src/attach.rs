@@ -48,17 +48,20 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         if !state.session.alive && state.session.ended_at_ms.is_none() {
             state.session.ended_at_ms = state.last_line_at_ms;
         }
-        if last_git.elapsed() >= Duration::from_secs(5) && state.session.cwd.is_dir() {
+        if last_git.elapsed() >= Duration::from_secs(5) && state.work_dir().is_dir() {
             last_git = Instant::now();
-            if let Some(g) = crate::git::info(&state.session.cwd) {
+            if let Some(g) = crate::git::info(state.work_dir()) {
                 state.session.git_branch = g.branch;
                 state.session.git_dirty = g.dirty;
             }
             if let Some(base) = &base_commit {
-                let ns = crate::files::numstat(&state.session.cwd, base);
+                // The repo the session started in: `CwdChanged` moves the
+                // branch display and Bash paths, not the diff base or the
+                // folder the file paths are relative to.
                 let cwd = state.session.cwd.clone();
+                let ns = crate::files::numstat(&cwd, base);
                 state.files.apply_numstat(&cwd, &ns);
-                let head = crate::files::numstat(&state.session.cwd, "HEAD");
+                let head = crate::files::numstat(&cwd, "HEAD");
                 state.uncommitted = Some((
                     head.iter().map(|(_, a, _)| a).sum(),
                     head.iter().map(|(_, _, d)| d).sum(),
@@ -145,11 +148,22 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             state.apply_hook(&ev);
         }
     }));
+    // The pane marker's `facts` (data rules, screen reader): the pane
+    // rewrites them when they change, so they are read again every few seconds.
+    app.state.load_pane_facts();
+    let mut facts_at = Instant::now();
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if facts_at.elapsed() >= Duration::from_secs(3) {
+            facts_at = Instant::now();
+            state.load_pane_facts();
+        }
+    }));
     if let Some(v) = crate::claude_home::read() {
         app.state.apply_claude_home(&v);
     }
     if app.state.session.pid.is_some() {
         app.state.load_autocompact();
+        app.state.load_hooks_missing();
     }
     // `~/.claude/usage-data`: Claude Code's own analysis, at attach and
     // whenever `/insights` writes a new file.
@@ -192,6 +206,9 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             }
         }
     }));
+    // The pane's context-breakdown spool.
+    app.tick_hooks
+        .push(spool_hook(&cctop_home, &app.state.session.session_id));
     // Background tasks every 2 s.
     if let Some(dir) = crate::tasks::dir_for(&app.state.session.session_id) {
         let mut last = Instant::now() - Duration::from_secs(5);
@@ -240,14 +257,32 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         crate::baseline::default_projects_dir(),
         app.state.cost.pricing().clone(),
     );
+    let idle_spool_dir = crate::hooks::spool_dir(&crate::status::cctop_dir());
+    let mut idle_seen = std::collections::HashMap::new();
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         let now = state.clock_ms();
         team.poll(&mut state.team, &state.tools.agent_spawns, now);
+        // `TeammateIdle` is spooled under the teammate's own session id.
+        if let Some(t) = state.team.as_mut() {
+            t.note_idle_from_spools(&idle_spool_dir, &mut idle_seen);
+        }
+        state.sync_teammate_idle();
     }));
     // The transcript itself.
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
         app.sources.push(Box::new(t) as Box<dyn LineSource>);
     }
+}
+
+/// The tick hook that feeds the pane's breakdown spool for one session id.
+fn spool_hook(home: &Path, session_id: &str) -> crate::app::TickHook {
+    let mut spool =
+        crate::context_spool::Watcher::at(crate::context_spool::path_in(home, session_id));
+    Box::new(move |state: &mut State| {
+        if let Some(s) = spool.poll() {
+            state.apply_context_spool(s);
+        }
+    })
 }
 
 /// The live registry entry that carries `pid` under a session id other than
@@ -298,6 +333,13 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
     app.state.team = crate::load::load_team(transcript, &app.state);
+    if let Some(t) = app.state.team.as_mut() {
+        t.note_idle_from_spools(
+            &crate::hooks::spool_dir(&crate::status::cctop_dir()),
+            &mut std::collections::HashMap::new(),
+        );
+    }
+    app.state.sync_teammate_idle();
     app.tick();
 }
 
@@ -324,6 +366,29 @@ mod tests {
 
     const OLD: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
     const NEW: &str = "9d337130-79ad-4df0-8bd5-1365210208b1";
+
+    /// After a session-id change `attach` builds the watcher for the new id:
+    /// the hook reads that id's spool, not the old one's.
+    #[test]
+    fn the_spool_hook_follows_the_session_id() {
+        let home = std::env::temp_dir().join(format!("cctop-attach-spool-{}", std::process::id()));
+        std::fs::create_dir_all(home.join("context")).unwrap();
+        let body = |tokens: u64| {
+            format!(r#"{{"v":1,"at":5,"tokens":{tokens},"window":100,"model":null}}"#)
+        };
+        std::fs::write(crate::context_spool::path_in(&home, OLD), body(11)).unwrap();
+        std::fs::write(crate::context_spool::path_in(&home, NEW), body(22)).unwrap();
+        for (id, want) in [(OLD, 11), (NEW, 22)] {
+            let mut state = State::new(crate::metrics::cost::Pricing::default());
+            spool_hook(&home, id)(&mut state);
+            assert_eq!(
+                state.context_spool.unwrap().capture.used_tokens,
+                want,
+                "{id}"
+            );
+        }
+        std::fs::remove_dir_all(&home).unwrap();
+    }
 
     #[test]
     fn rotated_entry_is_this_pid_under_another_live_id() {

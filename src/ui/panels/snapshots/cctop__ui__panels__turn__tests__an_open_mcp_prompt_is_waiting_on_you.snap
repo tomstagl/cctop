@@ -1,0 +1,24 @@
+---
+source: src/ui/panels/turn.rs
+expression: out
+---
+╭4 Turn ─ 8h 40m ──────────────────────────────────────────────────────────────────────────────────╮
+│ phase WAITING ×3 · turn elapsed 8h 40m · api 4 calls · api 3:48 / tools 8h 35m · retries 0:00    │
+│ ◆ waiting on you · MCP github asks · 1:15                                                        │
+│ edits 0 ✓ python3 - lorem_i lorem… 9h 01m ago · 3 unchecked · interrupts 1 (2.6k out cut)        │
+│ hooks —   permission waits —                                                                     │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Esc back  a ask  c coach  t theme  L sessions  q

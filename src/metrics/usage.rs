@@ -115,6 +115,8 @@ pub struct Turn {
     pub reopened: usize,
     /// Distinct API responses.
     pub api_calls: usize,
+    /// `requestId` of each counted response, the key a trace span joins on.
+    pub request_ids: Vec<String>,
     /// API-error lines seen in this turn (never counted as calls).
     pub api_errors: usize,
     pub usage: Usage,
@@ -196,6 +198,11 @@ pub struct Turn {
     pub instructions_seen: bool,
     /// Distinct source files edited this turn (basenames).
     pub files_edited: Vec<String>,
+    /// Thinking blocks / turns Claude Code dropped from this turn's requests
+    /// (`thinking_drop` attachments, 2.1.308+), and what it said changed.
+    pub thinking_dropped_blocks: u64,
+    pub thinking_dropped_turns: u64,
+    pub thinking_change_kinds: Vec<String>,
 }
 
 impl Turn {
@@ -273,6 +280,9 @@ pub struct CacheMissRecord {
     /// `cache_missed_input_tokens`, else the call's cache write.
     pub tokens: u64,
     pub message_id: String,
+    /// The `source` of a `ConfigChange` hook this request is the first
+    /// request after, when it missed (set by `State::mark_config_changes`).
+    pub after_config_change: Option<String>,
 }
 
 /// A line between two API calls that says what a context drop across them
@@ -386,6 +396,9 @@ pub struct Aggregate {
     /// when the transcript is a teammate's, so a teammate attached as the
     /// main session shows its team.
     pub team: Option<(String, String)>,
+    /// `(id, via)` of the first entry of the last `derived-from` line that
+    /// names another session (not this one): the session this one was started from and how (`clear`, `subprocess` …).
+    pub derived_from: Option<(String, String)>,
     /// Interrupts, in order: `(turn, tool calls so far)`.
     pub interrupts: Vec<(usize, usize)>,
     /// The `/model`, `/effort`, `/clear` … lines seen, with the turn.
@@ -414,6 +427,18 @@ pub struct Aggregate {
     pub cache_misses: Vec<CacheMissRecord>,
     /// The last `goal_status` attachment (`/goal`): met, tokens, iterations.
     pub goal: Option<GoalStatus>,
+    /// Thinking dropped over the session (`thinking_drop` attachments).
+    pub thinking_dropped: ThinkingDropped,
+}
+
+/// Session totals of dropped thinking. `by_kind` counts the blocks dropped
+/// under each `clientChange` kind as written (a drop naming two kinds counts
+/// its blocks under both).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ThinkingDropped {
+    pub blocks: u64,
+    pub turns: u64,
+    pub by_kind: std::collections::BTreeMap<String, u64>,
 }
 
 /// `/goal` progress as Claude Code reports it.
@@ -608,6 +633,28 @@ impl Aggregate {
                     } => {
                         *self.hook_ms_by_command.entry(command).or_default() += duration_ms;
                     }
+                    AttachmentKind::ThinkingDrop {
+                        dropped_blocks,
+                        dropped_turns,
+                        change_kinds,
+                        ..
+                    } => {
+                        let total = &mut self.thinking_dropped;
+                        total.blocks += dropped_blocks;
+                        total.turns += dropped_turns;
+                        for k in &change_kinds {
+                            *total.by_kind.entry(k.clone()).or_default() += dropped_blocks;
+                        }
+                        if let Some(t) = self.turns.last_mut() {
+                            t.thinking_dropped_blocks += dropped_blocks;
+                            t.thinking_dropped_turns += dropped_turns;
+                            for k in change_kinds {
+                                if !t.thinking_change_kinds.contains(&k) {
+                                    t.thinking_change_kinds.push(k);
+                                }
+                            }
+                        }
+                    }
                     AttachmentKind::SilentTurnReminder => {
                         if let Some(t) = self.turns.last_mut() {
                             t.silent_reminders += 1;
@@ -708,6 +755,10 @@ impl Aggregate {
                 if let Some(t) = self.turns.last_mut() {
                     t.checkpoints += 1;
                 }
+            }
+            Line::DerivedFrom(d) => {
+                let own: Vec<&str> = self.session_id.as_deref().into_iter().collect();
+                self.derived_from = d.parent(&own).map(|s| (s.id.clone(), s.via.clone()));
             }
             Line::ContinuedIn(c) => {
                 let turn = self.turn_number();
@@ -863,9 +914,13 @@ impl Aggregate {
                     .cache_missed_input_tokens
                     .unwrap_or(a.message.usage.cache_creation_input_tokens),
                 message_id: a.message.id.clone(),
+                after_config_change: None,
             });
         }
         t.api_calls += 1;
+        if let Some(r) = &a.request_id {
+            t.request_ids.push(r.clone());
+        }
         t.usage.add(&u);
         t.context_size = u.total_input();
         t.effort = a.effective_effort().map(str::to_string).or(t.effort.take());
@@ -916,6 +971,33 @@ mod tests {
     fn fixture(name: &str) -> Vec<Line> {
         parse_file(Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl")))
             .unwrap()
+    }
+
+    #[test]
+    fn derived_from_skips_entries_naming_the_session_itself() {
+        let line = |sessions: &str| {
+            Line::parse(&format!(
+                r#"{{"type":"derived-from","sessionId":"me","sessions":[{sessions}]}}"#
+            ))
+            .unwrap()
+        };
+        // Compact-only: the only entry is the session itself.
+        let agg = Aggregate::from_lines(&[line(
+            r#"{"type":"claude_code_session","id":"me","via":"compact"}"#,
+        )]);
+        assert_eq!(agg.derived_from, None);
+        // Cleared then compacted: the parent is the first foreign entry.
+        let agg = Aggregate::from_lines(&[line(
+            r#"{"type":"claude_code_session","id":"parent-1234","via":"clear"},{"type":"claude_code_session","id":"me","via":"compact"}"#,
+        )]);
+        assert_eq!(
+            agg.derived_from,
+            Some(("parent-1234".into(), "clear".into()))
+        );
+        assert_eq!(
+            crate::lineage::header_text("parent-1234", "clear"),
+            "from parent-1 · clear"
+        );
     }
 
     #[test]
@@ -1329,5 +1411,42 @@ mod tests {
             .as_deref()
             .unwrap()
             .starts_with("2023-11-14T22:13:20"));
+    }
+
+    #[test]
+    fn thinking_drops_aggregate_per_turn_and_in_total() {
+        let drop = |blocks: u64, turns: u64, kinds: &str| {
+            Line::parse(
+                &serde_json::json!({"type": "attachment", "attachment": {
+                    "type": "thinking_drop", "requestId": "r",
+                    "newlyDropped": {"blockCount": blocks, "turnCount": turns},
+                    "clientChange": {"kinds": kinds}}})
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let user = Line::parse(
+            r#"{"type":"user","promptId":"p1","message":{"role":"user","content":"hi"}}"#,
+        )
+        .unwrap();
+        let mut a = Aggregate::default();
+        a.push(&user);
+        a.push(&drop(4, 2, "messagesHistoryChanged"));
+        a.push(&drop(3, 1, "messagesHistoryChanged,toolSchemasChanged"));
+        let t = a.turns.last().unwrap();
+        assert_eq!(
+            (t.thinking_dropped_blocks, t.thinking_dropped_turns),
+            (7, 3)
+        );
+        assert_eq!(
+            t.thinking_change_kinds,
+            ["messagesHistoryChanged", "toolSchemasChanged"]
+        );
+        assert_eq!(
+            (a.thinking_dropped.blocks, a.thinking_dropped.turns),
+            (7, 3)
+        );
+        assert_eq!(a.thinking_dropped.by_kind["messagesHistoryChanged"], 7);
+        assert_eq!(a.thinking_dropped.by_kind["toolSchemasChanged"], 3);
     }
 }

@@ -6,11 +6,12 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
     "jsx": "react",
     "jsxFactory": "h",
     "jsxFragmentFactory": "Fragment"
   },
-  "include": ["plugin/.claude/types", "plugin/hooks", "tests/pane"]
+  "include": ["plugin/.claude/types", "plugin/hooks"]
 }

@@ -62,6 +62,20 @@ fn cells_of(spans: &[Span]) -> usize {
     spans.iter().map(|s| s.content.chars().count()).sum()
 }
 
+/// The facts keep at least this many cells for the hooks badge to show.
+pub const MIN_FACTS_WITH_BADGE: usize = 12;
+
+/// The text between the facts and the phase cell: the hooks badge and the
+/// data rules, two cells apart (the pane's `headerLine` in `views/overview.tsx` mirrors it with
+/// an inline join).
+pub fn header_badge(hooks: Option<&str>, rules: Option<&str>) -> String {
+    [hooks, rules]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
 /// Row 1: ` cctop` bold, the session facts dim, the phase cell
 /// (`● WORKING 52:11`) right-aligned in its colour.
 fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
@@ -71,9 +85,30 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
-    let facts_room = width.saturating_sub(8 + phase.chars().count() + 2);
+    // The badges (hooks, then the data rules) sit between the facts and the
+    // phase cell.
+    let mut badge = header_badge(d.header.hooks.as_deref(), d.header.rules.as_deref());
+    let room_for = |badge: &str| {
+        let badge_room = if badge.is_empty() {
+            0
+        } else {
+            badge.chars().count() + 2
+        };
+        (
+            badge_room,
+            width as i64 - (8 + phase.chars().count() + 2 + badge_room) as i64,
+        )
+    };
+    // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge
+    // goes first, the phase cell stays.
+    if room_for(&badge).1 < MIN_FACTS_WITH_BADGE as i64 {
+        badge.clear();
+    }
+    let (badge_room, facts_room) = room_for(&badge);
+    let facts_room = facts_room.max(0) as usize;
+    let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
-    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count());
+    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count() + badge_room);
     let phase_style = match d.header.phase.glyph {
         '◆' => t.warn(),
         '○' => t.dim(),
@@ -84,6 +119,14 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         Span::styled(" cctop  ", t.accent().add_modifier(Modifier::BOLD)),
         Span::styled(facts, t.dim()),
         Span::raw(" ".repeat(pad)),
+        Span::styled(
+            if badge.is_empty() {
+                badge
+            } else {
+                format!("{badge}  ")
+            },
+            t.warn(),
+        ),
         Span::styled(phase, phase_style),
     ])
 }
@@ -308,4 +351,176 @@ pub fn compose<'a>(
 pub fn render(frame: &mut Frame, area: Rect, d: &Dashboard, t: &Theme, open: usize, keys: bool) {
     let lines = compose(t, d, area.width, area.height, open, keys);
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use crate::status::{Repo, Workspace};
+    use crate::ui::state::{SessionInfo, State, StatusFacts};
+    use std::path::Path;
+
+    fn all_facts() -> StatusFacts {
+        StatusFacts {
+            workspace: Some(Workspace {
+                added_dirs: vec!["/x/y".into()],
+                git_worktree: Some("feat".into()),
+                repo: Some(Repo {
+                    host: Some("github.com".into()),
+                    owner: Some("acme".into()),
+                    name: Some("shop".into()),
+                }),
+                ..Default::default()
+            }),
+            output_style: Some("Concise".into()),
+            agent_name: Some("reviewer".into()),
+            remote_session_id: Some("r-1".into()),
+            ..Default::default()
+        }
+    }
+
+    fn dashboard_with(facts: StatusFacts) -> (App, Dashboard) {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.caps = crate::theme::Caps::full();
+        crate::attach::attach_headless(&mut app, &path, SessionInfo::from_fixture(&path));
+        app.set_theme("default-dark");
+        app.state.status_facts = facts;
+        let d = app.dashboard();
+        (app, d)
+    }
+
+    fn header_row(app: &App, d: &Dashboard, width: u16) -> String {
+        let rows = compose(&app.state.theme, d, width, 24, 0, false);
+        rows[0]
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn tui_header_drops_from_right() {
+        let (app, d) = dashboard_with(all_facts());
+        assert_eq!(
+            d.header.workspace,
+            [
+                "acme/shop",
+                "wt feat",
+                "+1 dir",
+                "style Concise",
+                "agent: reviewer",
+                "remote"
+            ]
+        );
+        let phase = format!(
+            "{} {} {}",
+            d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
+        );
+        let mut last = usize::MAX;
+        for w in [200u16, 140, 100, 80, 70, 60] {
+            let row = header_row(&app, &d, w);
+            assert!(row.chars().count() <= w as usize, "{w}: {row}");
+            assert!(row.contains(&phase), "{w}: phase cut: {row}");
+            let n = d
+                .header
+                .workspace
+                .iter()
+                .filter(|i| row.contains(i.as_str()))
+                .count();
+            assert!(n <= last, "{w}: items came back: {row}");
+            last = n;
+            // Dropped from the right: what shows is always a prefix.
+            let shown = d
+                .header
+                .workspace
+                .iter()
+                .take_while(|i| row.contains(i.as_str()))
+                .count();
+            assert_eq!(n, shown, "{w}: not a prefix: {row}");
+        }
+        // At 60 columns `remote` is gone while the repo may remain.
+        let narrow = header_row(&app, &d, 60);
+        assert!(!narrow.contains("remote"), "{narrow}");
+        let wide = header_row(&app, &d, 200);
+        assert!(
+            wide.contains("remote") && wide.contains("acme/shop"),
+            "{wide}"
+        );
+        // A width that fits the repo but not `remote`.
+        let mut seen = false;
+        for w in 60..200u16 {
+            let r = header_row(&app, &d, w);
+            if r.contains("acme/shop") && !r.contains("remote") {
+                seen = true;
+            }
+            assert!(!r.contains("remote") || r.contains("acme/shop"), "{w}: {r}");
+        }
+        assert!(seen);
+    }
+
+    #[test]
+    fn header_hooks_badge_is_amber_when_events_are_missing() {
+        let (mut app, d) = dashboard_with(all_facts());
+        assert!(d.header.hooks.is_none());
+        let plain = header_row(&app, &d, 120);
+        assert!(!plain.contains("hooks:"), "{plain}");
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let d = app.dashboard();
+        assert_eq!(d.header.hooks.as_deref(), Some("hooks: 7 new"));
+        let rows = compose(&app.state.theme, &d, 120, 24, 0, false);
+        let badge = rows[0]
+            .spans
+            .iter()
+            .find(|s| s.content.contains("hooks: 7 new"))
+            .expect("the badge span");
+        assert_eq!(badge.style, app.state.theme.warn());
+        let row = header_row(&app, &d, 120);
+        assert_eq!(row.chars().count(), 120, "{row}");
+        assert!(row.contains("hooks: 7 new  ● "), "{row}");
+        insta::assert_snapshot!("header_hooks_missing_120", row);
+        // Too narrow for the facts to keep a dozen cells: the badge goes
+        // before the phase cell does.
+        let narrow = header_row(&app, &d, 40);
+        assert!(!narrow.contains("hooks:"), "{narrow}");
+        assert!(narrow.contains(&d.header.phase.word), "{narrow}");
+        insta::assert_snapshot!("header_hooks_missing_40", narrow);
+    }
+
+    #[test]
+    fn header_shows_the_data_rules_beside_the_hooks_badge() {
+        let (mut app, d) = dashboard_with(all_facts());
+        assert!(d.header.rules.is_none());
+        app.state.pane_facts = Some(crate::pane::PaneFacts {
+            data_rules: Some(vec!["zdr".into(), "hipaa".into(), "acme-tier".into()]),
+            ..Default::default()
+        });
+        let d = app.dashboard();
+        assert_eq!(d.header.rules.as_deref(), Some("ZDR HIPAA rules"));
+        let row = header_row(&app, &d, 120);
+        assert!(row.contains("ZDR HIPAA rules  ● "), "{row}");
+        insta::assert_snapshot!("header_rules_120", row);
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let d = app.dashboard();
+        let row = header_row(&app, &d, 120);
+        assert!(row.contains("hooks: 7 new  ZDR HIPAA rules  ● "), "{row}");
+        insta::assert_snapshot!("header_rules_hooks_120", row);
+        // Too narrow: the badges go before the phase cell does.
+        let narrow = header_row(&app, &d, 40);
+        assert!(!narrow.contains("ZDR"), "{narrow}");
+        assert!(narrow.contains(&d.header.phase.word), "{narrow}");
+        insta::assert_snapshot!("header_rules_hooks_40", narrow);
+    }
+
+    #[test]
+    fn header_snapshots_with_all_items() {
+        let (app, d) = dashboard_with(all_facts());
+        for w in [80u16, 120, 200] {
+            insta::assert_snapshot!(format!("header_workspace_{w}"), header_row(&app, &d, w));
+        }
+    }
 }

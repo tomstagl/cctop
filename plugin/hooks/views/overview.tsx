@@ -103,6 +103,12 @@ export type Body = { key: string; id: string; title: string; keys: string; rows:
 export type Dashboard = {
   schema: number;
   headerLine: string;
+  /** The header's workspace items (`header.workspace`), priority order, inside `headerLine`; dropped from the right to fit. */
+  workspace: string[];
+  /** The amber hooks badge (`header.hooks`, `hooks: 7 new`) between the facts and the phase; null when the install is current. */
+  hooksBadge: string | null;
+  /** The data rules (`header.rules`, `ZDR HIPAA rules`) read from the pane's own `$.session.info()`, beside the hooks badge; null when none is listed. */
+  rulesBadge: string | null;
   /** The header's second row, the workflow strip, while a run is live (`header.workflow`); null otherwise. */
   workflow: Seg[] | null;
   phase: { glyph: string; word: string; elapsed: string; tokens: string[] };
@@ -164,6 +170,9 @@ export function dashboardOf(query: unknown): Dashboard | null {
   return {
     schema: SCHEMA,
     headerLine: stringAt(query, 'header', 'line') ?? '',
+    workspace: strings(at(query, 'header', 'workspace')),
+    hooksBadge: stringAt(query, 'header', 'hooks') ?? null,
+    rulesBadge: stringAt(query, 'header', 'rules') ?? null,
     workflow: Array.isArray(at(query, 'header', 'workflow')) ? segsOf(at(query, 'header', 'workflow')) : null,
     phase: {
       glyph: stringAt(phase, 'glyph') ?? '○',
@@ -228,15 +237,40 @@ export const PANE_KEYS = '1-6 a 0 body  ·  click a cell, the act line or home  
 /** The elements the Overview draws with: the views' Box and Text, plus Button for the targets. */
 export type OverviewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
 
+/** The header facts with as many workspace items as leave the facts before them and those items within `room`; what follows the items is cut by the clip. The binary's `dashboard::fit_workspace`, character for character. */
+export function fitWorkspace(facts: string, items: string[], room: number): string {
+  if (items.length === 0) return facts;
+  const mid = ` · ${items.join(' · ')}`;
+  const at = facts.lastIndexOf(mid);
+  if (at < 0) return facts;
+  const base = facts.slice(0, at);
+  const after = facts.slice(at + mid.length);
+  for (let n = items.length; n >= 0; n--) {
+    const out = base + items.slice(0, n).map((i) => ` · ${i}`).join('');
+    if ([...out].length <= room || n === 0) return out + after;
+  }
+  return facts;
+}
+
+/** The facts keep at least this many cells for the hooks badge to show (the TUI's `MIN_FACTS_WITH_BADGE`). */
+const MIN_FACTS_WITH_BADGE = 12;
+
 /** Row 1: ` cctop`, the session facts dim, the phase cell right-aligned in its colour. */
 function headerLine(d: Dashboard, columns: number): Line {
   const facts = d.headerLine.replace(/^cctop\s+/, '');
   const phaseText = clip(`${d.phase.glyph} ${d.phase.word} ${d.phase.elapsed}`, Math.min(40, Math.max(0, columns - 10)));
-  const factsText = clip(facts, Math.max(0, columns - 8 - width(phaseText) - 2));
-  const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText));
+  const roomFor = (b: string): number => columns - 8 - width(phaseText) - 2 - (b === '' ? 0 : width(b) + 2);
+  // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge goes first, the phase cell stays.
+  // The hooks badge and the data rules, two cells apart (the TUI's `header_badge`).
+  const both = [d.hooksBadge, d.rulesBadge].filter((b): b is string => b !== null).join('  ');
+  const badge = both !== '' && roomFor(both) >= MIN_FACTS_WITH_BADGE ? both : '';
+  const badgeRoom = badge === '' ? 0 : width(badge) + 2;
+  const factsRoom = Math.max(0, roomFor(badge));
+  const factsText = clip(fitWorkspace(facts, d.workspace, factsRoom), factsRoom);
+  const padCells = Math.max(0, columns - 8 - width(factsText) - width(phaseText) - badgeRoom);
   const phaseStyle: Omit<Seg, 'text'> =
     d.phase.glyph === '◆' ? { color: THEME.yellow, bold: true } : d.phase.glyph === '○' ? { dim: true, bold: true } : { color: THEME.green, bold: true };
-  return [seg(' cctop  ', { color: ACCENT, bold: true }), dim(factsText), seg(' '.repeat(padCells)), seg(phaseText, phaseStyle)];
+  return [seg(' cctop  ', { color: ACCENT, bold: true }), dim(factsText), seg(' '.repeat(padCells)), ...(badge === '' ? [] : [seg(`${badge}  `, { color: THEME.yellow })]), seg(phaseText, phaseStyle)];
 }
 
 /** The cell text form for the width: wide at ≥ 80 columns, mid at cells ≥ 28, short below. */
@@ -307,7 +341,7 @@ export function wrap(segs: Seg[], columns: number, indent: number): Line[] {
   for (const s of segs) {
     let pending = '';
     const flush = (): void => {
-      if (pending !== '') rows[rows.length - 1].push({ ...s, text: pending });
+      if (pending !== '') rows.at(-1)?.push({ ...s, text: pending });
       pending = '';
     };
     for (const word of s.text.split(/(?<= )/)) {
@@ -446,7 +480,7 @@ export function renderOverview(
   buttons?: { el: OverviewElements; actions: OverviewActions },
 ): RenderElement {
   const { Box } = el;
-  if (placement === 'inline') return renderInline(model, el, columns, now);
+  if (placement !== 'dock') return renderInline(model, el, columns, now);
   const d = dashboardOf(model.query.dashboard);
   const body: RenderElement[] = [];
   if (d === null) {

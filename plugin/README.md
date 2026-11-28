@@ -41,7 +41,8 @@ between the last contract change and the next one:
 | 0.4.1 – 0.7.0 | 2.1.272 / 2.1.273 | 2.1.269 and later, as far as CI has seen (the module awaits every host call) |
 | 0.8.0 | 2.1.274 | 2.1.269 – 2.1.274 (`$.agent.register`, `position: "absolute"` on `Box`, a `Markdown` element — additive, nothing the pane calls moved) |
 | 0.9.0 | 2.1.278 | 2.1.269 – 2.1.284 (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next` and four events, and re-typed `$.fs.read` (a bytes form) and `$.prompt.fill`'s result — additive, nothing the pane calls moved); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
-| 0.10.0 | 2.1.284 | 2.1.269 and later, as far as CI has seen (`$.process.spawn`, truncation flags on `$.process.run`'s result, `startedAt` on `$.session.usage()`, and `$.ui.open` resolving whether the pane was placed — additive; the poller's engine facade now takes `run` alone from `$.process`, so the new `spawn` is not required of it); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) |
+| 0.10.0 | 2.1.284 | 2.1.269 – 2.1.284 (`$.process.spawn`, truncation flags on `$.process.run`'s result, `startedAt` on `$.session.usage()`, and `$.ui.open` resolving whether the pane was placed — additive; the poller's engine facade now takes `run` alone from `$.process`, so the new `spawn` is not required of it); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) |
+| 0.11.0 | 2.1.332 | 2.1.332 and later, as far as CI has seen (the validator type-checks with `noUncheckedIndexedAccess`, and `e.props.placement` gained `widget`, laid out as inline); says so at session start (`cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok`) |
 
 Function hooks are early access and change between Claude Code releases.
 CI checks the contract against the latest release daily
@@ -130,14 +131,13 @@ Date` at the start of every session, every light on `waiting for cctop`
 once the pane was open, and `cctop pane status` reporting the hooks module
 as not loaded (issue #3). Plugin 0.4.1 awaits every reading and runs on
 2.1.270 and 2.1.272 alike; the header's `hooks …` light names the Claude
-Code version the module's contract was generated from (`2.1.284` for plugin
-0.10.0; 2.1.273 added a `vscode` render surface, 2.1.274 `$.agent.register`
+Code version the module's contract was generated from (`2.1.332` for plugin
+0.11.0; 2.1.273 added a `vscode` render surface, 2.1.274 `$.agent.register`
 and absolute `Box` placement, 2.1.278 an `Image` element, `$.prompt.read()`
 and a bytes form of `$.fs.read`, 2.1.284 `$.process.spawn` and a placement
-result from `$.ui.open` — none moved anything the pane calls).
-Update with
-`claude plugin marketplace update cctop && claude plugin update
-cctop@cctop`, then restart Claude Code.
+result from `$.ui.open`, 2.1.332 a `widget` placement — none moved
+anything the pane calls). Update with `claude plugin marketplace update
+cctop && claude plugin update cctop@cctop`, then restart Claude Code.
 
 ### When the contract moves
 
@@ -148,7 +148,7 @@ without — the clock resolves a number, `HOME` is set, the session has an id
 `~/.claude/debug/latest`) before anything else:
 
 ```
-cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok
+cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok
 ```
 
 When a surface moved, the line reads `self-check failed: <what>` with the
@@ -197,8 +197,8 @@ what it was tested with is the module's `TESTED_WITH` (the header's `hooks
 …` light), read from the marker or from the install's `hooks/model.ts`:
 
 ```
-  ✓ cctop plugin 0.10.0 tested with Claude Code 2.1.284
-  ! Claude Code 2.1.290 is newer than cctop plugin 0.10.0 was tested with (2.1.284); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
+  ✓ cctop plugin 0.11.0 tested with Claude Code 2.1.332
+  ! Claude Code 2.1.340 is newer than cctop plugin 0.11.0 was tested with (2.1.332); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
   ✗ cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3) → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code
 ```
 
@@ -207,6 +207,33 @@ in `src/pane.rs`), checked before the `TESTED_WITH` comparison; the `!` is
 the general case, a Claude Code the module has not been tested against. The
 table ships with the cctop binary, so the line is only as current as
 `brew upgrade cctop`.
+
+## Notifications (`CCTOP_PANE_NOTIFY`)
+
+Off by default. Set `CCTOP_PANE_NOTIFY=1` in the environment Claude Code
+starts in (or the `env` block of `~/.claude/settings.json`) and restart, and
+the pane raises a native notification, through the channel your
+`preferredNotifChannel` names, for two moments only:
+
+- a coach nudge of urgency NOW taking the slot: its headline, once per fire
+  (NEXT and LATER nudges never notify); snoozing it or acting on it asks to
+  take the notification back;
+- a five-hour or seven-day rate-limit window at 90 % or more: `rate limit
+  resets now`, sent when the window's reset time arrives (the pane waits on
+  its own timer; a new reset time replaces the wait, and dropping below 90 %
+  cancels it).
+
+Notifications are sent only while the pane module is running in the session:
+a reset is not announced after you quit Claude Code. A terminal (iTerm2,
+kitty, Ghostty, the bell) raises a notification the moment it is sent and
+has nothing to take back, so on a terminal "taken back" does nothing once
+shown; `untilBack` (drop it if you have returned) and held delivery apply
+only on clients that implement them.
+
+With no notification channel (or `notifications_disabled`) the pane stops
+asking after the first answer and logs it once. Your own `Notification`
+hooks run on these too; cctop's hook ignores them, so they never count as
+Claude Code waiting for you.
 
 ## Enabling function hooks
 

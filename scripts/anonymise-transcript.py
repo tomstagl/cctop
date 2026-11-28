@@ -28,7 +28,18 @@ Shapes the parsers classify are preserved without their content:
 - Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
   17-hex strings Claude Code made up, so they stay as they are: the
   transcript file name, the launch result and the notification must agree.
-- Team keys: `agentName` (a member's role) and `agentType` stay; the team
+- The keys of a `file-history-snapshot`'s `trackedFileBackups` are file
+  paths and are rewritten like a path value (extension kept).
+- A `thinking_drop` attachment keeps its counts, `reason`, `reasonCounts`,
+  `clientChange.kinds` (Claude Code's own words), `firstChangedMessageIndex`
+  and `callNumber`; `blockHashes`, `newlyDropped.first` / `last` and
+  `clientChange.baseline` are removed. A `budget_usd` attachment keeps its
+  numbers; `rendered[].content` is same-length filler. A `derived-from`
+  line keeps each entry's `type` and `via` and rewrites its `id` and
+  `started` (session ids) with the session-id map.
+- Team keys: `agentName` (a member's role) becomes `role<N>` with --team,
+  consistently in `<role>@<team>` ids and in a `name` equal to a role
+  (`team-lead` stays); `agentType` stays; the team
   name `session-<lead id8>` is rewritten to `session-<hid(lead)[:8]>` so it
   still equals the anonymised lead's id, wherever it appears (`teamName`,
   `team_name`, a team config's `name`, the `@<team>` suffix of `agentId` /
@@ -83,13 +94,19 @@ KEEP_KEYS = {"type", "subtype", "role", "model", "id", "name", "tool_use_id", "r
              "spawnDepth", "runId", "workflowName", "canReadOutputFile",
              # team keys: roles and the team name (rewritten with the lead's id, see TEAM)
              "agentName", "teamName", "team_name", "teammate_id", "leadAgentId", "backendType",
-             "isActive", "joinedAt"}
+             "isActive", "joinedAt",
+             # the role of a rendered block, a derived-from entry's `via`
+             "renderedRole", "via"}
+# thinking_drop: values that are Claude Code's own words, read by the parsers.
+THINKING_DROP_KEEP = {"requestId", "model", "querySource", "reason", "kinds", "type"}
 ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid", "promptId",
            "leafUuid", "messageId", "snapshotMessageId", "sourceToolAssistantUUID", "toolUseID",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
            "ownerOrganizationUuid", "parentSessionId", "parentLastUuid",
            "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid",
-           "prompt_id", "leadSessionId"}
+           "prompt_id", "leadSessionId",
+           # an assistant line's pointer at its `api-request`, and a request's at the previous one
+           "requestRef", "base"}
 PATH_KEYS = {"file_path", "filePath", "path", "notebook_path", "file", "filename", "trackingPath",
              "changedFiles", "displayPath", "planFilePath", "realParentDir", "outputFile",
              "persistedOutputPath", "transcriptDir", "scriptPath", "agent_transcript_path"}
@@ -143,16 +160,47 @@ def team_name(session_id):
     return "session-" + session_id[:8]
 
 
+# Member roles are the person's own free-form names: with --team they become
+# `role<N>` (the same N everywhere in the file); `team-lead` is Claude Code's.
+BUILTIN_ROLES = {"team-lead"}
+ROLES = set()
+
+
+def role_name(r):
+    return r if r in BUILTIN_ROLES else alias("role", r)
+
+
+def collect_roles(o):
+    """Roles named by a line: `agentName` values and the `<role>@<team>` prefix
+    of member ids."""
+    if TEAM is None:
+        return
+    old = "@" + TEAM[0]
+    if isinstance(o, dict):
+        for k, x in o.items():
+            if k == "agentName" and isinstance(x, str):
+                ROLES.add(x)
+            collect_roles(x)
+    elif isinstance(o, list):
+        for x in o:
+            collect_roles(x)
+    elif isinstance(o, str) and o.endswith(old):
+        ROLES.add(o[: -len(old)])
+
+
 def anon_team(v):
     """A string equal to the team name, or ending in `@<team>`, follows the
-    lead's anonymised id; anything else is returned unchanged."""
+    lead's anonymised id (its role prefix becomes `role<N>`); a string equal
+    to a member's role becomes `role<N>`; anything else is unchanged."""
     if TEAM is None:
         return v
     old, new = TEAM
     if v == old:
         return new
     if v.endswith("@" + old):
-        return v[: -len(old)] + new
+        return role_name(v[: -len(old) - 1]) + "@" + new
+    if v in ROLES:
+        return role_name(v)
     return v
 
 
@@ -163,6 +211,219 @@ def fill(n):
 def hid(s):
     h = hashlib.sha1(s.encode()).hexdigest()
     return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
+REQUEST_TYPES = ("api-request", "api-request-shape", "api-request-blob")
+MCP_NAMES = {}  # (kind, original) -> renamed, stable across every shape and blob line
+MCP_PROPS = {}  # original MCP tool name -> {property name: p<N>}
+
+
+def h64(s):
+    """A stable keyed 64-hex digest: the same input gives the same output, so
+    `shapeHash`, `tail[]`, `hash` and `requestDigest` keep their equalities."""
+    return hashlib.sha256(("cctop-fixture:" + s).encode()).hexdigest()
+
+
+def fill_all(v):
+    """Same-length filler for every string under `v` (no MAX_STR cap: the
+    request lines are read for their sizes). Dict keys stay."""
+    if isinstance(v, dict):
+        return {k: fill_all(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [fill_all(x) for x in v]
+    return fill(len(v)) if isinstance(v, str) else v
+
+
+# Claude Code's own tool names (the d.ts "inputs of the built-in tools" table,
+# plugin/.claude/types/claude-code.d.ts, 2.1.332) plus the server-side ones a
+# request lists. `ReportFindings` is in that table but is a harness-supplied
+# tool of one environment, so it is renamed like any other plugin tool.
+BUILTIN_TOOLS = {
+    "Agent", "AppifactRepl", "Artifact", "ArtifactCheck", "ArtifactComments", "ArtifactData",
+    "AskUserQuestion", "Bash", "ClaudeDesign", "CronCreate", "CronDelete", "CronList",
+    "DesignSync", "Edit", "EndConversation", "EnterPlanMode", "EnterWorktree", "ExitPlanMode",
+    "ExitWorktree", "FetchInboxMessage", "Glob", "GetGoal", "GetTask", "Grep", "ListAgents",
+    "ListConnectors", "ListMcpResourcesTool", "ListPlugins", "ListSkills", "LSP",
+    "McpTaskCheck", "McpTaskResumePolling", "McpTaskShowQuestion", "memory_list",
+    "memory_read", "memory_write", "Monitor", "NotebookEdit", "OfferChromeSetup", "PauseGoal",
+    "Poll", "Projects", "propose_skills", "PublishPlugin", "PushNotification", "Read",
+    "ReadMcpResourceDirTool", "ReadMcpResourceTool", "ReadNotifications", "ReadWidgetContext",
+    "RemoteTrigger", "request_computer", "ScheduleWakeup", "SearchMcpRegistry",
+    "SearchPlugins", "SearchSkills", "SendFeedback", "SendFile", "SendMessage", "SendToProject",
+    "SendToProjectContext", "SendUserFile", "SendUserMessage", "SetGoal",
+    "ShareOnboardingGuide", "ShowOnboardingRolePicker", "Skill", "SuggestConnectors",
+    "SuggestPluginInstall", "SuggestSkills", "TaskCreate", "TaskGet", "TaskList", "TaskOutput",
+    "TaskStop", "TaskUpdate", "TodoWrite", "ToolSearch", "WaitForMcpServers", "WebFetch",
+    "WebSearch", "Workflow", "WrapUp", "Write", "Yield",
+    "advisor", "DeferredToolPlaceholder",
+}
+BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup", "claude-code-guide", "fork"}
+# Bundled skills and built-in slash commands; every other skill name is renamed.
+BUNDLED_SKILLS = {
+    "update-config", "keybindings-help", "simplify", "loop", "schedule", "claude-api", "init",
+    "review", "security-review", "code-review", "run", "plugin-authoring",
+    "fewer-permission-prompts", "claude-approvals", "ship", "steward", "verify", "debug",
+    "batch", "compact", "clear", "context", "model", "effort", "resume", "rewind", "usage",
+    "cost", "help", "config", "status", "memory", "agents", "mcp", "plugin", "login", "logout",
+}
+SAFE_NAMES = BUILTIN_TOOLS | BUILTIN_AGENTS | {"origin"}
+ALIASES = {}  # (kind, original) -> `<kind><N>`, stable across every line
+
+
+def alias(kind, v):
+    m = ALIASES.setdefault(kind, {})
+    return m.setdefault(v, "%s%d" % (kind, len(m) + 1))
+
+
+def agent_type(v):
+    return v if v in BUILTIN_AGENTS else alias("agent", v)
+
+
+def skill_name(v):
+    return v if v.lstrip("/") in BUNDLED_SKILLS else alias("skill", v)
+
+
+def tool_name(n):
+    """Built-in names stay; `mcp__<server>__<tool>` -> `mcp__server<N>__tool<M>`;
+    any other name -> `tool<M>`."""
+    if n in SAFE_NAMES:
+        return n
+    if not n.startswith("mcp__"):
+        return MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
+    server = MCP_NAMES.setdefault(("s", n.split("__")[1]), "server%d" % (sum(k[0] == "s" for k in MCP_NAMES) + 1))
+    tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
+    return f"mcp__{server}__{tool}"
+
+
+def prop_name(tool, p):
+    """A non-built-in tool's parameter names are renamed `p1`, `p2`, ... per
+    tool; a built-in tool's keep theirs."""
+    if tool in BUILTIN_TOOLS:
+        return p
+    m = MCP_PROPS.setdefault(tool, {})
+    return m.setdefault(p, "p%d" % (len(m) + 1))
+
+
+def anon_schema(node, tool):
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            if k == "properties" and isinstance(v, dict):
+                out[k] = {prop_name(tool, pk): anon_schema(pv, tool) for pk, pv in v.items()}
+            elif k == "required" and isinstance(v, list):
+                out[k] = [prop_name(tool, r) if isinstance(r, str) else r for r in v]
+            elif k == "type" and isinstance(v, str):
+                out[k] = v
+            else:
+                out[k] = anon_schema(v, tool)
+        return out
+    if isinstance(node, list):
+        return [anon_schema(x, tool) for x in node]
+    return fill(len(node)) if isinstance(node, str) else node
+
+
+def anon_tool(t):
+    orig = t.get("name", "") if isinstance(t.get("name"), str) else ""
+    out = {}
+    for k, v in t.items():
+        if k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input_schema":
+            out[k] = anon_schema(v, orig)
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_block(b):
+    """One system block or message content block: `type` and `tool_use_id`
+    stay on the block itself, a tool's `name` is renamed, everything else
+    (text, input values, results) is filler."""
+    if not isinstance(b, dict):
+        return fill_all(b)
+    out = {}
+    for k, v in b.items():
+        if k in ("type", "tool_use_id") and isinstance(v, str):
+            out[k] = v
+        elif k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input" and isinstance(v, dict):
+            tool = b.get("name") if isinstance(b.get("name"), str) else ""
+            out[k] = {prop_name(tool, ik): fill_all(iv) for ik, iv in v.items()}
+        elif k == "tool" and isinstance(v, dict):
+            out[k] = {
+                tk: (tv if tk == "type" and isinstance(tv, str)
+                     else anon_tool(tv) if tk == "definition" and isinstance(tv, dict) else fill_all(tv))
+                for tk, tv in v.items()
+            }
+        elif k == "caller" and isinstance(v, dict):
+            out[k] = {ck: (cv if ck == "type" and isinstance(cv, str) else fill_all(cv)) for ck, cv in v.items()}
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_message(m):
+    out = {}
+    for k, v in m.items():
+        if k == "role" and isinstance(v, str):
+            out[k] = v
+        elif k == "content" and isinstance(v, list):
+            out[k] = [anon_block(b) for b in v]
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+PARAM_KEYS = ("model", "betas", "max_tokens", "thinking", "context_management", "output_config")
+
+
+def anon_params(p):
+    """Only the settings the ledger reads stay; anything else is dropped.
+    `output_config` keeps `effort`, its other keys become filler."""
+    out = {k: v for k, v in p.items() if k in PARAM_KEYS}
+    oc = out.get("output_config")
+    if isinstance(oc, dict):
+        out["output_config"] = {k: (v if k == "effort" else fill_all(v)) for k, v in oc.items()}
+    return out
+
+
+def anon_request(o):
+    """`api-request`, `-shape` and `-blob` lines. Settings (`params`,
+    `cacheControl`, `querySource`) are Claude Code's own words and stay; the
+    shape's and blob's prose becomes same-length filler; hashes and ids are
+    rewritten consistently."""
+    out = {}
+    for k, v in o.items():
+        if k == "params" and isinstance(v, dict):
+            out[k] = anon_params(v)
+        elif k in ("cacheControl", "querySource", "type", "timestamp", "version", "keep"):
+            out[k] = v
+        elif k in ("shapeHash", "hash", "requestDigest") and isinstance(v, str):
+            out[k] = h64(v)
+        elif k == "tail" and isinstance(v, list):
+            out[k] = [h64(x) if isinstance(x, str) else x for x in v]
+        elif k in ("id", "base", "requestRef", "sessionId") and isinstance(v, str):
+            out[k] = hid(v)
+        elif k == "shape" and isinstance(v, dict):
+            out[k] = anon_shape(v)
+        elif k == "message" and isinstance(v, dict):
+            out[k] = anon_message(v)
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_shape(shape):
+    out = {}
+    for k, v in shape.items():
+        if k == "system" and isinstance(v, list):
+            out[k] = [anon_block(b) for b in v]
+        elif k == "tools" and isinstance(v, list):
+            out[k] = [anon_tool(t) if isinstance(t, dict) else fill_all(t) for t in v]
+        else:
+            out[k] = fill_all(v)
+    return out
 
 
 def anon_path(p):
@@ -277,8 +538,57 @@ def anon_text(s):
     return out
 
 
+def anon_thinking_drop(a):
+    """A thinking_drop attachment: counts and machine tokens, no hashes."""
+    a = dict(a)
+    a.pop("blockHashes", None)
+    drop = a.get("newlyDropped")
+    if isinstance(drop, dict):
+        a["newlyDropped"] = {k: x for k, x in drop.items() if k not in ("first", "last")}
+    change = a.get("clientChange")
+    if isinstance(change, dict):
+        a["clientChange"] = {k: x for k, x in change.items() if k != "baseline"}
+
+    def walk(v, key=None):
+        if isinstance(v, dict):
+            return {k: walk(x, k) for k, x in v.items()}
+        if isinstance(v, str):
+            return v if key in THINKING_DROP_KEEP else fill(min(len(v), MAX_STR))
+        return v
+
+    return walk(a)
+
+
+def anon_derived_from(o):
+    """A derived-from line: entries keep `type` and `via`; ids go through hid."""
+    out = anon({k: x for k, x in o.items() if k != "sessions"})
+    out["sessions"] = [
+        {k: (hid(x) if k in ("id", "started") and isinstance(x, str) else anon(x, k, e))
+         for k, x in e.items()}
+        for e in o.get("sessions") or [] if isinstance(e, dict)
+    ]
+    return out
+
+
+def anon_line(o):
+    if o.get("type") in REQUEST_TYPES:
+        return anon_request(o)
+    if o.get("type") == "derived-from":
+        return anon_derived_from(o)
+    a = o.get("attachment")
+    if o.get("type") == "attachment" and isinstance(a, dict) and a.get("type") == "thinking_drop":
+        o = dict(o, attachment=anon_thinking_drop(a))
+        return {k: (x if k == "attachment" else anon(x, k, o)) for k, x in o.items()}
+    return anon(o)
+
+
 def anon(v, key=None, parent=None):
     if isinstance(v, dict):
+        if isinstance(v.get("name"), str) and "input_schema" in v:
+            return anon_tool(v)  # a tool definition anywhere (an attachment's surfaced one)
+        if key == "trackedFileBackups":
+            # a snapshot's map is keyed by file path: rewrite the keys like a path value
+            return {anon_path(k): anon(x, k, v) for k, x in v.items()}
         return {k: anon(x, k, v) for k, x in v.items()}
     if isinstance(v, list):
         return [anon(x, key, parent) for x in v]
@@ -287,8 +597,18 @@ def anon(v, key=None, parent=None):
             # `error: "rate_limit"` on an API-error line is an enum; a longer
             # error is free text.
             return v if len(v) <= 40 and " " not in v else fill(min(len(v), MAX_STR))
+        if key in ("subagent_type", "agent_type", "attributionAgent"):
+            return agent_type(v)
+        if key in ("skill", "attributionSkill", "commandName"):
+            return skill_name(v)
+        if key in ("from", "to") and v.startswith("/"):
+            return anon_path(v)  # an environment change's old / new directory
+        if key == "agentType" and ":" in v:
+            return agent_type(v)  # a plugin's agent (`<plugin>:<agent>`) names the plugin
         if key in KEEP_KEYS:
-            return anon_team(v)
+            if key == "name" and v in ROLES:
+                return role_name(v)
+            return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:
             return hid(v)
         if key == "cwd":
@@ -344,6 +664,7 @@ def main():
             out.write("\n")
         return
     rows = []
+    raw = []
     with open(src) as f:
         for n, line in enumerate(f, 1):
             if lines is not None and n > lines:
@@ -352,7 +673,11 @@ def main():
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            rows.append(anon(o))
+            raw.append(o)
+    for o in raw:
+        collect_roles(o)
+    for o in raw:
+        rows.append(anon_line(o))
     if dst.endswith("/") or os.path.isdir(dst):
         # A teammate transcript is `<sessionId>.jsonl`: name the copy by
         # the anonymised id so the collector still finds it by its lines.

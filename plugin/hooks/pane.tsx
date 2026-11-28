@@ -4,8 +4,9 @@
 // the engine's own events (model.ts) and, when the binary is installed, from
 // `cctop query` through the poller (poller.ts). The views (views/*.tsx) draw
 // the model; the Overview is the default.
-import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, Timer, ToolCallResult } from 'claude-code';
+import type { ElementTable, EngineInterface, Register, RenderElement, RenderInput, SessionUsage, Timer, ToolCallResult } from 'claude-code';
 import {
+  breakdownDue,
   HIDDEN_STATUS,
   initialModel,
   outcomeText,
@@ -16,9 +17,12 @@ import {
   type Action,
   type Binary,
   type Model,
+  type SessionFacts,
   type View,
 } from './model';
+import { spoolText } from './breakdown';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
+import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
 import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
@@ -72,6 +76,10 @@ let model: Model = initialModel();
 // once after session.start and turn.complete: never inside a hook's own
 // path before `next(e)`, so the pane costs the turn nothing.
 let usageTimer: Timer | null = null;
+// Whether this session's failed breakdown read or spool write is logged
+// already: once per session, and never retried in a loop (the next turn
+// simply tries again).
+let breakdownFailureLogged = false;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -88,6 +96,14 @@ let hiddenTimer: Timer | null = null;
 let renderWaiters: (() => void)[] = [];
 // Whether HIDDEN_STATUS is pinned under the prompt right now.
 let statusPinned = false;
+// Opt-in native notifications (CCTOP_PANE_NOTIFY=1, read at session.start)
+// and what has been sent so far.
+let notifyOn = false;
+let notifyState: NotifyState = initialNotifyState();
+// One pane-side timer per booked rate-limit reset (key `reset-5h` / `reset-7d`):
+// a terminal ignores `at` and raises a notification at once, so the wait is
+// ours and the notification is sent only when the reset arrives.
+const resetTimers = new Map<string, Timer>();
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -149,6 +165,8 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): vo
     bodyColumns: e.props.bodyColumns,
     viewportColumns: e.viewport?.columns ?? null,
   });
+  // The view in force (a switch from the tasks list shows here too).
+  model = reduce(model, { type: 'agents.viewed', id: e.props.view?.agentId ?? null });
   stopHiddenTimer();
   unpinStatus($);
   // The width may have changed the status line's form.
@@ -216,6 +234,29 @@ function replaceModel($: EngineInterface, next: Model): void {
   model = next;
   if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
+  if (model.sessionId !== before.sessionId) agentsAsked.clear();
+  if (model.query.agents !== before.query.agents) agentsPolled($);
+}
+
+// Ids already asked of `$.agent.list()` because a poll showed them running
+// and unmapped; each is asked once (a session change forgets them).
+const agentsAsked = new Set<string>();
+
+// An agent that starts mid-turn is not in `liveAgents` (read on turn.start /
+// turn.complete / the agents view opening): a running row whose id is neither
+// there nor already asked for reads the list once.
+function agentsPolled($: EngineInterface): void {
+  const agents = (model.query.agents as { agents?: unknown } | null | undefined)?.agents;
+  if (!Array.isArray(agents)) return;
+  const known = new Set(model.liveAgents.map((a) => a.id));
+  let ask = false;
+  for (const a of agents as { id?: unknown; state?: unknown }[]) {
+    if (a === null || typeof a !== 'object' || a.state !== 'running' || typeof a.id !== 'string') continue;
+    if (known.has(a.id) || agentsAsked.has(a.id)) continue;
+    agentsAsked.add(a.id);
+    ask = true;
+  }
+  if (ask) void readAgents($);
 }
 
 // The coach's own surfaces beyond the pane, kept from the last `cctop
@@ -235,6 +276,7 @@ function coachChanged($: EngineInterface): void {
       model = reduce(model, { type: 'coach.status', status });
     }
   }
+  notifyNudge($, c);
   const n = c.nudge;
   if (n !== null && n.cls === 'NOW') {
     const key = `${n.id}:${n.firedAt ?? 0}`;
@@ -254,9 +296,134 @@ function overviewActions($: EngineInterface): OverviewActions {
   };
 }
 
-// What the agents view's Buttons do: a run's row opens its detail, `back` the list (view state).
-function agentsActions($: EngineInterface): { open(run: string | null): void } {
-  return { open: (run) => apply($, { type: 'agents.run', run }) };
+// What the agents view's Buttons do: a run's row opens its detail, `back` the
+// list (view state); an agent's row puts its transcript in the main view.
+function agentsActions($: EngineInterface): { open(run: string | null): void; jump(agentId: string): void } {
+  return { open: (run) => apply($, { type: 'agents.run', run }), jump: (agentId) => viewAgent($, agentId) };
+}
+
+// `$.ui.view`: an agent's transcript in Claude Code's main view, or `{}` back
+// to the main conversation. Called only from a Button's onPress (the d.ts:
+// only while the call answers the person's own input). A `{ deny }` says why
+// the view did not move: one toast with the reason.
+function viewAgent($: EngineInterface, agentId: string | null): void {
+  $.ui
+    .view(agentId === null ? {} : { agentId })
+    .then((shown) => {
+      if (shown.deny !== undefined) {
+        $.ui.toast(`cctop: ${shown.deny}`);
+        return;
+      }
+      apply($, { type: 'agents.viewed', id: agentId });
+      invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: ui.view failed: ${String(err)}`));
+}
+
+// `$.agent.list()`: the engine's ids the agent rows are mapped to (agentmap.ts).
+// Read on turn.start, turn.complete and when the agents view opens; a read
+// that lands after `/clear` is dropped.
+function readAgents($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.agent
+    .list()
+    .then((list) => {
+      if (model.sessionId !== sessionId) return;
+      apply($, {
+        type: 'agents.live',
+        agents: list.map((a) => ({ id: a.id, type: a.type, description: a.description })),
+      });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: agent.list failed: ${String(err)}`));
+}
+
+// `CCTOP_PANE_NOTIFY=1` turns the notifications on; anything else leaves
+// them off. Read once per session.start.
+function readNotifyEnv($: EngineInterface): Promise<void> {
+  return $.env
+    .get("CCTOP_PANE_NOTIFY")
+    .then((value) => {
+      notifyOn = value === '1';
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: env read failed: ${String(err)}`));
+}
+
+function sendNotify($: EngineInterface, text: string, key: string, options: { at?: number; untilBack?: boolean } = {}): void {
+  $.ui
+    .notify(text, { title: 'cctop', key, ...options })
+    .then((result) => {
+      const line = noteResult(notifyState, key, result);
+      if (line !== null) $.ui.log(line);
+    })
+    .catch((err: unknown) => {
+      const line = noteFailure(notifyState, key, err);
+      if (line !== null) $.ui.log(line);
+    });
+}
+
+// A NOW nudge notifies once per fire; one that was snoozed or acted on is
+// taken back.
+function notifyNudge($: EngineInterface, c: NonNullable<ReturnType<typeof coachOf>>): void {
+  if (!notifyOn) return;
+  // Without a fire time there is no fire identity to notify once per: none.
+  const n = c.nudge !== null && c.nudge.firedAt !== null ? c.nudge : null;
+  const fire = n === null ? null : String(n.firedAt);
+  const todo = nudgeActions(
+    notifyState,
+    n === null || fire === null ? null : { ruleId: n.id, fireId: fire, urgency: n.cls === 'NOW' || n.cls === 'NEXT' ? n.cls : 'LATER', headline: n.line1 },
+    settledRules(model.query.coach, notifyState, n === null || fire === null ? null : { ruleId: n.id, fireId: fire }),
+  );
+  for (const key of todo.cancel) $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
+  for (const item of todo.notify) sendNotify($, item.text, item.key);
+}
+
+// A window at 90 % or more books its reset: a timer here for the wait to its
+// resets_at, and the notification (`untilBack`, no `at`) sent when it fires.
+// A new resets_at replaces the timer; a window that fell below the threshold
+// cancels it (and the key, in case a host queued one).
+function notifyResets($: EngineInterface, usage: SessionUsage, now: number): void {
+  if (!notifyOn) return;
+  const windows: { key: 'reset-5h' | 'reset-7d'; usedPct: number; resetsAtMs: number }[] = [];
+  for (const l of usage.rateLimits) {
+    const key = l.kind === 'five_hour' ? 'reset-5h' : l.kind === 'seven_day' ? 'reset-7d' : null;
+    const resetsAtMs = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt);
+    if (key !== null && Number.isFinite(resetsAtMs)) windows.push({ key, usedPct: l.percentUsed, resetsAtMs });
+  }
+  for (const key of resetCancels(notifyState, windows)) {
+    clearResetTimer(key);
+    $.ui.cancelNotify(key).catch((err: unknown) => $.ui.log(`cctop: cancelNotify failed: ${String(err)}`));
+  }
+  for (const item of resetActions(notifyState, windows, now)) bookReset($, item.text, item.key, Math.max(1, item.at - now));
+}
+
+function bookReset($: EngineInterface, text: string, key: string, waitMs: number): void {
+  clearResetTimer(key);
+  resetTimers.set(
+    key,
+    $.clock.after(waitMs, () => {
+      resetTimers.delete(key);
+      sendNotify($, text, key, { untilBack: true });
+    }),
+  );
+}
+
+function clearResetTimer(key: string): void {
+  resetTimers.get(key)?.cancel();
+  resetTimers.delete(key);
+}
+
+function clearResetTimers(): void {
+  for (const t of resetTimers.values()) t.cancel();
+  resetTimers.clear();
+}
+
+// The person's Stop: the running turn ends now rather than at the next poll,
+// and a round runs at once (turn.complete may not follow an interrupt).
+function noteStop($: EngineInterface): void {
+  apply($, { type: 'turn.stop', at: Date.now() });
+  stopUsageTimer();
+  poller?.reschedule();
+  poller?.pollNow();
 }
 
 // What the coach view's Buttons do: `fill` writes a prompt- or slash-class
@@ -359,7 +526,7 @@ export function selfCheckLine(version: string | null, check: SelfCheck): string 
 function announce($: EngineInterface, check: SelfCheck): Promise<void> {
   return readVersion($).then(() => {
     $.ui.log(selfCheckLine(model.version, check));
-    noteSession($);
+    return noteSession($);
   });
 }
 
@@ -440,8 +607,55 @@ function updateMarker($: EngineInterface): void {
 // Learns the session id after session.start; the poller's sync writes the
 // marker with `open: false`, so from then on `cctop pane status` can tell
 // that the hooks module runs in this session, before any pane was opened.
-function noteSession($: EngineInterface): void {
-  poller?.sync().catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
+function noteSession($: EngineInterface): Promise<void> {
+  return (poller?.sync() ?? Promise.resolve(false))
+    .then(() => readSessionInfo($))
+    .then(() => readAgentLimits($))
+    .catch((err: unknown) => $.ui.log(`cctop: session.id failed: ${String(err)}`));
+}
+
+// `$.session.info()`: the transcript path the poller queries by and the
+// data rules, platform and screen reader mode the marker carries. Read at
+// session.start and on every turn (`dataRules` and `isScreenReader` can
+// change: the d.ts says to read them at each use). A read that lands after
+// `/clear` rotated the id is dropped: its path is the old transcript's. A
+// change is written to the marker at once, so the header badge need not
+// wait for a tick.
+function readSessionInfo($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.session
+    .info()
+    .then((info) => {
+      if (model.sessionId !== sessionId) return;
+      const facts: SessionFacts = {};
+      if (typeof info.transcriptPath === 'string' && info.transcriptPath !== '') facts.transcriptPath = info.transcriptPath;
+      if (info.platform !== undefined) facts.platform = info.platform;
+      if (info.isScreenReader !== undefined) facts.isScreenReader = info.isScreenReader;
+      if (info.dataRules !== undefined) facts.dataRules = [...info.dataRules];
+      // Unchanged: no redraw, no marker write (every turn reads it again).
+      if (JSON.stringify(model.sessionFacts) === JSON.stringify(facts)) return;
+      apply($, { type: 'session.info', facts });
+      updateMarker($);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: session.info failed: ${String(err)}`));
+}
+
+// `$.agent.limits()`: how many agents may run at once and how deep they
+// nest, for the agents view's header. Read at session.start and at each
+// turn.complete (the d.ts: read at each call), written to the marker when
+// it changed. A read that lands after `/clear` is dropped.
+function readAgentLimits($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  return $.agent
+    .limits()
+    .then((l) => {
+      if (model.sessionId !== sessionId) return;
+      const limits = { concurrent: l.concurrent, depth: l.depth, isBackgroundEnabled: l.isBackgroundEnabled };
+      if (JSON.stringify(model.agentLimits) === JSON.stringify(limits)) return;
+      apply($, { type: 'agent.limits', limits });
+      updateMarker($);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: agent.limits failed: ${String(err)}`));
 }
 
 // `/clear` gives the session a new id and fires no session.start (the d.ts:
@@ -452,7 +666,18 @@ function noteSession($: EngineInterface): void {
 function followSession($: EngineInterface): void {
   poller
     ?.sync()
-    .then((rotated) => {
+    .then(async (rotated) => {
+      // A new session is a new spool: its first failure is worth one line too.
+      if (rotated) {
+        breakdownFailureLogged = false;
+        // The old session's bookings: the next usage read books afresh.
+        clearResetTimers();
+        notifyState.scheduledReset.clear();
+      }
+      // Before the first query of a rotated session: its transcript path
+      // and the limits the model dropped with the old session.
+      await readSessionInfo($);
+      if (rotated) await readAgentLimits($);
       if (!rotated || !model.open) return;
       readUsage($);
       void poller?.tick();
@@ -462,8 +687,36 @@ function followSession($: EngineInterface): void {
 
 function readUsage($: EngineInterface): void {
   Promise.all([$.session.usage(), clockNow($)])
-    .then(([usage, at]) => apply($, { type: 'usage', usage, at }))
+    .then(([usage, at]) => {
+      apply($, { type: 'usage', usage, at });
+      notifyResets($, usage, at);
+    })
     .catch((err: unknown) => $.ui.log(`cctop: session.usage failed: ${String(err)}`));
+}
+
+// Reads /context's breakdown (`summary`: an estimate, no token-count
+// request, never `full`) and writes the spool cctop reads. Called after a
+// turn.complete or session.compact has run `next(e)`, at most once per
+// BREAKDOWN_DEBOUNCE_MS, and only with a session bound.
+async function writeBreakdown($: EngineInterface): Promise<void> {
+  const sessionId = model.sessionId;
+  if (sessionId === null) return;
+  const at = await clockNow($);
+  if (!breakdownDue(model, at)) return;
+  // Bookkeeping only (the debounce's clock): nothing on screen changes, so no redraw.
+  model = reduce(model, { type: 'breakdown.read', at });
+  try {
+    const usage = await $.session.usage({ breakdown: 'summary' });
+    const text = spoolText(usage, at);
+    if (text === null) return;
+    const home = await $.env.get('HOME');
+    if (typeof home !== 'string' || home === '') return;
+    await $.fs.write(`${home}/.cctop/context/${sessionId}.json`, text);
+  } catch (err) {
+    if (breakdownFailureLogged) return;
+    breakdownFailureLogged = true;
+    $.ui.log(`cctop: context breakdown spool failed: ${String(err)}`);
+  }
 }
 
 // The model's name for the header, read once after session.start's `next(e)`.
@@ -516,6 +769,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
     visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
   };
   persistPane($);
+  if (model.view === 'agents') void readAgents($);
   if (!opened) {
     // The id first, so a `/clear` since the last look does not wipe the
     // usage read next.
@@ -561,6 +815,7 @@ async function closePane($: EngineInterface): Promise<void> {
 // redraws.
 function selectView($: EngineInterface, view: View): void {
   model = { ...model, view };
+  if (view === 'agents') void readAgents($);
   persistPane($);
   invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
 }
@@ -574,7 +829,7 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
   const el = $.ui.resolve(e);
   const { Box, Text } = el;
   const columns = e.props.bodyColumns;
-  if (e.props.placement === 'inline') {
+  if (e.props.placement !== 'dock') {
     return (
       <Box flexDirection="column">
         {renderView(model, el, columns, 'inline', now)}
@@ -632,7 +887,8 @@ function viewBar(
       used = 0;
       gap = 0;
     }
-    const line = lines[lines.length - 1];
+    const line = lines.at(-1);
+    if (!line) break;
     if (gap > 0) line.push(<Text wrap="truncate">{' '.repeat(gap)}</Text>);
     line.push(
       active ? (
@@ -646,12 +902,28 @@ function viewBar(
     used += gap + width;
     prevActive = active;
   }
+  // While an agent's transcript is in the main view: the way back.
+  if (model.viewedAgent !== null) {
+    const line = lines.at(-1);
+    const back = 'back to main';
+    if (line !== undefined) {
+      if (used + 2 + back.length + 2 > columns) {
+        lines.push([]);
+        used = 0;
+      }
+      lines.at(-1)?.push(
+        <Text wrap="truncate">{used === 0 ? '' : '  '}</Text>,
+        <Button key="back-to-main" label={back} plain onPress={() => viewAgent($, null)} />,
+      );
+      used += (used === 0 ? 0 : 2) + back.length + 2;
+    }
+  }
   // The `bin · shim · hooks 2.1.273` badges after the tabs, when they fit:
   // Console's header is the object's, identical on both surfaces.
   const badges = badgesLine(header(model, 0).badges);
   const badgesWidth = badges.reduce((n, b) => n + b.text.length, 0);
   if (used + 2 + badgesWidth <= columns) {
-    lines[lines.length - 1].push(
+    lines.at(-1)?.push(
       <Text wrap="truncate">{'  '}</Text>,
       ...badges.map((b) => (
         <Text wrap="truncate" color={b.color} dimColor={b.dim}>
@@ -680,6 +952,10 @@ export const register: Register = (on) => {
   stopHiddenTimer();
   renderWaiters = [];
   statusPinned = false;
+  notifyOn = false;
+  notifyState = initialNotifyState();
+  clearResetTimers();
+  agentsAsked.clear();
   invalidatedAt = null;
   renderPending = false;
   poller?.stop();
@@ -693,6 +969,8 @@ export const register: Register = (on) => {
   // session.start checks the surfaces first and says once what it found.
   on('session.start', async ($, e, next) => {
     const check = await selfCheck($);
+    breakdownFailureLogged = false;
+    await readNotifyEnv($);
     apply($, { type: 'session.start', at: check.now, selfCheck: check.problems.length === 0 ? 'ok' : check.problems.join('; ') });
     poller = makePoller($);
     await $.command.register({
@@ -715,6 +993,7 @@ export const register: Register = (on) => {
   // follow the session id, nothing else: no timer, no poll, no usage read.
   on('turn.start', async ($, e, next) => {
     apply($, { type: 'turn.start', at: await clockNow($) });
+    void readAgents($);
     if (model.open) startUsageTimer($);
     poller?.reschedule();
     followSession($);
@@ -730,15 +1009,27 @@ export const register: Register = (on) => {
     poller?.reschedule();
     const result = await next(e);
     if (model.open) readUsage($);
+    void writeBreakdown($);
+    void readAgentLimits($);
+    void readAgents($);
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: turn.complete failed: ${next.error.message ?? next.error.kind}`);
     return next(e);
   });
 
-  on('session.compact', ($, e, next) => {
-    apply($, { type: 'session.compact' });
+  // Observe only: the Stop is noted before any await (the d.ts: it is raised
+  // before the abort and nothing waits on it), and `next(e)` is returned as is.
+  on('session.stop', ($, e, next) => {
+    noteStop($);
     return next(e);
+  });
+
+  on('session.compact', async ($, e, next) => {
+    apply($, { type: 'session.compact' });
+    const result = await next(e);
+    void writeBreakdown($);
+    return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: session.compact failed: ${next.error.message ?? next.error.kind}`);
     return next(e);

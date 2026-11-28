@@ -12,7 +12,7 @@ import { renderOverview, type OverviewActions, type ViewElements } from './overv
 import { renderTools } from './tools';
 
 /** What the pane hands the views that press: the Button element and the closures over `$`. */
-export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions; agents: Pick<AgentsActions, 'open'> };
+export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions; agents: Pick<AgentsActions, 'open' | 'jump'> };
 
 export function renderView(
   model: Model,
@@ -22,14 +22,14 @@ export function renderView(
   now: number,
   actions?: ViewActions,
 ): RenderElement {
-  if (placement === 'inline') return renderOverview(model, el, columns, placement, now);
+  if (placement !== 'dock') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
     case 'coach':
       return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach);
     case 'tools':
       return renderTools(model, el, columns, now);
     case 'agents':
-      return renderAgents(model, el, columns, now, actions === undefined ? undefined : { el: actions.el, open: actions.agents.open });
+      return renderAgents(model, el, columns, now, actions === undefined ? undefined : { el: actions.el, open: actions.agents.open, jump: actions.agents.jump });
     case 'files':
       return renderFiles(model, el, columns);
     case 'events':

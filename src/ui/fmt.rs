@@ -59,6 +59,15 @@ pub fn duration_ms(ms: i64) -> String {
     }
 }
 
+/// Added time in seconds: `14 s`, `2.4 s`.
+pub fn added_s(ms: u64) -> String {
+    if ms < 10_000 {
+        format!("{:.1} s", ms as f64 / 1000.0)
+    } else {
+        format!("{} s", ms.saturating_add(500) / 1000)
+    }
+}
+
 /// Short duration for tables: `38ms`, `1.4s`, `2:05`.
 pub fn short_ms(ms: u64) -> String {
     if ms < 1_000 {
@@ -138,6 +147,18 @@ pub fn date_ymd(ms: i64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Epoch ms → `D Mon` in this machine's local time (`3 Dec`).
+pub fn day_month_local(ms: i64) -> String {
+    let local = ms.div_euclid(1000) + local_offset_secs();
+    let ymd = date_ymd(local * 1000);
+    let m: usize = ymd[5..7].parse().unwrap_or(1);
+    let d: u32 = ymd[8..10].parse().unwrap_or(1);
+    const MON: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    format!("{d} {}", MON[m.clamp(1, 12) - 1])
 }
 
 /// Clip to `max` characters with an ellipsis.

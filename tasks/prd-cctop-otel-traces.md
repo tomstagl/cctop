@@ -61,7 +61,7 @@ cctop's permission waits today come from hooks: `PermissionRequest` → next `Po
 
 **Acceptance criteria:**
 - [ ] Each `LlmRequestSpan` keeps `attempts` (the count of `gen_ai.request.attempt` events), `ttft_ms`, `first_content_ms`, `status_code`, `success`. It joins to the transcript's assistant message via `gen_ai.response.id` = `requestId`.
-- [ ] The turn panel shows `retries 2 (+14 s)` for a turn whose requests had attempts > 1; the added time is the sum over retried requests of (end − the last attempt event's time).
+- [ ] The turn panel shows `retries 2 (+14 s)` for a turn whose requests had attempts > 1; the added time is the sum over retried requests of (the last attempt event's time − the span's start). *Ruling 2026-11-27: the original wording (end − last attempt) measured the final attempt's duration, because Claude Code stamps `gen_ai.request.attempt` when an attempt begins, not when it fails; the time the retries cost is everything before the last attempt began.*
 - [ ] `metrics/registry.rs`: `api_retries`; docs regenerated.
 
 ### US-004: Hook overhead
@@ -97,7 +97,7 @@ cctop's permission waits today come from hooks: `PermissionRequest` → next `Po
 
 ## 6. Technical considerations
 
-- Traces are larger than metrics: one interaction is tens of spans. The receiver already reads bodies fully; cap the body at 4 MB and answer 413 above it.
+- Traces are larger than metrics: one interaction is tens of spans. The receiver already reads bodies fully; cap the body at 4 MB and answer 413 above it. The cap is shared by `/v1/metrics`, `/v1/logs` and `/v1/traces`.
 - `tool_use_id` sits on the `claude_code.tool` span (via `Pt(span, tool_use_id)`). The permission and execution spans are its children, so the join goes through `parent_span_id`.
 - `source` values beyond `config`, `classifier`, `hook`, `user` may exist (the binary text lists them as a prefix). Keep unknown values verbatim as machine tokens, and show them as `other`.
 

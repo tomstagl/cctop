@@ -137,6 +137,9 @@ enum QueryWhat {
     Prefix,
     /// What is in the window right now and what put it there.
     Sources,
+    /// The sessions this one was derived from and continued in, with the
+    /// chain's cost.
+    Lineage,
     /// Event log.
     Events {
         /// Only events newer than this (e.g. 10m, 2h).
@@ -176,6 +179,12 @@ struct RunArgs {
     /// Host an OTLP/HTTP receiver (loopback only) for Claude Code telemetry.
     #[arg(long, value_name = "ADDR", num_args = 0..=1, default_missing_value = cctop::otel::DEFAULT_ADDR)]
     otlp: Option<String>,
+    /// With --otlp, write each raw OTLP request body to DIR as
+    /// `<unix-ms>-<path-tail>.json` (for learning what Claude Code sends).
+    /// The bodies contain account identifiers and prompt text: the directory
+    /// is created private (0700); keep it so and delete it afterwards.
+    #[arg(long, value_name = "DIR", requires = "otlp")]
+    dump_otel: Option<PathBuf>,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -519,6 +528,7 @@ fn run(args: RunArgs) {
         theme,
         refresh_ms,
         otlp,
+        dump_otel,
     } = args;
     let (transcript, session_info): (PathBuf, SessionInfo) =
         match cctop::load::resolve(&target(&attach)) {
@@ -609,7 +619,7 @@ fn run(args: RunArgs) {
         .and_then(|home| cctop::split::PidFile::write(&home, &session_info.session_id));
     cctop::attach::attach(&mut app, &transcript, session_info, true);
     if let Some(addr) = otlp {
-        match cctop::otel::serve(&addr) {
+        match cctop::otel::serve(&addr, dump_otel) {
             Ok((store, bound)) => {
                 app.state.set_toast(format!("OTLP receiver on {bound}"));
                 app.tick_hooks.push(Box::new(move |state: &mut State| {
@@ -667,6 +677,16 @@ fn query(q: QueryArgs) {
     }
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
+        QueryWhat::Lineage => {
+            let (path, _) = match cctop::load::resolve(&target(&q.attach)) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("cctop: {e}");
+                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                }
+            };
+            qy::lineage(&path)
+        }
         QueryWhat::Coach {
             line: true,
             columns,
@@ -716,7 +736,7 @@ fn query(q: QueryArgs) {
                     };
                     qy::events(&state, since_ms)
                 }
-                QueryWhat::Explain { .. } => unreachable!(),
+                QueryWhat::Explain { .. } | QueryWhat::Lineage => unreachable!(),
             }
         }
     };

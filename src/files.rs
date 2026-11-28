@@ -128,6 +128,14 @@ impl Files {
         }
     }
 
+    /// The session moved to another folder (`CwdChanged`): relative Bash
+    /// paths resolve there from now on.
+    pub fn move_cwd(&mut self, cwd: &Path) {
+        if !cwd.as_os_str().is_empty() {
+            self.cwd = Some(cwd.to_path_buf());
+        }
+    }
+
     fn entry(&mut self, path: &str) -> &mut FileStats {
         self.files
             .entry(path.to_string())
@@ -449,6 +457,28 @@ mod tests {
             r#"{{"type":"user","timestamp":"2026-01-01T00:00:{t:02}Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{id}","content":"x"}}]}},"toolUseResult":{tur}}}"#
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn numstat_stays_relative_to_the_original_folder_after_a_cwd_change() {
+        let mut f = Files::default();
+        f.set_cwd(Path::new("/repo"));
+        f.push(&call(
+            "w1",
+            "Write",
+            r#"{"file_path":"/repo/src/a.rs","content":"x"}"#,
+            1,
+        ));
+        f.push(&result("w1", r#"{"type":"create"}"#, 2));
+        f.move_cwd(Path::new("/repo/src"));
+        let ns = parse_numstat("3\t1\tsrc/a.rs\n");
+        // The numstat of the original repo root resolves the file.
+        f.apply_numstat(Path::new("/repo"), &ns);
+        assert_eq!(f.files["/repo/src/a.rs"].lines_added, Some(3));
+        assert_eq!(f.files["/repo/src/a.rs"].lines_removed, Some(1));
+        // Relative to the moved folder it would not: why attach keeps the original.
+        f.apply_numstat(Path::new("/repo/src"), &ns);
+        assert_eq!(f.files["/repo/src/a.rs"].lines_added, None);
     }
 
     #[test]

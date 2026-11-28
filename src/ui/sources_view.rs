@@ -71,6 +71,16 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let r = state.residency();
     let dim = state.theme.dim();
     let est = if v.window_exact { "" } else { " est" };
+    // A calibrated prefix says how old its `/context` table is.
+    let calibrated = match (&r.mode, state.context_capture()) {
+        (Mode::Calibrated { .. }, Some((_, _, _, at))) if at > 0 => format!(
+            ", calibrated {} ago",
+            crate::coach::ago(state.clock_ms() - at)
+        ),
+        // A table without a timestamp is still a calibration.
+        (Mode::Calibrated { .. }, _) => ", calibrated".to_string(),
+        _ => String::new(),
+    };
     let title = if state.sources_files {
         format!(
             " Sources › files — {} in the window, since {}  (← back · Esc close) ",
@@ -79,11 +89,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         )
     } else {
         format!(
-            " Sources — {} of {}{}, since {}  (Esc back) ",
+            " Sources — {} of {}{}, since {}{}  (Esc back) ",
             fmt::tokens(r.size),
             fmt::tokens(v.window),
             est,
-            since_text(&r)
+            since_text(&r),
+            calibrated
         )
     };
     let block = Block::default().borders(Borders::ALL).title(title);
@@ -208,7 +219,75 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         ),
         dim,
     )));
+    lines.extend(workspace_lines(state, w));
+    lines.extend(otel_line(state));
+    if !state.hooks_missing.is_empty() {
+        lines.push(Line::from(Span::styled(
+            format!(
+                " {}",
+                crate::install::hooks_missing_text(state.hooks_missing.len())
+            ),
+            state.theme.warn(),
+        )));
+    }
     frame.render_widget(Paragraph::new(lines), inner);
+}
+
+/// `otel: metrics · logs · traces`, each lit once that signal has delivered
+/// data. Absent without a receiver.
+fn otel_line<'a>(state: &State) -> Option<Line<'a>> {
+    let (m, l, t) = state.otel_signals()?;
+    let lit = |on: bool| {
+        if on {
+            state.theme.accent()
+        } else {
+            state.theme.dim()
+        }
+    };
+    let dot = Span::styled(" · ", state.theme.dim());
+    Some(Line::from(vec![
+        Span::styled(" otel: ", state.theme.dim()),
+        Span::styled("metrics", lit(m)),
+        dot.clone(),
+        Span::styled("logs", lit(l)),
+        dot,
+        Span::styled("traces", lit(t)),
+    ]))
+}
+
+/// The workspace the status line reports: the repo, the worktree and the
+/// added directories' paths (the header carries only their count).
+fn workspace_lines<'a>(state: &State, width: usize) -> Vec<Line<'a>> {
+    let Some(w) = &state.status_facts.workspace else {
+        return Vec::new();
+    };
+    let dim = state.theme.dim();
+    let mut rows: Vec<String> = Vec::new();
+    if let Some(crate::status::Repo {
+        host,
+        owner: Some(o),
+        name: Some(n),
+    }) = &w.repo
+    {
+        let host = host.as_deref().map(|h| format!("{h}/")).unwrap_or_default();
+        rows.push(format!(" repo       {host}{o}/{n}"));
+    }
+    if let Some(t) = w.git_worktree.as_deref().filter(|t| !t.is_empty()) {
+        rows.push(format!(" worktree   {t}"));
+    }
+    if let Some(p) = w.project_dir.as_deref().filter(|p| !p.is_empty()) {
+        rows.push(format!(" project    {p}"));
+    }
+    for (i, d) in w.added_dirs.iter().enumerate() {
+        let label = if i == 0 { " added dirs" } else { "           " };
+        rows.push(format!("{label} {d}"));
+    }
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    let mut out = vec![Line::from(Span::styled(" ── workspace ──", dim))];
+    out.extend(rows.into_iter().map(|r| Line::from(fmt::clip(&r, width))));
+    out
 }
 
 fn render_files(lines: &mut Vec<Line>, r: &Residency, state: &State, width: usize) {
@@ -316,6 +395,97 @@ mod tests {
     }
 
     #[test]
+    fn sources_view_lights_the_otel_signals_that_arrived() {
+        use crate::otel::SessionData;
+        let mut app = app_on("session-a");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 30).contains("otel:"));
+        let mut d = SessionData {
+            cost_usd: 0.4,
+            api_errors: 1,
+            ..Default::default()
+        };
+        app.state.apply_otel(&d);
+        assert_eq!(app.state.otel_signals(), Some((true, true, false)));
+        insta::assert_snapshot!(
+            "sources_otel_metrics_logs_110x30",
+            render_to_string(&app, 110, 30)
+        );
+        d.spans = crate::ui::state::tests_support::trace_spans(&["user"]).into();
+        app.state.apply_otel(&d);
+        assert_eq!(app.state.otel_signals(), Some((true, true, true)));
+        // The text is the same as above; the difference is the style.
+        let styles = |st: &State| -> Vec<(String, ratatui::style::Style)> {
+            super::otel_line(st)
+                .unwrap()
+                .spans
+                .iter()
+                .filter(|sp| ["metrics", "logs", "traces"].contains(&sp.content.as_ref()))
+                .map(|sp| (sp.content.to_string(), sp.style))
+                .collect()
+        };
+        let (lit, dim) = (app.state.theme.accent(), app.state.theme.dim());
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), lit)
+            ]
+        );
+        d.spans.clear();
+        app.state.apply_otel(&d);
+        assert_eq!(
+            styles(&app.state),
+            [
+                ("metrics".into(), lit),
+                ("logs".into(), lit),
+                ("traces".into(), dim)
+            ]
+        );
+    }
+
+    #[test]
+    fn sources_view_says_when_hook_events_are_missing() {
+        let mut app = app_on("session-a");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 40).contains("run cctop install"));
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let out = render_to_string(&app, 110, 40);
+        assert!(
+            out.contains("hooks: 7 new events, run cctop install"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn sources_view_lists_added_dirs() {
+        let mut app = app_on("session-a");
+        app.state.status_facts.workspace = Some(crate::status::Workspace {
+            added_dirs: vec!["/x/lib".into(), "/y/docs".into()],
+            git_worktree: Some("feat".into()),
+            project_dir: Some("/p/shop".into()),
+            repo: Some(crate::status::Repo {
+                host: Some("github.com".into()),
+                owner: Some("acme".into()),
+                name: Some("shop".into()),
+            }),
+            ..Default::default()
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 110, 40);
+        assert!(out.contains("github.com/acme/shop"), "{out}");
+        assert!(out.contains("/x/lib") && out.contains("/y/docs"), "{out}");
+        assert!(out.contains("worktree   feat"), "{out}");
+        assert!(out.contains("project    /p/shop"), "{out}");
+        // Absent without the fact.
+        let app = app_on("session-a");
+        let mut app = app;
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 40).contains("── workspace"));
+    }
+
+    #[test]
     fn fixture_b_names_its_boundary_and_the_summary() {
         let mut app = app_on("session-b");
         app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
@@ -325,5 +495,26 @@ mod tests {
         assert!(out.contains("since model switch (−"), "{out}");
         assert!(out.contains("the compaction summary"), "{out}");
         insta::assert_snapshot!("sources_b_162x30", out);
+    }
+
+    /// A calibrated prefix says how old its `/context` table is; a table
+    /// with no timestamp is still called calibrated.
+    #[test]
+    fn a_calibrated_title_says_how_long_ago() {
+        let mut app = app_on("session-d");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated ") && title.contains(" ago"),
+            "{title}"
+        );
+        app.state.prefix.context_capture_at_ms = None;
+        let out = render_to_string(&app, 140, 30);
+        let title = out.lines().find(|l| l.contains("Sources — ")).unwrap();
+        assert!(
+            title.contains(", calibrated") && !title.contains(" ago"),
+            "{title}"
+        );
     }
 }

@@ -158,7 +158,27 @@ pub struct Header {
     /// (its lines carry `agentName` / `teamName`); absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
+    /// `from <id8> · <via>` when the transcript says the session was started
+    /// from another (`derived-from`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     pub phase: PhaseCell,
+    /// `hooks: 7 new`, amber, between the facts and the phase cell: the
+    /// installed hooks lack events this cctop would add (`cctop install`).
+    /// Absent when the install is current, not installed, or a fixture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<String>,
+    /// `ZDR HIPAA rules`: the data rules the pane read of `$.session.info()`
+    /// (`rules` for a name cctop does not know), drawn beside the hooks
+    /// badge. Absent without a pane marker, and when no rule is listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<String>,
+    /// What the status line says about where the session runs, in priority
+    /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
+    /// Inside `line`, before the PR and the version; both surfaces drop
+    /// items from the right to fit (`fit_workspace`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub workspace: Vec<String>,
     /// The header as one line: `cctop  claude-opus-5 · turn 14 · 1:12:08 · ~/code/cctop · PR #142`.
     pub line: String,
     /// The header's second row while a workflow run is live or recently
@@ -185,6 +205,115 @@ pub struct Cell {
     pub mid: Line,
     /// `ctx 35%`.
     pub short: Line,
+    /// The window's composition from `/context`'s own numbers: only on
+    /// the context cell, only while a capture exists (PRD context-breakdown
+    /// §3.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub composition: Option<Composition>,
+}
+
+/// The window by category, as Claude Code itself counted it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Composition {
+    /// `per /context` (the transcript's table) or `per Claude Code` (the
+    /// pane's spool).
+    pub source: &'static str,
+    /// The used categories in `/context`'s order, then `free`, then
+    /// `buffer` where the capture has them.
+    #[serde(serialize_with = "items_as_objects")]
+    pub items: Vec<(String, u64)>,
+    /// The row's text, cut whole item by whole item at [`coach::WIDTH`].
+    pub line: String,
+}
+
+fn items_as_objects<S: serde::Serializer>(
+    items: &[(String, u64)],
+    ser: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeSeq;
+    let mut seq = ser.serialize_seq(Some(items.len()))?;
+    for (name, tokens) in items {
+        seq.serialize_element(&serde_json::json!({"name": name, "tokens": tokens}))?;
+    }
+    seq.end()
+}
+
+/// A category's name for the row. Display only; nothing branches on it.
+fn short_category(name: &str) -> String {
+    match name.to_lowercase().as_str() {
+        "system prompt" => "sys".into(),
+        "system tools" => "tools".into(),
+        "mcp tools" => "mcp".into(),
+        "memory files" => "mem".into(),
+        "messages" => "msgs".into(),
+        "custom agents" => "agents".into(),
+        "skills" => "skills".into(),
+        _ => name.to_string(),
+    }
+}
+
+impl Composition {
+    pub fn of(state: &State) -> Option<Composition> {
+        use crate::ui::state::CaptureSource;
+        let (cap, _, src, _) = state.current_context_capture()?;
+        let mut items: Vec<(String, u64)> = cap.categories.clone();
+        if items.is_empty() {
+            return None;
+        }
+        let used = items.len();
+        if let Some(f) = cap.free_tokens {
+            items.push(("free".into(), f));
+        }
+        if let Some(b) = cap.autocompact_buffer {
+            items.push(("buffer".into(), b));
+        }
+        let source = match src {
+            CaptureSource::Transcript => "per /context",
+            CaptureSource::Spool => "per Claude Code",
+        };
+        // What goes first when the line is too long: the buffer, then the
+        // smallest used categories other than Messages. The rest keep
+        // /context's order.
+        let mut order: Vec<usize> = Vec::new();
+        if cap.autocompact_buffer.is_some() {
+            order.push(items.len() - 1);
+        }
+        let mut small: Vec<usize> = (0..used)
+            .filter(|&i| short_category(&items[i].0) != "msgs")
+            .collect();
+        small.sort_by_key(|&i| (items[i].1, std::cmp::Reverse(i)));
+        order.extend(small);
+        let render = |keep: &[bool]| {
+            let mut line = source.to_string();
+            for (i, (name, tokens)) in items.iter().enumerate() {
+                if keep[i] {
+                    line.push_str(&format!(
+                        " {} {}",
+                        short_category(name),
+                        fmt::tokens(*tokens)
+                    ));
+                }
+            }
+            if keep.iter().any(|k| !k) {
+                line.push_str(" …");
+            }
+            line
+        };
+        let mut keep = vec![true; items.len()];
+        let mut line = render(&keep);
+        for i in order {
+            if line.chars().count() <= coach::WIDTH {
+                break;
+            }
+            keep[i] = false;
+            line = render(&keep);
+        }
+        Some(Composition {
+            source,
+            items,
+            line,
+        })
+    }
 }
 
 /// The act line: the coach's slot, whole. A pending wait pre-empts the
@@ -342,6 +471,18 @@ fn header(state: &State, c: &Coach) -> Header {
     if let Some(t) = &team {
         parts.push(t.clone());
     }
+    let from = state
+        .agg
+        .derived_from
+        .as_ref()
+        .map(|(id, via)| crate::lineage::header_text(id, via));
+    if let Some(f) = &from {
+        parts.push(f.clone());
+    }
+    // The workspace items come before the PR and the version, so a narrow
+    // row cuts those first (`fit_workspace` then drops items from the right).
+    let workspace = workspace_items(&state.status_facts);
+    parts.extend(workspace.iter().cloned());
     if let Some(n) = pr {
         parts.push(format!("PR #{n}"));
     }
@@ -357,6 +498,7 @@ fn header(state: &State, c: &Coach) -> Header {
         cwd,
         pr,
         team,
+        from,
         phase: PhaseCell {
             glyph,
             word,
@@ -368,9 +510,85 @@ fn header(state: &State, c: &Coach) -> Header {
                 .unwrap_or_else(|| "—".into()),
             tokens: c.state.tokens.clone(),
         },
+        hooks: (!state.hooks_missing.is_empty())
+            .then(|| format!("hooks: {} new", state.hooks_missing.len())),
+        rules: state
+            .pane_facts
+            .as_ref()
+            .and_then(crate::pane::PaneFacts::rules_badge),
+        workspace,
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),
     }
+}
+
+/// The header facts (`line` without its `cctop  ` lead) with as many
+/// workspace items as leave the facts before them and those items within
+/// `room`: the items sit between the session facts and the PR / version,
+/// highest priority first, and are dropped from the right (`remote` first,
+/// the repo last). What follows them is cut by the caller's clip. The pane
+/// (`views/overview.tsx` `fitWorkspace`) mirrors this character for character.
+pub fn fit_workspace(facts: &str, items: &[String], room: usize) -> String {
+    if items.is_empty() {
+        return facts.to_string();
+    }
+    let mid = format!(" · {}", items.join(" · "));
+    let Some(at) = facts.rfind(&mid) else {
+        return facts.to_string();
+    };
+    let (base, after) = (&facts[..at], &facts[at + mid.len()..]);
+    for n in (0..=items.len()).rev() {
+        let mut out = base.to_string();
+        for i in &items[..n] {
+            out.push_str(" · ");
+            out.push_str(i);
+        }
+        if out.chars().count() <= room || n == 0 {
+            out.push_str(after);
+            return out;
+        }
+    }
+    facts.to_string()
+}
+
+/// The header's workspace items, highest priority first: `owner/name`,
+/// `wt <worktree>`, `+N dirs` (a count; the paths are in the sources view),
+/// `style <name>` unless `default`, `agent: <name>`, `remote` (the id is a
+/// badge, never shown).
+pub fn workspace_items(f: &crate::ui::state::StatusFacts) -> Vec<String> {
+    let mut items = Vec::new();
+    if let Some(w) = &f.workspace {
+        if let Some(crate::status::Repo {
+            owner: Some(o),
+            name: Some(n),
+            ..
+        }) = &w.repo
+        {
+            items.push(format!("{o}/{n}"));
+        }
+        if let Some(wt) = w.git_worktree.as_deref().filter(|t| !t.is_empty()) {
+            items.push(format!("wt {wt}"));
+        }
+        match w.added_dirs.len() {
+            0 => {}
+            1 => items.push("+1 dir".into()),
+            n => items.push(format!("+{n} dirs")),
+        }
+    }
+    if let Some(s) = f
+        .output_style
+        .as_deref()
+        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("default"))
+    {
+        items.push(format!("style {s}"));
+    }
+    if let Some(a) = f.agent_name.as_deref().filter(|a| !a.is_empty()) {
+        items.push(format!("agent: {a}"));
+    }
+    if f.remote_session_id.is_some() {
+        items.push("remote".into());
+    }
+    items
 }
 
 /// The header's workflow row; the ledger is read only when a run exists.
@@ -438,6 +656,7 @@ fn cell(key: char, id: &'static str, first: Line, second: Option<Line>) -> Cell 
         label,
         mid,
         short: first,
+        composition: None,
     }
 }
 
@@ -453,12 +672,13 @@ fn cells(state: &State, c: &Coach) -> Vec<Cell> {
         "—".into()
     };
     let left = v.threshold.saturating_sub(v.size);
-    let context = cell(
+    let mut context = cell(
         '1',
         "context",
         vec![fg("ctx "), seg(pct, level_tone(ctx_level))],
         (v.window > 0).then(|| vec![fg(format!("{} left", fmt::tokens(left)))]),
     );
+    context.composition = Composition::of(state);
     // 2 · limits: the 5-hour window and its reset.
     let limits = match &state.limits {
         Some(l) => cell(
@@ -478,12 +698,35 @@ fn cells(state: &State, c: &Coach) -> Vec<Cell> {
             l.five_hour_resets_at_ms
                 .map(|r| vec![fg(format!("↻ {}", coach::short_duration(r - now)))]),
         ),
-        None => cell(
-            '2',
-            "limits",
-            vec![fg("5h "), dim("—")],
-            Some(vec![dim("no status line")]),
-        ),
+        None => match budget_line(state) {
+            // A `--max-budget-usd` session has no status line: the budget is
+            // its limit.
+            Some((text, ratio, eta)) => {
+                let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Fg };
+                let amounts = text.strip_prefix("budget ").unwrap_or(&text);
+                let compact = amounts.replace(" / ", "/");
+                let mut c = cell(
+                    '2',
+                    "limits",
+                    vec![fg("budget "), seg(amounts.to_string(), tone)],
+                    eta.map(|e| vec![fg(e)]),
+                );
+                let mut mid = vec![seg(compact.clone(), tone)];
+                if let Some(e) = &c.label.get(3..) {
+                    mid.push(dim(" "));
+                    mid.extend(e.iter().cloned());
+                }
+                c.mid = mid;
+                c.short = vec![seg(compact, tone)];
+                c
+            }
+            None => cell(
+                '2',
+                "limits",
+                vec![fg("5h "), dim("—")],
+                Some(vec![dim("no status line")]),
+            ),
+        },
     };
     // 3 · cache: the countdown and the TTL.
     let ttl = if state.cache_ttl_ms() >= 3_600_000 {
@@ -591,10 +834,13 @@ fn act(state: &State, c: &Coach) -> Act {
         use crate::ui::state::WaitingKind;
         let since = coach::short_duration(state.clock_ms() - w.since_ms);
         let what = match w.kind {
-            WaitingKind::Permission => "permission prompt open",
-            WaitingKind::Question => "Claude asked a question",
-            WaitingKind::Notification => "Claude needs your input",
-            WaitingKind::Asked => "Claude asked, no reply yet",
+            WaitingKind::Permission => "permission prompt open".to_string(),
+            WaitingKind::Question => "Claude asked a question".to_string(),
+            WaitingKind::Notification => "Claude needs your input".to_string(),
+            WaitingKind::Asked => "Claude asked, no reply yet".to_string(),
+            WaitingKind::Elicitation => {
+                crate::coach::elicitation_ask(state, &format!("◆ WAITING {since} — "))
+            }
         };
         return Act {
             key: 'a',
@@ -735,7 +981,13 @@ fn body_context(state: &State, c: &Coach) -> Body {
         None => top.push(dim("   velocity — (one turn)")),
     }
     rows.push(top);
-    rows.push(Vec::new());
+    // The window by category as Claude Code counted it, when a `/context`
+    // table or the pane's spool exists: the same line on both surfaces.
+    // It takes the blank row's place, so a short dock keeps its last row.
+    match Composition::of(state) {
+        Some(comp) => rows.push(vec![dim(format!("  {}", comp.line))]),
+        None => rows.push(Vec::new()),
+    }
     let slices = vec![
         Slice {
             label: "prefix",
@@ -864,6 +1116,60 @@ fn body_context(state: &State, c: &Coach) -> Body {
     }
 }
 
+/// The spend limit as one line for the limits panel and the dashboard's
+/// limits cell: dollars with the period and the reset when the status line
+/// carries them, else the percentage alone.
+pub fn spend_limit_text(facts: &crate::ui::state::StatusFacts) -> Option<String> {
+    let Some((used, limit)) = facts.spend_limit_usd else {
+        return facts
+            .spend_limit_pct
+            .map(|p| format!("spend limit {p:.0} %"));
+    };
+    let mut t = format!("spend ${used:.0}");
+    if let Some(l) = limit {
+        t.push_str(&format!(" / ${l:.0}"));
+    }
+    if let Some(p) = &facts.spend_limit_period {
+        t.push_str(&format!(" · {p}"));
+    }
+    if let Some(ms) = facts.spend_limit_resets_at_ms {
+        t.push_str(&format!(" · resets {}", fmt::day_month_local(ms)));
+    }
+    Some(t)
+}
+
+/// The `--max-budget-usd` budget as one line for the limits panel and the
+/// dashboard's limits cell: the text (`budget $3.20 / $5.00`), the used ratio
+/// (0..=1, clamped; a zero total counts as spent) and, while money is left and
+/// the session is burning it, `halts in ~N min` when that is under an hour.
+pub fn budget_text(
+    used: f64,
+    total: f64,
+    burn_usd_per_ms: Option<f64>,
+) -> (String, f64, Option<String>) {
+    let text = format!("budget ${used:.2} / ${total:.2}");
+    let ratio = if total > 0.0 {
+        (used / total).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let remaining = total - used;
+    let eta = burn_usd_per_ms
+        .filter(|b| *b > 0.0 && remaining > 0.0)
+        .map(|b| remaining / b / 60_000.0)
+        .filter(|min| *min < 60.0)
+        .map(|min| format!("halts in ~{} min", min.round().max(1.0) as u64));
+    (text, ratio, eta)
+}
+
+/// The budget text for a state: burn from the trailing-window rate.
+pub fn budget_line(state: &State) -> Option<(String, f64, Option<String>)> {
+    let (used, total, _) = state.budget_usd?;
+    let rates = crate::metrics::cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
+    let burn = rates.usd_per_hour.map(|h| h / 3_600_000.0);
+    Some(budget_text(used, total, burn))
+}
+
 /// The limits body: the two windows as meters, then what the light says.
 fn body_limits(state: &State, c: &Coach) -> Body {
     let now = state.clock_ms();
@@ -949,8 +1255,32 @@ fn body_limits(state: &State, c: &Coach) -> Body {
             dim(" of usage was above 150k context"),
         ]);
     }
-    if let Some(p) = state.status_facts.spend_limit_pct {
-        rows.push(vec![dim("  spend limit "), fg(format!("{p:.0} %"))]);
+    if let Some(t) = spend_limit_text(&state.status_facts) {
+        // The label stays dim, the figures are the value.
+        let (label, value) = match t.strip_prefix("spend limit ") {
+            Some(v) => ("  spend limit ", v.to_string()),
+            None => (
+                "  spend ",
+                t.strip_prefix("spend ").unwrap_or(&t).to_string(),
+            ),
+        };
+        rows.push(vec![dim(label), fg(value)]);
+    }
+    if let Some((t, ratio, eta)) = budget_line(state) {
+        let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Ok };
+        let mut row = vec![
+            dim("  budget "),
+            seg(
+                t.strip_prefix("budget ").unwrap_or(&t).to_string(),
+                if ratio >= 0.9 { Tone::Crit } else { Tone::Fg },
+            ),
+            dim("  "),
+        ];
+        row.extend(bar(ratio * 100.0, 10, tone));
+        if let Some(e) = eta {
+            row.push(dim(format!("  {e}")));
+        }
+        rows.push(row);
     }
     if state.other_live_sessions > 0 {
         rows.push(vec![dim(format!(
@@ -1719,6 +2049,131 @@ mod tests {
     use super::*;
     use crate::metrics::Pricing;
 
+    fn spend_facts() -> crate::ui::state::StatusFacts {
+        crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            spend_limit_usd: Some((412.0, Some(500.0))),
+            spend_limit_period: Some("monthly".into()),
+            // 3 Dec 2026 12:00 UTC: the same local day in any time zone.
+            spend_limit_resets_at_ms: Some(1_796_299_200_000),
+            ..Default::default()
+        }
+    }
+
+    fn facts_with_workspace() -> crate::ui::state::StatusFacts {
+        crate::ui::state::StatusFacts {
+            workspace: Some(crate::status::Workspace {
+                added_dirs: vec!["/x/y".into(), "/z".into()],
+                git_worktree: Some("feat".into()),
+                repo: Some(crate::status::Repo {
+                    host: Some("github.com".into()),
+                    owner: Some("acme".into()),
+                    name: Some("shop".into()),
+                }),
+                ..Default::default()
+            }),
+            output_style: Some("Concise".into()),
+            agent_name: Some("reviewer".into()),
+            remote_session_id: Some("r-1".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn header_workspace_items() {
+        assert_eq!(
+            workspace_items(&facts_with_workspace()),
+            [
+                "acme/shop",
+                "wt feat",
+                "+2 dirs",
+                "style Concise",
+                "agent: reviewer",
+                "remote"
+            ]
+        );
+        let mut f = facts_with_workspace();
+        f.workspace.as_mut().unwrap().added_dirs = vec!["/x".into()];
+        assert!(workspace_items(&f).contains(&"+1 dir".to_string()));
+        // Empty or absent added dirs, a `default` or absent style: no item.
+        f.workspace.as_mut().unwrap().added_dirs.clear();
+        f.output_style = Some("default".into());
+        let items = workspace_items(&f);
+        assert!(
+            !items
+                .iter()
+                .any(|i| i.contains("dir") || i.starts_with("style")),
+            "{items:?}"
+        );
+        f.output_style = None;
+        assert!(!workspace_items(&f).iter().any(|i| i.starts_with("style")));
+        f.workspace = None;
+        assert_eq!(workspace_items(&f), ["agent: reviewer", "remote"]);
+        assert!(workspace_items(&Default::default()).is_empty());
+        // The line carries them after the session facts, before the PR and version; the object lists them.
+        let (mut s, e) = fixture_b();
+        s.status_facts = facts_with_workspace();
+        let h = snapshot(&s, &e).header;
+        assert!(
+            h.line.contains(
+                " · acme/shop · wt feat · +2 dirs · style Concise · agent: reviewer · remote"
+            ),
+            "{}",
+            h.line
+        );
+        assert_eq!(h.workspace.len(), 6);
+        let (s, e) = fixture_b();
+        let json = serde_json::to_value(snapshot(&s, &e).header).unwrap();
+        assert!(json.get("workspace").is_none());
+    }
+
+    #[test]
+    fn body_limits_shows_spend_in_dollars() {
+        let (mut s, e) = fixture_b();
+        s.status_facts = spend_facts();
+        let c = coach::snapshot(&s, &e);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(
+            text.contains("  spend $412 / $500 · monthly · resets 3 Dec"),
+            "{text}"
+        );
+        // Percentage only: the old row.
+        s.status_facts.spend_limit_usd = None;
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(text.contains("  spend limit 82 %"), "{text}");
+    }
+
+    #[test]
+    fn spend_text_full() {
+        assert_eq!(
+            spend_limit_text(&spend_facts()).as_deref(),
+            Some("spend $412 / $500 · monthly · resets 3 Dec")
+        );
+    }
+
+    #[test]
+    fn spend_text_no_limit() {
+        let mut f = spend_facts();
+        f.spend_limit_usd = Some((412.0, None));
+        assert_eq!(
+            spend_limit_text(&f).as_deref(),
+            Some("spend $412 · monthly · resets 3 Dec")
+        );
+        f.spend_limit_period = None;
+        f.spend_limit_resets_at_ms = None;
+        assert_eq!(spend_limit_text(&f).as_deref(), Some("spend $412"));
+    }
+
+    #[test]
+    fn spend_text_pct_only() {
+        let f = crate::ui::state::StatusFacts {
+            spend_limit_pct: Some(82.0),
+            ..Default::default()
+        };
+        assert_eq!(spend_limit_text(&f).as_deref(), Some("spend limit 82 %"));
+        assert_eq!(spend_limit_text(&Default::default()), None);
+    }
+
     fn fixture_b() -> (State, Engine) {
         fixture_at("b", usize::MAX)
     }
@@ -1877,6 +2332,29 @@ mod tests {
         assert!(v["header"].get("team").is_none());
     }
 
+    #[test]
+    fn a_derived_session_names_its_origin_in_the_header() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.from.as_deref(), Some("from 65b51d4c · subprocess"));
+        assert!(
+            d.header.line.contains(" · from 65b51d4c · subprocess"),
+            "{}",
+            d.header.line
+        );
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["header"]["from"], "from 65b51d4c · subprocess");
+        let (s, e) = fixture_b();
+        assert_eq!(snapshot(&s, &e).header.from, None);
+    }
+
     /// Schema 2 (US-102): six cells with contiguous keys, the act line,
     /// eight bodies with the keys `1`–`6`, `a`, `0`, nothing width-aware.
     #[test]
@@ -1992,6 +2470,150 @@ mod tests {
         assert_eq!(v["bodies"][0]["slices"][0]["step"], 0);
     }
 
+    fn composition_of(d: &Dashboard) -> Option<&Composition> {
+        d.cells[0].composition.as_ref()
+    }
+
+    /// A transcript capture labels the row `per /context`, in the table's
+    /// order, then free and buffer, and the context body carries the same
+    /// line.
+    #[test]
+    fn a_transcript_capture_draws_the_composition_row() {
+        let (s, e) = fixture_at("d", usize::MAX);
+        let d = snapshot(&s, &e);
+        let c = composition_of(&d).expect("fixture D has the table");
+        assert_eq!(c.source, "per /context");
+        assert!(c.line.starts_with("per /context "), "{}", c.line);
+        assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
+        let cap = s.prefix.context_capture.as_ref().unwrap();
+        assert_eq!(c.items[0].0, cap.categories[0].0);
+        assert_eq!(
+            serde_json::to_value(&d).unwrap()["cells"][0]["composition"]["items"][0]["name"],
+            c.items[0].0.as_str()
+        );
+        if let Some(f) = cap.free_tokens {
+            assert!(c.items.iter().any(|(n, t)| n == "free" && *t == f));
+        }
+        let text = body_text(body(&d, "context"));
+        assert!(text.iter().any(|r| r == &format!("  {}", c.line)));
+        let q = crate::query::dashboard(&s);
+        assert_eq!(q["composition_source"], "per /context");
+        assert_eq!(q["composition"][0]["name"], c.items[0].0.as_str());
+        assert_eq!(q["composition"][0]["tokens"], c.items[0].1);
+        insta::assert_snapshot!("composition_row_d", c.line);
+    }
+
+    /// The pane's spool, newer than anything in the transcript, reads `per
+    /// Claude Code`.
+    #[test]
+    fn a_spool_capture_is_labelled_per_claude_code() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        s.apply_context_spool(crate::context_spool::SpoolCapture {
+            at_ms: at,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: 100_000,
+                window_tokens: 1_000_000,
+                categories: vec![("System prompt".into(), 8_000), ("Messages".into(), 60_000)],
+                free_tokens: Some(850_000),
+                autocompact_buffer: Some(33_000),
+                ..Default::default()
+            },
+        });
+        let c = Composition::of(&s).expect("a spool capture");
+        assert_eq!(c.source, "per Claude Code");
+        assert_eq!(
+            c.items.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            ["System prompt", "Messages", "free", "buffer"]
+        );
+        assert_eq!(c.line, "per Claude Code sys 8.0k msgs 60k free 850k …");
+        assert!(c.line.chars().count() <= coach::WIDTH);
+    }
+
+    /// Deferred tools are not in the window: a spool's `deferred` row is in
+    /// neither the row nor `composition[]`.
+    #[test]
+    fn a_deferred_row_is_left_out() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        let json = format!(
+            r#"{{"v":1,"at":{at},"tokens":100000,"window":1000000,"categories":[{{"name":"System prompt","tokens":8000,"kind":"used"}},{{"name":"MCP tools (deferred)","tokens":900,"kind":"deferred"}},{{"name":"Messages","tokens":60000,"kind":"used"}},{{"name":"Free space","tokens":850000,"kind":"free"}}]}}"#
+        );
+        s.apply_context_spool(crate::context_spool::parse(&json).unwrap());
+        let c = Composition::of(&s).unwrap();
+        assert!(
+            !c.line.contains("deferred") && !c.line.contains("mcp"),
+            "{}",
+            c.line
+        );
+        assert!(c.items.iter().all(|(n, _)| !n.contains("deferred")));
+        let q = crate::query::dashboard(&s);
+        assert!(q["composition"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| !i["name"].as_str().unwrap().contains("deferred")));
+    }
+
+    /// At 52 cells the lever (Messages) and the free space stay; the
+    /// smallest other used categories go first, the order is /context's.
+    #[test]
+    fn the_cut_keeps_messages_and_free() {
+        let (s, e) = fixture_at("b", usize::MAX);
+        let d = snapshot(&s, &e);
+        let c = composition_of(&d).expect("fixture B has the table");
+        assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
+        assert!(
+            c.line.contains(" msgs ") && c.line.contains(" free "),
+            "{}",
+            c.line
+        );
+        let pos = |k: &str| c.line.find(k);
+        assert!(pos(" msgs ") < pos(" free "));
+        insta::assert_snapshot!("composition_row_b", c.line);
+    }
+
+    #[test]
+    fn no_used_categories_no_row() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        s.apply_context_spool(crate::context_spool::SpoolCapture {
+            at_ms: at,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: 1,
+                window_tokens: 1_000_000,
+                free_tokens: Some(999_999),
+                ..Default::default()
+            },
+        });
+        assert!(Composition::of(&s).is_none());
+    }
+
+    /// A `/context` table from before the last compaction describes a window
+    /// that is gone: no row; one after it counts.
+    #[test]
+    fn a_transcript_capture_before_a_compaction_gives_no_row() {
+        let (mut s, _) = fixture_at("b", usize::MAX);
+        assert!(Composition::of(&s).is_some(), "fixture B has the table");
+        let boundary = s.last_compaction_ms().expect("fixture B compacts");
+        s.prefix.context_capture_at_ms = Some(boundary - 1);
+        assert!(Composition::of(&s).is_none());
+        s.prefix.context_capture_at_ms = Some(boundary + 1);
+        assert_eq!(Composition::of(&s).unwrap().source, "per /context");
+    }
+
+    /// No capture: no row, no keys, and the cell serialises as before.
+    #[test]
+    fn no_capture_no_row() {
+        let (s, e) = fixture_at("a", usize::MAX);
+        let d = snapshot(&s, &e);
+        assert!(composition_of(&d).is_none());
+        let v = serde_json::to_value(&d).unwrap();
+        assert!(v["cells"][0].get("composition").is_none());
+        let q = crate::query::dashboard(&s);
+        assert!(q.get("composition").is_none() && q.get("composition_source").is_none());
+    }
+
     /// The act line pre-empts: a wait paints it crit over any nudge; with
     /// nothing to act on, the state line's tokens lead with the steer
     /// window (fixture B's cold moment: `PLANNING · 1 call · ▸ steer window
@@ -2066,5 +2688,101 @@ mod tests {
         assert!(crate::query::dashboard(&state_with_run())["header"]
             .get("workflow")
             .is_none());
+    }
+
+    #[test]
+    fn budget_text_normal() {
+        // $1.80 left at $0.10/min: 18 min.
+        let (t, ratio, eta) = budget_text(3.2, 5.0, Some(0.10 / 60_000.0));
+        assert_eq!(t, "budget $3.20 / $5.00");
+        assert!((ratio - 0.64).abs() < 1e-9);
+        assert_eq!(eta.as_deref(), Some("halts in ~18 min"));
+    }
+
+    #[test]
+    fn budget_text_total_zero_or_over() {
+        let (_, ratio, eta) = budget_text(1.0, 0.0, Some(1e-6));
+        assert_eq!((ratio, eta), (1.0, None));
+        let (t, ratio, eta) = budget_text(6.0, 5.0, Some(1e-6));
+        assert_eq!(t, "budget $6.00 / $5.00");
+        assert_eq!((ratio, eta), (1.0, None));
+    }
+
+    #[test]
+    fn budget_text_idle_no_eta() {
+        assert_eq!(budget_text(1.0, 5.0, None).2, None);
+        assert_eq!(budget_text(1.0, 5.0, Some(0.0)).2, None);
+    }
+
+    #[test]
+    fn budget_text_eta_over_an_hour_omitted() {
+        // $4 left at $0.01/min: 400 min.
+        assert_eq!(budget_text(1.0, 5.0, Some(0.01 / 60_000.0)).2, None);
+        // 59 min still shows.
+        assert_eq!(
+            budget_text(0.0, 5.9, Some(0.1 / 60_000.0)).2.as_deref(),
+            Some("halts in ~59 min")
+        );
+    }
+
+    #[test]
+    fn the_limits_body_carries_the_budget_beside_the_spend_limit() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(!text.contains("budget"), "{text}");
+        s.budget_usd = Some((3.2, 5.0, 1.8));
+        s.status_facts.spend_limit_pct = Some(40.0);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(text.contains("  budget $3.20 / $5.00  ▇▇▇▇▇▇"), "{text}");
+        assert!(text.contains("  spend limit 40 %"), "{text}");
+    }
+
+    #[test]
+    fn a_budget_session_shows_the_budget_in_the_limits_cell() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        assert!(s.limits.is_none());
+        let (used, total, _) = s.budget_usd.expect("session-s has a budget");
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        let cell = &d.cells[1];
+        let want = format!("${used:.2} / ${total:.2}");
+        assert!(
+            text_of(&cell.label).starts_with(&format!("budget {want}")),
+            "{}",
+            text_of(&cell.label)
+        );
+        assert_eq!(text_of(&cell.short), want.replace(" / ", "/"));
+        assert!(text_of(&cell.mid).starts_with(&want.replace(" / ", "/")));
+        assert!(!text_of(&cell.label).contains("no status line"));
+        // Red from 90 %.
+        s.budget_usd = Some((4.6, 5.0, 0.4));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().any(|g| g.tone == Tone::Crit));
+        s.budget_usd = Some((2.0, 5.0, 3.0));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().all(|g| g.tone != Tone::Crit));
+    }
+
+    #[test]
+    fn the_budget_bar_is_red_from_ninety_percent() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        for (used, tone) in [(4.4, Tone::Ok), (4.5, Tone::Crit)] {
+            s.budget_usd = Some((used, 5.0, 5.0 - used));
+            let rows = body_limits(&s, &c).rows;
+            let row = rows
+                .iter()
+                .find(|r| r.iter().any(|g| g.text.contains("budget")))
+                .unwrap();
+            let bar_seg = row.iter().find(|g| g.text.starts_with('▇')).unwrap();
+            assert_eq!(bar_seg.tone, tone, "{used}");
+        }
     }
 }

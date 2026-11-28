@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::transcript::Line;
+use crate::transcript::{Line, ShapeFacts};
+
+/// The row for tools Claude Code defers: listed, but not in the prefix total.
+pub const DEFERRED_ROW: &str = "deferred tools";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -33,6 +36,8 @@ pub struct Row {
     pub tokens_est: u64,
     /// Tool count for tool rows.
     pub count: usize,
+    /// Sized from the request shape (lengths as sent), not estimated.
+    pub exact: bool,
 }
 
 #[derive(Debug, Default)]
@@ -60,6 +65,8 @@ pub struct Prefix {
     pub invoked_skills: Vec<String>,
     /// `/context`'s own table, when the person ran it.
     pub context_capture: Option<crate::transcript::ContextCapture>,
+    /// Epoch ms of the line `context_capture` came from.
+    pub context_capture_at_ms: Option<i64>,
     /// Plugins: name → (always-on tokens, unused for N startups).
     plugins: Vec<(String, u64, Option<u64>)>,
 }
@@ -70,6 +77,10 @@ impl Prefix {
         if let Line::System(s) = line {
             if let Some(cap) = s.local_command().and_then(|c| c.context_capture()) {
                 self.context_capture = Some(cap);
+                self.context_capture_at_ms = s
+                    .timestamp
+                    .as_deref()
+                    .and_then(crate::metrics::cost::parse_ts_ms);
             }
             return;
         }
@@ -277,7 +288,7 @@ impl Prefix {
     }
 
     /// Rows sorted by size, with the remainder against `first_call_tokens` as `other`.
-    pub fn rows(&self, first_call_tokens: u64) -> Vec<Row> {
+    pub fn rows(&self, first_call_tokens: u64, shape: Option<&ShapeFacts>) -> Vec<Row> {
         let mut rows = Vec::new();
         for (name, bytes) in &self.files {
             rows.push(Row {
@@ -286,6 +297,7 @@ impl Prefix {
                 bytes: *bytes,
                 tokens_est: bytes / 4,
                 count: 1,
+                exact: false,
             });
         }
         // Tools grouped: built-in vs each MCP server.
@@ -311,6 +323,7 @@ impl Prefix {
                 bytes,
                 tokens_est: bytes / 4,
                 count,
+                exact: false,
             });
         }
         for (name, bytes) in &self.mcp_instruction_bytes {
@@ -320,6 +333,7 @@ impl Prefix {
                 bytes: *bytes,
                 tokens_est: bytes / 4,
                 count: 0,
+                exact: false,
             });
         }
         if self.skills_bytes > 0 {
@@ -329,6 +343,7 @@ impl Prefix {
                 bytes: self.skills_bytes,
                 tokens_est: self.skills_bytes / 4,
                 count: self.skills_count,
+                exact: false,
             });
         }
         if self.agents_bytes > 0 {
@@ -338,6 +353,7 @@ impl Prefix {
                 bytes: self.agents_bytes,
                 tokens_est: self.agents_bytes / 4,
                 count: self.agents_count,
+                exact: false,
             });
         }
         if let Some(b) = self.memory_bytes {
@@ -347,6 +363,7 @@ impl Prefix {
                 bytes: b,
                 tokens_est: b / 4,
                 count: 1,
+                exact: false,
             });
         }
         // Exact schema sizes from the snapshot replace the listing lines.
@@ -375,7 +392,63 @@ impl Prefix {
                     bytes,
                     tokens_est: bytes / 4,
                     count,
+                    exact: false,
                 });
+            }
+        }
+        // The newest request shape is what was sent: exact sizes replace the
+        // snapshot's and the listings'. Deferred tools are not in the prefix.
+        let mut system: &[usize] = &self.system_prompt_sections;
+        if let Some(shape) = shape {
+            if !shape.tools.is_empty() {
+                rows.retain(|r| {
+                    !matches!(r.kind, Kind::Tools | Kind::Mcp) || r.name.ends_with(" instructions")
+                });
+                let mut groups: std::collections::BTreeMap<String, (u64, usize)> =
+                    Default::default();
+                let mut deferred = (0u64, 0usize);
+                for t in &shape.tools {
+                    let bytes = (t.schema_chars + t.description_chars) as u64;
+                    if t.deferred {
+                        deferred.0 += bytes;
+                        deferred.1 += 1;
+                        continue;
+                    }
+                    let key = match crate::tools::display_name(&t.name) {
+                        (d, Some(_)) => d,
+                        _ => "built-in tools".to_string(),
+                    };
+                    let e = groups.entry(key).or_default();
+                    e.0 += bytes;
+                    e.1 += 1;
+                }
+                for (name, (bytes, count)) in groups {
+                    rows.push(Row {
+                        kind: if name.starts_with("mcp:") {
+                            Kind::Mcp
+                        } else {
+                            Kind::Tools
+                        },
+                        name,
+                        bytes,
+                        tokens_est: bytes / 4,
+                        count,
+                        exact: true,
+                    });
+                }
+                if deferred.1 > 0 {
+                    rows.push(Row {
+                        kind: Kind::Tools,
+                        name: DEFERRED_ROW.into(),
+                        bytes: deferred.0,
+                        tokens_est: deferred.0 / 4,
+                        count: deferred.1,
+                        exact: true,
+                    });
+                }
+            }
+            if !shape.system.is_empty() {
+                system = &shape.system;
             }
         }
         // Instruction files as loaded (exact chars), replacing the stat sizes.
@@ -388,6 +461,7 @@ impl Prefix {
                     bytes: *chars as u64,
                     tokens_est: (*chars / 4) as u64,
                     count: 1,
+                    exact: false,
                 });
             }
         }
@@ -398,15 +472,18 @@ impl Prefix {
                 bytes: self.nested_memory.1 as u64,
                 tokens_est: (self.nested_memory.1 / 4) as u64,
                 count: self.nested_memory.0,
+                exact: false,
             });
         }
-        for (i, chars) in self.system_prompt_sections.iter().enumerate() {
+        let from_shape = shape.is_some_and(|sh| !sh.system.is_empty());
+        for (i, chars) in system.iter().enumerate() {
             rows.push(Row {
                 kind: Kind::SystemPrompt,
                 name: format!("system prompt §{}", i + 1),
                 bytes: *chars as u64,
                 tokens_est: (*chars / 4) as u64,
                 count: 0,
+                exact: from_shape,
             });
         }
         for (name, always_on, unused) in &self.plugins {
@@ -420,13 +497,18 @@ impl Prefix {
                 bytes: 0,
                 tokens_est: *always_on,
                 count: 0,
+                exact: false,
             });
         }
-        let known: u64 = rows.iter().map(|r| r.tokens_est).sum();
+        let known: u64 = rows
+            .iter()
+            .filter(|r| r.name != DEFERRED_ROW)
+            .map(|r| r.tokens_est)
+            .sum();
         let other = first_call_tokens.saturating_sub(known);
         rows.push(Row {
             kind: Kind::Other,
-            name: if self.system_prompt_sections.is_empty() {
+            name: if system.is_empty() {
                 "system prompt + other".into()
             } else {
                 "other".into()
@@ -434,6 +516,7 @@ impl Prefix {
             bytes: 0,
             tokens_est: other,
             count: 0,
+            exact: false,
         });
         rows.sort_by_key(|r| std::cmp::Reverse(r.tokens_est));
         rows
@@ -503,7 +586,7 @@ mod tests {
         assert!(!p.invoked_skills.is_empty());
         let cap = p.context_capture.as_ref().expect("/context capture");
         assert!(cap.category("System prompt").is_some());
-        let rows = p.rows(60_000);
+        let rows = p.rows(60_000, None);
         assert!(rows.iter().any(|r| r.kind == Kind::SystemPrompt));
         assert!(rows
             .iter()
@@ -530,7 +613,7 @@ mod tests {
         assert_eq!(p.plugins.len(), 2, "disabled plugins are not listed");
         assert_eq!(p.plugins[0], ("cctop".to_string(), 371, Some(1)));
         assert_eq!(p.plugins[1], ("old".to_string(), 0, Some(38)));
-        let rows = p.rows(60_000);
+        let rows = p.rows(60_000, None);
         assert!(rows
             .iter()
             .any(|r| r.name == "plugin cctop" && r.tokens_est == 371));
@@ -555,7 +638,7 @@ mod tests {
         std::fs::write(dir.join("CLAUDE.md"), "c".repeat(2000)).unwrap();
         std::fs::write(dir.join(".claude/CLAUDE.md"), "d".repeat(400)).unwrap();
         p.scan(&dir, None);
-        let rows = p.rows(10_000);
+        let rows = p.rows(10_000, None);
         let by = |name: &str| rows.iter().find(|r| r.name == name).cloned().unwrap();
         assert_eq!(by("skills listing").tokens_est, 2000);
         assert_eq!(by("skills listing").count, 47);
@@ -581,7 +664,79 @@ mod tests {
         );
         // Removal deltas drop tools.
         p.push(&attachment(serde_json::json!({"type":"deferred_tools_delta","addedNames":[],"addedLines":[],"removedNames":["Read"]})));
-        assert!(!p.rows(0).iter().any(|r| r.name == "built-in tools"));
+        assert!(!p.rows(0, None).iter().any(|r| r.name == "built-in tools"));
+    }
+
+    fn shape(system: &[usize], tools: &[(&str, usize, usize, bool)]) -> ShapeFacts {
+        ShapeFacts {
+            shape_hash: "h".into(),
+            system: system.to_vec(),
+            tools: tools
+                .iter()
+                .map(|&(n, s, d, deferred)| crate::transcript::ToolFacts {
+                    name: n.into(),
+                    schema_chars: s,
+                    description_chars: d,
+                    deferred,
+                })
+                .collect(),
+            timestamp: None,
+        }
+    }
+
+    #[test]
+    fn shape_gives_exact_tool_rows() {
+        let p = Prefix::default();
+        let sh = shape(
+            &[400, 800],
+            &[
+                ("Bash", 1000, 200, false),
+                ("mcp__x__search", 300, 100, false),
+            ],
+        );
+        let rows = p.rows(10_000, Some(&sh));
+        let by = |n: &str| rows.iter().find(|r| r.name == n).cloned().unwrap();
+        assert_eq!(
+            (by("built-in tools").bytes, by("built-in tools").exact),
+            (1200, true)
+        );
+        assert_eq!((by("mcp:x").bytes, by("mcp:x").exact), (400, true));
+        assert_eq!(by("system prompt §2").bytes, 800);
+        assert!(by("system prompt §2").exact);
+        assert_eq!(by("other").tokens_est, 10_000 - 300 - 100 - 100 - 200);
+    }
+
+    #[test]
+    fn deferred_listed_apart() {
+        let p = Prefix::default();
+        let sh = shape(&[], &[("Bash", 100, 100, false), ("Late", 4000, 400, true)]);
+        let rows = p.rows(1000, Some(&sh));
+        let d = rows.iter().find(|r| r.name == DEFERRED_ROW).unwrap();
+        assert_eq!(
+            (d.kind, d.bytes, d.count, d.exact),
+            (Kind::Tools, 4400, 1, true)
+        );
+        // Not in the total: other = 1000 − Bash's 50 tokens.
+        let other = rows.iter().find(|r| r.kind == Kind::Other).unwrap();
+        assert_eq!(other.tokens_est, 950);
+    }
+
+    #[test]
+    fn empty_shape_no_rows() {
+        let p = Prefix::default();
+        let rows = p.rows(500, Some(&shape(&[], &[])));
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, Kind::Other);
+        assert_eq!(rows[0].tokens_est, 500);
+    }
+
+    #[test]
+    fn no_shape_unchanged() {
+        let mut p = Prefix::default();
+        p.push(&attachment(serde_json::json!({"type":"deferred_tools_delta","addedNames":["Read"],"addedLines":["Read: xxxxxxxx"]})));
+        let rows = p.rows(1000, None);
+        assert!(rows.iter().all(|r| !r.exact));
+        assert_eq!(rows.len(), 2);
     }
 
     #[test]

@@ -62,6 +62,19 @@ pub fn summary(state: &State) -> Value {
             o.insert("team_cost".into(), team);
         }
     }
+    // The budget of a `--max-budget-usd` run, only when there is one.
+    if state.budget_usd.is_some() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("budget_usd".into(), budget_value(state));
+        }
+    }
+    // The status line's extra facts only once a sample carried any, so a
+    // session without a status line prints exactly what it did before.
+    if state.status_facts != Default::default() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("status".into(), status_object(state));
+        }
+    }
     v
 }
 
@@ -156,6 +169,7 @@ fn summary_object(state: &State) -> Value {
         "tokens_to_ctx": m(state.tools.tokens_to_ctx(), "tokens", "tokens_to_ctx", true),
         "agents": m(state.agents.len(), "count", "agent_state", false),
         "hooks_installed": state.session.hooks_installed,
+        "hooks_missing": state.hooks_missing,
         "permission_waits": if state.session.hooks_installed {
             json!({"count": state.session.permission_waits, "total": m(state.session.permission_wait_ms, "ms", "permission_wait", true)})
         } else {
@@ -190,6 +204,42 @@ fn summary_object(state: &State) -> Value {
     })
 }
 
+/// What the status line carries beyond the numbers: the workspace (the
+/// added directories as a count, never paths; the remote id never), the spend
+/// limit in dollars (gateway accounts with an overage) and the long-context
+/// flag. Absent facts are `null`.
+fn status_object(state: &State) -> Value {
+    let f = &state.status_facts;
+    let w = f.workspace.as_ref();
+    let repo = w
+        .and_then(|w| w.repo.as_ref())
+        .and_then(|r| Some(format!("{}/{}", r.owner.as_deref()?, r.name.as_deref()?)));
+    let spend = f.spend_limit_usd.map(|(used, limit)| {
+        json!({
+            "used_usd": m(used, "USD", "spend_limit_usd", false),
+            "limit_usd": limit.map(|l| m(l, "USD", "spend_limit_usd", false)),
+            "period": f.spend_limit_period,
+            "resets_at_ms": f.spend_limit_resets_at_ms,
+        })
+    });
+    json!({
+        "workspace": {
+            "repo": repo,
+            "worktree": w.and_then(|w| w.git_worktree.clone()),
+            "added_dirs": w.map(|w| m(w.added_dirs.len(), "count", "workspace_added_dirs", false)),
+            "output_style": f.output_style.as_ref().map(|s| m(s.clone(), "enum", "output_style", false)),
+            "agent": f.agent_name,
+            "remote": f.remote_session_id.is_some(),
+        },
+        "spend_limit": spend,
+        "pr": (f.pr_url.is_some() || f.pr_kind.is_some()).then(|| json!({
+            "url": f.pr_url,
+            "kind": f.pr_kind,
+        })),
+        "exceeds_200k_tokens": m(f.exceeds_200k_tokens, "bool", "exceeds_200k_tokens", false),
+    })
+}
+
 /// `/usage`'s behaviour flags for the session.
 fn behaviour_flags(state: &State) -> Value {
     let f = state.behaviour_flags();
@@ -213,7 +263,7 @@ pub fn cache_object(state: &State) -> Value {
         3_600_000 => "1h",
         _ => "5m",
     };
-    json!({
+    let mut v = json!({
         "source": if c.from_shim { "status_line" } else { "transcript" },
         "warm": state.cache_warm().map(|(w, a)| m(w, "bool", "cache_warm", a)),
         "ttl": m(ttl, "enum", "cache_ttl", !c.from_shim),
@@ -224,7 +274,54 @@ pub fn cache_object(state: &State) -> Value {
         "last_miss_cause": c.last_miss_cause,
         "miss_causes": c.miss_causes,
         "hit_ratio": c.hit_ratio.or_else(|| state.agg.total.cache_hit_ratio()).map(|r| m(r, "ratio", "cache_hit_ratio", approx)),
-    })
+    });
+    // What the status line counts and diagnoses beyond the headline figures;
+    // shim only, so a transcript-sourced block has none of these keys.
+    if c.from_shim {
+        v["requests"] = m(c.requests, "count", "cache_requests", false);
+        v["cache_write_tokens"] = m(c.cache_write_tokens, "tokens", "cache_write_shim", false);
+        v["miss_recache_tokens"] = m(c.miss_recache_tokens, "tokens", "cache_miss_recache", false);
+        v["last_miss_tools_added"] = c
+            .last_miss_tools_added
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_tools_removed"] = c
+            .last_miss_tools_removed
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_system_char_delta"] = c
+            .last_miss_system_delta
+            .map(|n| m(n, "chars", "cache_miss_system_delta", false))
+            .into();
+    }
+    // Absent on transcripts before 2.1.302 (no request lines), so their output is unchanged.
+    let located = located_misses(state);
+    if located.as_array().is_some_and(|a| !a.is_empty()) {
+        v["located_misses"] = located;
+    }
+    v
+}
+
+/// Every cache miss the request chain could pair with its response, with
+/// what changed (`located.kind` / `located.detail`).
+fn located_misses(state: &State) -> Value {
+    Value::Array(
+        state
+            .requests
+            .misses()
+            .iter()
+            .map(|l| {
+                json!({
+                    "turn": l.turn,
+                    "at": l.at,
+                    "message_id": l.message_id,
+                    "tokens": m(l.tokens, "tokens", "cache_write", false),
+                    "api_reason": l.api_reason,
+                    "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
+                })
+            })
+            .collect(),
+    )
 }
 
 pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
@@ -234,7 +331,7 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
         rows.iter()
             .skip(skip)
             .map(|r| {
-                json!({
+                let mut row = json!({
                     "turn": r.turn,
                     "started_at_ms": r.started_at_ms,
                     "duration": r.duration_ms.map(|d| m(d, "ms", "turn_duration", false)),
@@ -260,7 +357,13 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
                     "api_errors": r.api_errors,
                     "steers": r.steers,
                     "interrupted": r.interrupted,
-                })
+                });
+                // Only on a turn Claude Code dropped thinking in (2.1.308+).
+                if r.thinking_dropped > 0 {
+                    row["thinking_dropped"] =
+                        m(r.thinking_dropped, "count", "thinking_dropped", false);
+                }
+                row
             })
             .collect(),
     )
@@ -310,7 +413,17 @@ pub fn tools(state: &State) -> Value {
             |(n, c)| json!({"tool": n, "tokens": m(*c as u64 / 4, "tokens", "input_tokens", true)}),
         )
         .collect();
-    json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads})
+    let skill_shell: Vec<Value> = state
+        .skill_shell
+        .iter()
+        .map(|(n, c)| json!({"skill": n, "count": c}))
+        .collect();
+    let mut out = json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads});
+    // Only once a skill ran a shell command (`PreSkillShellCommand` hook).
+    if !skill_shell.is_empty() {
+        out["skill_shell"] = Value::Array(skill_shell);
+    }
+    out
 }
 
 pub fn files(state: &State) -> Value {
@@ -465,6 +578,16 @@ pub fn agents(state: &State) -> Value {
         "agents": agents,
         "totals": totals_v,
         "depth": state.agent_depth(),
+        "limits": state
+            .pane_facts
+            .as_ref()
+            .and_then(|f| f.agent_limits.as_ref())
+            .map(|l| json!({
+                "concurrent": m(l.concurrent, "count", "agent_limits", false),
+                "depth": m(l.depth, "count", "agent_limits", false),
+                "background": l.is_background_enabled,
+                "line": crate::ui::agents_view::limits_text(totals.running, l),
+            })),
         "workflows": workflows,
         "teammates": teammates,
         "mcp": if state.session.pid.is_some() { Value::Array(mcp) } else { missing("no live process (fixture)") },
@@ -575,7 +698,72 @@ pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
 /// surface cuts at its own width.
 pub fn dashboard(state: &State) -> Value {
     let engine = advisor::Engine::for_state(state);
-    serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null)
+    let mut v =
+        serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null);
+    // The window's composition, lifted out of the context cell: `composition[]`
+    // and where it was read from (PRD context-breakdown §3.3).
+    if let Some(c) = crate::dashboard::Composition::of(state) {
+        v["composition"] = c
+            .items
+            .iter()
+            .map(|(name, tokens)| json!({"name": name, "tokens": tokens}))
+            .collect();
+        v["composition_source"] = json!(c.source);
+        v["composition_metric_id"] = json!("context_composition");
+    }
+    // Absent for a session without a `--max-budget-usd` budget.
+    if state.budget_usd.is_some() {
+        v["budget_usd"] = budget_value(state);
+    }
+    // Absent until Claude Code (2.1.308+) drops thinking from a request.
+    let td = &state.agg.thinking_dropped;
+    if td.blocks > 0 || td.turns > 0 {
+        v["thinking_dropped"] = json!({
+            "blocks": td.blocks,
+            "turns": td.turns,
+            "by_kind": td.by_kind,
+            "metric_id": "thinking_dropped",
+        });
+    }
+    // Absent until an MCP server has asked the person something.
+    let ew = &state.elicitation_waits;
+    if ew.count > 0 || !state.elicitations.is_empty() {
+        v["elicitation_waits"] = json!({
+            "count": ew.count,
+            "total_wait_ms": ew.total_wait_ms,
+            "accept": ew.accept,
+            "decline": ew.decline,
+            "cancel": ew.cancel,
+            "open": state.elicitations.values().map(|q| q.len()).sum::<usize>(),
+            "metric_id": "elicitation_wait",
+        });
+    }
+    // Absent without OpenTelemetry trace spans.
+    if let Some((total, by_event)) = state.hook_overhead() {
+        v["hook_overhead"] = json!({
+            "total_ms": total,
+            "by_event": by_event,
+            "metric_id": "hook_overhead",
+        });
+    }
+    v
+}
+
+/// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
+fn budget_value(state: &State) -> Value {
+    let (Some((used, total, remaining)), Some((text, ratio, eta))) =
+        (state.budget_usd, crate::dashboard::budget_line(state))
+    else {
+        return Value::Null;
+    };
+    json!({
+        "used": m(used, "USD", "budget_usd", false),
+        "total": m(total, "USD", "budget_usd", false),
+        "remaining": m(remaining, "USD", "budget_usd", false),
+        "ratio": ratio,
+        "text": text,
+        "halt_eta": eta.map(|e| json!({"text": e, "metric_id": "budget_halt_eta", "estimate": true})),
+    })
 }
 
 /// `cctop query coach --line`: the one-line form at `columns`.
@@ -607,13 +795,20 @@ pub fn advice_of(engine: &advisor::Engine) -> Value {
     })
 }
 
+/// The session's chain: ancestors, descendants and the chain's cost, from
+/// the transcript at `path` and the transcripts under `~/.claude/projects`.
+pub fn lineage(path: &std::path::Path) -> Value {
+    let root = crate::baseline::default_projects_dir().unwrap_or_default();
+    serde_json::to_value(crate::lineage::chain(path, &root)).unwrap_or(Value::Null)
+}
+
 pub fn prefix(state: &State) -> Value {
     let ctx = state.context();
     let rows: Vec<Value> = state
         .prefix
-        .rows(ctx.prefix)
+        .rows(ctx.prefix, state.requests.latest_shape())
         .iter()
-        .map(|r| json!({"kind": format!("{:?}", r.kind).to_lowercase(), "name": r.name, "bytes": r.bytes, "tokens": m(r.tokens_est, "tokens", "context_prefix", true), "count": r.count}))
+        .map(|r| json!({"kind": format!("{:?}", r.kind).to_lowercase(), "name": r.name, "bytes": r.bytes, "tokens": m(r.tokens_est, "tokens", "context_prefix", true), "count": r.count, "exact": r.exact}))
         .collect();
     json!({"total": m(ctx.prefix, "tokens", "context_prefix", false), "rows": rows})
 }
@@ -745,6 +940,138 @@ mod tests {
     }
 
     #[test]
+    fn located_misses_on_fixture_r() {
+        let path = std::path::Path::new("fixtures/session-r.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(path);
+        let s = crate::load::state_from(path, info);
+        let v = cache_object(&s);
+        let kinds: Vec<&str> = v["located_misses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["located"]["kind"].as_str().unwrap())
+            .collect();
+        assert_eq!(kinds, ["tools_changed", "expired", "expired"]);
+        let first = &v["located_misses"][0];
+        assert!(first["located"]["detail"]
+            .as_str()
+            .unwrap()
+            .starts_with("tools changed"));
+        assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
+        assert_eq!(first["tokens"]["metric_id"], "cache_write");
+    }
+
+    #[test]
+    fn query_summary_status_keys() {
+        // No status sample: no key, nothing moves.
+        let s = state_b();
+        assert!(summary(&s).get("status").is_none());
+        let mut s = s;
+        s.status_facts.workspace = Some(crate::status::Workspace {
+            added_dirs: vec!["/secret/a".into(), "/secret/b".into()],
+            git_worktree: Some("feat".into()),
+            repo: Some(crate::status::Repo {
+                host: None,
+                owner: Some("acme".into()),
+                name: Some("shop".into()),
+            }),
+            ..Default::default()
+        });
+        s.status_facts.output_style = Some("Concise".into());
+        s.status_facts.agent_name = Some("reviewer".into());
+        s.status_facts.remote_session_id = Some("r-secret".into());
+        s.status_facts.exceeds_200k_tokens = true;
+        s.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        s.status_facts.spend_limit_period = Some("monthly".into());
+        s.status_facts.spend_limit_resets_at_ms = Some(1_790_000_000_000);
+        let v = summary(&s);
+        let st = &v["status"];
+        assert_eq!(st["workspace"]["repo"], "acme/shop");
+        assert_eq!(st["workspace"]["worktree"], "feat");
+        assert_eq!(st["workspace"]["added_dirs"]["value"], 2);
+        assert_eq!(
+            st["workspace"]["added_dirs"]["metric_id"],
+            "workspace_added_dirs"
+        );
+        assert_eq!(st["workspace"]["output_style"]["value"], "Concise");
+        assert_eq!(st["workspace"]["output_style"]["metric_id"], "output_style");
+        assert_eq!(st["workspace"]["agent"], "reviewer");
+        assert_eq!(st["workspace"]["remote"], true);
+        assert_eq!(st["spend_limit"]["used_usd"]["value"], 412.0);
+        assert_eq!(
+            st["spend_limit"]["used_usd"]["metric_id"],
+            "spend_limit_usd"
+        );
+        assert_eq!(st["spend_limit"]["limit_usd"]["value"], 500.0);
+        assert_eq!(st["spend_limit"]["period"], "monthly");
+        assert_eq!(st["spend_limit"]["resets_at_ms"], 1_790_000_000_000i64);
+        assert_eq!(st["exceeds_200k_tokens"]["value"], true);
+        assert_eq!(
+            st["exceeds_200k_tokens"]["metric_id"],
+            "exceeds_200k_tokens"
+        );
+        // Paths and the remote id are never in the object.
+        let text = v.to_string();
+        assert!(
+            !text.contains("/secret/") && !text.contains("r-secret"),
+            "{text}"
+        );
+        // Without spend, the key is null.
+        s.status_facts.spend_limit_usd = None;
+        assert!(summary(&s)["status"]["spend_limit"].is_null());
+        // The PR's link and kind: present with them, null without.
+        assert!(summary(&s)["status"]["pr"].is_null());
+        s.status_facts.pr_url = Some("https://github.com/acme/shop/pull/142".into());
+        s.status_facts.pr_kind = Some("github".into());
+        let pr = &summary(&s)["status"]["pr"];
+        assert_eq!(pr["url"], "https://github.com/acme/shop/pull/142");
+        assert_eq!(pr["kind"], "github");
+    }
+
+    #[test]
+    fn cache_object_carries_the_shims_counters_only_from_the_shim() {
+        let mut s = state_b();
+        let v = cache_object(&s);
+        for k in [
+            "requests",
+            "cache_write_tokens",
+            "miss_recache_tokens",
+            "last_miss_tools_added",
+            "last_miss_tools_removed",
+            "last_miss_system_char_delta",
+        ] {
+            assert!(v.get(k).is_none(), "{k} without a shim sample");
+        }
+        s.cache.from_shim = true;
+        s.cache.requests = 49;
+        s.cache.cache_write_tokens = 257_729;
+        s.cache.miss_recache_tokens = 95_700;
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let v = cache_object(&s);
+        for (k, val, id) in [
+            ("requests", 49, "cache_requests"),
+            ("cache_write_tokens", 257_729, "cache_write_shim"),
+            ("miss_recache_tokens", 95_700, "cache_miss_recache"),
+            ("last_miss_tools_added", 2, "cache_miss_tools_delta"),
+            ("last_miss_tools_removed", 0, "cache_miss_tools_delta"),
+            (
+                "last_miss_system_char_delta",
+                -800,
+                "cache_miss_system_delta",
+            ),
+        ] {
+            assert_eq!(v[k]["value"], val, "{k}");
+            assert_eq!(v[k]["metric_id"], id, "{k}");
+            assert!(crate::metrics::registry::get(id).is_some(), "{id}");
+        }
+        // A shim sample whose miss carried no deltas: the keys are null.
+        s.cache.last_miss_tools_added = None;
+        assert!(cache_object(&s)["last_miss_tools_added"].is_null());
+    }
+
+    #[test]
     fn summary_and_ledger_snapshots() {
         let s = state();
         insta::assert_snapshot!(
@@ -822,6 +1149,35 @@ mod tests {
             let s = summary(&st);
             assert!(s.get("team_cost").is_none(), "{}", s["team_cost"]);
         }
+    }
+
+    #[test]
+    fn query_agents_carries_the_limits_only_with_the_pane_facts() {
+        let mut st = state_d();
+        assert!(agents(&st)["limits"].is_null());
+        st.pane_facts = Some(crate::pane::PaneFacts {
+            agent_limits: Some(crate::pane::AgentLimits {
+                concurrent: 10,
+                depth: 2,
+                is_background_enabled: false,
+            }),
+            ..Default::default()
+        });
+        let l = &agents(&st)["limits"];
+        assert_eq!(l["concurrent"]["value"], 10);
+        assert_eq!(l["concurrent"]["metric_id"], "agent_limits");
+        assert_eq!(l["depth"]["value"], 2);
+        assert_eq!(l["background"], false, "a plain bool, no metric tag");
+        let running = agents(&st)["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["state"] == "running")
+            .count();
+        assert_eq!(
+            l["line"],
+            format!("{running} / 10 running · depth ≤ 2 · no background")
+        );
     }
 
     #[test]
@@ -1036,5 +1392,100 @@ mod tests {
             .collect::<Vec<_>>()
             .join(" ");
         assert!(flat.contains("batch this phase's items, or lower its effort/model"));
+    }
+
+    #[test]
+    fn dashboard_reports_dropped_thinking_on_fixture_t() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-t.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["thinking_dropped"]["blocks"], 10);
+        assert_eq!(v["thinking_dropped"]["turns"], 10);
+        assert_eq!(
+            v["thinking_dropped"]["by_kind"]["messagesHistoryChanged"],
+            10
+        );
+        // Absent where nothing was dropped.
+        assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_carries_hook_overhead_only_when_traces_exist() {
+        let mut state = State::new(crate::metrics::Pricing::bundled());
+        assert!(dashboard(&state).get("hook_overhead").is_none());
+        let ids = |ms: u64| crate::otel::SpanIds {
+            trace_id: "t".into(),
+            span_id: "s".into(),
+            parent_span_id: None,
+            start_ns: 0,
+            end_ns: ms * 1_000_000,
+        };
+        state.apply_otel(&crate::otel::SessionData {
+            spans: vec![
+                crate::otel::Span::Hook {
+                    ids: ids(700),
+                    hook_event: Some("Stop".into()),
+                    hook_name: None,
+                    num_hooks: None,
+                    duration_ms: Some(700),
+                    num_blocking: None,
+                },
+                crate::otel::Span::Hook {
+                    ids: ids(100),
+                    hook_event: Some("PreToolUse".into()),
+                    hook_name: None,
+                    num_hooks: None,
+                    duration_ms: None,
+                    num_blocking: None,
+                },
+            ]
+            .into(),
+            ..Default::default()
+        });
+        let v = &dashboard(&state)["hook_overhead"];
+        assert_eq!(v["total_ms"], 800);
+        assert_eq!(v["by_event"]["Stop"], 700);
+        assert_eq!(v["by_event"]["PreToolUse"], 100);
+        assert_eq!(v["metric_id"], "hook_overhead");
+    }
+
+    #[test]
+    fn dashboard_carries_elicitation_waits_only_once_a_server_asked() {
+        let mut state = State::new(crate::metrics::Pricing::bundled());
+        assert!(dashboard(&state).get("elicitation_waits").is_none());
+        let hook = |event: &str, at: i64, action: &str| crate::hooks::HookEvent {
+            at,
+            event: event.into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: json!({"mcp_server_name": "github", "action": action}),
+        };
+        state.apply_hook(&hook("Elicitation", 1_000, ""));
+        assert_eq!(dashboard(&state)["elicitation_waits"]["open"], 1);
+        state.apply_hook(&hook("ElicitationResult", 4_000, "accept"));
+        let v = &dashboard(&state)["elicitation_waits"];
+        assert_eq!(v["count"], 1);
+        assert_eq!(v["total_wait_ms"], 3_000);
+        assert_eq!(v["accept"], 1);
+        assert_eq!(v["open"], 0);
+        assert_eq!(v["metric_id"], "elicitation_wait");
+    }
+
+    #[test]
+    fn dashboard_reports_the_budget_on_fixture_s() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["budget_usd"]["total"]["value"], 12.0);
+        assert!(v["budget_usd"]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("budget $"));
+        assert_eq!(v["budget_usd"]["total"]["metric_id"], "budget_usd");
+        // Absent where the session has no budget.
+        assert!(dashboard(&state()).get("budget_usd").is_none());
     }
 }

@@ -186,6 +186,20 @@ pub fn usd_short(v: f64) -> String {
     }
 }
 
+/// `MCP <server> asks`, the server clipped so that `lead` (what precedes it
+/// on the coach / dashboard line) plus this fits `WIDTH`.
+pub fn elicitation_ask(state: &State, lead: &str) -> String {
+    let room = WIDTH.saturating_sub(lead.chars().count() + "MCP  asks".len());
+    let server = state.open_elicitation().map_or("", |(s, _)| s);
+    format!("MCP {} asks", fmt::clip(server, room.clamp(1, 24)))
+}
+
+/// `waiting on you · MCP <server> asks`, the turn panel's form (the server
+/// with the oldest open prompt, clipped).
+pub fn elicitation_text(state: &State) -> String {
+    format!("waiting on you · {}", elicitation_ask(state, ""))
+}
+
 /// Minutes-first duration: `41m`, `2h10`, `4:12` under five minutes.
 pub fn short_duration(ms: i64) -> String {
     let s = ms.max(0) / 1000;
@@ -198,7 +212,7 @@ pub fn short_duration(ms: i64) -> String {
     }
 }
 
-fn ago(ms: i64) -> String {
+pub(crate) fn ago(ms: i64) -> String {
     let s = ms.max(0) / 1000;
     if s < 60 {
         format!("{s}s")
@@ -675,10 +689,25 @@ pub fn cache_light(state: &State) -> Light {
         .agg
         .cache_misses
         .last()
-        .map(|m| m.kind.clone())
+        .map(|m| {
+            state
+                .requests
+                .miss_for(&m.message_id)
+                .filter(|l| l.cause.kind() != "unlocated")
+                .map(|l| l.cause.compact())
+                // No located cause: the status line's deltas for this miss
+                // (same gate as A01), else the transcript's kind.
+                .or_else(|| crate::advisor::rules::token::shim_deltas(state, m))
+                .unwrap_or_else(|| m.kind.clone())
+        })
         .or_else(|| state.cache.last_miss_cause.clone());
     lines.push(match last {
-        Some(k) if misses > 0 => format!("{hit} · misses {misses} (last {k})"),
+        Some(k) if misses > 0 => {
+            // The fixed width: the deltas are clipped, the parenthesis kept.
+            let lead = format!("{hit} · misses {misses} (last ");
+            let room = WIDTH.saturating_sub(lead.chars().count() + 1);
+            format!("{lead}{})", fmt::clip(&k, room))
+        }
         _ => format!("{hit} · misses {misses}"),
     });
     lines.push(format!(
@@ -1080,6 +1109,10 @@ pub fn state_line(state: &State, mode: SessionMode) -> StateLine {
             WaitingKind::Question => "Claude asked a question".into(),
             WaitingKind::Notification => "Claude needs your input".into(),
             WaitingKind::Asked => "Claude asked, no reply yet".into(),
+            WaitingKind::Elicitation => {
+                let lead = format!("◆ WAITING {} · ", short_duration(now - w.since_ms));
+                elicitation_ask(state, &lead)
+            }
         });
     } else if turn_running(state) {
         let phase = state
@@ -1263,6 +1296,30 @@ mod tests {
     /// The first turn's dim line: `/insights` medians for the cwd and the
     /// previous session here; gone from the second human turn; never for a
     /// fixture (no pid), never the never-display text.
+    #[test]
+    fn cache_light_last_miss_uses_the_shims_deltas_when_unlocated() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}"#).unwrap());
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"c","model":"claude-opus-5","content":[],"usage":{"input_tokens":2,"cache_creation_input_tokens":30000},"diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}}}"#).unwrap());
+        let last = |s: &State| cache_light(s).lines[0].clone();
+        assert!(last(&s).ends_with("(last tools_changed)"), "{}", last(&s));
+        s.cache.from_shim = true;
+        s.cache.last_miss_cause = Some("tools_changed".into());
+        s.cache.last_miss_causes = vec!["tools_changed".into()];
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        let l = last(&s);
+        assert!(l.ends_with("(last tools +2 −0)"), "{l}");
+        // Both deltas: clipped inside the card's width, the parenthesis kept.
+        s.cache.last_miss_system_delta = Some(-800);
+        let l = last(&s);
+        assert!(l.chars().count() <= WIDTH && l.ends_with(')'), "{l}");
+        assert!(l.contains("(last tools +2 −0"), "{l}");
+        // A shim miss that is not this one: the kind again.
+        s.cache.last_miss_causes = vec!["model_changed".into()];
+        assert!(last(&s).ends_with("(last tools_changed)"), "{}", last(&s));
+    }
+
     #[test]
     fn start_line_on_the_first_turn_from_insights_and_the_previous_session() {
         let dir = crate::insights::tests::dir("coach");

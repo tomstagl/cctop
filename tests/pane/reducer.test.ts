@@ -6,7 +6,7 @@ import { fakeElements, fakeEngine, fakeOn, paneRender, type FakeEngine } from '.
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { HISTORY_TURNS, initialModel, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
+import { BREAKDOWN_DEBOUNCE_MS, breakdownDue, HISTORY_TURNS, initialModel, outcomeText, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
 import { renderOverview } from '../../plugin/hooks/views/overview';
 import { register } from '../../plugin/hooks/pane';
 
@@ -104,11 +104,13 @@ test('usage rows draw what the engine left out as ?', () => {
 // reads, a chain with a core that answers each event as the engine would.
 function boot(usage?: SessionUsage) {
   const $: FakeEngine = fakeEngine({ now: T0, session: usage ? { usage } : {} });
-  const reads = { count: 0 };
+  // `reads` counts the status line's reads; a breakdown read (the spool's) is counted apart.
+  const reads = { count: 0, breakdowns: [] as (string | undefined)[] };
   const real = $.session.usage;
-  $.session.usage = () => {
-    reads.count += 1;
-    return real();
+  $.session.usage = (args) => {
+    if (args?.breakdown === undefined) reads.count += 1;
+    else reads.breakdowns.push(args.breakdown);
+    return real(args);
   };
   const { on, dispatch } = fakeOn($, { surface: SURFACE });
   register(on, {});
@@ -288,4 +290,121 @@ test('agents.run opens a run and closes it; a new session id closes it', () => {
   assert.equal(reduce(opened, { type: 'agents.run', run: null }).openRun, null);
   assert.equal(reduce(opened, { type: 'session.id', id: 'session-a' }).openRun, 'wf_0aa065ff-0a0', 'the same id keeps it');
   assert.equal(reduce(opened, { type: 'session.id', id: 'session-b' }).openRun, null);
+});
+
+test('a widget render is laid out as inline', () => {
+  const render = (placement: 'inline' | 'widget'): Action => ({ type: 'render', placement, bodyColumns: 60, viewportColumns: 120, at: 0 });
+  const inline = run([render('inline')]);
+  const widget = run([render('widget')]);
+  assert.equal(widget.placement, 'widget');
+  assert.deepEqual({ ...widget, placement: 'inline' }, inline);
+  assert.equal(outcomeText(widget), outcomeText(inline));
+  const draw = (model: Model): string[] => renderToText(renderOverview(model, fakeElements(new Map()), 60, model.placement, T0), 60);
+  assert.deepEqual(draw(widget), draw(inline));
+});
+
+test('breakdownDue: true at first, false inside the debounce, true at its end', () => {
+  assert.equal(BREAKDOWN_DEBOUNCE_MS, 15_000);
+  assert.equal(breakdownDue(initialModel(), T0), true);
+  const read = reduce(initialModel(), { type: 'breakdown.read', at: T0 });
+  assert.equal(read.lastBreakdownAt, T0);
+  assert.equal(breakdownDue(read, T0 + 14_999), false);
+  assert.equal(breakdownDue(read, T0 + 15_000), true);
+});
+
+test('turn.complete and session.compact write the breakdown spool, once per debounce, never with full', async () => {
+  const usage = {
+    startedAt: 0,
+    context: {
+      window: 200000,
+      breakdown: { categories: [], totalTokens: 10, rawMaxTokens: 200000, model: 'm', memoryFiles: [], mcpTools: [], agents: [], isAutoCompactEnabled: true },
+    },
+    rateLimits: [],
+  } as unknown as SessionUsage;
+  const { $, dispatch, reads, start, turnStart, turnComplete, settle } = boot(usage);
+  $.env.values.HOME = '/home/u';
+  await start();
+  await settle();
+  await $.session.id(); // bound
+  await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
+  await settle();
+  await turnStart();
+  await turnComplete();
+  await settle();
+  const path = Object.keys(Object.fromEntries($.fs.files)).find((f) => f.startsWith('/home/u/.cctop/context/'));
+  assert.ok(path, 'the spool is written');
+  assert.deepEqual(reads.breakdowns, ['summary']);
+  assert.equal((JSON.parse($.fs.files.get(path) ?? '{}') as { v?: number }).v, 1);
+  await dispatch('session.compact', { trigger: 'auto', messages: [] }, () => ({ tokensBefore: 1, tokensAfter: 1 }));
+  await settle();
+  assert.equal(reads.breakdowns.length, 1, 'inside the debounce: no second read');
+  $.clock.tick(15_000);
+  await dispatch('session.compact', { trigger: 'auto', messages: [] }, () => ({ tokensBefore: 1, tokensAfter: 1 }));
+  await settle();
+  assert.deepEqual(reads.breakdowns, ['summary', 'summary']);
+});
+
+// A breakdown read that fails (the spool cannot be written): one log line per
+// session, the debounce starts all the same, and a turn 15 s later tries again.
+test('a failed breakdown write logs once, still debounces, retries after 15 s; a rotated session logs afresh', async () => {
+  const usage = {
+    startedAt: 0,
+    context: {
+      window: 200000,
+      breakdown: { categories: [], totalTokens: 10, rawMaxTokens: 200000, model: 'm', memoryFiles: [], mcpTools: [], agents: [], isAutoCompactEnabled: true },
+    },
+    rateLimits: [],
+  } as unknown as SessionUsage;
+  const { $, dispatch, reads, start, turnStart, turnComplete, settle } = boot(usage);
+  $.env.values.HOME = '/home/u';
+  const write = $.fs.write;
+  $.fs.write = async (path: string, text: string) => {
+    if (path.includes('/.cctop/context/')) throw new Error('disk full');
+    return write(path, text);
+  };
+  const failures = () => $.ui.logs.filter((l) => l.startsWith('cctop: context breakdown spool failed')).length;
+  await start();
+  await settle();
+  await $.session.id();
+  await dispatch('command.run', { command: 'cctop-pane', args: '', origin: 'person' });
+  await settle();
+  await turnStart();
+  await turnComplete();
+  await settle();
+  assert.equal(failures(), 1);
+  assert.equal(reads.breakdowns.length, 1);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 1, 'the failed read still started the debounce');
+  $.clock.tick(15_000);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 2, 'a turn after 15 s tries again');
+  assert.equal(failures(), 1, 'the second failure is not logged again');
+  // /clear: a new id, so the next failure is the new session's first.
+  $.session.scripted.id = 'rotated-session';
+  await turnStart();
+  await settle();
+  $.clock.tick(15_000);
+  await turnComplete();
+  await settle();
+  assert.equal(reads.breakdowns.length, 3);
+  assert.equal(failures(), 2, 'a rotated session id resets the once-per-session log');
+});
+
+test('turn.stop ends a running turn with no duration; on an idle pane it changes nothing', () => {
+  const done = run([
+    { type: 'session.start', at: T0 },
+    { type: 'turn.start', at: T0 + 100 },
+    { type: 'turn.complete', at: T0 + 1100, durationMs: 1000, reason: 'answer' },
+  ]);
+  const running = run([{ type: 'turn.start', at: T0 + 2000 }, { type: 'tool.start', name: 'Bash', at: T0 + 2100 }], done);
+  assert.equal(running.turn.state, 'busy');
+  const stopped = reduce(running, { type: 'turn.stop', at: T0 + 2500 });
+  assert.equal(stopped.turn.state, 'idle');
+  assert.equal(stopped.turn.startedAt, null);
+  assert.equal(stopped.turn.runningTool, null);
+  assert.equal(stopped.turn.lastDurationMs, 1000, 'the last completed turn keeps its duration: a Stop adds none');
+  assert.equal(stopped.turn.lastReason, 'answer');
+  assert.equal(reduce(done, { type: 'turn.stop', at: T0 + 5000 }), done, 'no turn running: no state change, no negative duration');
 });

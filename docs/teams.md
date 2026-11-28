@@ -13,8 +13,10 @@ prompts. The constants cctop rests on are in `src/harness_facts.rs`
 first eight characters of the lead's session id:
 
 ```
-{createdAt, leadAgentId, leadSessionId, name, members[]}
+{createdAt, leadAgentId, leadProcess, leadSessionId, name, members[]}
 ```
+
+(`leadProcess` appeared in 2.1.332; cctop does not read it.)
 
 A member is
 

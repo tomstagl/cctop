@@ -101,6 +101,17 @@ impl Log {
         }
     }
 
+    /// Remove one exact row (a derived row being replaced by a newer figure).
+    pub fn remove(&mut self, at: i64, kind: Kind, text: &str) {
+        if let Some(i) = self
+            .events
+            .iter()
+            .position(|e| e.at == at && e.kind == kind && e.text == text)
+        {
+            self.events.remove(i);
+        }
+    }
+
     pub fn note(&mut self, at: i64, text: impl Into<String>) {
         self.push(Event {
             at,
@@ -456,6 +467,28 @@ impl Log {
                 }
             }
             Line::Attachment(att) => {
+                if let crate::transcript::AttachmentKind::ThinkingDrop {
+                    dropped_blocks,
+                    dropped_turns,
+                    change_kinds,
+                    ..
+                } = att.kind()
+                {
+                    if let Some(at) = att.timestamp.as_deref().and_then(parse_ts_ms) {
+                        let mut text = format!(
+                            "thinking dropped · {dropped_blocks} blocks / {dropped_turns} turns"
+                        );
+                        if !change_kinds.is_empty() {
+                            text.push_str(" · ");
+                            text.push_str(&crate::requests::change_kinds_text(&change_kinds));
+                        }
+                        self.push(Event {
+                            at,
+                            kind: Kind::Note,
+                            text,
+                        });
+                    }
+                }
                 // A44: a plain IDE edit is a row; the collision (the same
                 // file edited by Claude this turn) is the coach's.
                 if let crate::transcript::AttachmentKind::EditedTextFile { filename, .. } =
@@ -605,5 +638,33 @@ mod tests {
             l.iter().last().unwrap().text,
             "cache miss: model_changed 427k"
         );
+    }
+
+    #[test]
+    fn thinking_drop_is_a_note_row() {
+        let l = log("session-t");
+        let rows: Vec<&Event> = l
+            .iter()
+            .filter(|e| e.text.starts_with("thinking dropped"))
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, Kind::Note);
+        assert_eq!(
+            rows[0].text,
+            "thinking dropped · 10 blocks / 10 turns · history changed"
+        );
+    }
+
+    #[test]
+    fn a_drop_without_change_kinds_has_no_tail() {
+        let mut l = Log::default();
+        l.apply(&Line::parse(r#"{"type":"attachment","timestamp":"2026-11-17T07:57:05.877Z","attachment":{"type":"thinking_drop","thinkingBlocksSent":4,"thinkingTurnsSent":4,"newlyDropped":{"blockCount":4,"turnCount":3,"reason":"prefix_mismatch"}}}"#).unwrap());
+        let rows: Vec<&Event> = l
+            .iter()
+            .filter(|e| e.text.starts_with("thinking dropped"))
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].text, "thinking dropped · 4 blocks / 3 turns");
+        assert!(!rows[0].text.ends_with(['·', ' ']));
     }
 }

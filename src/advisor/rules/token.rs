@@ -9,6 +9,7 @@ use crate::advisor::{ActionKind, Advice, Rule, Saving, Urgency};
 use crate::harness_facts::context_suggestions as ctx_rules;
 use crate::metrics::context::Mode;
 use crate::phase::ToolClass;
+use crate::requests::LocatedCause;
 use crate::ui::fmt;
 use crate::ui::State;
 
@@ -61,41 +62,101 @@ impl Rule for CacheMiss {
             .find(|m| m.tokens >= MISS_TOKENS && human_turns_since(state, m.turn) < 3)?;
         let model = model_short(state);
         let price = usd_label(state, miss.tokens, PriceKind::CacheWrite);
-        let (what, action, action_text) = match miss.kind.as_str() {
+        let located = state
+            .requests
+            .miss_for(&miss.message_id)
+            .filter(|m| !matches!(m.cause, LocatedCause::Unlocated));
+        let old_cli =
+            !crate::harness_facts::first_seen::RENDERED.at_most(state.agg.version.as_deref());
+        let tools_action = if old_cli {
+            "an MCP connect or a ToolSearch load rebuilt the list; CLI < 2.1.267 rebuilds it often — `claude update`".to_string()
+        } else {
+            "an MCP server connected or ToolSearch loaded a deferred tool — load what you need early, then hold".to_string()
+        };
+        let (kind_what, mut action, action_text) = match miss.kind.as_str() {
             "model_changed" => (
                 format!("model → {model}"),
                 "a switch re-writes all context — pick the model early, or switch right after /clear".to_string(),
                 String::new(),
             ),
-            "tools_changed" => {
-                let old_cli = !crate::harness_facts::first_seen::RENDERED
-                    .at_most(state.agg.version.as_deref());
-                (
-                    "tool list changed".to_string(),
-                    if old_cli {
-                        "an MCP connect or a ToolSearch load rebuilt the list; CLI < 2.1.267 rebuilds it often — `claude update`".to_string()
-                    } else {
-                        "an MCP server connected or ToolSearch loaded a deferred tool — load what you need early, then hold".to_string()
-                    },
-                    String::new(),
-                )
-            }
+            "tools_changed" => ("tool list changed".to_string(), tools_action.clone(), String::new()),
             _ => (
                 "an earlier message changed".to_string(),
                 "a rewind or an edited turn re-writes from that point — steer forward instead of rewriting".to_string(),
                 String::new(),
             ),
         };
+        let mut shim = false;
+        let what = match located {
+            Some(l) => {
+                match l.cause {
+                    LocatedCause::PrefixRewritten { .. } => {
+                        action = "a rewind or an edited turn re-writes from that point — steer forward instead of rewriting".to_string();
+                    }
+                    LocatedCause::Expired { .. } => {
+                        action = "the cache expired between turns — keep turns closer than the TTL, or accept the rebuild".to_string();
+                    }
+                    LocatedCause::ToolsChanged { .. } => action = tools_action,
+                    LocatedCause::SystemChanged { .. } => {
+                        action = "the system prompt changed — a settings, CLAUDE.md or output-style edit mid-session re-writes the cache; make such changes between sessions".to_string();
+                    }
+                    LocatedCause::ParamsChanged { field, .. } => {
+                        action = match field {
+                            "model" => "a switch re-writes all context — pick the model early, or switch right after /clear",
+                            "effort" => "an effort change re-writes the cache — set effort at the start of a session",
+                            "betas" => "a Claude Code update or a feature toggle changed the request betas — update between sessions",
+                            _ => "a request setting changed mid-session — keep settings fixed within a session",
+                        }
+                        .to_string();
+                    }
+                    _ => {}
+                }
+                l.cause.compact()
+            }
+            None => match shim_deltas(state, miss) {
+                Some(t) => {
+                    shim = true;
+                    t
+                }
+                None => kind_what,
+            },
+        };
+        // The coach draws `▸ ` + the headline in WIDTH cells: cut `what`, never the figure.
+        let tail = format!(" · {} re-written{price}", fmt::tokens(miss.tokens));
+        // The shim's figures are the content: shorten the lead-in before clipping them.
+        let head = if shim
+            && 2 + "cache miss: ".chars().count() + what.chars().count() + tail.chars().count()
+                > crate::coach::WIDTH
+        {
+            "miss: "
+        } else {
+            "cache miss: "
+        };
+        let room = crate::coach::WIDTH
+            .saturating_sub(2 + head.chars().count() + tail.chars().count())
+            .max(1);
+        let what = if located.is_some() || shim {
+            fmt::clip(&what, room)
+        } else {
+            what
+        };
         let mut a = Advice::new("A01", "cache-miss", Urgency::Later);
-        a.headline = format!(
-            "cache miss: {what} · {} re-written{price}",
-            fmt::tokens(miss.tokens)
-        );
+        a.headline = format!("{head}{what}{tail}");
+        // `· after settings change` does not fit the headline beside the
+        // never-clipped tail (52 cells): it leads the evidence line instead.
+        let after = located
+            .and_then(|l| l.after_config_change.as_ref())
+            .or(miss.after_config_change.as_ref())
+            .map(|_| "after settings change · ")
+            .unwrap_or_default();
         a.evidence = format!(
-            "{} · turn {} · {} named misses this session",
+            "{after}{} · turn {} · {} named misses this session{}",
             miss.kind,
             miss.turn,
-            state.agg.cache_misses.len()
+            state.agg.cache_misses.len(),
+            located
+                .map(|l| format!(" · located: {} · {}", l.cause.kind(), l.cause.short()))
+                .unwrap_or_default()
         );
         a.action = action;
         a.action_text = action_text;
@@ -103,6 +164,61 @@ impl Rule for CacheMiss {
         a.window_turns = 3;
         Some(a)
     }
+}
+
+/// The status line's own deltas for its last miss (`tools_added`,
+/// `tools_removed`, `system_char_delta`), used when the transcript's request
+/// ledger could not locate the cause. They describe the status line's *last*
+/// miss, so they apply only when that is the miss `miss` describes: within
+/// two minutes by the clocks when both have one, else `miss` being the newest
+/// named one; and only to the delta its cause list explains. The tools
+/// delta needs `tools_changed` in the shim's causes and as `miss.kind`; the
+/// system delta needs `system_prompt_changed` (or `tools_changed`) in the
+/// shim's causes and `miss.kind` of `messages_changed` or `tools_changed`
+/// (the transcript sees a system change as a changed prefix).
+pub(crate) fn shim_deltas(
+    state: &State,
+    miss: &crate::metrics::usage::CacheMissRecord,
+) -> Option<String> {
+    let c = &state.cache;
+    let has = |k: &str| c.last_miss_causes.iter().any(|x| x == k);
+    let tools_ok = has("tools_changed") && miss.kind == "tools_changed";
+    let system_ok = (has("system_prompt_changed") || has("tools_changed"))
+        && matches!(miss.kind.as_str(), "messages_changed" | "tools_changed");
+    if !tools_ok && !system_ok {
+        return None;
+    }
+    let miss_ms = miss
+        .at
+        .as_deref()
+        .and_then(crate::metrics::cost::parse_ts_ms);
+    let same_miss = match (c.last_miss_at_ms, miss_ms) {
+        (Some(shim), Some(at)) => (shim - at).abs() <= 120_000,
+        _ => state
+            .agg
+            .cache_misses
+            .last()
+            .is_some_and(|m| m.message_id == miss.message_id),
+    };
+    if !same_miss {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if tools_ok && c.last_miss_tools_added.unwrap_or(0) + c.last_miss_tools_removed.unwrap_or(0) > 0
+    {
+        parts.push(format!(
+            "tools +{} −{}",
+            c.last_miss_tools_added.unwrap_or(0),
+            c.last_miss_tools_removed.unwrap_or(0)
+        ));
+    }
+    if let Some(d) = c.last_miss_system_delta.filter(|d| system_ok && *d != 0) {
+        parts.push(format!(
+            "system {} chars",
+            crate::requests::signed(d).replacen('-', "−", 1)
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// A02 — a prompt gap longer than the cache TTL followed by a full-context
@@ -943,10 +1059,10 @@ impl Rule for BigPrefix {
         if per_turn_usd.is_none_or(|u| u < 0.25) && !(calibrated && prefix >= PREFIX_TOKENS) {
             return None;
         }
-        let rows = state.prefix.rows(prefix);
+        let rows = state.prefix.rows(prefix, state.requests.latest_shape());
         let biggest = rows
             .iter()
-            .find(|r| r.kind != crate::prefix::Kind::Other)
+            .find(|r| r.kind != crate::prefix::Kind::Other && r.name != crate::prefix::DEFERRED_ROW)
             .map(|r| format!("largest: {} ({})", r.name, fmt::tokens(r.tokens_est)))
             .unwrap_or_else(|| "press i on Context for the breakdown".into());
         let captured = state
@@ -1035,6 +1151,508 @@ mod tests {
             "cache writes alone never fire A01 now"
         );
         assert!(CacheMiss.evaluate(&fixture_state()).is_none());
+    }
+
+    /// A state whose second request missed with a named `kind`, 30 k re-written,
+    /// the tool list going from `old` to `new` between the two requests.
+    fn miss_state(kind: &str, old: &[&str], new: &[&str], gap_ts: &str) -> State {
+        let tools = |names: &[&str]| {
+            names
+                .iter()
+                .map(|n| format!(r#"{{"name":"{n}","description":"d","input_schema":{{}}}}"#))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let req = |shape: &str, ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"{shape}","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"high"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let shape = |h: &str, names: &[&str]| {
+            format!(
+                r#"{{"type":"api-request-shape","shapeHash":"{h}","shape":{{"system":[{{"type":"text","text":"xx"}}],"tools":[{}]}},"timestamp":"2026-01-01T00:00:00Z"}}"#,
+                tools(names)
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str, reason: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}}{reason}}}}}"#
+            )
+        };
+        let named = format!(
+            r#","diagnostics":{{"cache_miss_reason":{{"type":"{kind}","cache_missed_input_tokens":30000}}}}"#
+        );
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        for l in [
+            shape("s1", old),
+            shape("s2", new),
+            req("s1", "2026-01-01T00:00:01Z"),
+            reply("a", 0, 40_000, "2026-01-01T00:00:02Z", ""),
+            req("s2", gap_ts),
+            reply("b", 5_000, 30_000, gap_ts, &named),
+        ] {
+            s.apply(&Line::parse(&l).unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn a01_names_the_located_tool() {
+        let s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("+mcp__x__find"), "{}", a.headline);
+        assert!(
+            a.evidence.contains("tools changed: +mcp__x__find −0"),
+            "{}",
+            a.evidence
+        );
+        assert!(
+            a.evidence.contains("located: tools_changed"),
+            "{}",
+            a.evidence
+        );
+    }
+
+    fn config_change(at: &str, source: &str) -> crate::hooks::HookEvent {
+        crate::hooks::HookEvent {
+            at: crate::metrics::cost::parse_ts_ms(at).unwrap(),
+            event: "ConfigChange".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"source": source, "file_path": "/p/.claude/settings.json"}),
+        }
+    }
+
+    #[test]
+    fn config_change_marks_next_miss() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        // Not marked before any ConfigChange.
+        let plain = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!plain.evidence.contains("after settings change"));
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        let miss = s.requests.miss_for("b").expect("located");
+        assert_eq!(
+            miss.after_config_change.as_deref(),
+            Some("project_settings")
+        );
+        assert_eq!(
+            s.agg.cache_misses[0].after_config_change.as_deref(),
+            Some("project_settings")
+        );
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "settings changed · settings.json (project_settings)"));
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        // The tail is never cut, and the headline stays inside the coach width.
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+        assert!(2 + a.headline.chars().count() <= crate::coach::WIDTH);
+        assert!(
+            a.evidence
+                .starts_with("after settings change · tools_changed"),
+            "{}",
+            a.evidence
+        );
+    }
+
+    #[test]
+    fn config_change_marks_only_the_first_miss_and_not_one_before() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        // After the miss: it was not caused by this change.
+        s.apply_hook(&config_change("2026-01-01T00:00:20Z", "user_settings"));
+        assert_eq!(s.requests.miss_for("b").unwrap().after_config_change, None);
+        // A second change between: the miss belongs to the later one.
+        s.apply_hook(&config_change("2026-01-01T00:00:03Z", "skills"));
+        s.apply_hook(&config_change("2026-01-01T00:00:08Z", "project_settings"));
+        assert_eq!(
+            s.requests
+                .miss_for("b")
+                .unwrap()
+                .after_config_change
+                .as_deref(),
+            Some("project_settings")
+        );
+    }
+
+    /// Three main-thread responses on one shape: `a` creates the cache, then
+    /// each `(id, read, create, ts, named)` follows.
+    fn chain_state(steps: &[(&str, u64, u64, &str, bool)]) -> State {
+        let req = |ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"s1","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"high"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str, named: bool| {
+            let extra = if named {
+                r#","diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}"#
+            } else {
+                ""
+            };
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}}{extra}}}}}"#
+            )
+        };
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(
+            &Line::parse(r#"{"type":"api-request-shape","shapeHash":"s1","shape":{"system":[{"type":"text","text":"xx"}],"tools":[]},"timestamp":"2026-01-01T00:00:00Z"}"#)
+                .unwrap(),
+        );
+        s.apply(&Line::parse(&req("2026-01-01T00:00:01Z")).unwrap());
+        s.apply(&Line::parse(&reply("a", 0, 40_000, "2026-01-01T00:00:02Z", false)).unwrap());
+        for (id, read, create, ts, named) in steps {
+            s.apply(&Line::parse(&req(ts)).unwrap());
+            s.apply(&Line::parse(&reply(id, *read, *create, ts, *named)).unwrap());
+        }
+        s
+    }
+
+    #[test]
+    fn config_change_marks_only_the_first_request_when_it_missed() {
+        // change -> hit -> miss: the miss is not the first request after.
+        let mut s = chain_state(&[
+            ("h", 40_000, 100, "2026-01-01T00:00:07Z", false),
+            ("b", 5_000, 30_000, "2026-01-01T00:00:12Z", true),
+        ]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        assert_eq!(s.agg.cache_misses.len(), 1);
+        assert_eq!(s.agg.cache_misses[0].after_config_change, None);
+        assert_eq!(s.requests.miss_for("b").unwrap().after_config_change, None);
+        // change -> miss (named): marked.
+        let mut s = chain_state(&[("b", 5_000, 30_000, "2026-01-01T00:00:12Z", true)]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        assert_eq!(
+            s.agg.cache_misses[0].after_config_change.as_deref(),
+            Some("project_settings")
+        );
+    }
+
+    #[test]
+    fn config_change_does_not_claim_an_expired_cache() {
+        // Twenty minutes idle on an unchanged prefix: the TTL, not the change.
+        let mut s = chain_state(&[("b", 0, 40_000, "2026-01-01T00:20:00Z", false)]);
+        s.apply_hook(&config_change("2026-01-01T00:00:05Z", "project_settings"));
+        let m = s.requests.miss_for("b").expect("a miss");
+        assert!(
+            matches!(m.cause, crate::requests::LocatedCause::Expired { .. }),
+            "{:?}",
+            m.cause
+        );
+        assert_eq!(m.after_config_change, None);
+        assert!(s
+            .agg
+            .cache_misses
+            .iter()
+            .all(|m| m.after_config_change.is_none()));
+    }
+
+    #[test]
+    fn a01_falls_back_when_unlocated() {
+        // A transcript before 2.1.302: no request lines, so nothing is located.
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"id":"c","model":"claude-opus-5","content":[],"usage":{"input_tokens":2,"cache_creation_input_tokens":30000},"diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}}}"#).unwrap());
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        assert!(!a.evidence.contains("located:"), "{}", a.evidence);
+    }
+
+    fn unlocated_miss(kind: &str) -> State {
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        s.apply(&Line::parse(&format!(r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{{"id":"c","model":"claude-opus-5","content":[],"usage":{{"input_tokens":2,"cache_creation_input_tokens":30000}},"diagnostics":{{"cache_miss_reason":{{"type":"{kind}","cache_missed_input_tokens":30000}}}}}}}}"#)).unwrap());
+        s
+    }
+
+    /// The status line's last miss, with the cause it names (no clock).
+    fn shim_miss(s: &mut State, cause: &str) {
+        s.cache.from_shim = true;
+        s.cache.last_miss_cause = Some(cause.to_string());
+        s.cache.last_miss_causes = vec![cause.to_string()];
+    }
+
+    #[test]
+    fn a01_shim_cause_list_gates_each_delta() {
+        // Two causes: the shim's first is not the one that matters.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_causes = vec!["system_prompt_changed".into(), "tools_changed".into()];
+        s.cache.last_miss_tools_added = Some(1);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +1 −0"), "{}", a.headline);
+        // system_prompt_changed alone: the system delta on a messages_changed
+        // miss, never tool counts.
+        let mut s = unlocated_miss("messages_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_tools_added = Some(3);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        assert!(!a.headline.contains("tools +3"), "{}", a.headline);
+        // The same cause on a tools_changed miss: no tools delta (the shim
+        // did not name tools_changed), the system one still applies.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_tools_added = Some(3);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("tools +3"), "{}", a.headline);
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        // A model change takes neither.
+        let mut s = unlocated_miss("model_changed");
+        shim_miss(&mut s, "system_prompt_changed");
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("system −800"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_ignores_shim_deltas_that_do_not_match() {
+        // Kind mismatch: a rewritten-messages miss never gets tool counts.
+        let mut s = unlocated_miss("messages_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(!a.headline.contains("tools +2"), "{}", a.headline);
+        assert!(
+            a.headline.contains("an earlier message changed"),
+            "{}",
+            a.headline
+        );
+        // The shim's cause names a different miss.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "messages_rewritten");
+        s.cache.last_miss_tools_added = Some(2);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        // Time mismatch: the shim's miss is an hour later than the transcript's.
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        let at = crate::metrics::cost::parse_ts_ms("2026-01-01T00:00:03Z").unwrap();
+        s.cache.last_miss_at_ms = Some(at + 3_600_000);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+        // Within two minutes it matches.
+        s.cache.last_miss_at_ms = Some(at + 60_000);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +2 −0"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_not_the_newest_miss_without_clocks() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        // A newer named miss exists (too small to fire A01 itself).
+        s.apply(&Line::parse(r#"{"type":"assistant","timestamp":"2026-01-01T00:00:05Z","message":{"id":"d","model":"claude-opus-5","content":[],"usage":{"input_tokens":2,"cache_creation_input_tokens":3000},"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":3000}}}}"#).unwrap());
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tool list changed"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_model_change_ignores_shim_deltas() {
+        let mut s = unlocated_miss("model_changed");
+        shim_miss(&mut s, "model_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_system_delta = Some(1200);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("model →"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_tools_and_system_clip_with_the_short_lead_in() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(
+            a.headline.starts_with("miss: tools +2 −0"),
+            "{}",
+            a.headline
+        );
+        assert!(
+            a.headline.chars().count() + 2 <= crate::coach::WIDTH,
+            "{}",
+            a.headline
+        );
+        assert!(a.headline.contains('…'), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+    }
+
+    #[test]
+    fn a01_uses_shim_deltas_when_unlocated() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("tools +2 −0"), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "{}",
+            a.headline
+        );
+        assert!(a.headline.chars().count() + 2 <= crate::coach::WIDTH);
+    }
+
+    #[test]
+    fn a01_system_delta() {
+        let mut s = unlocated_miss("tools_changed");
+        shim_miss(&mut s, "tools_changed");
+        s.cache.last_miss_system_delta = Some(-800);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system −800 chars"), "{}", a.headline);
+        s.cache.last_miss_system_delta = Some(1200);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("system +1.2k chars"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_located_beats_shim() {
+        let mut s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &["Bash", "mcp__x__find"],
+            "2026-01-01T00:00:10Z",
+        );
+        s.cache.last_miss_tools_added = Some(5);
+        s.cache.last_miss_tools_removed = Some(0);
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.headline.contains("+mcp__x__find"), "{}", a.headline);
+        assert!(!a.headline.contains("tools +5"), "{}", a.headline);
+    }
+
+    #[test]
+    fn a01_cuts_long_names() {
+        let s = miss_state(
+            "tools_changed",
+            &["Bash"],
+            &[
+                "Bash",
+                "mcp__some_long_server__some_long_tool",
+                "mcp__other__a",
+                "mcp__other__b",
+            ],
+            "2026-01-01T00:00:10Z",
+        );
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(
+            a.headline.chars().count() + 2 <= crate::coach::WIDTH,
+            "{}",
+            a.headline
+        );
+        assert!(a.headline.contains('…'), "{}", a.headline);
+        assert!(
+            a.headline.ends_with(" · 30k re-written ≈$0.19"),
+            "tail must be uncut: {}",
+            a.headline
+        );
+    }
+
+    #[test]
+    fn a01_action_follows_the_located_cause() {
+        // The API says tools_changed, the chain found the system prompt moved.
+        let sys = miss_state_system();
+        let a = CacheMiss.evaluate(&sys).expect("fires");
+        assert!(a.headline.contains("system block"), "{}", a.headline);
+        assert!(
+            a.action.starts_with("the system prompt changed"),
+            "{}",
+            a.action
+        );
+    }
+
+    #[test]
+    fn a01_action_for_a_params_change_follows_the_field() {
+        // The effort differs between the two requests; same shape.
+        let req = |effort: &str, ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"s1","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"{effort}"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}},"diagnostics":{{"cache_miss_reason":{{"type":"model_changed","cache_missed_input_tokens":30000}}}}}}}}"#
+            )
+        };
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        for l in [
+            req("high", "2026-01-01T00:00:01Z"),
+            reply("a", 0, 40_000, "2026-01-01T00:00:02Z"),
+            req("max", "2026-01-01T00:00:10Z"),
+            reply("b", 5_000, 30_000, "2026-01-01T00:00:10Z"),
+        ] {
+            s.apply(&Line::parse(&l).unwrap());
+        }
+        let a = CacheMiss.evaluate(&s).expect("fires");
+        assert!(a.evidence.contains("effort high→max"), "{}", a.evidence);
+        assert!(a.action.starts_with("an effort change"), "{}", a.action);
+    }
+
+    /// Like `miss_state`, but the second request's first system block grew.
+    fn miss_state_system() -> State {
+        let shape = |h: &str, n: usize| {
+            format!(
+                r#"{{"type":"api-request-shape","shapeHash":"{h}","shape":{{"system":[{{"type":"text","text":"{}"}}],"tools":[]}},"timestamp":"2026-01-01T00:00:00Z"}}"#,
+                "x".repeat(n)
+            )
+        };
+        let req = |h: &str, ts: &str| {
+            format!(
+                r#"{{"type":"api-request","querySource":"repl_main_thread","shapeHash":"{h}","params":{{"model":"claude-opus-5","betas":["b"],"max_tokens":64000,"output_config":{{"effort":"high"}}}},"keep":4,"tail":["h"],"cacheControl":[],"timestamp":"{ts}"}}"#
+            )
+        };
+        let reply = |id: &str, read: u64, create: u64, ts: &str, extra: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","requestId":"r-{id}","message":{{"id":"{id}","model":"claude-opus-5","content":[],"usage":{{"input_tokens":1,"cache_read_input_tokens":{read},"cache_creation_input_tokens":{create}}}{extra}}}}}"#
+            )
+        };
+        let named = r#","diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":30000}}"#;
+        let mut s = State::new(Pricing::bundled());
+        s.apply(&prompt("2026-01-01T00:00:00Z"));
+        for l in [
+            shape("s1", 10),
+            shape("s2", 1300),
+            req("s1", "2026-01-01T00:00:01Z"),
+            reply("a", 0, 40_000, "2026-01-01T00:00:02Z", ""),
+            req("s2", "2026-01-01T00:00:10Z"),
+            reply("b", 5_000, 30_000, "2026-01-01T00:00:10Z", named),
+        ] {
+            s.apply(&Line::parse(&l).unwrap());
+        }
+        s
     }
 
     /// What `/context` printed, as Claude Code records it: a `local_command`
