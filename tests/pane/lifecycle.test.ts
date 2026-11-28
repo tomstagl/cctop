@@ -62,7 +62,7 @@ function boot(opts: { binary?: boolean; store?: Record<string, unknown>; isInter
   const invalidates = () => $.ui.invalidates['ui.render'] ?? 0;
   const marker = () => JSON.parse($.fs.files.get(MARKER) ?? 'null') as Record<string, unknown> | null;
   const queries = () => $.process.calls.filter((argv) => argv[1] === 'query' && argv[2] !== '--help');
-  return { $, registrations, start, command, close, turnStart, turnComplete, compact, render, invalidates, marker, queries };
+  return { $, dispatch, registrations, start, command, close, turnStart, turnComplete, compact, render, invalidates, marker, queries };
 }
 
 function stored($: FakeEngine): unknown {
@@ -224,6 +224,8 @@ function expectedMarker(rest: Record<string, unknown>): Record<string, unknown> 
     loaded: true,
     loadedAt: new Date(T0).toISOString(),
     placement: 'dock',
+    // What the fake engine's `$.agent.limits()` answers.
+    facts: { agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } },
     ...rest,
   };
 }
@@ -398,4 +400,30 @@ test('self-check: HOME unset and a session without an id are named together', as
   const line = $.ui.logs.find((l) => l.startsWith('cctop: plugin '));
   assert.ok(line !== undefined, JSON.stringify($.ui.logs));
   assert.match(line, /self-check failed: \$\.env\.get\("HOME"\) is unset: no marker can be written; \$\.session\.id\(\) failed: no session — /);
+});
+
+test('session.stop ends the running turn at once, polls now and returns next(e) unchanged', async () => {
+  const { $, dispatch, start, command, turnStart, queries } = boot();
+  await start();
+  await settle();
+  await command();
+  await settle();
+  await turnStart();
+  await settle();
+  const before = queries().length;
+  const seen: unknown[] = [];
+  const result = await dispatch('session.stop', { isTurnRunning: true }, (e: unknown) => {
+    seen.push(e);
+    return { isTurnRunning: true };
+  });
+  assert.deepEqual(result, { isTurnRunning: true }, 'the engine result comes back unchanged');
+  assert.deepEqual(seen, [{ isTurnRunning: true }], 'the event reaches the core unchanged');
+  await settle();
+  await settle();
+  assert.ok(queries().length > before, 'a Stop polls at once');
+  const afterStop = queries().length;
+  // Idle cadence now (10 s), not the busy 2 s.
+  $.clock.tick(3000);
+  await settle();
+  assert.equal(queries().length, afterStop, 'the busy cadence is gone');
 });

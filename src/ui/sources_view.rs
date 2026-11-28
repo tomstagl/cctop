@@ -220,6 +220,15 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
         dim,
     )));
     lines.extend(workspace_lines(state, w));
+    if !state.hooks_missing.is_empty() {
+        lines.push(Line::from(Span::styled(
+            format!(
+                " {}",
+                crate::install::hooks_missing_text(state.hooks_missing.len())
+            ),
+            state.theme.warn(),
+        )));
+    }
     frame.render_widget(Paragraph::new(lines), inner);
 }
 
@@ -360,6 +369,19 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
         assert_eq!(app.state.context_view, ContextView::Prefix);
         assert_eq!(app.state.inspector_opens, 2);
+    }
+
+    #[test]
+    fn sources_view_says_when_hook_events_are_missing() {
+        let mut app = app_on("session-a");
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 110, 40).contains("run cctop install"));
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let out = render_to_string(&app, 110, 40);
+        assert!(
+            out.contains("hooks: 7 new events, run cctop install"),
+            "{out}"
+        );
     }
 
     #[test]

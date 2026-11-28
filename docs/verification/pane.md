@@ -672,6 +672,60 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+42. **An MCP elicitation with cctop's silent hook installed still shows
+    the person the prompt unchanged** (hook events PRD, §6).
+    Setup: an MCP server that elicits, and cctop's hooks installed
+    (`cctop install`, so `Elicitation` and `ElicitationResult` have a
+    `cctop hook` entry).
+    Expected: the prompt appears and works as it does without cctop;
+    cctop shows it until it is answered: the TUI's turn panel reads
+    `waiting on you · MCP <server> asks`, the dashboard and the pane read
+    `◆ WAITING … — MCP <server> asks`.
+    Claude Code version:
+    Result: pending
+
+43. **A teammate going idle shows `idle` on the lead's team view at once
+    (`TeammateIdle`)** (hook events PRD, §6).
+    Setup: a lead session running a team of two or more teammates, cctop's
+    hooks installed (`cctop install`) and the Agents view open (or
+    `cctop query agents --session <lead id>`); let one teammate finish its
+    turn and wait for work.
+    Expected: that teammate's row shows `idle <age>` within a few seconds
+    of the turn ending, not after the five-minute inference window, and
+    `~/.cctop/events/<teammate session id>.jsonl` holds the `TeammateIdle`
+    event (it is in the teammate's own spool, not the lead's). Its money
+    counts as idle waste only after five minutes.
+    Claude Code version:
+    Result: pending
+
+44. **Pressing an agent row shows its transcript; back to main returns**
+    (the pane-APIs PRD, US-003).
+    Setup: a session with a running `Explore` agent (ask it to explore
+    something slow in the background), the pane docked on the Agents view.
+    Expected: the agent's row is a Button; pressing it puts that agent's
+    transcript in Claude Code's main view and `back to main` appears in the
+    pane's view bar; pressing that returns to the main conversation. A row
+    for an agent the engine refuses (a teammate in a pane of its own, a
+    stopped one) raises one toast with the reason and does not move the
+    view. Record whether cctop's agent ids equal `AgentInfo.id` (a press on
+    a row with no match draws no Button: the mapping falls back on
+    description and type only for a running agent whose pair is unique,
+    so two running agents alike show no button).
+    Claude Code version:
+    Result: pending
+
+45. **Notifications on a real terminal: a NOW nudge once, a reset at the
+    reset time** (the pane-APIs PRD, notifications).
+    Setup: `CCTOP_PANE_NOTIFY=1` in the environment Claude Code starts in,
+    a terminal with a notification channel (iTerm2, kitty, Ghostty), the
+    pane open; a window at 90 % or more with a `resets_at` a few minutes
+    ahead.
+    Expected: a NOW nudge taking the slot notifies once; the reset
+    notification `rate limit resets now` arrives at the reset time, not
+    before (nothing when the window first crosses 90 %).
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

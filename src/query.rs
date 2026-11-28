@@ -169,6 +169,7 @@ fn summary_object(state: &State) -> Value {
         "tokens_to_ctx": m(state.tools.tokens_to_ctx(), "tokens", "tokens_to_ctx", true),
         "agents": m(state.agents.len(), "count", "agent_state", false),
         "hooks_installed": state.session.hooks_installed,
+        "hooks_missing": state.hooks_missing,
         "permission_waits": if state.session.hooks_installed {
             json!({"count": state.session.permission_waits, "total": m(state.session.permission_wait_ms, "ms", "permission_wait", true)})
         } else {
@@ -412,7 +413,17 @@ pub fn tools(state: &State) -> Value {
             |(n, c)| json!({"tool": n, "tokens": m(*c as u64 / 4, "tokens", "input_tokens", true)}),
         )
         .collect();
-    json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads})
+    let skill_shell: Vec<Value> = state
+        .skill_shell
+        .iter()
+        .map(|(n, c)| json!({"skill": n, "count": c}))
+        .collect();
+    let mut out = json!({"tools": rows, "top_ctx": top, "bash_by_class": bash, "errors_by_class": errors, "input_to_ctx": input, "tool_search_loads": state.tools.tool_search_loads});
+    // Only once a skill ran a shell command (`PreSkillShellCommand` hook).
+    if !skill_shell.is_empty() {
+        out["skill_shell"] = Value::Array(skill_shell);
+    }
+    out
 }
 
 pub fn files(state: &State) -> Value {
@@ -567,6 +578,16 @@ pub fn agents(state: &State) -> Value {
         "agents": agents,
         "totals": totals_v,
         "depth": state.agent_depth(),
+        "limits": state
+            .pane_facts
+            .as_ref()
+            .and_then(|f| f.agent_limits.as_ref())
+            .map(|l| json!({
+                "concurrent": m(l.concurrent, "count", "agent_limits", false),
+                "depth": m(l.depth, "count", "agent_limits", false),
+                "background": l.is_background_enabled,
+                "line": crate::ui::agents_view::limits_text(totals.running, l),
+            })),
         "workflows": workflows,
         "teammates": teammates,
         "mcp": if state.session.pid.is_some() { Value::Array(mcp) } else { missing("no live process (fixture)") },
@@ -702,6 +723,19 @@ pub fn dashboard(state: &State) -> Value {
             "turns": td.turns,
             "by_kind": td.by_kind,
             "metric_id": "thinking_dropped",
+        });
+    }
+    // Absent until an MCP server has asked the person something.
+    let ew = &state.elicitation_waits;
+    if ew.count > 0 || !state.elicitations.is_empty() {
+        v["elicitation_waits"] = json!({
+            "count": ew.count,
+            "total_wait_ms": ew.total_wait_ms,
+            "accept": ew.accept,
+            "decline": ew.decline,
+            "cancel": ew.cancel,
+            "open": state.elicitations.values().map(|q| q.len()).sum::<usize>(),
+            "metric_id": "elicitation_wait",
         });
     }
     v
@@ -1110,6 +1144,35 @@ mod tests {
     }
 
     #[test]
+    fn query_agents_carries_the_limits_only_with_the_pane_facts() {
+        let mut st = state_d();
+        assert!(agents(&st)["limits"].is_null());
+        st.pane_facts = Some(crate::pane::PaneFacts {
+            agent_limits: Some(crate::pane::AgentLimits {
+                concurrent: 10,
+                depth: 2,
+                is_background_enabled: false,
+            }),
+            ..Default::default()
+        });
+        let l = &agents(&st)["limits"];
+        assert_eq!(l["concurrent"]["value"], 10);
+        assert_eq!(l["concurrent"]["metric_id"], "agent_limits");
+        assert_eq!(l["depth"]["value"], 2);
+        assert_eq!(l["background"], false, "a plain bool, no metric tag");
+        let running = agents(&st)["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["state"] == "running")
+            .count();
+        assert_eq!(
+            l["line"],
+            format!("{running} / 10 running · depth ≤ 2 · no background")
+        );
+    }
+
+    #[test]
     fn query_agents_exports_the_team_only_when_there_is_one() {
         let d = state_d();
         let a = agents(&d);
@@ -1337,6 +1400,29 @@ mod tests {
         );
         // Absent where nothing was dropped.
         assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_carries_elicitation_waits_only_once_a_server_asked() {
+        let mut state = State::new(crate::metrics::Pricing::bundled());
+        assert!(dashboard(&state).get("elicitation_waits").is_none());
+        let hook = |event: &str, at: i64, action: &str| crate::hooks::HookEvent {
+            at,
+            event: event.into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: json!({"mcp_server_name": "github", "action": action}),
+        };
+        state.apply_hook(&hook("Elicitation", 1_000, ""));
+        assert_eq!(dashboard(&state)["elicitation_waits"]["open"], 1);
+        state.apply_hook(&hook("ElicitationResult", 4_000, "accept"));
+        let v = &dashboard(&state)["elicitation_waits"];
+        assert_eq!(v["count"], 1);
+        assert_eq!(v["total_wait_ms"], 3_000);
+        assert_eq!(v["accept"], 1);
+        assert_eq!(v["open"], 0);
+        assert_eq!(v["metric_id"], "elicitation_wait");
     }
 
     #[test]

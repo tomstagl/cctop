@@ -467,6 +467,8 @@ test('/clear while the pane is closed: the markers follow the id and nothing is 
   const next = readMarker($, NEXT_MARKER);
   assert.equal(next?.loaded, true, 'cctop pane status finds the module under the new id');
   assert.equal(next?.open, false);
+  // The limits the model dropped with the old id are read again at once, not at the next turn.complete.
+  assert.deepEqual((next?.facts as { agentLimits?: unknown } | undefined)?.agentLimits, { concurrent: 20, depth: 3, isBackgroundEnabled: true });
   assert.equal(next?.sessionId, NEXT);
   assert.equal(queries($).length, 0, 'closed: nothing polled');
 });
@@ -483,4 +485,166 @@ test('a pane opened before detection ends starts polling once the binary is foun
   answer(ok('cctop 0.9.0\n'));
   await settle();
   assert.equal(queries($, 'summary').length, 1);
+});
+
+// `$.session.info()` (PRD 6 US-001): the transcript path says exactly which
+// transcript to read; without one the id is looked up as before.
+const PATH_A = '/home/user/.claude/projects/-home-user-project/fake-session.jsonl';
+const PATH_B = '/home/user/.claude/projects/-home-user-project/next-session.jsonl';
+
+function pathScripts(path: string): Record<string, ProcessScript> {
+  const scripts = binaryScripts();
+  for (const verb of QUERY_FIXTURES) {
+    delete scripts[`cctop query ${verb} --session ${SESSION} --surface pane`];
+    scripts[`cctop query ${verb} --session ${path} --surface pane`] = ok(JSON.stringify(fixture(verb)));
+  }
+  return scripts;
+}
+
+test('session.info: queries carry the transcript path when known and the id otherwise', async () => {
+  const { $, start, open } = bootHooks({ ...binaryScripts(), ...pathScripts(PATH_A) });
+  $.session.scripted.info = { transcriptPath: '' };
+  await start();
+  await settle();
+  await open();
+  await settle();
+  assert.ok(queries($).length > 0);
+  assert.ok(queries($).every((argv) => argv[4] === SESSION), 'a session that keeps no transcript is queried by id');
+
+  const second = bootHooks(pathScripts(PATH_A));
+  second.$.session.scripted.info = { transcriptPath: PATH_A, platform: 'macos' };
+  await second.start();
+  await settle();
+  await second.open();
+  await settle();
+  assert.ok(queries(second.$).length > 0);
+  assert.ok(queries(second.$).every((argv) => argv[4] === PATH_A), JSON.stringify(queries(second.$)[0]));
+  assert.equal(second.$.ui.logs.filter((l) => l.includes('failed')).length, 0, JSON.stringify(second.$.ui.logs));
+});
+
+test('session.info: a rotated id switches to the new transcript path, never the old one', async () => {
+  const scripts = pathScripts(PATH_A);
+  for (const verb of QUERY_FIXTURES) {
+    scripts[`cctop query ${verb} --session ${PATH_B} --surface pane`] = ok(JSON.stringify(fixture(verb)));
+  }
+  const { $, start, open, turnStart } = bootHooks(scripts);
+  $.session.scripted.info = { transcriptPath: PATH_A };
+  await start();
+  await settle();
+  await open();
+  await settle();
+  const before = queries($).length;
+  $.session.scripted.id = NEXT;
+  $.session.scripted.info = { transcriptPath: PATH_B };
+  await turnStart();
+  await settle();
+  const after = queries($).slice(before);
+  assert.ok(after.length > 0, 'the new session was queried at once');
+  assert.ok(after.every((argv) => argv[4] === PATH_B), JSON.stringify(after.map((a) => a[4])));
+  assert.equal(readMarker($, NEXT_MARKER)?.sessionId, NEXT);
+});
+
+test('session.info: the marker carries facts (rules, platform, screen reader) and follows a change', async () => {
+  const { $, start, turnStart } = bootHooks(binaryScripts());
+  $.session.scripted.info = { transcriptPath: '', platform: 'macos', isScreenReader: true, dataRules: ['zdr', 'acme'] };
+  await start();
+  await settle();
+  const facts = readMarker($, MARKER)?.facts;
+  assert.deepEqual(facts, { dataRules: ['zdr', 'acme'], platform: 'macos', isScreenReader: true, agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
+  // The rules can change mid-session: the next turn writes them.
+  $.session.scripted.info = { transcriptPath: '', platform: 'macos', dataRules: [] };
+  await turnStart();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos', agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
+  // A failing read keeps what was known and logs once per failure.
+  $.session.info = () => Promise.reject(new Error('gone'));
+  await turnStart();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { dataRules: [], platform: 'macos', agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } });
+  assert.ok($.ui.logs.some((l) => l.includes('session.info failed: Error: gone')));
+});
+
+// `$.agent.limits()` (PRD 6 US-002): read at session.start and at each
+// turn.complete, written to the marker; a failing read keeps what was known.
+test('agent.limits: read at session.start and turn.complete, written to the marker', async () => {
+  const { $, start, turnStart, turnComplete } = bootHooks(binaryScripts());
+  $.agent.scripted.concurrent = 10;
+  $.agent.scripted.depth = 2;
+  await start();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: true } });
+  // Not on turn.start; read again on turn.complete.
+  $.agent.scripted.isBackgroundEnabled = false;
+  await turnStart();
+  await settle();
+  assert.equal((readMarker($, MARKER)?.facts as { agentLimits: { isBackgroundEnabled: boolean } }).agentLimits.isBackgroundEnabled, true);
+  await turnComplete();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: false } });
+  // A failing read keeps what was known and logs.
+  $.agent.limits = () => Promise.reject(new Error('gone'));
+  await turnComplete();
+  await settle();
+  assert.deepEqual(readMarker($, MARKER)?.facts, { agentLimits: { concurrent: 10, depth: 2, isBackgroundEnabled: false } });
+  assert.ok($.ui.logs.some((l) => l.includes('agent.limits failed: Error: gone')));
+});
+
+test('session.info: no facts in the marker before the first read', async () => {
+  const { $, poller } = bootPoller();
+  await poller.tick();
+  assert.equal(readMarker($, MARKER)?.facts, undefined);
+});
+
+// Screen reader mode (PRD 6 US-001): where the view bar draws a glyph-only
+// badge, a word replaces it. The bar has none today (tabs and the
+// `bin · shim · hooks` badges are words), so nothing is swapped and the bar
+// reads the same with the mode on: no token of it is a bare symbol.
+test('session.info: under isScreenReader the view bar holds no glyph-only token', async () => {
+  const { $, start, open, render } = bootHooks(binaryScripts());
+  $.session.scripted.info = { transcriptPath: '', isScreenReader: true, dataRules: ['hipaa'] };
+  await start();
+  await settle();
+  await open();
+  await settle();
+  const rows = await render(120);
+  const bar = rows.findIndex((r) => r.startsWith('cctop'));
+  assert.ok(bar >= 0, JSON.stringify(rows.slice(0, 6)));
+  const tokens = rows[bar].split(/\s+/).filter((t) => t !== '');
+  assert.ok(tokens.length > 3);
+  assert.ok(tokens.every((t) => /[\p{L}\p{N}]/u.test(t)), JSON.stringify(tokens));
+});
+
+test('pollNow runs a round at once; during one in flight it runs exactly one follow-up', async () => {
+  const scripts = binaryScripts();
+  const key = `cctop query summary --session ${SESSION} --surface pane`;
+  const answer = scripts[key] as ProcessRunResult;
+  let release: () => void = () => undefined;
+  let calls = 0;
+  // The first summary is held open; later ones answer at once.
+  scripts[key] = () => {
+    calls += 1;
+    return calls === 1 ? new Promise<ProcessRunResult>((resolve) => (release = () => resolve(answer))) : Promise.resolve(answer);
+  };
+  const { $, poller, busy } = bootPoller(scripts);
+  await busy();
+  poller.start();
+  await settle();
+  assert.equal(queries($, 'summary').length, 1, 'the first round is in flight');
+  poller.pollNow();
+  poller.pollNow();
+  await settle();
+  assert.equal(queries($, 'summary').length, 1, 'nothing starts beside a round in flight');
+  release();
+  for (let i = 0; i < 10; i += 1) await settle();
+  assert.equal(queries($, 'summary').length, 2, 'two pollNow calls leave exactly one follow-up round');
+  poller.pollNow();
+  for (let i = 0; i < 10; i += 1) await settle();
+  assert.equal(queries($, 'summary').length, 3, 'with nothing in flight it polls once now');
+});
+
+test('pollNow on a stopped poller does nothing', async () => {
+  const { $, poller } = bootPoller();
+  poller.pollNow();
+  await settle();
+  assert.equal(queries($).length, 0);
 });

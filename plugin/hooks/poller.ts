@@ -29,6 +29,12 @@ export type Poller = {
   stop(): void;
   /** One round of queries; resolves at once when a round is already in flight. */
   tick(): Promise<void>;
+  /**
+   * A round now, for an event that changed what the pane shows (a Stop).
+   * While one is in flight, exactly one follow-up round runs after it; a
+   * no-op while stopped.
+   */
+  pollNow(): void;
   /** Re-arms the timer when the cadence changed with the turn state; a no-op while stopped. */
   reschedule(): void;
   running(): boolean;
@@ -68,6 +74,20 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
   return QUERY_VERBS.filter((verb) => found.has(verb));
 }
 
+// The marker's `facts` (cctop's header badges read them), without the
+// transcript path: the binary is told that by the poller's argv, not the marker.
+// `dataRules` is what the engine says now: each marker write reflects the
+// current value, so it is rewritten when it changes (the d.ts: "do not keep it").
+function markerFacts(model: Model): Record<string, unknown> | undefined {
+  const f = model.sessionFacts ?? {};
+  const out: Record<string, unknown> = {};
+  if (f.dataRules !== undefined) out.dataRules = f.dataRules;
+  if (f.platform !== undefined) out.platform = f.platform;
+  if (f.isScreenReader !== undefined) out.isScreenReader = f.isScreenReader;
+  if (model.agentLimits !== null) out.agentLimits = model.agentLimits;
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 // The marker other cctop processes read to learn what the pane is doing in
 // this session: `cctop split` refuses a second dashboard while it is open
 // (US-009) and `cctop pane status` reports it. Written once the module knows
@@ -99,6 +119,7 @@ export async function writeMarker($: PollerEngine, model: Model): Promise<void> 
     placement: model.placement,
     bodyColumns: model.bodyColumns,
     viewportColumns: model.viewportColumns,
+    facts: markerFacts(model),
   };
   await $.fs.write(`${home}/.cctop/pane/${model.sessionId}.json`, JSON.stringify(marker));
 }
@@ -108,6 +129,8 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
   let timer: Timer | null = null;
   let timerMs = 0;
   let inflight: Promise<void> | null = null;
+  // A pollNow arrived while a round ran: one more round follows it.
+  let followUp = false;
   // When the poller started; stands in for `queryAt` until the first success.
   let startedAt = 0;
   // Verbs that failed since their last success, so each failure is logged once.
@@ -134,11 +157,15 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
     }
   };
 
+  // The transcript path the engine named, else the id: the path says
+  // exactly which transcript to read, the id is looked up in the registry.
+  const queryKey = (sessionId: string): string => getModel().sessionFacts?.transcriptPath || sessionId;
+
   const query = async (verb: QueryVerb, sessionId: string): Promise<boolean> => {
     try {
       // `--surface pane`: a fire the binary promotes for this pane (no
       // dashboard running) is recorded as shown here.
-      const argv = ['cctop', 'query', verb, '--session', sessionId, '--surface', 'pane'];
+      const argv = ['cctop', 'query', verb, '--session', queryKey(sessionId), '--surface', 'pane'];
       const result = await $.process.run(argv, { timeoutMs: QUERY_TIMEOUT_MS });
       // The session rotated while the binary ran: whatever it answered is
       // the old session's, not the new one's.
@@ -230,8 +257,17 @@ export function createPoller($: PollerEngine, getModel: () => Model, setModel: (
         .catch((err: unknown) => $.ui.log(`cctop: poll failed: ${err instanceof Error ? err.message : String(err)}`))
         .finally(() => {
           inflight = null;
+          if (followUp) {
+            followUp = false;
+            if (active) void poller.tick();
+          }
         });
       return inflight;
+    },
+    pollNow() {
+      if (!active) return;
+      if (inflight !== null) followUp = true;
+      else void poller.tick();
     },
     reschedule() {
       if (!active) return;

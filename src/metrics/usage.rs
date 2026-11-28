@@ -278,6 +278,9 @@ pub struct CacheMissRecord {
     /// `cache_missed_input_tokens`, else the call's cache write.
     pub tokens: u64,
     pub message_id: String,
+    /// The `source` of a `ConfigChange` hook this request is the first
+    /// request after, when it missed (set by `State::mark_config_changes`).
+    pub after_config_change: Option<String>,
 }
 
 /// A line between two API calls that says what a context drop across them
@@ -909,6 +912,7 @@ impl Aggregate {
                     .cache_missed_input_tokens
                     .unwrap_or(a.message.usage.cache_creation_input_tokens),
                 message_id: a.message.id.clone(),
+                after_config_change: None,
             });
         }
         t.api_calls += 1;

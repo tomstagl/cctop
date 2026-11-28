@@ -48,17 +48,20 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         if !state.session.alive && state.session.ended_at_ms.is_none() {
             state.session.ended_at_ms = state.last_line_at_ms;
         }
-        if last_git.elapsed() >= Duration::from_secs(5) && state.session.cwd.is_dir() {
+        if last_git.elapsed() >= Duration::from_secs(5) && state.work_dir().is_dir() {
             last_git = Instant::now();
-            if let Some(g) = crate::git::info(&state.session.cwd) {
+            if let Some(g) = crate::git::info(state.work_dir()) {
                 state.session.git_branch = g.branch;
                 state.session.git_dirty = g.dirty;
             }
             if let Some(base) = &base_commit {
-                let ns = crate::files::numstat(&state.session.cwd, base);
+                // The repo the session started in: `CwdChanged` moves the
+                // branch display and Bash paths, not the diff base or the
+                // folder the file paths are relative to.
                 let cwd = state.session.cwd.clone();
+                let ns = crate::files::numstat(&cwd, base);
                 state.files.apply_numstat(&cwd, &ns);
-                let head = crate::files::numstat(&state.session.cwd, "HEAD");
+                let head = crate::files::numstat(&cwd, "HEAD");
                 state.uncommitted = Some((
                     head.iter().map(|(_, a, _)| a).sum(),
                     head.iter().map(|(_, _, d)| d).sum(),
@@ -145,11 +148,22 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             state.apply_hook(&ev);
         }
     }));
+    // The pane marker's `facts` (data rules, screen reader): the pane
+    // rewrites them when they change, so they are read again every few seconds.
+    app.state.load_pane_facts();
+    let mut facts_at = Instant::now();
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if facts_at.elapsed() >= Duration::from_secs(3) {
+            facts_at = Instant::now();
+            state.load_pane_facts();
+        }
+    }));
     if let Some(v) = crate::claude_home::read() {
         app.state.apply_claude_home(&v);
     }
     if app.state.session.pid.is_some() {
         app.state.load_autocompact();
+        app.state.load_hooks_missing();
     }
     // `~/.claude/usage-data`: Claude Code's own analysis, at attach and
     // whenever `/insights` writes a new file.
@@ -243,9 +257,16 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
         crate::baseline::default_projects_dir(),
         app.state.cost.pricing().clone(),
     );
+    let idle_spool_dir = crate::hooks::spool_dir(&crate::status::cctop_dir());
+    let mut idle_seen = std::collections::HashMap::new();
     app.tick_hooks.push(Box::new(move |state: &mut State| {
         let now = state.clock_ms();
         team.poll(&mut state.team, &state.tools.agent_spawns, now);
+        // `TeammateIdle` is spooled under the teammate's own session id.
+        if let Some(t) = state.team.as_mut() {
+            t.note_idle_from_spools(&idle_spool_dir, &mut idle_seen);
+        }
+        state.sync_teammate_idle();
     }));
     // The transcript itself.
     if let Ok(t) = crate::tail::Tailer::open(transcript) {
@@ -312,6 +333,13 @@ pub fn attach_headless_prefix(app: &mut App, transcript: &Path, info: SessionInf
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
     }
     app.state.team = crate::load::load_team(transcript, &app.state);
+    if let Some(t) = app.state.team.as_mut() {
+        t.note_idle_from_spools(
+            &crate::hooks::spool_dir(&crate::status::cctop_dir()),
+            &mut std::collections::HashMap::new(),
+        );
+    }
+    app.state.sync_teammate_idle();
     app.tick();
 }
 
