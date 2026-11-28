@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 2: instrument with Raster</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+a{color:#4CC2C2;text-decoration:none}a:hover{color:#8FE3E3}
+</style>
+</helmet>
+<div style="width: 1440px; height: 960px; box-sizing: border-box; padding: 20px; background: #0A0E12; display: flex; flex-direction: column; gap: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 19px; color: #D6DEE8">
+
+  <div style="height: 856px; display: flex; border: 1px solid #2A3644; border-radius: 10px; background: #0E1318; overflow: hidden">
+    <div style="flex: 1 1 0; min-width: 0; padding: 18px 22px; display: flex; flex-direction: column; white-space: pre-wrap; color: #9AA7B6">
+      <div><span style="color: #8696A8">&gt; </span><span style="color: #EEF3F8">open the PR for the contract bump and push</span></div>
+      <div style="height: 19px"></div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(gh pr view 24)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found…</div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(gh pr view --json url)</div>
+      <div style="color: #E5605E">  ⎿  Error: no pull requests found…</div>
+      <div><span style="color: #5FC77E">⏺</span> Bash(git push)</div>
+      <div style="color: #E5605E">  ⎿  Error: ! [rejected] (non-fast-forward)</div>
+      <div style="height: 19px"></div>
+      <div style="color: #D97757">✻ Pondering… <span style="color: #8696A8">(14s)</span></div>
+      <div style="flex-grow: 1"></div>
+      <div style="border: 1px solid #4A5A6C; border-radius: 6px; padding: 6px 10px; color: #8696A8">&gt; </div>
+      <div style="padding: 4px 4px 0; color: #8696A8">  ⏵⏵ auto mode · ctx 41 %</div>
+    </div>
+
+    <div style="width: 800px; flex: 0 0 800px; border-left: 1px solid #2A3644; display: flex; flex-direction: column; background: #0C1116">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid #2A3644">
+        <span style="color: #4CC2C2; font-weight: 700">cctop</span>
+        <span style="color: #8696A8">Coach</span>
+        <span style="background: #D6DEE8; color: #0C1116; padding: 0 6px">Overview</span>
+        <span style="color: #8696A8">Tools</span><span style="color: #8696A8">Agents</span><span style="color: #8696A8">Events</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #5D6B7D">Opus 5.5 · turn 14 · 41m</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #1C2630">
+        <!-- cost per turn -->
+        <div style="padding: 14px 18px; border-right: 1px solid #1C2630; display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700">cost per turn</span><span style="flex-grow: 1"></span><span style="color: #8696A8">$14.82 so far</span></div>
+          <div style="white-space: normal; background: #1A1710; padding: 5px 8px"><span style="color: #E2B04A; font-weight: 700">Watch · </span>steady at ~$0.60 a turn, but the last two cost $1.74 and $2.21. <span style="color: #EEF3F8">Do: /compact at the next break.</span></div>
+          <div style="color: #C3CDD9; min-height: 38px; white-space: normal">{{ costReadout }}</div>
+          <div style="display: flex; gap: 8px; align-items: flex-end">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 180px; color: #5D6B7D; font-size: 11px; text-align: right; width: 34px"><span>$2.40</span><span>$1.20</span><span>$0</span></div>
+            <div style="display: flex; gap: 6px; align-items: flex-end">
+              <sc-for list="{{ costCols }}" as="col" hint-placeholder-count="14">
+                <div onMouseEnter="{{ col.hover }}" style="display: flex; flex-direction: column; gap: 0; padding: 0 1px; background: {{ col.hl }}; cursor: default">
+                  <sc-for list="{{ col.cells }}" as="c" hint-placeholder-count="20"><span style="width: 16px; height: 9px; background: {{ c }}"></span></sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; margin-left: 42px; color: #5D6B7D; font-size: 11px">
+            <sc-for list="{{ costCols }}" as="col" hint-placeholder-count="14"><span style="width: 18px; text-align: center; color: {{ col.tickColor }}">{{ col.n }}</span></sc-for>
+          </div>
+          <div style="margin-left: 42px; color: #8696A8">turn →</div>
+          <div style="display: flex; flex-direction: column; gap: 2px; color: #8696A8; white-space: normal">
+            <span><span style="color: #B48CE0">■</span> turn 3: Claude started a helper agent ($1.85)</span>
+            <span><span style="color: #E5605E">■</span> turn 11: the cache had to be rebuilt ($2.31)</span>
+          </div>
+        </div>
+
+        <!-- cache -->
+        <div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: baseline"><span style="font-weight: 700">prompt cache</span><span style="color: #5FC77E">warm</span><span style="flex-grow: 1"></span><span style="color: #8696A8">reused 94 % of the time</span></div>
+          <div style="white-space: normal; background: #0F1B14; padding: 5px 8px"><span style="color: #5FC77E; font-weight: 700">Good · </span>all 3 rebuilds were avoidable. <span style="color: #EEF3F8">Don't: change effort or connect tools mid-session.</span></div>
+          <div style="color: #C3CDD9; min-height: 38px; white-space: normal">{{ cacheReadout }}</div>
+          <div style="display: flex; gap: 4px">
+            <sc-for list="{{ cacheTurns }}" as="t" hint-placeholder-count="14">
+              <div onMouseEnter="{{ t.hover }}" style="display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: default">
+                <span style="width: 22px; height: 26px; background: {{ t.c }}; outline: {{ t.outline }}"></span>
+                <span style="font-size: 11px; color: #5D6B7D">{{ t.n }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="color: #8696A8">turn →</div>
+          <div style="display: flex; flex-direction: column; gap: 2px; color: #8696A8">
+            <span><span style="color: #5FC77E">■</span> reused the cache   <span style="color: #E5605E">■</span> had to rebuild it   <span style="color: #3A4654">■</span> first turn</span>
+          </div>
+          <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px">
+            <div style="white-space: pre"><span style="color: #8696A8">stays warm for </span><span style="color: #EEF3F8">59m</span></div>
+            <div style="white-space: pre"><span style="color: #5FC77E">███████████████████████████████████████</span><span style="color: #24313D">░</span></div>
+            <div style="color: #8696A8; white-space: normal">If you reply after that, the next message rebuilds 412k tokens (about $0.60).</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- heat map -->
+      <div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; gap: 8px"><span style="font-weight: 700">tool calls per turn</span><span style="color: #8696A8">124 calls · 3 failed in turn 14</span></div>
+        <div style="white-space: normal; background: #1A1710; padding: 5px 8px"><span style="color: #E2B04A; font-weight: 700">Watch · </span>46 reads for 18 edits, and state.rs was read whole 3 times (41k). <span style="color: #EEF3F8">Do: ask Claude to grep before reading whole files.</span></div>
+        <div style="display: flex; gap: 12px">
+          <div style="display: flex; flex-direction: column; color: #8696A8; text-align: right; width: 104px">
+            <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6"><div style="height: 18px; line-height: 18px; margin-bottom: 2px">{{ r.name }}</div></sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6">
+              <div style="display: flex; gap: 2px"><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="14"><span style="width: 34px; height: 18px; background: {{ c }}"></span></sc-for></div>
+            </sc-for>
+            <div style="display: flex; gap: 2px; color: #5D6B7D; font-size: 11px"><sc-for list="{{ turnNums }}" as="n" hint-placeholder-count="14"><span style="width: 34px; text-align: center">{{ n }}</span></sc-for></div>
+          </div>
+          <div style="display: flex; flex-direction: column; color: #8696A8">
+            <sc-for list="{{ heat }}" as="r" hint-placeholder-count="6"><div style="height: 18px; line-height: 18px; margin-bottom: 2px">{{ r.total }}</div></sc-for>
+          </div>
+        </div>
+        <div style="margin-left: 116px; color: #8696A8">turn →   <span style="color: #E5605E">■</span> failed call   darker = fewer calls</div>
+      </div>
+
+      <div style="flex-grow: 1"></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid #2A3644; background: #1A1012">
+        <span style="background: #E5605E; color: #0C1116; font-weight: 700; padding: 0 6px">NOW</span>
+        <span style="flex-grow: 1; color: #EEF3F8">Claude is stuck retrying: 3 fails in a row</span>
+        <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 1px 10px; font-weight: 700">c  open in Coach</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 13.5px">
+    <sc-for list="{{ legend }}" as="g" hint-placeholder-count="4">
+      <div style="border: 1px solid #22303D; border-radius: 8px; padding: 8px 12px; color: #9AA7B6"><span style="font-family: 'JetBrains Mono', monospace; color: #4CC2C2">{{ g.el }}</span>  {{ g.what }}</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { costTurn: 14, cacheTurn: 11 };
+  }
+  renderVals() {
+    const EMPTY = '#111A22';
+    const s = this.state;
+    const cost = [0.92, 0.41, 1.85, 0.53, 0.66, 0.47, 0.72, 0.58, 0.61, 1.12, 2.31, 0.69, 1.74, 2.21];
+    const notes = {
+      3: 'Claude started a helper agent to explore the code.',
+      11: 'The cache had to be rebuilt after a new MCP tool loaded.',
+      13: 'A long answer: 9k tokens written.',
+      14: 'This turn so far, including the 3 failed calls.'
+    };
+    const costCols = cost.map((v, i) => {
+      const n = i + 1;
+      const col = n === 11 ? '#E5605E' : n === 3 ? '#B48CE0' : '#4CC2C2';
+      const cells = [];
+      for (let y = 0; y < 20; y++) {
+        const lvl = (19 - y + 0.5) * 0.12;
+        cells.push(lvl <= v ? col : EMPTY);
+      }
+      const on = s.costTurn === n;
+      return { n: String(n), cells, hl: on ? '#1C2833' : 'transparent', tickColor: on ? '#EEF3F8' : '#5D6B7D', hover: () => this.setState({ costTurn: n }) };
+    });
+    const ct = s.costTurn;
+    const costReadout = `Turn ${ct}${ct === 14 ? ' (now)' : ''} · $${cost[ct - 1].toFixed(2)}. ${notes[ct] || 'A normal turn.'}`;
+    const missWhy = {
+      4: 'An earlier message changed, so everything after it was rebuilt: 64k tokens.',
+      9: 'The effort level changed from high to max: 188k tokens rebuilt.',
+      11: 'Claude loaded a new MCP tool (mcp__linear__search), which changed the tool list: 112k tokens rebuilt, $0.70.'
+    };
+    const cacheTurns = Array.from({ length: 14 }, (_, i) => {
+      const n = i + 1;
+      const miss = Boolean(missWhy[n]);
+      return {
+        n: String(n),
+        c: n === 1 ? '#3A4654' : miss ? '#E5605E' : '#5FC77E',
+        outline: s.cacheTurn === n ? '2px solid #EEF3F8' : 'none',
+        hover: () => this.setState({ cacheTurn: n })
+      };
+    });
+    const k = s.cacheTurn;
+    const cacheReadout = `Turn ${k}: ` + (k === 1 ? 'the first turn writes the cache.' : missWhy[k] || 'the cache was reused.');
+    const ramp = ['#111A22', '#173840', '#1F5A60', '#2A8484', '#4CC2C2'];
+    const heatRows = [
+      ['Read', [6, 4, 2, 5, 3, 4, 3, 2, 4, 3, 2, 3, 3, 2]],
+      ['Bash', [1, 2, 0, 3, 2, 2, 4, 1, 3, 2, 3, 2, 3, 3]],
+      ['Edit', [0, 0, 0, 2, 3, 1, 2, 2, 1, 3, 0, 2, 2, 0]],
+      ['Grep', [4, 3, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 0]],
+      ['Agent', [0, 0, 2, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]],
+      ['MCP linear', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0]]
+    ];
+    const heat = heatRows.map(([name, v]) => ({
+      name,
+      total: String(v.reduce((a, b) => a + b, 0)),
+      cells: v.map((n, i) => (name === 'Bash' && i === 13) ? '#E5605E' : ramp[Math.min(4, Math.ceil(n * 4 / 6))])
+    }));
+    return {
+      costCols, costReadout, cacheTurns, cacheReadout, heat,
+      turnNums: Array.from({ length: 14 }, (_, i) => String(i + 1)),
+      legend: [
+        { el: 'Raster', what: 'cost bars, the cache strip and the heat map are one cell grid each' },
+        { el: 'hover', what: 'point at a turn: the line above the chart says what happened' },
+        { el: '$.ui.blit', what: 'repaints a chart each second without a render pass' },
+        { el: 'any terminal', what: 'coloured cells only, no graphics protocol needed' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POC 5: act dialog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+a{color:#4CC2C2;text-decoration:none}a:hover{color:#8FE3E3;text-decoration:underline}
+</style>
+</helmet>
+<div style="width: 1440px; height: 960px; box-sizing: border-box; padding: 20px; background: #0A0E12; display: flex; flex-direction: column; gap: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 19px; color: #D6DEE8">
+
+  <div style="height: 856px; position: relative; border: 1px solid #2A3644; border-radius: 10px; background: #0E1318; overflow: hidden">
+    <!-- session behind, dimmed -->
+    <div style="position: absolute; inset: 0; padding: 18px 26px; white-space: pre-wrap; color: #4A5664">
+      <div>&gt; open the PR for the contract bump and push the branch</div>
+      <div style="height: 19px"></div>
+      <div>⏺ Bash(gh pr view 24)</div>
+      <div>  ⎿  Error: no pull requests found for branch "prds-cc-2-1-332"</div>
+      <div>⏺ Bash(gh pr view --json url)</div>
+      <div>  ⎿  Error: no pull requests found for branch "prds-cc-2-1-332"</div>
+      <div>⏺ Bash(git push)</div>
+      <div>  ⎿  Error: ! [rejected] (non-fast-forward)</div>
+    </div>
+
+    <!-- the dialog pane -->
+    <div style="position: absolute; left: 70px; right: 70px; top: 120px; bottom: 70px; background: #0C1116; border: 1px solid #4CC2C2; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.6)">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #2A3644">
+        <span style="color: #4CC2C2; font-weight: 700">cctop · act</span>
+        <span style="color: #8696A8">4 open · Tab and ↑↓ walk · Esc closes · toasts wait</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #8696A8">esc ×</span>
+      </div>
+      <div style="display: flex; flex-grow: 1; min-height: 0">
+        <!-- list -->
+        <div style="width: 330px; flex: 0 0 330px; border-right: 1px solid #2A3644; padding: 10px 0; display: flex; flex-direction: column; gap: 2px">
+          <sc-for list="{{ items }}" as="it" hint-placeholder-count="4">
+            <button onClick="{{ it.pick }}" style="font: inherit; text-align: left; border: 0; cursor: pointer; padding: 8px 16px; display: flex; flex-direction: column; gap: 2px; background: {{ it.bg }}; color: #D6DEE8">
+              <span><span style="color: {{ it.color }}; font-weight: 700">{{ it.cls }}</span> <span style="color: #C3CDD9">{{ it.topic }}</span></span>
+              <span style="white-space: normal">{{ it.short }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <!-- detail -->
+        <div style="flex-grow: 1; min-width: 0; padding: 16px 22px; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+          <sc-if value="{{ isA09 }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size: 16px; line-height: 23px; font-weight: 700; color: #EEF3F8">You've approved gh pr view 7 times (1 waiting)</div>
+            <div style="color: #C3CDD9; white-space: normal">Claude stops and waits for you on every <span style="color: #EEF3F8">gh pr view</span>. A rule in <span style="color: #EEF3F8">permissions.allow</span> lets it run without asking. cctop never edits your settings: it shows the change, copies it, and opens the file.</div>
+            <div style="display: flex; flex-direction: column; gap: 0; border: 1px solid #2A3644; border-radius: 6px; padding: 8px 12px; background: #0A0F14; white-space: pre">
+              <div style="color: #8696A8">~/.claude/settings.json</div>
+              <div style="color: #8696A8">   "permissions": {</div>
+              <div style="color: #8696A8">     "allow": [</div>
+              <div style="color: #8696A8">       "Bash(cargo test:*)",</div>
+              <div style="color: #5FC77E; background: #10241A">+      "Bash(gh pr view:*)",</div>
+              <div style="color: #8696A8">       "Read(./**)"</div>
+            </div>
+            <div style="display: flex; gap: 22px; align-items: flex-end">
+              <div style="display: flex; flex-direction: column; gap: 4px">
+                <div style="color: #8696A8">waits per approval, this session</div>
+                <div style="display: flex; gap: 4px; align-items: flex-end; height: 46px">
+                  <sc-for list="{{ waits }}" as="w" hint-placeholder-count="7"><span style="width: 22px; height: {{ w.h }}; background: {{ w.c }}"></span></sc-for>
+                </div>
+              </div>
+              <div style="position: relative; display: flex; flex-direction: column; gap: 2px">
+                <span onMouseEnter="{{ showHover }}" onMouseLeave="{{ hideHover }}" style="border-bottom: 1px dotted #4CC2C2; color: #EEF3F8; cursor: help; align-self: flex-start">≈ 12 s per turn · 84 s so far</span>
+                <span style="color: #5D6B7D">hover the figure</span>
+                <sc-if value="{{ hover }}" hint-placeholder-val="{{ false }}">
+                  <div style="position: absolute; bottom: 44px; left: 0; width: 360px; background: #161D25; border: 1px solid #4A5A6C; border-radius: 6px; padding: 8px 10px; white-space: normal; color: #C3CDD9; font-size: 12.5px; line-height: 17px">
+                    <div style="color: #4CC2C2">permission_waits · hooks</div>
+                    <div>PermissionRequest → the call's PostToolUse, summed. 7 waits, 84 s; this turn's is still open.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto">
+              <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 3px 12px; font-weight: 700">1  Copy the rule</button>
+              <button style="font: inherit; background: transparent; color: #4CC2C2; border: 1px solid #4CC2C2; padding: 2px 12px">2  Open settings.json ↗</button>
+              <button style="font: inherit; background: transparent; color: #C3CDD9; border: 1px solid #4A5A6C; padding: 2px 12px">3  Fill /permissions</button>
+              <button style="font: inherit; background: transparent; color: #8696A8; border: 1px solid #2A3644; padding: 2px 12px">4  Snooze</button>
+            </div>
+            <div style="color: #5D6B7D">retires when "Bash(gh pr view:*)" shows up in permissions.allow</div>
+          </sc-if>
+
+          <sc-if value="{{ isA13 }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 16px; line-height: 23px; font-weight: 700; color: #EEF3F8">5h limit full in 1h50, before its reset at 2h10</div>
+            <div style="color: #C3CDD9; white-space: normal">At this pace you hit the 5-hour limit 20 minutes before it resets, and the session stalls. Sonnet roughly doubles the runway; <span style="color: #EEF3F8">/effort medium</span> trims output on top.</div>
+            <div style="display: flex; flex-direction: column; gap: 6px; white-space: pre">
+              <div><span style="color: #8696A8">Opus 5.5 now      </span><span style="color: #E2B04A">██████████████████████████████████</span><span style="color: #E5605E">▓▓▓▓</span>  full 1h50 · stall 20m</div>
+              <div><span style="color: #8696A8">/model sonnet     </span><span style="color: #5FC77E">████████████████████████████████████████</span>  lasts past ↻ 2h10</div>
+              <div><span style="color: #8696A8">                  </span><span style="color: #5D6B7D">now                                 ↻ reset</span></div>
+            </div>
+            <div style="border: 1px solid #3A3220; background: #18140C; border-radius: 6px; padding: 8px 12px; color: #E2B04A; white-space: normal">Trade-off: switching re-writes the cache once, 412k tokens ≈ $0.62. Switch now, while the turn is fresh, or right after /clear.</div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto">
+              <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 3px 12px; font-weight: 700">1  Fill /model sonnet</button>
+              <button style="font: inherit; background: transparent; color: #4CC2C2; border: 1px solid #4CC2C2; padding: 2px 12px">2  Fill /effort medium</button>
+              <button style="font: inherit; background: transparent; color: #C3CDD9; border: 1px solid #4A5A6C; padding: 2px 12px">3  Remind me at reset</button>
+              <button style="font: inherit; background: transparent; color: #8696A8; border: 1px solid #2A3644; padding: 2px 12px">4  Snooze</button>
+            </div>
+            <div style="color: #5D6B7D">fill puts the command in the prompt box; you press Enter</div>
+          </sc-if>
+
+          <sc-if value="{{ isA38 }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 16px; line-height: 23px; font-weight: 700; color: #EEF3F8">3 fails in a row: gh pr view ×2, git push</div>
+            <div style="color: #C3CDD9; white-space: normal">Claude is retrying without a fact it can't know. Stop the turn, then say what's missing. The draft below goes into the prompt box with the cursor at its end.</div>
+            <div style="border: 1px solid #2A3644; border-radius: 6px; padding: 8px 12px; background: #0A0F14; white-space: normal; color: #EEF3F8">The last 3 calls failed (gh pr view, git push). Stop retrying. What's missing: <span style="background: #D6DEE8; color: #0A0F14"> </span></div>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <div style="display: flex; gap: 8px"><span style="color: #E5605E">✕</span>Bash(gh pr view 24)<span style="color: #8696A8">· no pull requests found</span><span style="flex-grow: 1"></span><a href="#">t14 · call 3 ↗</a></div>
+              <div style="display: flex; gap: 8px"><span style="color: #E5605E">✕</span>Bash(gh pr view --json url)<span style="color: #8696A8">· same error</span><span style="flex-grow: 1"></span><a href="#">t14 · call 4 ↗</a></div>
+              <div style="display: flex; gap: 8px"><span style="color: #E5605E">✕</span>Bash(git push)<span style="color: #8696A8">· rejected, non-fast-forward</span><span style="flex-grow: 1"></span><a href="#">t14 · call 5 ↗</a></div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto">
+              <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 3px 12px; font-weight: 700">1  Stop the turn (Esc)</button>
+              <button style="font: inherit; background: transparent; color: #4CC2C2; border: 1px solid #4CC2C2; padding: 2px 12px">2  Fill the draft</button>
+              <button style="font: inherit; background: transparent; color: #8696A8; border: 1px solid #2A3644; padding: 2px 12px">3  Snooze 15m</button>
+            </div>
+            <div style="color: #5D6B7D">retires on a successful gh or git call</div>
+          </sc-if>
+
+          <sc-if value="{{ isA01 }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 16px; line-height: 23px; font-weight: 700; color: #EEF3F8">cache miss: tool list changed · 112k re-written · $0.70</div>
+            <div style="color: #C3CDD9; white-space: normal">At turn 11 an MCP server's tool loaded mid-session, so every cached token after the tool list was written again. Load what you need early, then hold.</div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+              <div style="border: 1px solid #2A3644; border-radius: 6px; padding: 8px 12px; white-space: pre; color: #8696A8"><div style="color: #C3CDD9">request t10 · 15 tools</div><div>Agent Bash Edit Glob Grep</div><div>Read Write WebFetch …</div></div>
+              <div style="border: 1px solid #5A2A2E; border-radius: 6px; padding: 8px 12px; white-space: pre; color: #8696A8"><div style="color: #C3CDD9">request t11 · 16 tools</div><div>Agent Bash Edit Glob Grep</div><div>Read Write WebFetch …</div><div style="color: #E5605E">+ mcp__linear__search</div></div>
+            </div>
+            <div style="color: #8696A8">located from the transcript's request lines (PRD 1), not guessed</div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto">
+              <button style="font: inherit; background: #4CC2C2; color: #0C1116; border: 0; padding: 3px 12px; font-weight: 700">1  Got it</button>
+              <button style="font: inherit; background: transparent; color: #C3CDD9; border: 1px solid #4A5A6C; padding: 2px 12px">2  Show all misses</button>
+              <button style="font: inherit; background: transparent; color: #8696A8; border: 1px solid #2A3644; padding: 2px 12px">3  Mute this rule</button>
+            </div>
+            <div style="color: #5D6B7D">a read-and-decide nudge: nothing to type</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 13.5px">
+    <sc-for list="{{ legend }}" as="g" hint-placeholder-count="5">
+      <div style="border: 1px solid #22303D; border-radius: 8px; padding: 8px 12px; color: #9AA7B6"><span style="font-family: 'JetBrains Mono', monospace; color: #4CC2C2">{{ g.el }}</span>  {{ g.what }}</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 'A09', hover: false };
+  }
+  renderVals() {
+    const sel = this.state.sel;
+    const list = [
+      { id: 'A38', cls: 'NOW', color: '#E5605E', topic: 'Claude is stuck retrying', short: '3 fails in a row: gh pr view ×2, git push' },
+      { id: 'A13', cls: 'NEXT', color: '#E2B04A', topic: 'usage limit', short: '5h limit full in 1h50, before its reset' },
+      { id: 'A09', cls: 'NEXT', color: '#E2B04A', topic: 'permissions', short: "You've approved gh pr view 7 times" },
+      { id: 'A01', cls: 'LATER', color: '#8696A8', topic: 'cache', short: 'cache miss: tool list changed · $0.70' }
+    ];
+    const waitS = [9, 14, 11, 16, 12, 10, 12];
+    return {
+      items: list.map((it) => ({ ...it, bg: it.id === sel ? '#18242E' : 'transparent', pick: () => this.setState({ sel: it.id }) })),
+      isA09: sel === 'A09', isA13: sel === 'A13', isA38: sel === 'A38', isA01: sel === 'A01',
+      waits: waitS.map((s, i) => ({ h: Math.round(s / 16 * 44) + 'px', c: i === 6 ? '#E2B04A' : '#4CC2C2' })),
+      hover: this.state.hover,
+      showHover: () => this.setState({ hover: true }),
+      hideHover: () => this.setState({ hover: false }),
+      legend: [
+        { el: '$.ui.open focus · closeOnEscape · holdToasts', what: 'the pane behaves as a dialog' },
+        { el: 'action kind', what: 'decides the buttons: key, slash, allow rule, read' },
+        { el: 'Code format=diff', what: 'the settings change, shown, never written' },
+        { el: 'hover card', what: 'a figure explains its formula and source' },
+        { el: 'ui.notify', what: '"Remind me at reset" schedules one, untilBack' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

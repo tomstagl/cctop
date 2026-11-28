@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cctop mod POCs: index</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E12}
+a{color:#4CC2C2;text-decoration:none}a:hover{color:#8FE3E3}
+</style>
+</helmet>
+<div style="width: 1440px; height: 960px; box-sizing: border-box; padding: 56px 64px; background: #0A0E12; color: #D6DEE8; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 36px">
+  <header style="display: flex; flex-direction: column; gap: 10px">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.08em; color: #4CC2C2">CCTOP · CLAUDE CODE 2.1.332 MODS</div>
+    <h1 style="margin: 0; font-size: 44px; font-weight: 700; letter-spacing: -0.01em; color: #EEF3F8">The pane, redrawn with what mods can draw now</h1>
+    <p style="margin: 0; max-width: 980px; font-size: 18px; line-height: 1.5; color: #9AA7B6">Five proofs of concept, one session. Each POC answers one question: how much room advice gets, which chart elements carry the numbers, and where cctop speaks up when the pane is closed.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 40px; flex-grow: 1; min-height: 0">
+    <section style="background: #0E1318; border: 1px solid #2A3644; border-radius: 10px; padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.55">
+      <div style="font-family: Inter, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: #8696A8">THE MOMENT EVERY POC DRAWS</div>
+      <div style="color: #EEF3F8; font-size: 15px; font-weight: 600">cctop · main · Opus 5.5 · turn 14 · 41m</div>
+      <div style="display: flex; flex-direction: column; gap: 6px; color: #C3CDD9">
+        <div><span style="color: #8696A8">context </span> 412k / 1M · 41 % · +19k/turn</div>
+        <div><span style="color: #8696A8">         </span> compacts in ~29 turns</div>
+        <div><span style="color: #8696A8">cache   </span> warm · cold in 59m · hit 94 %</div>
+        <div><span style="color: #8696A8">         </span> last miss t11: +mcp__linear__search</div>
+        <div><span style="color: #8696A8">limits  </span> 5h 62 % ↻2h10 · 7d 31 %</div>
+        <div><span style="color: #8696A8">         </span> pace: 5h full in 1h50 <span style="color: #E2B04A">(before reset)</span></div>
+        <div><span style="color: #8696A8">rework  </span> <span style="color: #E5605E">3 fails in a row</span> this turn</div>
+        <div><span style="color: #8696A8">spend   </span> $14.82 · $0.36/min</div>
+      </div>
+      <div style="border-top: 1px solid #2A3644; padding-top: 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="font-family: Inter, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: #8696A8">THE COACH'S QUEUE (REAL RULES)</div>
+        <div><span style="color: #E5605E; font-weight: 700">NOW  </span>A38 failure-cascade</div>
+        <div><span style="color: #E2B04A; font-weight: 700">NEXT </span>A13 rate-limit</div>
+        <div><span style="color: #E2B04A; font-weight: 700">NEXT </span>A09 permission-wait</div>
+        <div><span style="color: #8696A8; font-weight: 700">LATER</span> A01 cache-miss</div>
+      </div>
+      <div style="margin-top: auto; font-family: Inter, sans-serif; font-size: 12.5px; line-height: 1.5; color: #8696A8">Rule ids, headlines and action kinds are the binary's (<span style="font-family: 'JetBrains Mono', monospace">src/advisor/rules</span>); the figures are one invented, internally consistent session.</div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+      <sc-for list="{{ pocs }}" as="p" hint-placeholder-count="5">
+        <a href="{{ p.href }}" style="display: grid; grid-template-columns: 64px minmax(0, 1fr) 300px; gap: 20px; align-items: center; background: #0E1318; border: 1px solid #2A3644; border-radius: 10px; padding: 18px 22px; color: #D6DEE8">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; color: #4CC2C2">{{ p.n }}</div>
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <div style="font-size: 19px; font-weight: 600; color: #EEF3F8">{{ p.name }}</div>
+            <div style="font-size: 14.5px; line-height: 1.45; color: #9AA7B6">{{ p.idea }}</div>
+          </div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; color: #8FA0B3; white-space: pre-line">{{ p.elements }}</div>
+        </a>
+      </sc-for>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 6px">
+        <div style="border: 1px solid #22303D; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.45; color: #9AA7B6"><span style="color: #EEF3F8; font-weight: 600">Read-only holds.</span> Every action prepares: it fills the prompt, copies a rule or opens a file. You press Enter.</div>
+        <div style="border: 1px solid #22303D; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.45; color: #9AA7B6"><span style="color: #EEF3F8; font-weight: 600">One state.</span> Full advice text comes from <span style="font-family: 'JetBrains Mono', monospace">cctop query</span>, as today; only the 52-cell cut goes.</div>
+        <div style="border: 1px solid #22303D; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.45; color: #9AA7B6"><span style="color: #EEF3F8; font-weight: 600">Falls back.</span> Image and hover need a capable surface; each POC shows what plain terminals draw instead.</div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      pocs: [
+        { n: '1', href: 'Poc1Advice.dc.html', name: 'Advice first', idea: 'The nudge owns the top of the pane: full text as Markdown, the evidence as links, one primary button per action kind. Lights shrink to a strip.', elements: 'Markdown · Button primary\nProgress · hover · $.state' },
+        { n: '2', href: 'Poc2Raster.dc.html', name: 'Instrument', idea: 'Every number becomes a chart made of cells: context area, cost per turn, cache countdown, a tool heat map. Works in any terminal.', elements: 'Raster · Progress\noverflowX scroll · maxLines' },
+        { n: '3', href: 'Poc3Image.dc.html', name: 'Pixel charts', idea: 'Real charts at pixel resolution where the terminal speaks a graphics protocol: composition, cost with forecast, cache misses on a timeline.', elements: 'Image (kitty · Ghostty · iTerm2)\n$.ui.blit · alt fallback' },
+        { n: '4', href: 'Poc4Surfaces.dc.html', name: 'Beyond the pane', idea: 'cctop speaks where you look: a band row above the prompt, a cell beside it, a card placed in the transcript at the turn end.', elements: 'AbovePrompt · BesidePrompt\nPlaced · StatusLine' },
+        { n: '5', href: 'Poc5Dialog.dc.html', name: 'Act dialog', idea: 'Press a nudge and a focused dialog walks the action: what changes, the exact text, where it goes, and the cost of not doing it.', elements: 'Pane as dialog · Code diff\nhover card · ui.notify' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
