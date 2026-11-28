@@ -19,8 +19,9 @@ git tag v0.1.0 && git push origin v0.1.0
    pushes it to the tap repository — only when the repository **variable**
    `HOMEBREW_TAP` (e.g. `tomstagl/homebrew-tap`) and the **secret**
    `HOMEBREW_TAP_TOKEN` (PAT with `contents: write` on the tap) are set;
-5. runs `cargo publish --dry-run --locked` (the real publish is manual:
-   `cargo publish` with a crates.io token).
+5. runs `cargo publish --workspace --dry-run --locked` (the real publish is
+   manual: `cargo publish --workspace` with a crates.io token, which publishes
+   `cctop-charts` before `cctop`, in dependency order).
 
 ## Homebrew tap
 
@@ -37,8 +38,10 @@ and prints the `claude plugin add …` line as a caveat.
 ## cargo
 
 `Cargo.toml` carries the crates.io metadata (`description`, `license`,
-`repository`, `keywords`, `categories`, `readme`). `cargo publish --dry-run`
-passes locally and in CI. Package contents are trimmed by the `exclude` list
+`repository`, `keywords`, `categories`, `readme`). The repository is a
+workspace: `cctop` depends on the chart renderer `crates/cctop-charts`, which
+is published alongside it, so every publish step names `--workspace`
+(Cargo ≥ 1.90). `cargo publish --workspace --dry-run` passes locally and in CI. Package contents are trimmed by the `exclude` list
 in `Cargo.toml` (fixtures, brand assets, planning files stay out of the crate).
 
 ## Website (GitHub Pages)

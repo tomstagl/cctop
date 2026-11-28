@@ -94,7 +94,7 @@ reserves `/cctop` for the plugin's own skill (`/cctop:cctop`) and refuses
 question 1 of `tasks/prd-cctop-pane.md`: the native command is `cctop-pane`,
 and `/cctop` keeps resolving to the skill, which is the fallback path.
 
-Last automated run: 2026-09-29 (the v0.9.1 release: pricing only, the module unchanged), Claude Code 2.1.284, plugin 0.10.0, by the agent through `scripts/check-contract.sh` (no model call): all ten checks ok — load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` or `cctop: … failed` line, marker written, contract surface unchanged, validator and version pins green. Earlier: 2026-09-29 (the daily `contract` job had been red since 2.1.283; PR #19's runs showed the same), Claude Code 2.1.284 with the contract regenerated against it (`$.process.spawn`, `isStdoutTruncated` / `isStderrTruncated` on `$.process.run`'s result, `startedAt` on `SessionUsage`, `$.ui.open` resolving `{ isPlaced }` — additive; `npm run typecheck` named one call site, the poller's engine facade, which took the whole of `$.process` and now takes `run` alone, and the fake engine's results and usage), `TESTED_WITH` and `READ_FROM` 2.1.284, every probed harness fact unchanged (the output-reserve probe's pattern widened: the lookup now takes `e.model`) — released as plugin 0.10.0 / cctop v0.9.0 (release: v0.9.0), by the agent through `scripts/check-contract.sh` (no model call): load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.10.0"`, `testedWith: "2.1.284"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-20 (the daily `contract` job went red when npm's latest reached 2.1.278; PR #10's runs showed the same), Claude Code 2.1.278 with the contract regenerated against it (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next`, four events; `$.fs.read` overloaded for bytes and `$.prompt.fill`'s result widened — additive; `npm run typecheck` named the fake engine's `read` and `fill` and no call site of the pane; the load line now reads `hooks module cctop@inline loaded (worker, environment 1, tier user)`, which the check accepts since this run), `TESTED_WITH` and `READ_FROM` 2.1.278, every probed harness fact unchanged — released as plugin 0.9.0 / cctop v0.8.0 (release: v0.8.0), by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.9.0 (hooks contract 2.1.278) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.9.0"`, `testedWith: "2.1.278"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-17 (the v0.7.0 release, issue #4), Claude Code 2.1.274 with the contract regenerated against it (`$.agent.register`, `position: "absolute"` on `Box`, a `Markdown` element — additive; `npm run typecheck` names no call site; the first run of `make check-contract` on this machine caught the drift, 32 declarations named), the module released as plugin 0.8.0, by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.8.0"`, `testedWith: "2.1.274"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-16 (the v0.6.0 release, Console — schema 2), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.7.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 12 ms apart. Earlier: 2026-09-16 (the v0.5.0 release), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.6.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 25 ms apart. Earlier: 2026-09-16, Claude Code 2.1.273 with the contract regenerated against it (a `vscode` render surface added, nothing the pane calls changed), the module of plugin 0.5.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 15 ms apart. Earlier: 2026-09-15, Claude Code 2.1.272, plugin 0.4.1 (issue #3), by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, and `~/.cctop/pane/<session>.json` written with `loaded: true`, `open: false` and ISO timestamps (`loadedAt` and `heartbeatAt` 15 ms apart: two clock round trips) for a session whose pane was never opened — the case of issue #3's comment. Earlier: 2026-09-12, Claude Code 2.1.269, the same result.
+Last automated run: 2026-11-28 (the v0.10.0 release: PRDs 0–7 and the mod pane), Claude Code 2.1.332, plugin 0.12.0, by the agent through `scripts/check-contract.sh` (no model call): all ten checks ok — load line present, `/cctop-pane listed`, `cctop: plugin 0.12.0 (hooks contract 2.1.332) loaded; self-check ok`, nothing refused, no `hook failed` or `cctop: … failed` line, marker written, contract surface unchanged, validator and version pins green. Earlier: 2026-09-29 (the v0.9.1 release: pricing only, the module unchanged), Claude Code 2.1.284, plugin 0.10.0, by the agent through `scripts/check-contract.sh` (no model call): all ten checks ok — load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` or `cctop: … failed` line, marker written, contract surface unchanged, validator and version pins green. Earlier: 2026-09-29 (the daily `contract` job had been red since 2.1.283; PR #19's runs showed the same), Claude Code 2.1.284 with the contract regenerated against it (`$.process.spawn`, `isStdoutTruncated` / `isStderrTruncated` on `$.process.run`'s result, `startedAt` on `SessionUsage`, `$.ui.open` resolving `{ isPlaced }` — additive; `npm run typecheck` named one call site, the poller's engine facade, which took the whole of `$.process` and now takes `run` alone, and the fake engine's results and usage), `TESTED_WITH` and `READ_FROM` 2.1.284, every probed harness fact unchanged (the output-reserve probe's pattern widened: the lookup now takes `e.model`) — released as plugin 0.10.0 / cctop v0.9.0 (release: v0.9.0), by the agent through `scripts/check-contract.sh` (no model call): load line present, `/cctop-pane listed`, `cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.10.0"`, `testedWith: "2.1.284"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-20 (the daily `contract` job went red when npm's latest reached 2.1.278; PR #10's runs showed the same), Claude Code 2.1.278 with the contract regenerated against it (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next`, four events; `$.fs.read` overloaded for bytes and `$.prompt.fill`'s result widened — additive; `npm run typecheck` named the fake engine's `read` and `fill` and no call site of the pane; the load line now reads `hooks module cctop@inline loaded (worker, environment 1, tier user)`, which the check accepts since this run), `TESTED_WITH` and `READ_FROM` 2.1.278, every probed harness fact unchanged — released as plugin 0.9.0 / cctop v0.8.0 (release: v0.8.0), by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.9.0 (hooks contract 2.1.278) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.9.0"`, `testedWith: "2.1.278"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-17 (the v0.7.0 release, issue #4), Claude Code 2.1.274 with the contract regenerated against it (`$.agent.register`, `position: "absolute"` on `Box`, a `Markdown` element — additive; `npm run typecheck` names no call site; the first run of `make check-contract` on this machine caught the drift, 32 declarations named), the module released as plugin 0.8.0, by the agent through `scripts/check-contract.sh` (no model call): exit 0, load line present, `/cctop-pane listed`, `cctop: plugin 0.8.0 (hooks contract 2.1.274) loaded; self-check ok`, nothing refused, no `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `version: "0.8.0"`, `testedWith: "2.1.274"`, `selfCheck: "ok"`; contract surface unchanged; validator and version pins green. Earlier: 2026-09-16 (the v0.6.0 release, Console — schema 2), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.7.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 12 ms apart. Earlier: 2026-09-16 (the v0.5.0 release), Claude Code 2.1.273, the contract unchanged (`make check-types` matches it), the module released as plugin 0.6.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 25 ms apart. Earlier: 2026-09-16, Claude Code 2.1.273 with the contract regenerated against it (a `vscode` render surface added, nothing the pane calls changed), the module of plugin 0.5.0, by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, marker written with `loaded: true`, `open: false`, `loadedAt` and `heartbeatAt` 15 ms apart. Earlier: 2026-09-15, Claude Code 2.1.272, plugin 0.4.1 (issue #3), by the agent: exit 0, load line present, `/cctop-pane listed`, no `refused` or `hook failed` line, no `cctop: … failed` line, and `~/.cctop/pane/<session>.json` written with `loaded: true`, `open: false` and ISO timestamps (`loadedAt` and `heartbeatAt` 15 ms apart: two clock round trips) for a session whose pane was never opened — the case of issue #3's comment. Earlier: 2026-09-12, Claude Code 2.1.269, the same result.
 Claude Code version:
 Result: pending
 
@@ -755,6 +755,152 @@ hooks are off or before its module is accepted.
     `user_prompt_length`: the PRD's allowlist must drop those. `llm_request`
     carries `query_source_safe` (not `query_source`), `tool` carries
     `tool_name_safe`, `bash_argv0` and `bash_command_class`.
+    Claude Code version:
+    Result: pending
+
+47. **Ghostty draws the overview's charts as pictures** (the mod-pane PRD,
+    US-007; items 50–53 are the later tasks').
+    Setup: Ghostty with `font-family = JetBrains Mono`, `font-size = 13`,
+    `adjust-cell-height = 23%`; Claude Code in `/tui fullscreen`, the pane
+    docked 100 or more columns wide on the Overview; press cell 1 (or `1`).
+    Expected: the context chart across the width, then spend beside cost
+    per turn and the cache beside the tool calls, each chart smooth (a
+    picture, not half blocks) and sitting on whole cells: the axis labels,
+    titles and verdicts line up with the picture's edges and no letter is
+    inside a picture. `cctop pane status` prints `charts drawn as
+    pictures (this terminal)`. While a turn runs, a chart that changes swaps in place
+    without the pane flickering, and resizing the pane redraws the charts
+    at the new width.
+    Claude Code version:
+    Result: pending
+
+48. **Terminal.app draws the same overview in cells** (US-007).
+    Setup: Terminal.app with SF Mono Regular 13 pt, character and line
+    spacing 1, antialias on, bright-bold off; the pane docked on the
+    Overview, body 1 open, as in item 47.
+    Expected: the same layout as item 47 with every chart in half blocks
+    (two pixels a row, POC 8's colours), the same labels and verdicts in
+    the same places; `cctop pane status` prints `charts drawn as cells
+    (this terminal)`. Below 60 body columns each chart is one row of cells. The
+    rows of each chart match what `cctop run` shows at the same width.
+    Claude Code version:
+    Result: pending
+
+49. **tmux with and without passthrough** (US-006/US-007).
+    Setup: Claude Code inside tmux 3.3 or later in Ghostty, first with
+    `set -g allow-passthrough on` and `set -g focus-events on`, then with
+    either off (restart Claude Code between the two); body 1 open.
+    Expected: with both on the charts are pictures, as in item 47. With
+    either off the first picture is probed, refused, and the overview
+    switches to cells within a second; `cctop pane status` warns `charts
+    drawn as cells (a probe picture the terminal would not draw): tmux
+    holds pictures back` with the `allow-passthrough` / `focus-events` fix.
+    Claude Code version:
+    Result: pending
+
+50. **The coach card's fix prompt: fill, then Enter** (US-008).
+    Setup: the pane docked on the Coach view during a session where a
+    nudge with a fix prompt holds the slot (a failing retry loop gives
+    A38, three foreground builds of a minute A10); also one whose
+    actions are an allow rule (approve the same `gh` command three times:
+    A09) and one with a key step (A38 or A36).
+    Expected: the NOW card shows the plain name, the age and the dim rule
+    id, the headline, the body and the evidence wrapped, nothing cut
+    mid-word, also with the pane narrowed to 59 columns. With the prompt
+    box empty, clicking any line of the fix-prompt card puts the prompt in
+    the box and nothing is sent: the card then says `It's in your prompt
+    box. Nothing has been sent`, and the turn starts only when you press
+    Enter. The line goes with the turn, or within a few seconds once you
+    empty the box yourself. With a draft in the box (type a few words
+    first) the press fills nothing: the draft stays exactly as typed, a
+    toast says `cctop: Your draft is kept — clear the prompt box, then
+    press again`, and the card does not change. Under a dialog the fill is
+    refused with the toast `the prompt box is busy`. A key-kind card shows
+    `1  Press Esc to stop the turn` as text before its Buttons: there is
+    no stop Button, and Esc itself stops the turn. The NOW card's Buttons
+    keep their digits (1, 2, …) across polls; "Up next" Buttons have none.
+    An allow rule's `Copy the rule` puts the rule on the clipboard (paste
+    it somewhere to check) and the toast names the project's
+    `.claude/settings.local.json`; `Open settings.local.json` opens that
+    file in your editor without changing it (`git diff` stays clean; a
+    missing file is reported, not created); `Put /permissions in the box`
+    fills `/permissions` (into an empty box only). A setting opens
+    `~/.claude/settings.json`; with HOME unset the toast names the file to
+    open by hand. A tip's `Got it` silences it for the session. An "Up
+    next" row and each light open in place on a click and close on a
+    second; the context light shows what fills the window with its age
+    (`per Claude Code, 12s ago` once a turn has written the spool) and the
+    residency rows.
+    Claude Code version:
+    Result: pending
+
+51. **The act dialog: the Esc hint first, and Esc stops the turn** (US-009).
+    Setup: the pane docked on the Coach view during a session where a
+    key-kind nudge holds the slot (a failing retry loop gives A38). Press
+    `a` on the NOW card (or click its headline).
+    Expected: the dialog `cctop-act` opens with the keyboard. The detail
+    on the right starts with `1  Press Esc to stop the turn`, before the
+    headline and body, and there is no Button that stops a turn (cctop
+    never calls `$.turn.abort`). Record what the first Esc does while a
+    turn runs (the dialog's `closeOnEscape` should hand the keys back and
+    close it; the dialog says so) and that a second Esc at the prompt
+    stops the turn and Claude Code writes its own interrupt marker
+    (`[Request interrupted by user]`) in the transcript.
+    Claude Code version:
+    Result: pending
+
+52. **The act dialog's keys, detail and buttons** (US-009, US-011 PRD 6).
+    Setup: as item 51, with two items (a NOW nudge and an "Up next" one:
+    an allow rule from approving the same `gh` command three times is
+    one, a setting from a slow hook another), and a running subagent for
+    the agents-key nudge.
+    Expected: the list is on the left (the detail stacks below under 72
+    body columns), Tab and the arrow keys walk the list and the Buttons,
+    Enter presses one, Esc closes. Toasts raised while the dialog is
+    open wait for it to close (`holdToasts`); the outcome of a copy or an
+    open is drawn in the dialog instead. An allow rule shows
+    `.claude/settings.local.json` as a diff (`+` line green) and the
+    rule; `Copy the rule` copies it, `Open settings.local.json` opens the
+    file without changing it (`git diff` stays clean). A fill (the exact
+    text, or its Button) closes the dialog and drafts into an empty
+    prompt box without sending; with a draft in the box the draft is kept
+    and the toast says so. The digit keys 1, 2, … press the numbered
+    Buttons. On the agents-key item, `Jump to agent <type>` puts the
+    agent's transcript in the main view (the dialog closes first) and
+    `back to main` returns. Pressing `a` again while open retitles it, no
+    second dialog.
+    Claude Code version:
+    Result: pending
+
+53. **Placed rows scroll with the conversation and are gone after `--resume`** (US-010).
+    Setup: the pane open in `/tui fullscreen` with a NOW nudge firing
+    (a failing retry loop gives A38) and a session where a located cache
+    miss happens (a new MCP tool loaded mid-session). Scroll the
+    transcript up and down, then quit and `claude --resume` the session.
+    Expected: at the turn end a bordered `cctop` card with the NOW
+    headline, one line of body and two Buttons (the first action and
+    Snooze, doing what the coach card's do) stands in the transcript, and
+    a located miss adds one dim row naming the cause and the tokens
+    re-written. Both scroll with the conversation, `onScreen` following
+    the viewport. Once the nudge is snoozed or gone the card reads as one
+    dim "no longer current" line. Nothing is written to the transcript
+    file (`git diff`-style: the `.jsonl` is unchanged), the model never
+    mentions the rows, and after `--resume` none comes back. Record
+    whether a compaction removes them.
+    Claude Code version:
+    Result: pending
+
+54. **Hover readouts on the per-turn charts** (US-007).
+    Setup: as item 47 or 48, body 1 open, a session with five or more
+    turns.
+    Expected: moving the pointer over a turn's column of cost per turn,
+    the cache strip or the tool-call heat map shows that turn's readout in
+    the row under the chart (`Turn 4 · $9.26. A costly turn …`), and the
+    latest turn's readout comes back when the pointer leaves. Clicking a
+    turn number under the chart pins that turn's readout, also in a
+    terminal that reports no pointer movement. Record whether the hover
+    areas, drawn over the picture, take the pointer in Ghostty and in
+    Terminal.app.
     Claude Code version:
     Result: pending
 
