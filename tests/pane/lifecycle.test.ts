@@ -61,7 +61,7 @@ function boot(opts: { binary?: boolean; store?: Record<string, unknown>; isInter
   const render = (columns = 80) => dispatch<RenderElement>('ui.render', paneRender('cctop', columns));
   const invalidates = () => $.ui.invalidates['ui.render'] ?? 0;
   const marker = () => JSON.parse($.fs.files.get(MARKER) ?? 'null') as Record<string, unknown> | null;
-  const queries = () => $.process.calls.filter((argv) => argv[1] === 'query' && argv[2] !== '--help');
+  const queries = () => $.process.calls.filter((argv) => argv[1] === 'query' && argv[2] !== '--help' && argv[2] !== 'config');
   return { $, dispatch, registrations, start, command, close, turnStart, turnComplete, compact, render, invalidates, marker, queries };
 }
 
@@ -226,6 +226,8 @@ function expectedMarker(rest: Record<string, unknown>): Record<string, unknown> 
     placement: 'dock',
     // What the fake engine's `$.agent.limits()` answers.
     facts: { agentLimits: { concurrent: 20, depth: 3, isBackgroundEnabled: true } },
+    // HOME only in the fake environment: no terminal named, the wasm compiled.
+    charts: { mode: 'image', why: 'unknown', wasm: 'ok' },
     ...rest,
   };
 }

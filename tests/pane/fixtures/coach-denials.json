@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far ≈$19.26 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "720k ▇▇▇▇▇▇▇▁▁▁ 72% · re-reads 720k/call",
@@ -75,10 +76,24 @@
   },
   "model": "claude-opus-5",
   "next": {
+    "actions": [
+      {
+        "kind": "slash",
+        "label": "Put /compact in the box",
+        "payload": "/compact "
+      }
+    ],
+    "body": "At 720k tokens every call re-reads the whole context: about $0.37 a call and $5.61 a turn at this session's 15 calls per turn, against $0.96 a turn at 100k. The next 30 calls cost about $11.2. At the next clean stop: /compact with a focus, or a hand-off note and /clear, brings it back down.",
     "class": "NEXT",
+    "evidence": [
+      "15 calls per turn on this session · next 30 calls ≈$11"
+    ],
     "family": "context-reset",
+    "fix_prompt": null,
+    "foot": "goes away after a /compact or /clear",
     "headline": "ctx 720k → ≈$.37/call, ≈$5.6/turn (was ≈$.96)",
     "id": "A23",
+    "name": "The context is getting expensive",
     "promotes": "next-row only",
     "row": "next     context-reset → next-row only · ctx 720k →…"
   },
@@ -87,14 +102,29 @@
     "acting": false,
     "action_kind": "prompt",
     "action_text": "You can't run `rm` here (it's denied by my settings). Use another way or tell me what you need.",
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "You can't run `rm` here (it's denied by my settings). Use another way or tell me what you need."
+      }
+    ],
+    "body": "rm is denied by a permissions.deny rule in your settings, so Claude cannot run it however it tries. Tell it the alternative, or what you need instead.",
     "class": "NOW",
-    "evidence": "  NOW · fired at call 6 · +4 queued (n)",
+    "evidence": [
+      "a permissions.deny rule in settings"
+    ],
     "explain": "Auto mode blocks a command shape by a classifier; a second block of the same shape within a turn (or three turns) means the model will keep trying variants, and three blocks in a row pause auto mode. An allow rule — Claude Code's own suggestion when it made one, else Tool(argv0 subcommand:*) — lets the shape through; a bare Bash rule allows everything and is never suggested. A settings deny rule is different: the model cannot run it, tell it the alternative.",
     "family": "denial-streak",
     "fired_at_ms": 1789397202074,
+    "fix_prompt": "You can't run `rm` here (it's denied by my settings). Use another way or tell me what you need.",
+    "foot": "goes away at the end of the turn",
+    "headline": "rm is denied by your rules",
     "id": "A45",
     "line1": "▸ rm is denied by your rules",
     "line2": "  tell Claude the alternative — it cannot run this",
+    "line3": "  NOW · fired at call 6 · +4 queued (n)",
+    "name": "A command keeps being blocked",
     "queued": 4,
     "retires_on": "turn end",
     "saving": "avoids a hard stop",
@@ -104,7 +134,7 @@
   "queued": 4,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-b",
   "session_mode": "interactive",
   "snoozed": [],

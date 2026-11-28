@@ -229,15 +229,18 @@ test('turn.complete records the context size for the sparkline, capped at HISTOR
   for (let i = 0; i < HISTORY_TURNS + 5; i++) turn(3000 + i);
   assert.equal(model.contextHistory.length, HISTORY_TURNS);
   assert.equal(model.contextHistory.at(-1), 3000 + HISTORY_TURNS + 4);
-  // Console's context body is the object's (the sparkline of the engine's
-  // history was the Overview's own block, which is gone with the tiles);
-  // the history still feeds the engine-side usage rows.
+  // Console's context body is the overview object's charts (the sparkline of
+  // the engine's history was the Overview's own block, which is gone with
+  // the tiles); the history still feeds the engine-side usage rows.
   const withSummary = reduce(model, { type: 'query', verb: 'summary', data: fixture('summary') });
   const withDashboard = reduce(withSummary, { type: 'query', verb: 'dashboard', data: fixture('dashboard') });
   const opened = reduce(withDashboard, { type: 'overview.body', id: 'context' });
-  const lines = renderToText(renderOverview({ ...opened, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
-  assert.ok(lines.some((r) => r.startsWith('─── context ')), JSON.stringify(lines));
-  assert.ok(lines.some((r) => /^  prefix\s+\S+\s+[▇▆▁]+/.test(r)), JSON.stringify(lines));
+  const waiting = renderToText(renderOverview({ ...opened, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
+  assert.ok(waiting.some((r) => r.startsWith('─── context ')), JSON.stringify(waiting));
+  assert.ok(waiting.includes(' waiting for cctop query overview…'), JSON.stringify(waiting));
+  const drawn = reduce(opened, { type: 'query', verb: 'overview', data: fixture('overview-b') });
+  const lines = renderToText(renderOverview({ ...drawn, binary: 'present' }, fakeElements(new Map()), 80, 'dock', T0), 80);
+  assert.ok(lines.some((r) => r.startsWith(' Context window  142k of 1M')), JSON.stringify(lines));
   assert.equal(reduce(opened, { type: 'overview.body', id: 'context' }), opened, 'the same body is a no-op');
 });
 
@@ -407,4 +410,31 @@ test('turn.stop ends a running turn with no duration; on an idle pane it changes
   assert.equal(stopped.turn.lastDurationMs, 1000, 'the last completed turn keeps its duration: a Stop adds none');
   assert.equal(stopped.turn.lastReason, 'answer');
   assert.equal(reduce(done, { type: 'turn.stop', at: T0 + 5000 }), done, 'no turn running: no state change, no negative duration');
+});
+
+test('the coach view opens lights and "Up next" rows in place and remembers a fill until the next turn', () => {
+  let m = run([{ type: 'session.start', at: T0 }]);
+  assert.equal(m.coachLight, null, 'the highest light until one is pressed');
+  m = reduce(m, { type: 'coach.light', light: 'cache' });
+  assert.equal(m.coachLight, 'cache');
+  m = reduce(m, { type: 'coach.light', light: 'none' });
+  assert.equal(m.coachLight, 'none', 'every light closed');
+  assert.equal(reduce(m, { type: 'coach.light', light: 'none' }), m, 'no change, the same model');
+  // An "Up next" row toggles: open, then closed by a second press; another row takes its place.
+  m = reduce(m, { type: 'coach.next', id: 'A36' });
+  assert.equal(m.coachNext, 'A36');
+  assert.equal(reduce(m, { type: 'coach.next', id: 'A36' }).coachNext, null);
+  m = reduce(m, { type: 'coach.next', id: 'A23' });
+  assert.equal(m.coachNext, 'A23');
+  // A fill that took: kept for the card's line, gone with the next turn.
+  m = reduce(m, { type: 'coach.filled', text: '/compact ' });
+  assert.equal(m.coachFilled, '/compact ');
+  const next = reduce(m, { type: 'turn.start', at: T0 + 1000 });
+  assert.equal(next.coachFilled, null);
+  assert.equal(next.coachNext, 'A23', 'the open row stays');
+  // `/clear` rotated the session: the old nudges' state goes.
+  const a = reduce(m, { type: 'session.id', id: 's1' });
+  const rotated = reduce(a, { type: 'session.id', id: 's2' });
+  assert.equal(rotated.coachNext, null);
+  assert.equal(rotated.coachFilled, null);
 });

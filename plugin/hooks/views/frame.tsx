@@ -150,15 +150,26 @@ export type Frame = {
   /** Drawn after the title, `─ summary`, as the TUI's panel summaries. */
   summary?: string;
   /** Rows inside the frame; each is fitted to the inner width. A `key` names its metric. */
-  rows: { line: Line; key?: string; press?: Press }[];
+  rows: { line: Line; key?: string; press?: Press; buttons?: FrameButton[] }[];
   /** The whole frame's width in columns, borders included. */
   width: number;
   /** Accent-coloured border, as the TUI draws the focused panel. */
   focused?: boolean;
 };
 
-/** A frame row drawn as one plain Button (its text, dim) between the borders, when the frame has a Button to draw with. */
-export type Press = { key: string; onPress: () => void };
+/** A frame row drawn as one plain Button (its text, dim unless `dimColor` is false) between the borders, when the frame has a Button to draw with. */
+export type Press = { key: string; onPress: () => void; dimColor?: boolean };
+
+/** One of a row of plain Buttons between a frame's borders: drawn `hotkey: label`, or the label alone. */
+export type FrameButton = { key: string; label: string; hotkey?: string; onPress: () => void };
+
+/** Two cells between the Buttons of a frame row. */
+export const BUTTON_GAP = 2;
+
+/** Columns a plain Button takes: `1: label`, or the label alone (the engine's plain form, d.ts ButtonProps.plain). */
+export function buttonWidth(b: Pick<FrameButton, 'label' | 'hotkey'>): number {
+  return width(b.hotkey === undefined ? b.label : `${b.hotkey}: ${b.label}`);
+}
 
 /** The elements a frame draws with: Box and Text, and Button for the rows that press. */
 export type FrameElements = ViewElements & Partial<Pick<ElementTable<'terminal'>, 'Button'>>;
@@ -190,13 +201,14 @@ export function frame(f: Frame, el: FrameElements): RenderElement {
       : [...fit(head, w - 1), seg('╮', border)];
   const bottom: Line = [seg('╰', border), seg(H.repeat(w - 2), border), seg('╯', border)];
   const rows = f.rows.map((r) => {
+    if (r.buttons !== undefined && r.buttons.length > 0 && Button !== undefined) return buttonRow(r.buttons, inner, border, el, Button);
     const cells = fit(r.line, inner);
     if (r.press === undefined || Button === undefined) return textRow([seg('│ ', border), ...cells, seg(' │', border)], el, r.key);
     const press = r.press;
     return (
       <Box flexDirection="row">
         {textRow([seg('│ ', border)], el)}
-        <Button key={press.key} label={cells.map((s) => s.text).join('')} plain dimColor onPress={press.onPress} />
+        <Button key={press.key} label={cells.map((s) => s.text).join('')} plain dimColor={press.dimColor ?? true} onPress={press.onPress} />
         {textRow([seg(' │', border)], el)}
       </Box>
     );
@@ -208,6 +220,49 @@ export function frame(f: Frame, el: FrameElements): RenderElement {
       {textRow(bottom, el)}
     </Box>
   );
+}
+
+// A row of plain Buttons between the borders, BUTTON_GAP apart, padded to
+// the inner width. The caller packs a row to fit; a Button that would still
+// cross the edge has its label cut, and the ones after it are left out.
+function buttonRow(
+  buttons: FrameButton[],
+  inner: number,
+  border: Omit<Seg, 'text'>,
+  el: FrameElements,
+  Button: NonNullable<FrameElements['Button']>,
+): RenderElement {
+  const { Box } = el;
+  const cells = buttonCells(buttons, inner, el, Button);
+  return (
+    <Box flexDirection="row">
+      {textRow([seg('│ ', border)], el)}
+      {cells.parts}
+      {textRow([seg(' '.repeat(Math.max(0, inner - cells.used))), seg(' │', border)], el)}
+    </Box>
+  );
+}
+
+/** The Buttons of one row, BUTTON_GAP apart, and the cells they take; shared by a frame's row and a dialog's borderless one. */
+export function buttonCells(
+  buttons: FrameButton[],
+  inner: number,
+  el: FrameElements,
+  Button: NonNullable<FrameElements['Button']>,
+): { parts: RenderElement[]; used: number } {
+  const parts: RenderElement[] = [];
+  let used = 0;
+  for (const b of buttons) {
+    const gap = used === 0 ? 0 : BUTTON_GAP;
+    const room = inner - used - gap;
+    const lead = b.hotkey === undefined ? 0 : width(`${b.hotkey}: `);
+    if (room <= lead) break;
+    const label = clip(b.label, room - lead);
+    if (gap > 0) parts.push(textRow([seg(' '.repeat(gap))], el));
+    parts.push(<Button key={b.key} label={label} {...(b.hotkey === undefined ? {} : { hotkey: b.hotkey })} plain onPress={b.onPress} />);
+    used += gap + buttonWidth({ label, hotkey: b.hotkey });
+  }
+  return { parts, used };
 }
 
 /** Frames side by side on one row; each keeps its own width. */

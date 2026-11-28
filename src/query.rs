@@ -311,14 +311,33 @@ fn located_misses(state: &State) -> Value {
             .misses()
             .iter()
             .map(|l| {
-                json!({
+                let mut row = json!({
                     "turn": l.turn,
                     "at": l.at,
                     "message_id": l.message_id,
                     "tokens": m(l.tokens, "tokens", "cache_write", false),
                     "api_reason": l.api_reason,
-                    "located": { "kind": l.cause.kind(), "detail": l.cause.short() },
-                })
+                    // `words`: the overview's own phrasing, which the pane's placed row uses too.
+                    "located": {
+                        "kind": l.cause.kind(),
+                        "detail": l.cause.short(),
+                        "words": crate::overview::cause_words(&l.cause).trim_start_matches("of "),
+                    },
+                });
+                // What re-writing those tokens cost at the cache-write price
+                // (the price A01 and the overview use); absent when unpriced.
+                if let Some(usd) = crate::advisor::rules::usd(
+                    state,
+                    l.tokens,
+                    crate::advisor::rules::PriceKind::CacheWrite,
+                ) {
+                    row["cost"] = m(usd, "USD", "cache_miss_cost", true);
+                }
+                // The `ConfigChange` source this request followed (PRD 5).
+                if let Some(src) = &l.after_config_change {
+                    row["after_config_change"] = json!(src);
+                }
+                row
             })
             .collect(),
     )
@@ -644,13 +663,20 @@ fn teammate_json(r: &crate::agent_ledger::TeammateRow) -> Value {
     })
 }
 
-/// One advice item as JSON.
+/// One advice item as JSON: the one-line fields, then the full words
+/// (`name`, `body`, `evidence_rows`, `fix_prompt`, `actions`, `foot`).
 pub fn advice_item(x: &advisor::Advice) -> Value {
     json!({
         "rule": x.rule,
+        "name": x.name,
         "family": x.family,
         "class": x.urgency.label(),
         "headline": x.headline,
+        "body": x.body,
+        "evidence_rows": x.evidence_rows,
+        "fix_prompt": x.fix_prompt,
+        "actions": x.actions,
+        "foot": x.foot,
         "evidence": x.evidence,
         "action": x.action,
         "action_text": x.action_text,
@@ -672,7 +698,9 @@ pub fn advice(state: &State) -> Value {
 }
 
 /// `cctop query coach`: the coach object (state line, four lights, the
-/// nudge, next, snoozed, recent), every line cut at 52 cells. `snooze`
+/// nudge, next, snoozed, recent), every one-line form cut at 52 cells and
+/// the nudge's full words (name, body, evidence, fix prompt, actions,
+/// foot) uncut. `snooze`
 /// applies (or queues, while the dashboard runs) a snooze first.
 pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
     let mut engine = advisor::Engine::for_state(state);
@@ -709,6 +737,7 @@ pub fn dashboard(state: &State) -> Value {
             .map(|(name, tokens)| json!({"name": name, "tokens": tokens}))
             .collect();
         v["composition_source"] = json!(c.source);
+        v["composition_note"] = json!(crate::dashboard::composition_note(state));
         v["composition_metric_id"] = json!("context_composition");
     }
     // Absent for a session without a `--max-budget-usd` budget.
@@ -747,6 +776,23 @@ pub fn dashboard(state: &State) -> Value {
         });
     }
     v
+}
+
+/// `cctop query overview`: the overview object (mod-pane US-002) — per
+/// chart its title, figure, verdict, chart spec, readouts and legend; the
+/// per-turn charts keep the last `max_turns` turns. A derived session's
+/// chain cost (PRD 4) is [`State::chain_usd`]: the caller reads the
+/// ancestors first ([`State::refresh_lineage`]).
+pub fn overview(state: &State, max_turns: usize) -> Value {
+    let o = crate::overview::build_with(
+        state,
+        &crate::overview::Options {
+            max_turns,
+            chain_usd: state.chain_usd(),
+            fallback_cells: true,
+        },
+    );
+    serde_json::to_value(o).unwrap_or(Value::Null)
 }
 
 /// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
@@ -795,11 +841,13 @@ pub fn advice_of(engine: &advisor::Engine) -> Value {
     })
 }
 
-/// The session's chain: ancestors, descendants and the chain's cost, from
-/// the transcript at `path` and the transcripts under `~/.claude/projects`.
-pub fn lineage(path: &std::path::Path) -> Value {
+/// The session's chain: ancestors, descendants and the chain's cost. This
+/// session from `state` (live), its relatives from the transcripts under
+/// `~/.claude/projects` through `~/.cctop/lineage-cache.json`.
+pub fn lineage(state: &State) -> Value {
     let root = crate::baseline::default_projects_dir().unwrap_or_default();
-    serde_json::to_value(crate::lineage::chain(path, &root)).unwrap_or(Value::Null)
+    let mut cache = crate::lineage::Cache::open(crate::lineage::default_cache_file());
+    serde_json::to_value(crate::lineage::chain(state, &root, &mut cache)).unwrap_or(Value::Null)
 }
 
 pub fn prefix(state: &State) -> Value {
@@ -890,6 +938,11 @@ pub fn baseline(b: Option<&crate::baseline::Baseline>) -> Value {
     }
 }
 
+/// `cctop query config`: the config the pane reads (`[pane] charts`).
+pub fn config(config: &crate::config::Config) -> Value {
+    json!({"schema": 1, "pane": {"charts": config.pane.charts}})
+}
+
 pub fn explain(metric_id: &str) -> Value {
     match registry::get(metric_id) {
         Some(mt) => {
@@ -939,6 +992,97 @@ mod tests {
         s
     }
 
+    /// The no-prose rule (mod-pane US-001): a session whose prompt and tool
+    /// output carry distinctive text; none of it reaches `cctop query coach`
+    /// or `cctop query advice`, while the full words do.
+    #[test]
+    fn coach_and_advice_carry_no_prose() {
+        use crate::transcript::Line;
+        let mut s = State::new(crate::metrics::Pricing::bundled());
+        s.session.alive = true;
+        s.apply(&Line::parse(r#"{"type":"user","timestamp":"2026-01-01T10:00:00Z","promptSource":"typed","message":{"role":"user","content":"SECRET-PROMPT-xyz open the PR and push"}}"#).unwrap());
+        // The tool inputs carry secrets too: an env assignment, arguments.
+        let out = [
+            (
+                "TOKEN=SECRET-INPUT-def gh pr view SECRET-ARG",
+                "no pull requests found for branch SECRET-OUTPUT-abc",
+            ),
+            (
+                "gh pr view --json url",
+                "no pull requests found for branch SECRET-OUTPUT-abc",
+            ),
+            (
+                "git push sekritbranch SECRET-ARG",
+                "! [rejected] SECRET-OUTPUT-abc (non-fast-forward)",
+            ),
+        ];
+        for (i, (cmd, text)) in out.iter().enumerate() {
+            let ts = format!("2026-01-01T10:0{}:00Z", i + 1);
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","message":{{"id":"m{i}","model":"claude-opus-5","content":[{{"type":"text","text":"SECRET-MODEL-qrs"}},{{"type":"tool_use","id":"t{i}","name":"Bash","input":{{"command":"{cmd}"}}}}],"usage":{{"input_tokens":2,"cache_read_input_tokens":300000,"output_tokens":10}}}}}}"#
+            )).unwrap());
+            s.apply(&Line::parse(&format!(
+                r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t{i}","content":"{text}","is_error":true}}]}},"toolUseResult":{{"stdout":"","stderr":"{text}","interrupted":false,"is_error":true}}}}"#
+            )).unwrap());
+        }
+        s.now_ms = crate::metrics::cost::parse_ts_ms("2026-01-01T10:04:00Z").unwrap();
+        let coach = coach(&s, None);
+        let n = &coach["nudge"];
+        assert_eq!(n["id"], "A38", "{coach:#}");
+        assert_eq!(n["name"], "Claude is stuck retrying");
+        assert!(n["body"]
+            .as_str()
+            .unwrap()
+            .contains("there is no PR for this branch yet"));
+        assert_eq!(
+            n["evidence"][1],
+            "gh pr · there is no PR for this branch yet"
+        );
+        assert!(n["fix_prompt"]
+            .as_str()
+            .unwrap()
+            .ends_with("then open the PR with gh pr create --fill."));
+        assert_eq!(n["actions"][0]["kind"], "key");
+        assert_eq!(n["actions"][1]["kind"], "prompt");
+        assert!(n["foot"].as_str().is_some_and(|f| !f.is_empty()));
+        assert!(n["line3"].as_str().unwrap().contains("NOW"));
+        // The headline (uncut) and the one-line forms name commands by shape:
+        // `git push`, never its lowercase argument, which a word-like
+        // subcommand filter alone would let through.
+        assert_eq!(
+            n["headline"], "3 fails in a row: gh pr ×2, git push",
+            "{coach:#}"
+        );
+        for field in [
+            &n["headline"],
+            &n["line1"],
+            &n["line2"],
+            &coach["lines"]["l0"],
+            &coach["lines"]["l1"],
+            &coach["lines"]["l2"],
+        ] {
+            let f = field.as_str().unwrap();
+            for secret in ["sekrit", "SECRET", "TOKEN="] {
+                assert!(!f.contains(secret), "{secret} in {f}");
+            }
+        }
+        for (verb, v) in [("coach", coach.clone()), ("advice", advice(&s))] {
+            let text = v.to_string();
+            for secret in [
+                "SECRET-PROMPT",
+                "SECRET-OUTPUT",
+                "SECRET-MODEL",
+                "SECRET-INPUT",
+                "SECRET-ARG",
+                "TOKEN=",
+                "sekrit",
+                "open the PR and push",
+            ] {
+                assert!(!text.contains(secret), "{verb} leaks {secret}: {text}");
+            }
+        }
+    }
+
     #[test]
     fn located_misses_on_fixture_r() {
         let path = std::path::Path::new("fixtures/session-r.jsonl");
@@ -959,6 +1103,21 @@ mod tests {
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
         assert_eq!(first["tokens"]["metric_id"], "cache_write");
+        // Priced at the cache-write price when the model is known.
+        if let Some(usd) = first["cost"]["value"].as_f64() {
+            assert!(usd > 0.0);
+            assert_eq!(first["cost"]["metric_id"], "cache_miss_cost");
+            assert_eq!(
+                crate::metrics::registry::get("cache_miss_cost").map(|m| m.unit),
+                Some("USD")
+            );
+        }
+        // The overview's phrasing of the cause, which the pane's placed row uses.
+        assert!(first["located"]["words"]
+            .as_str()
+            .unwrap()
+            .starts_with("a new "));
+        assert!(first.get("after_config_change").is_none());
     }
 
     #[test]
@@ -1256,6 +1415,27 @@ mod tests {
         let s = sources(&b);
         assert_eq!(s["since"]["kind"], "model switch");
         assert!(s["since"]["delta"].as_i64().unwrap() < 0);
+    }
+
+    /// `cctop query overview`: five charts, each verdict tagged with a
+    /// registered id; a derived session without its transcript has no chain.
+    #[test]
+    fn overview_carries_five_charts_with_registered_verdicts() {
+        let s = state_b();
+        let v = overview(&s, 50);
+        assert_eq!(v["schema"], 1);
+        let charts = v["charts"].as_array().unwrap();
+        assert_eq!(charts.len(), 5);
+        for c in charts {
+            let id = c["verdict"]["metric_id"].as_str().unwrap();
+            assert!(registry::get(id).is_some(), "{id} not registered");
+            assert!(
+                ["good", "watch", "act"].contains(&c["verdict"]["level"].as_str().unwrap()),
+                "{c}"
+            );
+            assert!(c["spec"]["kind"].is_string() && c["fallback_cells"]["cells"].is_string());
+        }
+        assert!(v["footer"].as_str().unwrap().contains("at API prices"));
     }
 
     #[test]

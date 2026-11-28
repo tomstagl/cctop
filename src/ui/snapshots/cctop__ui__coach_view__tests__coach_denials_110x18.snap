@@ -2,21 +2,21 @@
 source: src/ui/coach_view.rs
 expression: "render_to_string(&app, 110, 18)"
 ---
-╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  NOW A45 · denial-streak
-│ PLANNING · 5 calls · silent 13m · ▸ steer window · … │  rm is denied by your rules
+╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  A command keeps being blocked
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · … │  NOW A45 · denial-streak
+├──────────────────────────────────────────────────────┤  rm is denied by your rules
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │
+│ ○ cache    warm 1h00 (1h) ≈                          │  rm is denied by a permissions.deny rule in your
+│ ○ limits   — no status line                          │  settings, so Claude cannot run it however it tries.
+│ ● rework   4 blocked · edits 3 ✓ none 18m            │  Tell it the alternative, or what you need instead.
 ├──────────────────────────────────────────────────────┤
-│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │  evidence  NOW · fired at call 6 · +4 queued (n)
-│ ○ cache    warm 1h00 (1h) ≈                          │  retires   on turn end · since turn 5
-│ ○ limits   — no status line                          │  saving    avoids a hard stop (an estimate)
-│ ● rework   4 blocked · edits 3 ✓ none 18m            │  prompt    You can't run `rm` here (it's denied by my
-├──────────────────────────────────────────────────────┤  settings). Use another way or tell me what you need.
-│ ▸ rm is denied by your rules                         │
-│   tell Claude the alternative — it cannot run this   │  Auto mode blocks a command shape by a classifier; a
-│   NOW · fired at call 6 · +4 queued (n)              │  second block of the same shape within a turn (or
-│                                                      │  three turns) means the model will keep trying
-│ next     context-reset → next-row only · ctx 720k →… │  variants, and three blocks in a row pause auto mode.
-│ snoozed  —                                           │  An allow rule — Claude Code's own suggestion when it
-╰──────────────────────────────────────────────────────╯  made one, else Tool(argv0 subcommand:*) — lets the
-                                                          shape through; a bare Bash rule allows everything
-                                                          and is never suggested. A settings deny rule is
+│ ▸ rm is denied by your rules                         │  fix ↵ You can't run `rm` here (it's denied by my
+│   tell Claude the alternative — it cannot run this   │        settings). Use another way or tell me what you
+│   NOW · fired at call 6 · +4 queued (n)              │        need.
+│                                                      │
+│ next     context-reset → next-row only · ctx 720k →… │  evidence  a permissions.deny rule in settings
+│ snoozed  —                                           │  slot      NOW · fired at call 6 · +4 queued (n)
+╰──────────────────────────────────────────────────────╯  retires   on turn end · since turn 5
+                                                          saving    avoids a hard stop (an estimate)
+
  ▸ rm is denied by your rules

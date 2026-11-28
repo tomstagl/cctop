@@ -1,0 +1,46 @@
+---
+source: src/ui/overview_view.rs
+expression: text(&lines)
+---
+ Context window  134k of 1M · 13 %
+ Good Plenty of room: 865k free.
+ ■ context so far  ■ auto-compact at 375k
+ 1.00M
+
+
+ 500k
+       ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄ ▄
+                                                                                                  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+                                                            ▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄
+ 0     ▄▄▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+       turn 1                                                                                                          56
+ Turn 56 · 134k (−190k) · compacted
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Spend  $9.23 · ≈ $46.07 in an hour                         │ Cost per turn  ≈ $0.13 typical                last 23 turns
+ Watch $0.61 a minute. 3 jumps, the last two a costly turn  │ Watch The last two turns cost $0.17 and $1.25: every turn
+       in turn 31 ($0.56) and a costly turn in turn 56      │       now re-sends 134k. Do: /compact at the next break.
+       ($1.25). Do: /clear between unrelated tasks; a       │ ■ a turn
+       smaller context makes every turn cheaper.            │ $1.25                                                   ▀▀
+ ■ spent  ■ forecast · $0.61 a minute                       │                                                         ▀▀
+ $46.07                                                     │                                                         ▀▀
+                                                          ▄ │ $0.63                                                   ▀▀
+                                                          ▀ │                                                         ▀▀
+ $23.04                                                   ▀ │                                ▀▀            ▄▄         ▀▀
+                                                         ▀▀ │                         ▄▄     ▀▀       ▄▄   ▀▀         ▀▀
+                                                         ▀▀ │ $0    ▀▀▀▀▀▀▀▀ ▀▀▄▄▀▀ ▄▄▀▀▄▄ ▀▀▀▀▀▀▀▀ ▀▀▀▀▀▀ ▀▀▀▀▀▀ ▀▀▀▀▀▀
+                                                      ▄▄▀▀▀ │       34  36   38  40   42   44  46   48  50   52   54  56
+ $0          ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▀▀▀▀▀▀▀▀▀ │ Turn 56 · $1.25. A costly turn: 9 API calls, up to 134k of
+        min 0                                          1264 │   context.
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Prompt cache  reused 98 %                    last 23 turns │ Tool calls per turn  102 calls                last 23 turns
+ Good Reused 98 %. But the one rebuild (160k tokens, about  │ Good 102 calls, 4 failed. Do: ask Claude to search (grep)
+      $0.64) was avoidable. Do: reply before the cache      │      before it reads whole files.
+      expires, or /clear before a long break.               │ ■ brighter = more calls  ■ failed
+ ■ reused  ■ thinking dropped                               │        Bash ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀  │ SendMessage ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀  │       Agent ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ 34   36   38   40   42   44   46   48   50   52   54   56  │        Read ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ stays warm ≈ 60 minutes ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀     │    Artifact ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+                                                            │             34  36  38  40  42  44  46  48  50  52  54  56
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ spent so far ≈$9.23 · what this session would cost at API prices

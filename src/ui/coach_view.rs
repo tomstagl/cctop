@@ -4,7 +4,9 @@
 //! lifecycle rows), the `next` and `snoozed` rows. At ≥ 100 columns the
 //! why / lifecycle column sits beside the card; at ≤ 40 columns the 2 × 2
 //! form; when rows are scarce the blank row goes first, then `snoozed`,
-//! then `next`, and the slot never drops below two lines.
+//! then `next`, and the slot never drops below two lines. The nudge's
+//! full words (name, body, fix prompt) are wrapped into the rows left
+//! below the slot, or into the why column when it sits beside the card.
 
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -12,7 +14,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::coach::{Coach, Level, WIDTH};
+use crate::coach::{Coach, Full, Level, WIDTH};
 use crate::theme::Theme;
 use crate::ui::state::{CoachUi, State};
 
@@ -42,6 +44,92 @@ fn row<'a>(t: &Theme, inner: usize, spans: Vec<Span<'a>>) -> Line<'a> {
     v.push(Span::raw(" ".repeat(pad)));
     v.push(Span::styled(t.coach_text(" │"), t.dim()));
     Line::from(v)
+}
+
+/// `s` broken at spaces into lines of at most `width` cells, the first
+/// led by `first`, the rest by `rest`; a word longer than a line stands
+/// alone (the row clips it).
+fn wrap(s: &str, width: usize, first: &str, rest: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for w in s.split_whitespace() {
+        let prefix = if out.is_empty() { first } else { rest };
+        if !cur.is_empty()
+            && prefix.chars().count() + cur.chars().count() + 1 + w.chars().count() > width
+        {
+            out.push(format!("{prefix}{cur}"));
+            cur.clear();
+        }
+        if !cur.is_empty() {
+            cur.push(' ');
+        }
+        cur.push_str(w);
+    }
+    if !cur.is_empty() {
+        let prefix = if out.is_empty() { first } else { rest };
+        out.push(format!("{prefix}{cur}"));
+    }
+    out
+}
+
+/// The lead of the fix prompt's first row, and of its other rows.
+const FIX_LEAD: (&str, &str) = ("fix ↵ ", "      ");
+
+/// The nudge's full words in the card, for `rows` rows: the name, the
+/// body and the fix prompt, wrapped at the card's width, after a blank row
+/// when all of it fits. When it does not, the fix prompt (the line to act
+/// on) comes before the body and the rest is cut with a pointer to `e`.
+/// Nothing under three rows.
+fn advice_rows<'a>(t: &Theme, inner: usize, full: &Full, rows: usize) -> Vec<Line<'a>> {
+    if rows < 3 {
+        return Vec::new();
+    }
+    let name = (
+        full.name.to_string(),
+        Style::default().add_modifier(Modifier::BOLD),
+    );
+    let body: Vec<(String, Style)> = wrap(&full.body, inner, "", "")
+        .into_iter()
+        .map(|s| (s, Style::default()))
+        .collect();
+    let fix: Vec<(String, Style)> = full
+        .fix_prompt
+        .as_deref()
+        .map(|f| wrap(f, inner, FIX_LEAD.0, FIX_LEAD.1))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s, t.accent()))
+        .collect();
+    let mut v = vec![name];
+    if 1 + body.len() + fix.len() <= rows {
+        v.extend(body);
+        v.extend(fix);
+        if v.len() < rows {
+            v.insert(0, (String::new(), Style::default()));
+        }
+    } else {
+        v.extend(fix);
+        v.extend(body);
+        v.truncate(rows - 1);
+        v.push(("… e shows the whole advice".into(), t.dim()));
+    }
+    v.into_iter()
+        .map(|(s, style)| {
+            if s.is_empty() {
+                row(t, inner, vec![])
+            } else {
+                plain(t, inner, &s, style)
+            }
+        })
+        .collect()
+}
+
+/// The queued nudge `n` peeks at, when it does.
+fn peeked<'s>(ui: &CoachUi, state: &'s State) -> Option<(usize, &'s crate::advisor::Advice)> {
+    let i = ui.peek.min(state.advice.len().saturating_sub(1));
+    (ui.peek > 0 && i > 0)
+        .then(|| state.advice.get(i).map(|a| (i, a)))
+        .flatten()
 }
 
 fn plain<'a>(t: &Theme, inner: usize, text: &str, style: Style) -> Line<'a> {
@@ -139,24 +227,18 @@ fn slot_rows<'a>(t: &Theme, inner: usize, c: &Coach, ui: &CoachUi, state: &State
         return v;
     }
     // `n` peeks down the queue without promoting.
-    let peeked = ui.peek.min(state.advice.len().saturating_sub(1));
-    if ui.peek > 0 && peeked > 0 {
-        if let Some(a) = state.advice.get(peeked) {
-            let evidence = format!(
-                "  {} · queued #{peeked} · n next · Esc back",
-                a.urgency.label()
-            );
-            return vec![
-                plain(
-                    t,
-                    inner,
-                    &format!("▸ {}", a.headline),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-                plain(t, inner, &format!("  {}", a.action), t.accent()),
-                plain(t, inner, &evidence, t.dim()),
-            ];
-        }
+    if let Some((i, a)) = peeked(ui, state) {
+        let evidence = format!("  {} · queued #{i} · n next · Esc back", a.urgency.label());
+        return vec![
+            plain(
+                t,
+                inner,
+                &format!("▸ {}", a.headline),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            plain(t, inner, &format!("  {}", a.action), t.accent()),
+            plain(t, inner, &evidence, t.dim()),
+        ];
     }
     match &c.nudge {
         Some(n) => vec![
@@ -167,7 +249,7 @@ fn slot_rows<'a>(t: &Theme, inner: usize, c: &Coach, ui: &CoachUi, state: &State
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             plain(t, inner, &n.line2, t.accent()),
-            plain(t, inner, &n.evidence, t.dim()),
+            plain(t, inner, &n.line3, t.dim()),
         ],
         None => {
             let mut v = vec![plain(t, inner, &c.quiet_row(), t.dim())];
@@ -238,8 +320,21 @@ pub fn card_lines<'a>(
         slot_len = avail.max(2).min(slot.len());
         slot.truncate(slot_len);
     }
+    // The full words fill the rows left between the slot and the tail,
+    // unless the why column beside the card shows them.
+    let shown = match (ui.light, peeked(ui, state)) {
+        (Some(_), _) => None,
+        (None, Some((_, a))) => Some(Full::of(a)),
+        (None, None) => c.nudge.as_ref().map(|n| n.full.clone()),
+    };
+    let spare = avail.saturating_sub(slot.len() + tail.len());
+    let advice = match shown {
+        Some(full) if width < WIDE => advice_rows(t, inner, &full, spare),
+        _ => Vec::new(),
+    };
     let mut lines = top;
     lines.extend(slot);
+    lines.extend(advice);
     lines.extend(tail);
     lines.push(bottom);
     lines
@@ -308,30 +403,7 @@ pub fn narrow_lines<'a>(t: &Theme, width: u16, c: &Coach) -> Vec<Line<'a>> {
     ];
     match &c.nudge {
         Some(n) => {
-            let wrap = |s: &str, first: &str, rest: &str| -> Vec<String> {
-                let mut out = Vec::new();
-                let mut cur = String::new();
-                for w in s.split_whitespace() {
-                    let prefix = if out.is_empty() { first } else { rest };
-                    if cur.is_empty() {
-                        cur = w.to_string();
-                    } else if prefix.chars().count() + cur.chars().count() + 1 + w.chars().count()
-                        <= inner
-                    {
-                        cur.push(' ');
-                        cur.push_str(w);
-                    } else {
-                        out.push(format!("{prefix}{cur}"));
-                        cur = w.to_string();
-                    }
-                }
-                if !cur.is_empty() {
-                    let prefix = if out.is_empty() { first } else { rest };
-                    out.push(format!("{prefix}{cur}"));
-                }
-                out
-            };
-            for s in wrap(n.line1.trim_start_matches("▸ "), "▸ ", "  ") {
+            for s in wrap(n.line1.trim_start_matches("▸ "), inner, "▸ ", "  ") {
                 lines.push(plain(
                     t,
                     inner,
@@ -339,7 +411,7 @@ pub fn narrow_lines<'a>(t: &Theme, width: u16, c: &Coach) -> Vec<Line<'a>> {
                     Style::default().add_modifier(Modifier::BOLD),
                 ));
             }
-            for s in wrap(n.line2.trim(), "  ", "  ") {
+            for s in wrap(n.line2.trim(), inner, "  ", "  ") {
                 lines.push(plain(t, inner, &s, t.accent()));
             }
         }
@@ -390,42 +462,45 @@ impl crate::coach::Light {
     }
 }
 
-/// The why column (≥ 100 columns) or overlay (`e`): evidence, the
+/// The why column (≥ 100 columns) or overlay (`e`): the nudge's name and
+/// full words — headline, body, evidence, fix prompt — then the
 /// retirement rule, the saving, the doc text, the last retired nudges.
 pub fn why_lines<'a>(t: &Theme, width: usize, c: &Coach) -> Vec<Line<'a>> {
     let dim = t.dim();
     let bold = Style::default().add_modifier(Modifier::BOLD);
     let mut lines: Vec<Line> = Vec::new();
-    let wrap = |s: &str| -> Vec<String> {
-        let mut out = Vec::new();
-        let mut cur = String::new();
-        for w in s.split_whitespace() {
-            if !cur.is_empty() && cur.chars().count() + 1 + w.chars().count() > width {
-                out.push(std::mem::take(&mut cur));
-            }
-            if !cur.is_empty() {
-                cur.push(' ');
-            }
-            cur.push_str(w);
-        }
-        if !cur.is_empty() {
-            out.push(cur);
-        }
-        out
-    };
+    let wrapped = |s: &str| wrap(s, width, "", "");
     match &c.nudge {
         Some(n) => {
+            let f = &n.full;
+            lines.push(Line::from(Span::styled(t.coach_text(f.name), bold)));
             lines.push(Line::from(Span::styled(
                 t.coach_text(&format!("{} {} · {}", n.class.label(), n.id, n.family)),
-                bold,
+                dim,
             )));
-            for s in wrap(&t.coach_text(n.line1.trim_start_matches("▸ "))) {
+            for s in wrapped(&t.coach_text(&f.headline)) {
                 lines.push(Line::from(s));
             }
             lines.push(Line::from(""));
+            for s in wrapped(&t.coach_text(&f.body)) {
+                lines.push(Line::from(s));
+            }
+            if let Some(fix) = &f.fix_prompt {
+                lines.push(Line::from(""));
+                for s in wrap(fix, width, FIX_LEAD.0, FIX_LEAD.1) {
+                    lines.push(Line::from(Span::styled(t.coach_text(&s), t.accent())));
+                }
+            }
+            lines.push(Line::from(""));
+            for (i, e) in f.evidence.iter().enumerate() {
+                lines.push(Line::from(vec![
+                    Span::styled(if i == 0 { "evidence  " } else { "          " }, dim),
+                    Span::raw(t.coach_text(e)),
+                ]));
+            }
             lines.push(Line::from(vec![
-                Span::styled("evidence  ", dim),
-                Span::raw(t.coach_text(n.evidence.trim())),
+                Span::styled("slot      ", dim),
+                Span::raw(t.coach_text(n.line3.trim())),
             ]));
             lines.push(Line::from(vec![
                 Span::styled("retires   ", dim),
@@ -435,14 +510,14 @@ pub fn why_lines<'a>(t: &Theme, width: usize, c: &Coach) -> Vec<Line<'a>> {
                 Span::styled("saving    ", dim),
                 Span::raw(format!("{} (an estimate)", n.saving)),
             ]));
-            if !n.action_text.is_empty() {
+            if !n.action_text.is_empty() && f.fix_prompt.as_ref() != Some(&n.action_text) {
                 lines.push(Line::from(vec![
                     Span::styled(format!("{:<10}", n.action_kind.label()), dim),
                     Span::raw(t.coach_text(&n.action_text)),
                 ]));
             }
             lines.push(Line::from(""));
-            for s in wrap(n.explain) {
+            for s in wrapped(n.explain) {
                 lines.push(Line::from(Span::styled(s, dim)));
             }
         }
@@ -606,6 +681,57 @@ mod tests {
         }
     }
 
+    /// The text of a rendered frame's columns `from..to`, rows joined, the
+    /// card's borders and the wrap's line breaks gone.
+    fn flat(out: &str, from: usize, to: usize) -> String {
+        out.lines()
+            .map(|l| {
+                let s: String = l.chars().skip(from).take(to - from).collect();
+                s.trim_matches(|c: char| c == '│' || c.is_whitespace())
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn full_words_wrapped_at_56_and_122_columns() {
+        let app = app_at(761, 0);
+        let c = crate::coach::snapshot(&app.state, app.advisor());
+        let f = &c.nudge.as_ref().unwrap().full;
+        let fix = f
+            .fix_prompt
+            .as_deref()
+            .expect("the deny rule has a fix prompt");
+        // 56 columns: the card alone, the words below the slot.
+        let narrow = render_to_string(&app, 56, 32);
+        insta::assert_snapshot!("coach_full_56x32", narrow);
+        let text = flat(&narrow, 0, 56);
+        assert!(text.contains(f.name), "{text}");
+        assert!(text.contains(&f.body), "{text}");
+        assert!(text.contains(&format!("fix ↵ {fix}")), "{text}");
+        for row in narrow.lines() {
+            assert!(row.chars().count() <= 56, "{row}");
+        }
+        // 122 columns: the why column beside the card carries them.
+        let wide = render_to_string(&app, 122, 32);
+        insta::assert_snapshot!("coach_full_122x32", wide);
+        let col = flat(&wide, 58, 122);
+        assert!(col.contains(f.name), "{col}");
+        assert!(col.contains(&f.body), "{col}");
+        assert!(col.contains(&format!("fix ↵ {fix}")), "{col}");
+        assert!(!flat(&wide, 0, 56).contains(f.name), "not twice");
+        // Rows scarce: cut with a pointer to the why overlay.
+        let short = render_to_string(&app, 56, 20);
+        assert!(
+            short.contains(f.name) && short.contains("… e shows the whole advice"),
+            "{short}"
+        );
+    }
+
     #[test]
     fn narrow_wide_short_and_ascii_forms() {
         let app = app_at(761, 0);
@@ -630,6 +756,10 @@ mod tests {
         let out = render_to_string(&ascii, 56, 20);
         assert!(out.contains("! rework"), "{out}");
         assert!(!out.contains('●') && !out.contains('╭'), "{out}");
+        // The fix prompt's lead is ASCII too, in the card and the why column.
+        assert!(out.contains("fix > ") && !out.contains('↵'), "{out}");
+        let wide = render_to_string(&ascii, 122, 32);
+        assert!(wide.contains("fix > ") && !wide.contains('↵'), "{wide}");
     }
 
     /// The sync contract: the state line, the four light rows and the
@@ -648,7 +778,7 @@ mod tests {
         let n = c.nudge.as_ref().unwrap();
         assert_eq!(cell(8), n.line1);
         assert_eq!(cell(9), n.line2.trim());
-        assert_eq!(cell(10), n.evidence.trim());
+        assert_eq!(cell(10), n.line3.trim());
     }
 
     #[test]
@@ -702,15 +832,23 @@ mod tests {
             app.handle_key(k);
         }
         assert_eq!(app.state.view, View::Coach, "Esc closed the overlay only");
-        // Enter opens the act popup pre-filled; a key-class action is not
-        // sendable.
+        // Enter opens the act popup pre-filled with the fix prompt (the
+        // key itself is the card's to name); a prompt may be sent.
         for k in parse_keys("Enter") {
             app.handle_key(k);
         }
         let (panel, text) = app.state.ask.clone().expect("act popup");
         assert_eq!(panel, 9);
-        assert_eq!(text, "Esc Esc", "the key to press, shown, not sent");
-        assert!(!app.state.ask_send_ok);
+        let c = crate::coach::snapshot(&app.state, app.advisor());
+        assert_eq!(
+            Some(&text),
+            c.nudge.as_ref().unwrap().full.fix_prompt.as_ref()
+        );
+        assert!(
+            text.starts_with("Before you change anything, tell me"),
+            "{text}"
+        );
+        assert!(app.state.ask_send_ok);
         assert!(app.state.advice_acting || app.state.advice_view.acting);
         for k in parse_keys("Esc") {
             app.handle_key(k);

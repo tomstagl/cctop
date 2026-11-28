@@ -108,4 +108,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo publish --dry-run --locked
+      - run: cargo publish --workspace --dry-run --locked

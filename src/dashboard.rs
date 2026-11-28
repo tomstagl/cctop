@@ -316,6 +316,23 @@ impl Composition {
     }
 }
 
+/// Where the composition was read and how long ago (`per Claude Code, 12s
+/// ago`), the label every surface draws it with (PRD 3); `None` without a
+/// capture.
+pub fn composition_note(state: &State) -> Option<String> {
+    let c = Composition::of(state)?;
+    let (_, _, _, at) = state.current_context_capture()?;
+    Some(if at > 0 {
+        format!(
+            "{}, {} ago",
+            c.source,
+            coach::ago(state.clock_ms().saturating_sub(at))
+        )
+    } else {
+        c.source.to_string()
+    })
+}
+
 /// The act line: the coach's slot, whole. A pending wait pre-empts the
 /// nudge; with neither, the state line's tokens; with nothing running,
 /// the first turn's start line or the quiet row.
@@ -381,6 +398,15 @@ pub struct Dashboard {
     pub lines: coach::StatusLines,
     /// The session's whole spend (`cost_combined`), with its provenance.
     pub cost_combined: Option<crate::query::CostValue>,
+    /// The overview object (mod-pane): what the TUI draws in body 1,
+    /// charts included. Built by the TUI where the width is known, only
+    /// while body 1 is open; not part of `cctop query dashboard` (the pane
+    /// reads it through `cctop query overview`).
+    #[serde(skip)]
+    pub overview: Option<crate::overview::Overview>,
+    /// Rows of the overview scrolled off the top (TUI only).
+    #[serde(skip)]
+    pub scroll: usize,
 }
 
 /// The eight bodies' ids, in key order (`1`–`6`, `a`, `0`).
@@ -424,6 +450,8 @@ pub fn snapshot(state: &State, engine: &Engine) -> Dashboard {
         cost_combined: state
             .cost_combined()
             .map(|c| crate::query::CostValue::new(c, "cost_combined")),
+        overview: None,
+        scroll: 0,
     }
 }
 
@@ -870,7 +898,7 @@ fn act(state: &State, c: &Coach) -> Act {
             crate::advisor::Urgency::Later => Tone::Fg,
         };
         let tag = n
-            .evidence
+            .line3
             .trim()
             .split(" · ")
             .take(2)
@@ -1110,7 +1138,7 @@ fn body_context(state: &State, c: &Coach) -> Body {
         key: '1',
         id: "context",
         title: "context",
-        keys: "Enter panel",
+        keys: "j k PgUp PgDn scroll  ·  Enter panel",
         rows,
         slices,
     }
@@ -1919,8 +1947,8 @@ fn body_advisor(c: &Coach, engine: &Engine) -> Body {
             if !n.line2.trim().is_empty() {
                 rows.push(vec![dim(format!("    {}", n.line2.trim()))]);
             }
-            if !n.evidence.trim().is_empty() {
-                rows.push(vec![dim(format!("    {}", n.evidence.trim()))]);
+            if !n.line3.trim().is_empty() {
+                rows.push(vec![dim(format!("    {}", n.line3.trim()))]);
             }
             if !n.saving.is_empty() {
                 rows.push(vec![dim(format!("    saves {}", n.saving))]);
@@ -2408,7 +2436,7 @@ mod tests {
         assert_eq!(d.act.nudge, Some("A10"));
         assert_eq!(d.act.tag, "LATER · turn 6");
         assert!(
-            text_of(&d.act.line).starts_with("▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn"),
+            text_of(&d.act.line).starts_with("▸ A shell command blocked the turn"),
             "{}",
             text_of(&d.act.line)
         );
@@ -2528,6 +2556,19 @@ mod tests {
         );
         assert_eq!(c.line, "per Claude Code sys 8.0k msgs 60k free 850k …");
         assert!(c.line.chars().count() <= coach::WIDTH);
+        // Its age labels it on every surface (PRD 3): the dashboard query
+        // carries the same note the overview's context chart draws.
+        s.clock_override = true;
+        s.now_ms = at + 12_000;
+        assert_eq!(
+            composition_note(&s).as_deref(),
+            Some("per Claude Code, 12s ago")
+        );
+        assert_eq!(
+            crate::query::dashboard(&s)["composition_note"],
+            "per Claude Code, 12s ago"
+        );
+        assert!(composition_note(&fixture_at("a", usize::MAX).0).is_none());
     }
 
     /// Deferred tools are not in the window: a spool's `deferred` row is in

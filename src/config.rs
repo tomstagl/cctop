@@ -25,6 +25,25 @@ pub struct Config {
     /// alternates by session (the control arm of its own measurement).
     #[serde(default = "default_coach")]
     pub coach: String,
+    /// `[pane]`: what the docked pane draws, read through `cctop query config`.
+    pub pane: PaneConfig,
+}
+
+/// `[pane]` in the config file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct PaneConfig {
+    /// `auto` / `image` / `cells`: pictures or cell charts in the pane
+    /// (`CCTOP_PANE_CHARTS` overrides it, the terminal decides under `auto`).
+    pub charts: String,
+}
+
+impl Default for PaneConfig {
+    fn default() -> PaneConfig {
+        PaneConfig {
+            charts: "auto".into(),
+        }
+    }
 }
 
 fn default_view() -> String {
@@ -46,6 +65,7 @@ impl Default for Config {
             pricing: None,
             view: "dashboard".into(),
             coach: "on".into(),
+            pane: PaneConfig::default(),
         }
     }
 }
@@ -102,6 +122,9 @@ mod tests {
             pricing: Some(PathBuf::from("/x/pricing.toml")),
             view: "coach".into(),
             coach: "auto".into(),
+            pane: PaneConfig {
+                charts: "cells".into(),
+            },
         };
         c.save_to(&path).unwrap();
         assert_eq!(Config::load_from(&path), c);
@@ -114,5 +137,8 @@ mod tests {
             p.view, "dashboard",
             "a file without `view` opens the dashboard"
         );
+        assert_eq!(p.pane.charts, "auto");
+        std::fs::write(&path, "[pane]\ncharts = \"image\"\n").unwrap();
+        assert_eq!(Config::load_from(&path).pane.charts, "image");
     }
 }

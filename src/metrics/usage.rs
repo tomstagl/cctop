@@ -399,6 +399,10 @@ pub struct Aggregate {
     /// `(id, via)` of the first entry of the last `derived-from` line that
     /// names another session (not this one): the session this one was started from and how (`clear`, `subprocess` …).
     pub derived_from: Option<(String, String)>,
+    /// The session the last `continued-in` line names (not an empty id).
+    pub continued_in: Option<String>,
+    /// The first timestamp any line carries.
+    pub first_at: Option<String>,
     /// Interrupts, in order: `(turn, tool calls so far)`.
     pub interrupts: Vec<(usize, usize)>,
     /// The `/model`, `/effort`, `/clear` … lines seen, with the turn.
@@ -493,6 +497,9 @@ impl Aggregate {
         }
         if self.session_id.is_none() {
             self.session_id = line.session_id().map(str::to_string);
+        }
+        if self.first_at.is_none() {
+            self.first_at = line.timestamp().map(str::to_string);
         }
         if self.team.is_none() {
             self.team = line.team().map(|(t, a)| (t.to_string(), a.to_string()));
@@ -761,6 +768,9 @@ impl Aggregate {
                 self.derived_from = d.parent(&own).map(|s| (s.id.clone(), s.via.clone()));
             }
             Line::ContinuedIn(c) => {
+                if let Some(id) = c.continued_in_session_id.as_ref().filter(|i| !i.is_empty()) {
+                    self.continued_in = Some(id.clone());
+                }
                 let turn = self.turn_number();
                 self.boundaries.push(Boundary {
                     at: c.timestamp.clone(),

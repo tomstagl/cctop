@@ -100,6 +100,8 @@ pub fn compose(state: &State, panel: u8) -> Option<String> {
         9 => {
             let a = state.advice.get(state.advice_index.min(state.advice.len().saturating_sub(1)))?;
             match a.action_kind {
+                // The fix prompt, when the rule has one, is the draft.
+                _ if a.fix_prompt.is_some() => a.fix_prompt.clone().unwrap_or_default(),
                 // A prompt or a slash command is the exact text to send.
                 crate::advisor::ActionKind::Prompt | crate::advisor::ActionKind::Slash
                     if !a.action_text.is_empty() =>
