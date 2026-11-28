@@ -89,7 +89,9 @@ ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
            "ownerOrganizationUuid", "parentSessionId", "parentLastUuid",
            "continuedInSessionId", "source_uuid", "headUuid", "anchorUuid", "tailUuid",
-           "prompt_id", "leadSessionId"}
+           "prompt_id", "leadSessionId",
+           # an assistant line's pointer at its `api-request`, and a request's at the previous one
+           "requestRef", "base"}
 PATH_KEYS = {"file_path", "filePath", "path", "notebook_path", "file", "filename", "trackingPath",
              "changedFiles", "displayPath", "planFilePath", "realParentDir", "outputFile",
              "persistedOutputPath", "transcriptDir", "scriptPath", "agent_transcript_path"}
@@ -163,6 +165,219 @@ def fill(n):
 def hid(s):
     h = hashlib.sha1(s.encode()).hexdigest()
     return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
+REQUEST_TYPES = ("api-request", "api-request-shape", "api-request-blob")
+MCP_NAMES = {}  # (kind, original) -> renamed, stable across every shape and blob line
+MCP_PROPS = {}  # original MCP tool name -> {property name: p<N>}
+
+
+def h64(s):
+    """A stable keyed 64-hex digest: the same input gives the same output, so
+    `shapeHash`, `tail[]`, `hash` and `requestDigest` keep their equalities."""
+    return hashlib.sha256(("cctop-fixture:" + s).encode()).hexdigest()
+
+
+def fill_all(v):
+    """Same-length filler for every string under `v` (no MAX_STR cap: the
+    request lines are read for their sizes). Dict keys stay."""
+    if isinstance(v, dict):
+        return {k: fill_all(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [fill_all(x) for x in v]
+    return fill(len(v)) if isinstance(v, str) else v
+
+
+# Claude Code's own tool names (the d.ts "inputs of the built-in tools" table,
+# plugin/.claude/types/claude-code.d.ts, 2.1.332) plus the server-side ones a
+# request lists. `ReportFindings` is in that table but is a harness-supplied
+# tool of one environment, so it is renamed like any other plugin tool.
+BUILTIN_TOOLS = {
+    "Agent", "AppifactRepl", "Artifact", "ArtifactCheck", "ArtifactComments", "ArtifactData",
+    "AskUserQuestion", "Bash", "ClaudeDesign", "CronCreate", "CronDelete", "CronList",
+    "DesignSync", "Edit", "EndConversation", "EnterPlanMode", "EnterWorktree", "ExitPlanMode",
+    "ExitWorktree", "FetchInboxMessage", "Glob", "GetGoal", "GetTask", "Grep", "ListAgents",
+    "ListConnectors", "ListMcpResourcesTool", "ListPlugins", "ListSkills", "LSP",
+    "McpTaskCheck", "McpTaskResumePolling", "McpTaskShowQuestion", "memory_list",
+    "memory_read", "memory_write", "Monitor", "NotebookEdit", "OfferChromeSetup", "PauseGoal",
+    "Poll", "Projects", "propose_skills", "PublishPlugin", "PushNotification", "Read",
+    "ReadMcpResourceDirTool", "ReadMcpResourceTool", "ReadNotifications", "ReadWidgetContext",
+    "RemoteTrigger", "request_computer", "ScheduleWakeup", "SearchMcpRegistry",
+    "SearchPlugins", "SearchSkills", "SendFeedback", "SendFile", "SendMessage", "SendToProject",
+    "SendToProjectContext", "SendUserFile", "SendUserMessage", "SetGoal",
+    "ShareOnboardingGuide", "ShowOnboardingRolePicker", "Skill", "SuggestConnectors",
+    "SuggestPluginInstall", "SuggestSkills", "TaskCreate", "TaskGet", "TaskList", "TaskOutput",
+    "TaskStop", "TaskUpdate", "TodoWrite", "ToolSearch", "WaitForMcpServers", "WebFetch",
+    "WebSearch", "Workflow", "WrapUp", "Write", "Yield",
+    "advisor", "DeferredToolPlaceholder",
+}
+BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup", "claude-code-guide", "fork"}
+# Bundled skills and built-in slash commands; every other skill name is renamed.
+BUNDLED_SKILLS = {
+    "update-config", "keybindings-help", "simplify", "loop", "schedule", "claude-api", "init",
+    "review", "security-review", "code-review", "run", "plugin-authoring",
+    "fewer-permission-prompts", "claude-approvals", "ship", "steward", "verify", "debug",
+    "batch", "compact", "clear", "context", "model", "effort", "resume", "rewind", "usage",
+    "cost", "help", "config", "status", "memory", "agents", "mcp", "plugin", "login", "logout",
+}
+SAFE_NAMES = BUILTIN_TOOLS | BUILTIN_AGENTS | {"origin"}
+ALIASES = {}  # (kind, original) -> `<kind><N>`, stable across every line
+
+
+def alias(kind, v):
+    m = ALIASES.setdefault(kind, {})
+    return m.setdefault(v, "%s%d" % (kind, len(m) + 1))
+
+
+def agent_type(v):
+    return v if v in BUILTIN_AGENTS else alias("agent", v)
+
+
+def skill_name(v):
+    return v if v.lstrip("/") in BUNDLED_SKILLS else alias("skill", v)
+
+
+def tool_name(n):
+    """Built-in names stay; `mcp__<server>__<tool>` -> `mcp__server<N>__tool<M>`;
+    any other name -> `tool<M>`."""
+    if n in SAFE_NAMES:
+        return n
+    if not n.startswith("mcp__"):
+        return MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
+    server = MCP_NAMES.setdefault(("s", n.split("__")[1]), "server%d" % (sum(k[0] == "s" for k in MCP_NAMES) + 1))
+    tool = MCP_NAMES.setdefault(("t", n), "tool%d" % (sum(k[0] == "t" for k in MCP_NAMES) + 1))
+    return f"mcp__{server}__{tool}"
+
+
+def prop_name(tool, p):
+    """A non-built-in tool's parameter names are renamed `p1`, `p2`, ... per
+    tool; a built-in tool's keep theirs."""
+    if tool in BUILTIN_TOOLS:
+        return p
+    m = MCP_PROPS.setdefault(tool, {})
+    return m.setdefault(p, "p%d" % (len(m) + 1))
+
+
+def anon_schema(node, tool):
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            if k == "properties" and isinstance(v, dict):
+                out[k] = {prop_name(tool, pk): anon_schema(pv, tool) for pk, pv in v.items()}
+            elif k == "required" and isinstance(v, list):
+                out[k] = [prop_name(tool, r) if isinstance(r, str) else r for r in v]
+            elif k == "type" and isinstance(v, str):
+                out[k] = v
+            else:
+                out[k] = anon_schema(v, tool)
+        return out
+    if isinstance(node, list):
+        return [anon_schema(x, tool) for x in node]
+    return fill(len(node)) if isinstance(node, str) else node
+
+
+def anon_tool(t):
+    orig = t.get("name", "") if isinstance(t.get("name"), str) else ""
+    out = {}
+    for k, v in t.items():
+        if k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input_schema":
+            out[k] = anon_schema(v, orig)
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_block(b):
+    """One system block or message content block: `type` and `tool_use_id`
+    stay on the block itself, a tool's `name` is renamed, everything else
+    (text, input values, results) is filler."""
+    if not isinstance(b, dict):
+        return fill_all(b)
+    out = {}
+    for k, v in b.items():
+        if k in ("type", "tool_use_id") and isinstance(v, str):
+            out[k] = v
+        elif k == "name" and isinstance(v, str):
+            out[k] = tool_name(v)
+        elif k == "input" and isinstance(v, dict):
+            tool = b.get("name") if isinstance(b.get("name"), str) else ""
+            out[k] = {prop_name(tool, ik): fill_all(iv) for ik, iv in v.items()}
+        elif k == "tool" and isinstance(v, dict):
+            out[k] = {
+                tk: (tv if tk == "type" and isinstance(tv, str)
+                     else anon_tool(tv) if tk == "definition" and isinstance(tv, dict) else fill_all(tv))
+                for tk, tv in v.items()
+            }
+        elif k == "caller" and isinstance(v, dict):
+            out[k] = {ck: (cv if ck == "type" and isinstance(cv, str) else fill_all(cv)) for ck, cv in v.items()}
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_message(m):
+    out = {}
+    for k, v in m.items():
+        if k == "role" and isinstance(v, str):
+            out[k] = v
+        elif k == "content" and isinstance(v, list):
+            out[k] = [anon_block(b) for b in v]
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+PARAM_KEYS = ("model", "betas", "max_tokens", "thinking", "context_management", "output_config")
+
+
+def anon_params(p):
+    """Only the settings the ledger reads stay; anything else is dropped.
+    `output_config` keeps `effort`, its other keys become filler."""
+    out = {k: v for k, v in p.items() if k in PARAM_KEYS}
+    oc = out.get("output_config")
+    if isinstance(oc, dict):
+        out["output_config"] = {k: (v if k == "effort" else fill_all(v)) for k, v in oc.items()}
+    return out
+
+
+def anon_request(o):
+    """`api-request`, `-shape` and `-blob` lines. Settings (`params`,
+    `cacheControl`, `querySource`) are Claude Code's own words and stay; the
+    shape's and blob's prose becomes same-length filler; hashes and ids are
+    rewritten consistently."""
+    out = {}
+    for k, v in o.items():
+        if k == "params" and isinstance(v, dict):
+            out[k] = anon_params(v)
+        elif k in ("cacheControl", "querySource", "type", "timestamp", "version", "keep"):
+            out[k] = v
+        elif k in ("shapeHash", "hash", "requestDigest") and isinstance(v, str):
+            out[k] = h64(v)
+        elif k == "tail" and isinstance(v, list):
+            out[k] = [h64(x) if isinstance(x, str) else x for x in v]
+        elif k in ("id", "base", "requestRef", "sessionId") and isinstance(v, str):
+            out[k] = hid(v)
+        elif k == "shape" and isinstance(v, dict):
+            out[k] = anon_shape(v)
+        elif k == "message" and isinstance(v, dict):
+            out[k] = anon_message(v)
+        else:
+            out[k] = fill_all(v)
+    return out
+
+
+def anon_shape(shape):
+    out = {}
+    for k, v in shape.items():
+        if k == "system" and isinstance(v, list):
+            out[k] = [anon_block(b) for b in v]
+        elif k == "tools" and isinstance(v, list):
+            out[k] = [anon_tool(t) if isinstance(t, dict) else fill_all(t) for t in v]
+        else:
+            out[k] = fill_all(v)
+    return out
 
 
 def anon_path(p):
@@ -279,6 +494,8 @@ def anon_text(s):
 
 def anon(v, key=None, parent=None):
     if isinstance(v, dict):
+        if isinstance(v.get("name"), str) and "input_schema" in v:
+            return anon_tool(v)  # a tool definition anywhere (an attachment's surfaced one)
         return {k: anon(x, k, v) for k, x in v.items()}
     if isinstance(v, list):
         return [anon(x, key, parent) for x in v]
@@ -287,8 +504,12 @@ def anon(v, key=None, parent=None):
             # `error: "rate_limit"` on an API-error line is an enum; a longer
             # error is free text.
             return v if len(v) <= 40 and " " not in v else fill(min(len(v), MAX_STR))
+        if key in ("subagent_type", "agent_type", "attributionAgent"):
+            return agent_type(v)
+        if key in ("skill", "attributionSkill", "commandName"):
+            return skill_name(v)
         if key in KEEP_KEYS:
-            return anon_team(v)
+            return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:
             return hid(v)
         if key == "cwd":
@@ -352,7 +573,7 @@ def main():
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            rows.append(anon(o))
+            rows.append(anon_request(o) if o.get("type") in REQUEST_TYPES else anon(o))
     if dst.endswith("/") or os.path.isdir(dst):
         # A teammate transcript is `<sessionId>.jsonl`: name the copy by
         # the anonymised id so the collector still finds it by its lines.
