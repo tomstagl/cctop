@@ -166,6 +166,9 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
     state.session = info;
     state.now_ms = crate::app::now_ms();
     state.clock_override = std::env::var_os("CCTOP_FAKE_NOW").is_some();
+    state.transcript = Some(transcript.to_path_buf());
+    #[cfg(test)]
+    tests::LOADS.with(|n| n.borrow_mut().push(transcript.to_path_buf()));
     for line in crate::transcript::parse_file(transcript)
         .unwrap_or_default()
         .into_iter()
@@ -308,10 +311,17 @@ pub fn load_team(transcript: &Path, state: &State) -> Option<crate::team::Team> 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::fs;
     use std::time::{Duration, SystemTime};
+
+    thread_local! {
+        /// The transcripts [`state_from_prefix`] loaded on this thread
+        /// (each test runs on its own).
+        pub(crate) static LOADS: std::cell::RefCell<Vec<PathBuf>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
 
     #[test]
     fn a_transcript_path_under_projects_keeps_its_session_id() {

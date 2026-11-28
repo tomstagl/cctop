@@ -22,6 +22,7 @@ pub fn tools() -> Vec<Value> {
         json!({"name":"cctop_agents","description":"Per subagent: type, model, state, status, tokens, priced cost, returned tokens, waste with its reason, cold start; totals; workflow runs; the team led (own cost, liveness, turns, waste); MCP servers.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_advice","description":"The coach's nudge (primary: class, headline, action_text, evidence, saving, explanation), the ranked queue, snoozed rules, session mode.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_coach","description":"The coach: state line, four lights (context, cache, limits, rework), the nudge to act on now, what is next or snoozed.","inputSchema":obj(json!({"session":session}), vec![])}),
+        json!({"name":"cctop_overview","description":"Five charts (context, spend, cost per turn, cache, tool calls): figure, verdict and what to do, chart data, readouts.","inputSchema":obj(json!({"session":session,"max_turns":{"type":"integer"}}), vec![])}),
         json!({"name":"cctop_prefix","description":"What is in the context window: what rides on every request (CLAUDE.md, tool schemas, skills, memory) and, as `sources`, the rest by kind since the last boundary, with per-file tokens.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_lineage","description":"The session chain: ancestors, descendants, cost per member and in total, missing transcripts.","inputSchema":obj(json!({"session":session}), vec![])}),
         json!({"name":"cctop_events","description":"Recent events (tool start/end, hooks, permissions, compactions, alerts). `since` like 10m, 2h.","inputSchema":obj(json!({"session":session,"since":{"type":"string"}}), vec![])}),
@@ -41,8 +42,8 @@ fn parent_session() -> Option<String> {
         .map(|s| s.session_id.clone())
 }
 
-fn state_for(args: &Value) -> Result<crate::ui::State, String> {
-    let t = Target {
+fn target_of(args: &Value) -> Target {
+    Target {
         session: args
             .get("session")
             .and_then(Value::as_str)
@@ -51,8 +52,11 @@ fn state_for(args: &Value) -> Result<crate::ui::State, String> {
         cwd: None,
         wait: false,
         lines: None,
-    };
-    let mut state = crate::load::state(&t).map_err(|e| e.to_string())?;
+    }
+}
+
+fn state_for(args: &Value) -> Result<crate::ui::State, String> {
+    let mut state = crate::load::state(&target_of(args)).map_err(|e| e.to_string())?;
     let engine = crate::advisor::Engine::for_state(&state);
     state.advice = engine.current.clone();
     state.advice_view.has_occupant = engine.occupant.is_some();
@@ -82,26 +86,26 @@ pub fn call(name: &str, args: &Value) -> Result<Value, String> {
         "cctop_agents" => Ok(query::agents(&state_for(args)?)),
         "cctop_advice" => Ok(query::advice(&state_for(args)?)),
         "cctop_coach" => Ok(query::coach(&state_for(args)?, None)),
+        "cctop_overview" => {
+            let max_turns = match args.get("max_turns") {
+                None => crate::overview::DEFAULT_MAX_TURNS,
+                Some(v) => v
+                    .as_u64()
+                    .filter(|n| *n > 0)
+                    .ok_or_else(|| format!("max_turns {v}: expected a positive integer"))?
+                    as usize,
+            };
+            let mut state = state_for(args)?;
+            state.refresh_lineage();
+            Ok(query::overview(&state, max_turns))
+        }
         "cctop_prefix" => {
             let state = state_for(args)?;
             let mut v = query::prefix(&state);
             v["sources"] = query::sources(&state);
             Ok(v)
         }
-        "cctop_lineage" => {
-            let t = Target {
-                session: args
-                    .get("session")
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-                    .or_else(parent_session),
-                cwd: None,
-                wait: false,
-                lines: None,
-            };
-            let (path, _) = crate::load::resolve(&t).map_err(|e| e.to_string())?;
-            Ok(query::lineage(&path))
-        }
+        "cctop_lineage" => Ok(query::lineage(&state_for(args)?)),
         "cctop_events" => {
             let since = match args.get("since").and_then(Value::as_str) {
                 Some(s) => Some(
@@ -200,9 +204,9 @@ mod tests {
             );
             assert!(t["inputSchema"]["type"] == "object");
         }
-        assert_eq!(tools().len(), 10);
+        assert_eq!(tools().len(), 11);
         let tokens = schema_tokens();
-        assert!(tokens < 900, "schemas ≈ {tokens} tokens");
+        assert!(tokens < 1000, "schemas ≈ {tokens} tokens");
     }
 
     #[test]
@@ -237,7 +241,7 @@ mod tests {
         );
         assert_eq!(lines[0]["result"]["serverInfo"]["name"], "cctop");
         assert_eq!(lines[0]["result"]["protocolVersion"], PROTOCOL_VERSION);
-        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 10);
+        assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 11);
         let summary: Value =
             serde_json::from_str(lines[2]["result"]["content"][0]["text"].as_str().unwrap())
                 .unwrap();
@@ -257,6 +261,36 @@ mod tests {
         // Same JSON as `cctop query`.
         let via_query = crate::query::explain("cache_hit_ratio");
         assert_eq!(explain, via_query);
+    }
+
+    /// The overview tool returns what `cctop query overview` prints, with
+    /// the per-turn charts cut to `max_turns`.
+    #[test]
+    fn overview_tool_matches_the_query() {
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/session-b.jsonl");
+        let v = call("cctop_overview", &json!({"session":fixture,"max_turns":3})).unwrap();
+        let ids: Vec<&str> = v["charts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            ids,
+            ["context", "spend", "cost_per_turn", "cache", "tool_calls"]
+        );
+        assert_eq!(v["charts"][2]["label"], "last 3 turns");
+        assert_eq!(
+            v["charts"][2]["spec"]["series"][0]["points"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        let state = state_for(&json!({"session":fixture})).unwrap();
+        assert_eq!(v, query::overview(&state, 3));
+        let e = call("cctop_overview", &json!({"session":fixture,"max_turns":0})).unwrap_err();
+        assert!(e.contains("max_turns"), "{e}");
     }
 
     #[test]

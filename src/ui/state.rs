@@ -562,6 +562,17 @@ pub struct State {
     pub console_body: Option<usize>,
     /// Console's rule line expanded into the open body's key map (`?`).
     pub console_keys: bool,
+    /// Rows the open body is scrolled down (body 1, the overview, is taller
+    /// than the screen); reset when the body changes.
+    pub console_offset: usize,
+    /// The furthest `console_offset` the last frame allowed, written by the
+    /// render so the keys can stop there.
+    pub console_offset_max: std::cell::Cell<usize>,
+    /// The session's transcript, for the lineage chain's cost.
+    pub transcript: Option<std::path::PathBuf>,
+    /// The ancestors' finished cost (PRD 4), with the parent id it was read
+    /// for: `chain_usd` adds this session's live cost to it.
+    pub ancestors_usd: Option<(String, f64)>,
     /// A view the open panel owns on top of itself (`Enter`: a ledger, a
     /// call's detail, an explanation), closed with Esc.
     pub overlay: Option<PanelId>,
@@ -1986,6 +1997,55 @@ impl State {
     /// Whether the prompt cache is warm right now, with the `≈` flag.
     pub fn cache_warm(&self) -> Option<(bool, bool)> {
         self.cache_clock().map(|c| (c.remaining_ms > 0, c.approx))
+    }
+
+    /// The cost of this session and the ones it came from (PRD 4): the
+    /// ancestors' cost read for the current parent, plus this session's
+    /// live cost. `None` for a session not derived from another, or until
+    /// the ancestors were read ([`State::lineage_due`]).
+    pub fn chain_usd(&self) -> Option<f64> {
+        let (parent, _) = self.agg.derived_from.as_ref()?;
+        let (_, ancestors) = self.ancestors_usd.as_ref().filter(|(p, _)| p == parent)?;
+        Some(crate::lineage::chain_usd(*ancestors, self))
+    }
+
+    /// What to read the ancestors' cost from, when the session is derived
+    /// and they were not read for its current parent yet.
+    pub fn lineage_due(&self) -> Option<crate::lineage::Ask> {
+        let (parent, _) = self.agg.derived_from.as_ref()?;
+        if self
+            .ancestors_usd
+            .as_ref()
+            .is_some_and(|(p, _)| p == parent)
+        {
+            return None;
+        }
+        Some(crate::lineage::Ask::of(self))
+    }
+
+    /// Read the ancestors' cost now, when due (through
+    /// `~/.cctop/lineage-cache.json`). For one-shot callers (`cctop query`,
+    /// MCP); the TUI reads it on a thread of its own.
+    pub fn refresh_lineage(&mut self) {
+        if self.lineage_due().is_none() {
+            return;
+        }
+        let root = crate::baseline::default_projects_dir().unwrap_or_default();
+        let mut cache = crate::lineage::Cache::open(crate::lineage::default_cache_file());
+        self.refresh_lineage_with(&root, &mut cache);
+    }
+
+    /// [`State::refresh_lineage`] with the projects directory and cache given.
+    pub fn refresh_lineage_with(
+        &mut self,
+        projects_root: &std::path::Path,
+        cache: &mut crate::lineage::Cache,
+    ) {
+        let Some(ask) = self.lineage_due() else {
+            return;
+        };
+        let usd = crate::lineage::ancestors_usd(&ask, projects_root, cache);
+        self.ancestors_usd = ask.parent.map(|p| (p, usd));
     }
 
     /// Console's open body: the index a key set, else events (home).
@@ -3720,9 +3780,35 @@ mod tests {
                 .count(),
             1
         );
-        assert!(
-            PermissionWaits.evaluate(&s).is_some(),
-            "3 waits, only 1 joined"
+        let a = PermissionWaits
+            .evaluate(&s)
+            .expect("3 waits, only 1 joined");
+        // The card's split by who decided (PRD 7), in fixed words.
+        assert_eq!(
+            a.evidence_rows,
+            ["who decided the 3 permission waits: you 1 · not known 2"]
         );
+    }
+
+    #[test]
+    fn the_permission_card_splits_the_waits_by_who_decided() {
+        use super::tests_support::{state_with_waits, trace_spans};
+        use crate::advisor::rules::events::PermissionWaits;
+        use crate::advisor::Rule;
+        let mut s = state_with_waits(5);
+        s.apply_otel(&crate::otel::SessionData {
+            spans: trace_spans(&["user", "user", "user", "config", "classifier"]).into(),
+            ..Default::default()
+        });
+        let a = PermissionWaits.evaluate(&s).expect("3 of the person's own");
+        assert_eq!(
+            a.evidence_rows,
+            ["who decided the 5 permission waits: you 3 · rule 1 · classifier 1"]
+        );
+        // Without traces, no split row.
+        let plain = PermissionWaits
+            .evaluate(&state_with_waits(3))
+            .expect("3 waits");
+        assert!(plain.evidence_rows.is_empty());
     }
 }
