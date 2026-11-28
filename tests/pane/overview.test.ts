@@ -48,7 +48,10 @@ function build(opts: Options = {}): Model {
   if (opts.summary ?? true) actions.push({ type: 'query', verb: 'summary', data: fixture('summary') });
   const dash = opts.dashboard ?? true;
   if (dash !== false) actions.push({ type: 'query', verb: 'dashboard', data: dash === true ? fixture('dashboard') : dash });
-  if (opts.body !== undefined) actions.push({ type: 'overview.body', id: opts.body });
+  // The bodies as the TUI opens Console (events, the way home): the TUI
+  // snapshots these rows are compared with. The pane's own default, the
+  // overview's charts, is tested below and in overview-charts.test.ts.
+  actions.push({ type: 'overview.body', id: opts.body ?? 'events' });
   return actions.reduce(reduce, initialModel());
 }
 
@@ -178,7 +181,7 @@ test('the width ladder: three cells per row at 80, two below; wide, mid and shor
 test('cells are keyed Boxes of plain Buttons sharing one scope and one press; the open cell is Text; a press opens the body', () => {
   const opened: string[] = [];
   const keys: boolean[] = [];
-  const actions: OverviewActions = { open: (id) => opened.push(id), keys: (k) => keys.push(k) };
+  const actions: OverviewActions = { open: (id) => opened.push(id), keys: (k) => keys.push(k), readout: () => undefined };
   // With tools open: five cell Buttons (the open cell is Text), `a` and `0`.
   const tree = renderOverview(build({ body: 'tools' }), el, 85, 'dock', NOW, { el, actions });
   const bs = buttons(tree);
@@ -313,7 +316,7 @@ test('fixture W live: the header strip renders row-identical on both surfaces at
     const tui = snap.split('\n---\n')[1].split('\n').map((l) => l.replace(/\s+$/, ''));
     while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
     tui.pop(); // the footer
-    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined }).map((l) => l.replace(/\s+$/, ''));
     assert.match(pane[1], /^ wf {5}▸ Verify/);
     for (let i = 0; i < tui.length; i++) assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}`);
   }
@@ -334,22 +337,12 @@ test('fixture B renders row-identical on both surfaces at 54, 67 and 85 columns'
       .map((l) => l.replace(/\s+$/, ''));
     while (tui.length > 0 && tui[tui.length - 1] === '') tui.pop();
     tui.pop(); // the footer
-    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined }).map((l) => l.replace(/\s+$/, ''));
+    const pane = raw(model, columns, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined }).map((l) => l.replace(/\s+$/, ''));
     assert.ok(tui.length >= 10, `${columns}: ${tui.length} TUI rows`);
     for (let i = 0; i < tui.length; i++) {
       assert.equal(pane[i], tui[i], `${columns} columns, row ${i + 1}\n  tui:  ${JSON.stringify(tui[i])}\n  pane: ${JSON.stringify(pane[i])}`);
     }
   }
-});
-
-// The window's composition (PRD 3): the context body's row, from the dashboard
-// object, is the TUI's row character for character; the label names the source.
-test('the context body draws the composition row identically to the TUI at 85 columns', () => {
-  const snap = readFileSync(join(repo, 'src', 'snapshots', 'cctop__theme__fixture_b_snapshots__fixture_b_console_context_85x24.snap'), 'utf8');
-  const tuiRow = snap.split('\n').find((l) => l.startsWith('  per /context'));
-  assert.ok(tuiRow !== undefined, 'the TUI snapshot has the composition row');
-  const pane = raw(build({ dashboard: fixture('dashboard-b'), body: 'context' }), 85).map((l) => l.replace(/\s+$/, ''));
-  assert.ok(pane.includes(tuiRow!.replace(/\s+$/, '')), `pane rows: ${JSON.stringify(pane)}`);
 });
 
 // The status-bearing header (PRD 2): the TUI's `header_workspace_*` insta
@@ -375,6 +368,16 @@ test('a status-bearing header renders row-identical on both surfaces at 80, 120 
   assert.match(rows.get(200) ?? '', /acme\/shop · wt feat · \+1 dir · style Concise · agent: reviewer · remote · PR #121 · v2\.1\.270/);
   assert.match(rows.get(120) ?? '', /\/home\/user\/project · acme\/shop/);
   assert.doesNotMatch(rows.get(120) ?? '', /remote/);
+});
+
+// Lineage (PRD 4): `from <id8> · <via>` rides in the object's header line and
+// is drawn with it; a session that started fresh has no such words.
+test('the lineage words are in the header when the object carries them, and absent without', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 200)[0], /from [0-9a-f]{8}/);
+  dash.header.from = 'from 65b51d4c · subprocess';
+  dash.header.line = dash.header.line.replace(' · v2.1.270', ' · from 65b51d4c · subprocess · v2.1.270');
+  assert.match(raw(build({ dashboard: dash }), 200)[0], /from 65b51d4c · subprocess/);
 });
 
 // The hooks badge (PRD 5): an old `cctop install` lacks events, the object's
@@ -421,4 +424,41 @@ test('the rules badge renders row-identical on both surfaces and is absent witho
   const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
   assert.doesNotMatch(pane40, /ZDR/);
   assert.equal(pane40, snapRow('header_rules_hooks_40'));
+});
+
+// Spec §5.2 / POC 7: the Overview opens on the charts (body 1), the act line
+// (the nudge) pinned under them above the footer; `0` still goes home.
+test('the Overview opens on the charts, the act line pinned under them above the footer', () => {
+  const model = [
+    { type: 'binary', binary: 'present' },
+    { type: 'query', verb: 'dashboard', data: fixture('dashboard-b') },
+    { type: 'query', verb: 'overview', data: fixture('overview-b') },
+  ].reduce((m, a) => reduce(m, a as Action), initialModel());
+  assert.equal(model.body, 'context');
+  const lines = raw(model, 105, 'dock', { open: () => undefined, keys: () => undefined, readout: () => undefined });
+  const rule = lines.findIndex((l) => l.startsWith('─── context '));
+  assert.ok(rule > 0, JSON.stringify(lines));
+  assert.ok(lines[rule + 1]?.startsWith(' Context window'), lines[rule + 1]);
+  const act = lines.findIndex((l) => l.startsWith(' ▸ '));
+  assert.ok(act > rule, `the act line is under the charts: ${act} > ${rule}`);
+  assert.equal(lines.at(-1), ' spent so far $18.75 · what this session would cost at API prices');
+  assert.ok(act < lines.length - 1);
+  // Before the overview arrives: the waiting line, the act line under it.
+  const waiting = raw(reduce(model, { type: 'query', verb: 'overview', data: null }), 105);
+  assert.equal(waiting[waiting.findIndex((l) => l.startsWith('─── context ')) + 1], ' waiting for cctop query overview…');
+  assert.ok(waiting.at(-1)?.startsWith(' ') && waiting.some((l) => l.startsWith(' ▸ ')));
+});
+
+// A surface without Raster and Image (no terminal table): the pictures are
+// blank boxes, but the turn numbers are still Console's Buttons, not gone.
+test('without the terminal\'s table the turn numbers stay Buttons', () => {
+  const model = [
+    { type: 'binary', binary: 'present' },
+    { type: 'query', verb: 'dashboard', data: fixture('dashboard-b') },
+    { type: 'query', verb: 'overview', data: fixture('overview-b') },
+  ].reduce((m, a) => reduce(m, a as Action), initialModel());
+  const actions = { open: () => undefined, keys: () => undefined, readout: () => undefined };
+  const tree = renderOverview(model, el, 105, 'dock', NOW, { el, actions });
+  assert.ok(buttons(tree).some((b) => b.props?.key === 'turn-cost_per_turn-3'));
+  has(renderToText(tree, 105), /│ +1  2  3  4  5  6$/);
 });

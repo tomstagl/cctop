@@ -13,9 +13,10 @@
 // needs (FR-16). Inline placement (the classic renderer's few rows above the
 // prompt) is the strip: the status line, the coach's L1 line, the act line.
 import type { ElementTable, RenderElement } from 'claude-code';
-import { TESTED_WITH, usageRows, type Model, type Placement, type TurnState } from '../model';
+import { TESTED_WITH, UNSUPPORTED, isSupported, usageRows, type Model, type Placement, type TurnState } from '../model';
 import { DASH, at, formatDuration, isMissing, stringAt } from './format';
 import { ACCENT, THEME, clip, dim, fit, join, seg, textRow, width, lineWidth, type Line, type Seg } from './frame';
+import { overviewOf, renderOverviewCharts, type ChartElements, type Pictures } from './overview-charts';
 
 /** The elements a view draws with, as `$.ui.resolve(e)` answers them. */
 export type ViewElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text'>;
@@ -229,7 +230,12 @@ export type OverviewActions = {
   open(id: string): void;
   /** `? keys` pressed: expand the rule line into the key map, or collapse it. */
   keys(keys: boolean): void;
+  /** A turn number pressed under one of the overview's per-turn charts: show that turn's readout. */
+  readout(chart: string, turn: number): void;
 };
+
+/** What body 1 draws its charts with: the full element table (Raster, Image) and the pictures pane.tsx rendered. */
+export type OverviewCharts = { el: ChartElements; pictures: Pictures };
 
 /** What the pane's keys are, when the rule line is expanded: the hotkeys, and the pointer. */
 export const PANE_KEYS = '1-6 a 0 body  ·  click a cell, the act line or home  ·  the view bar for the other views';
@@ -468,6 +474,38 @@ function renderInline(model: Model, el: ViewElements, columns: number, now: numb
 }
 
 /**
+ * Body 1 is the overview (mod-pane US-007), what the Overview opens on
+ * (spec §5.2, POC 7): the charts of `cctop query overview` at the TUI's
+ * sizes, with the pictures pane.tsx rendered for them and the act line (the
+ * nudge) pinned under them above the footer; a line until the binary has
+ * answered.
+ */
+function overviewBody(model: Model, el: ViewElements, columns: number, buttons: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts } | undefined, pinned: RenderElement[]): RenderElement {
+  const { Box } = el;
+  const o = overviewOf(model.query.overview);
+  if (o === null) {
+    const text = isSupported(model, 'overview') ? 'waiting for cctop query overview…' : `overview: ${UNSUPPORTED}`;
+    return (
+      <Box flexDirection="column">
+        {textRow([dim(` ${text}`)], el, 'body_context')}
+        {pinned}
+      </Box>
+    );
+  }
+  // Without the terminal's table (another surface, a test's bare elements)
+  // the pictures are blank boxes; the turn numbers keep Console's Buttons.
+  const bare = { ...el, Button: buttons?.el.Button ?? el.Box, Raster: el.Box, Image: el.Box } as unknown as ChartElements;
+  const actions = buttons?.actions;
+  return renderOverviewCharts(o, columns, {
+    el: buttons?.charts?.el ?? bare,
+    ...(buttons?.charts ? { pictures: buttons.charts.pictures } : {}),
+    readouts: model.readouts,
+    pinned,
+    ...(actions ? { actions: { readout: (chart: string, turn: number) => actions.readout(chart, turn) } } : {}),
+  });
+}
+
+/**
  * Console: the header line, the six cells, the act line, the rule line and
  * the open body's rows. Inline placement draws the strip (renderInline).
  */
@@ -477,7 +515,7 @@ export function renderOverview(
   columns: number,
   placement: Placement,
   now: number,
-  buttons?: { el: OverviewElements; actions: OverviewActions },
+  buttons?: { el: OverviewElements; actions: OverviewActions; charts?: OverviewCharts },
 ): RenderElement {
   const { Box } = el;
   if (placement !== 'dock') return renderInline(model, el, columns, now);
@@ -508,11 +546,14 @@ export function renderOverview(
   // The workflow strip, verbatim, above the cells while a run is live (the TUI's row 2).
   if (d.workflow !== null) body.push(textRow(fit(d.workflow, columns), el, 'workflow_failed'));
   body.push(...cellRows(d, open, columns, bel, actions));
-  body.push(...actRows(d, open, columns, bel, actions));
+  const acts = actRows(d, open, columns, bel, actions);
   const shown = d.bodies.find((b) => b.id === open) ?? d.bodies.find((b) => b.id === 'events') ?? d.bodies[0];
+  // Over the charts the act line is pinned beneath them; over a body, above it.
+  if (shown?.id !== 'context') body.push(...acts);
   if (shown !== undefined) {
     body.push(ruleRow(shown, model.keys, columns, bel, actions));
-    shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
+    if (shown.id === 'context') body.push(overviewBody(model, el, columns, buttons, acts));
+    else shown.rows.forEach((row, i) => body.push(textRow(row.length === 0 ? [seg('')] : fit(row, columns), el, i === 0 ? `body_${shown.id}` : undefined)));
   }
   return <Box flexDirection="column">{body}</Box>;
 }

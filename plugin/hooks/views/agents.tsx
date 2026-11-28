@@ -218,7 +218,7 @@ function detailRows(rows: string[], heads: number): FrameRow[] {
 }
 
 /** The agent rows as the mapping reads them: id, what the Agent call said, whether it runs. */
-function agentRows(agents: unknown[]): AgentRow[] {
+export function agentRows(agents: unknown[]): AgentRow[] {
   return agents.flatMap((a) => {
     const id = stringAt(a, 'id');
     if (id === null || id === undefined) return [];

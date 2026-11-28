@@ -10,6 +10,7 @@ import {
   HIDDEN_STATUS,
   initialModel,
   outcomeText,
+  overviewShown,
   reduce,
   unsupportedVerbs,
   UNSUPPORTED,
@@ -21,11 +22,15 @@ import {
   type View,
 } from './model';
 import { spoolText } from './breakdown';
+import { chartsDecision, drawPicture, pictureHash, probeOf, startCharts, type ChartRenderer, type ChartsEnv, type ChartsMode, type Picture } from './charts';
 import { createPoller, writeMarker, type Poller, type PollerEngine } from './poller';
 import { initialNotifyState, nudgeActions, noteFailure, noteResult, resetActions, resetCancels, settledRules, type NotifyState } from './notify';
-import { coachOf, statusLine, type CoachActions, type LightId } from './views/coach';
+import { coachOf, copiedText, DRAFT_KEPT, openerFor, settingsPath, settingsScope, statusLine, USER_SETTINGS, type CoachActions, type LightId, type SettingsKind } from './views/coach';
+import { missPlacements, nudgePlacement, placedTree, type PlacedRow } from './views/placed';
+import { ACT_ID, ACT_ROWS, renderAct, type ActActions } from './views/act';
 import { renderView } from './views/index';
 import { badgesLine, header, type OverviewActions } from './views/overview';
+import { maxTurnsFor, overviewOf, pictureJobs, type Pictures } from './views/overview-charts';
 
 // Re-exported so the checked-in `$` contract's own version (US-009) has one
 // source (`model.ts`, already imported by both this file and the views) and
@@ -51,6 +56,9 @@ export const OPEN_SETTLE_MS = 800;
 // as hidden (the /diff panel took the dock after the open) and the status
 // line under the prompt says so.
 export const HIDDEN_AFTER_MS = 2000;
+// How long after a render that drew the first Image its probe blit waits:
+// the tree is mounted at the surface's next frame, after the hook returned.
+export const PROBE_AFTER_MS = 200;
 const INSTALL_HINT = 'needs the cctop binary: brew install tomstagl/tap/cctop';
 // The views in view-bar order; the `view` is the /cctop-pane argument.
 const VIEWS: { view: View; label: string }[] = [
@@ -80,6 +88,27 @@ let usageTimer: Timer | null = null;
 // already: once per session, and never retried in a loop (the next turn
 // simply tries again).
 let breakdownFailureLogged = false;
+// charts.wasm, compiled and instantiated once per session.start (null until
+// then, and for good when it would not load: the query's cells are drawn).
+let chartRenderer: ChartRenderer | null = null;
+// The overview's pictures (US-007), rendered off the render hook: by key, the
+// picture and the hash of what it was drawn from, so only a changed chart is
+// drawn again. `mounted` is what the last render drew under each key (a
+// blit needs the same kind and size mounted), `chartsTimer` the pending
+// refresh, `chartsBusy`/`chartsAgain` one refresh at a time with one more
+// after it, `probeTimer` the probe blit waiting for its Image to mount.
+let pictures = new Map<string, { hash: string; picture: Picture }>();
+let mounted = new Map<string, Picture>();
+let chartsTimer: Timer | null = null;
+let chartsBusy = false;
+let chartsAgain = false;
+let probeTimer: Timer | null = null;
+// The overview's object is read again with the next refresh: its charts came
+// into view, or the turns that fit the width changed.
+let chartsQuery = false;
+// Probe blits sent this session that came back saying nothing of the terminal.
+let probeTries = 0;
+const PROBE_TRIES = 5;
 // The query poller, built at session.start and run while the pane is open
 // and the binary is present.
 let poller: Poller | null = null;
@@ -104,6 +133,15 @@ let notifyState: NotifyState = initialNotifyState();
 // a terminal ignores `at` and raises a notification at once, so the wait is
 // ours and the notification is sent only when the reset arrives.
 const resetTimers = new Map<string, Timer>();
+// Rows placed in the transcript (`$.ui.place`), by id: what each draws from
+// when the engine asks. Each id is placed once. `standing` holds what the
+// first coach and summary answers after each pane open already had (the
+// nudge in the slot, the located misses of a resumed session or of the time
+// the pane was closed): history is not replayed into the transcript. The
+// flags say which answers have been taken since the last open.
+const placedRows = new Map<string, PlacedRow>();
+const standing = new Set<string>();
+let standingTaken = { coach: false, summary: false };
 
 // Asks for a redraw as of `now` (the clock's answer, or the trailing timer's
 // due time) and arms the hidden watch.
@@ -158,6 +196,7 @@ function unpinStatus($: EngineInterface): void {
 // open waiting on it and lifts the hidden status if it was pinned.
 function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): void {
   const wasHidden = model.visibility === 'hidden';
+  const before = model;
   model = reduce(model, {
     type: 'render',
     at: now,
@@ -167,6 +206,13 @@ function noteRender($: EngineInterface, e: RenderInput<'Pane'>, now: number): vo
   });
   // The view in force (a switch from the tasks list shows here too).
   model = reduce(model, { type: 'agents.viewed', id: e.props.view?.agentId ?? null });
+  // A new width is a full redraw of the overview: its pictures at the new
+  // sizes, and its object again when the turns that fit changed.
+  if (overviewShown(model) && model.bodyColumns !== before.bodyColumns) {
+    // The read, like the pictures, a timer away: nothing is spawned from the render hook.
+    if (before.bodyColumns === null || maxTurnsFor(before.bodyColumns) !== maxTurnsFor(e.props.bodyColumns)) chartsQuery = true;
+    scheduleCharts($);
+  }
   stopHiddenTimer();
   unpinStatus($);
   // The width may have changed the status line's form.
@@ -232,9 +278,19 @@ function stopRenderTimer(): void {
 function replaceModel($: EngineInterface, next: Model): void {
   const before = model;
   model = next;
-  if (model.open) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  if (model.open || model.actOpen) requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
   if (model.query.coach !== before.query.coach) coachChanged($);
-  if (model.sessionId !== before.sessionId) agentsAsked.clear();
+  if (model.query.coach !== before.query.coach || model.query.summary !== before.query.summary) placeNotes($, model.query.coach !== before.query.coach, model.query.summary !== before.query.summary);
+  if (model.queryAt !== before.queryAt) checkFilled($);
+  overviewChanged($, before);
+  if (model.sessionId !== before.sessionId) {
+    agentsAsked.clear();
+    placedRows.clear();
+    standing.clear();
+    standingTaken = { coach: false, summary: false };
+    // The act dialog acts on the old session's nudges: it closes.
+    if (model.actOpen) closeAct($).catch((err: unknown) => $.ui.log(`cctop: act dialog close failed: ${String(err)}`));
+  }
   if (model.query.agents !== before.query.agents) agentsPolled($);
 }
 
@@ -288,12 +344,148 @@ function coachChanged($: EngineInterface): void {
 }
 
 // What Console's targets do: a cell, the act line or `0 home` opens its
-// body in place; the header never moves.
+// body in place; the header never moves. A turn number under one of the
+// overview's per-turn charts shows that turn's readout.
 function overviewActions($: EngineInterface): OverviewActions {
   return {
     open: (id) => apply($, { type: 'overview.body', id }),
     keys: (keys) => apply($, { type: 'overview.keys', keys }),
+    readout: (chart, turn) => apply($, { type: 'overview.readout', chart, turn }),
   };
+}
+
+// The picture-or-cells mode the overview's pictures are drawn in now.
+function modeOf(m: Model): ChartsMode {
+  return m.charts === null ? 'cells' : chartsDecision(m.charts).mode;
+}
+
+// What changed for the overview's charts: body 1 just came into view (its
+// verb is read at once, not at the next tick), or its object or what the
+// pane knows of picture-or-cells moved while it is shown (the pictures are
+// drawn again, off the render hook; a new width is noteRender's).
+function overviewChanged($: EngineInterface, before: Model): void {
+  if (!overviewShown(model)) return;
+  const opened = !overviewShown(before);
+  if (opened) chartsQuery = true;
+  if (opened || model.query.overview !== before.query.overview || model.charts !== before.charts) scheduleCharts($);
+}
+
+// One refresh of the overview's pictures, a timer away: never inside a hook
+// (the render hook among them), and the triggers of one moment fold into it.
+// When asked, the overview's verb is read first, on its own.
+function scheduleCharts($: EngineInterface): void {
+  if (chartsTimer !== null) return;
+  chartsTimer = $.clock.after(1, () => {
+    chartsTimer = null;
+    const ask = chartsQuery;
+    chartsQuery = false;
+    if (ask) void poller?.queryNow('overview');
+    void refreshCharts($).catch((err: unknown) => $.ui.log(`cctop: charts failed: ${String(err)}`));
+  });
+}
+
+// Draws the overview's pictures that changed (spec §5.4): one wasm call per
+// picture whose spec, size or mode moved since it was last drawn; a picture
+// mounted at the same kind and size is swapped in place with `$.ui.blit`,
+// anything else (a first draw, a new size, a refused blit) asks for one
+// redraw. Pictures no longer drawn are dropped.
+async function refreshCharts($: EngineInterface): Promise<void> {
+  if (chartsBusy) {
+    chartsAgain = true;
+    return;
+  }
+  chartsBusy = true;
+  try {
+    const o = overviewOf(model.query.overview);
+    const columns = model.bodyColumns;
+    if (!overviewShown(model) || o === null || columns === null) return;
+    const mode = modeOf(model);
+    const jobs = pictureJobs(o, columns);
+    const keys = new Set(jobs.map((j) => j.key));
+    for (const key of [...pictures.keys()]) if (!keys.has(key)) pictures.delete(key);
+    let redraw = false;
+    const blits: Promise<void>[] = [];
+    // The query's cells are drawn only until the wasm is there: its arrival is a change too.
+    const source = chartRenderer === null ? 'query' : 'wasm';
+    for (const job of jobs) {
+      const hash = `${pictureHash(job, mode)}:${source}`;
+      if (pictures.get(job.key)?.hash === hash) continue;
+      const picture = drawPicture(chartRenderer, job, mode);
+      if (picture === null) {
+        pictures.delete(job.key);
+        redraw = true;
+        continue;
+      }
+      pictures.set(job.key, { hash, picture });
+      const shown = mounted.get(job.key);
+      if (shown === undefined || shown.kind !== picture.kind || shown.cols !== picture.cols || shown.rows !== picture.rows) {
+        redraw = true;
+        continue;
+      }
+      blits.push(blitPicture($, job.key, picture).then((ok) => {
+        if (ok) mounted.set(job.key, picture);
+        else redraw = true;
+      }));
+    }
+    await Promise.all(blits);
+    if (redraw && model.open) await requestRender($);
+  } finally {
+    chartsBusy = false;
+    if (chartsAgain) {
+      chartsAgain = false;
+      scheduleCharts($);
+    }
+  }
+}
+
+function stopChartTimers(): void {
+  chartsTimer?.cancel();
+  chartsTimer = null;
+  probeTimer?.cancel();
+  probeTimer = null;
+}
+
+// Swaps one mounted picture: an Image's source or a Raster's cells, at the
+// size it is mounted. True when the surface took it.
+function blitPicture($: EngineInterface, key: string, picture: Picture): Promise<boolean> {
+  const args =
+    picture.kind === 'image'
+      ? { requestId: PANE_ID, key, source: { png: picture.png }, columns: picture.cols, rows: picture.rows }
+      : { requestId: PANE_ID, key, cells: picture.cells, columns: picture.cols, rows: picture.rows };
+  return $.ui.blit(args).then(
+    (answer) => answer.deny === undefined,
+    (err: unknown) => {
+      $.ui.log(`cctop: chart blit failed: ${String(err)}`);
+      return false;
+    },
+  );
+}
+
+// The pictures a render may draw, each one it draws noted as mounted.
+function picturesForRender(): Pictures {
+  mounted = new Map();
+  return {
+    get: (key) => {
+      const p = pictures.get(key)?.picture;
+      if (p !== undefined) mounted.set(key, p);
+      return p;
+    },
+  };
+}
+
+// After a render that drew an Image while the terminal's answer is not known:
+// the probe blit (§5.3) once the Image is mounted, a moment after the tree.
+function probeAfterRender($: EngineInterface): void {
+  if (probeTimer !== null || probeTries >= PROBE_TRIES || model.charts === null || model.charts.probe !== 'unknown') return;
+  const first = [...mounted.entries()].find(([, p]) => p.kind === 'image');
+  if (first === undefined) return;
+  const [key, picture] = first;
+  if (picture.kind !== 'image') return;
+  probeTimer = $.clock.after(PROBE_AFTER_MS, () => {
+    probeTimer = null;
+    if (mounted.get(key) !== picture) return;
+    void probeCharts($, PANE_ID, key, picture.png);
+  });
 }
 
 // What the agents view's Buttons do: a run's row opens its detail, `back` the
@@ -346,6 +538,86 @@ function readNotifyEnv($: EngineInterface): Promise<void> {
       notifyOn = value === '1';
     })
     .catch((err: unknown) => $.ui.log(`cctop: env read failed: ${String(err)}`));
+}
+
+// What the terminal says of itself, one literal `$.env.get` each (the
+// validator reads the names off the source). Unset and empty are absent.
+async function readChartsEnv($: EngineInterface, config: string | undefined): Promise<ChartsEnv> {
+  const set = (v: string | undefined): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
+  const [override, termProgram, kitty, tmux, iterm] = await Promise.all([
+    $.env.get("CCTOP_PANE_CHARTS"),
+    $.env.get("TERM_PROGRAM"),
+    $.env.get("KITTY_WINDOW_ID"),
+    $.env.get("TMUX"),
+    $.env.get("ITERM_SESSION_ID"),
+  ]);
+  const env: ChartsEnv = { kitty: set(kitty) !== undefined, tmux: set(tmux) !== undefined, iterm: set(iterm) !== undefined };
+  if (set(override) !== undefined) env.override = set(override);
+  if (config !== undefined) env.config = config;
+  if (set(termProgram) !== undefined) env.termProgram = set(termProgram);
+  return env;
+}
+
+// `[pane] charts` from `cctop query config`; undefined when the binary is
+// missing, older than the verb, or answers something else.
+function readChartsConfig($: EngineInterface): Promise<string | undefined> {
+  return $.process
+    .run(['cctop', 'query', 'config'], { timeoutMs: VERSION_TIMEOUT_MS })
+    .then((result) => {
+      if (result.exitCode !== 0) return undefined;
+      const charts = (JSON.parse(result.stdout) as { pane?: { charts?: unknown } }).pane?.charts;
+      return typeof charts === 'string' ? charts : undefined;
+    })
+    .catch(() => undefined);
+}
+
+// US-006: compile charts.wasm once (a literal path, here, for the validator),
+// read the terminal's environment and the config, decide picture or cells,
+// and tell the marker. A wasm that will not load is logged once and leaves
+// the cells the query carries. Never awaited by a hook; `detected` settles
+// when detectBinary has put its answer in the model.
+async function initCharts($: EngineInterface, detected: Promise<void>): Promise<void> {
+  const runtime = await startCharts(
+    () => $.wasm.compile('./charts.wasm'),
+    (text) => $.ui.log(text),
+  );
+  chartRenderer = runtime.renderer;
+  // The config is the binary's to say: only asked once it is known to be there.
+  await detected;
+  const config = model.binary === 'present' ? await readChartsConfig($) : undefined;
+  const env = await readChartsEnv($, config);
+  apply($, { type: 'charts.info', info: { env, probe: 'unknown', wasm: runtime.wasm } });
+  updateMarker($);
+}
+
+// How the pane draws charts now: `Image` or `Raster`.
+export function chartsMode(): ChartsMode {
+  return modeOf(model);
+}
+
+// The wasm renderer, or null when it would not load.
+export function chartsRenderer(): ChartRenderer | null {
+  return chartRenderer;
+}
+
+// The probe blit (§5.3): the first time a chart is drawn as an `Image`, the
+// same source is blitted once. A `deny` naming the alt means the terminal
+// draws the alt, so the session is cells; `fix` (tmux's passthrough) goes to
+// the marker. A deny that says nothing of the terminal (not mounted yet, no
+// surface) leaves it unknown: a later render tries again, PROBE_TRIES times.
+export async function probeCharts($: EngineInterface, requestId: string, key: string, png: string): Promise<void> {
+  if (model.charts === null || model.charts.probe !== 'unknown') return;
+  try {
+    probeTries += 1;
+    const answer = await $.ui.blit({ requestId, key, source: { png } });
+    const probe = probeOf(answer);
+    if (probe === 'unknown') return;
+    apply($, { type: 'charts.probe', probe, ...(answer.fix !== undefined ? { fix: answer.fix } : {}) });
+    updateMarker($);
+    invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  } catch (err) {
+    $.ui.log(`cctop: chart probe failed: ${String(err)}`);
+  }
 }
 
 function sendNotify($: EngineInterface, text: string, key: string, options: { at?: number; untilBack?: boolean } = {}): void {
@@ -426,36 +698,222 @@ function noteStop($: EngineInterface): void {
   poller?.pollNow();
 }
 
-// What the coach view's Buttons do: `fill` writes a prompt- or slash-class
-// action into the prompt box (never submits it), `snooze` asks the binary
-// (queued for the TUI while it runs) and re-polls, `why` and `light` are
-// view state.
+// What the coach view's Buttons do. None of it acts on the session: `fill`
+// drafts in an empty prompt box (never submits, never replaces a draft; the
+// card then says nothing was sent), `copy` puts a rule or a setting on the
+// clipboard and says which settings file it belongs in, `openSettings`
+// opens that file in the person's editor (cctop never writes it), `snooze`
+// and `gotIt` ask the binary (queued for the TUI while it runs) and take its
+// answer; `agents`, `light` and `next` are view state.
 function coachActions($: EngineInterface): CoachActions {
   return {
-    fill: (text) => {
-      $.prompt
-        .fill({ text })
-        .then(({ isFilled }) => {
-          if (!isFilled) $.ui.toast('cctop: the prompt box is busy — the action was not filled');
-        })
-        .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
-    },
-    snooze: (rule) => {
-      const id = model.sessionId;
-      if (id === null) return;
-      $.process
-        .run(['cctop', 'query', 'coach', '--snooze', rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
-        .then((result) => {
-          if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
-          const answer = JSON.parse(result.stdout) as { snooze?: unknown };
-          if (typeof answer.snooze === 'string') $.ui.toast(`cctop: ${answer.snooze}`);
-          apply($, { type: 'query', verb: 'coach', data: answer });
-        })
-        .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
-    },
-    why: () => apply($, { type: 'coach.why', why: !model.coachWhy }),
-    light: (light: LightId) => apply($, { type: 'coach.light', light }),
+    fill: (text) => fillPrompt($, text),
+    copy: (text, kind) => copySetting($, text, kind),
+    openSettings: (kind) => openSettings($, kind),
+    snooze: (rule) => snoozeRule($, rule, '--snooze'),
+    gotIt: (rule) => snoozeRule($, rule, '--snooze-session'),
+    agents: () => selectView($, 'agents'),
+    light: (light: LightId | 'none') => apply($, { type: 'coach.light', light }),
+    next: (id) => apply($, { type: 'coach.next', id }),
+    act: (id) => openAct($, id),
   };
+}
+
+// Notes where they happened (US-010): a NOW nudge (`nudge-<fire time>`) and
+// a located cache miss that came after the first summary (`miss-<turn>`) are
+// placed at the transcript's end once each, and only between turns, so they
+// land at the turn end. Display only: nothing is written to the transcript.
+function placeNotes($: EngineInterface, coachMoved: boolean, summaryMoved: boolean): void {
+  const nudge = nudgePlacement(coachOf(model.query.coach));
+  const misses = missPlacements(model.query.summary);
+  // What was already there when each answer first arrived (since the load
+  // or the last open) is taken as history, mid-turn or not. Only an answer
+  // that just arrived counts: the other verb's may be from before a close.
+  if (coachMoved && model.query.coach !== undefined && !standingTaken.coach) {
+    standingTaken.coach = true;
+    if (nudge !== null) standing.add(nudge.id);
+  }
+  if (summaryMoved && model.query.summary !== undefined && !standingTaken.summary) {
+    standingTaken.summary = true;
+    for (const m of misses) standing.add(m.id);
+  }
+  if (model.turn.state !== 'busy') {
+    for (const { id, row } of [...(nudge === null ? [] : [nudge]), ...misses]) {
+      if (placedRows.has(id) || standing.has(id)) continue;
+      placedRows.set(id, row);
+      $.ui.place({ id }).catch((err: unknown) => $.ui.log(`cctop: place ${id} failed: ${String(err)}`));
+    }
+  }
+  // A card whose nudge left the slot is redrawn as its settled line, pane open or not
+  // (only a coach change can settle one; an open pane already redraws on every change).
+  if (coachMoved && !model.open && [...placedRows.values()].some((r) => r.kind === 'nudge')) {
+    requestRender($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
+  }
+}
+
+// What the act dialog's buttons do: the coach card's own (one implementation
+// for both). Two differences: a fill, or a switch to the agents view, hands
+// the keyboard back first (the dialog holds it; a fill is refused under a
+// dialog), and the outcome is drawn in the dialog (`notice`), since toasts
+// are held while it is open.
+function actActions($: EngineInterface): ActActions {
+  const card = coachActions($);
+  const then = (run: () => void): void => {
+    closeAct($).then(run, run);
+  };
+  return {
+    ...card,
+    fill: (text) => then(() => card.fill(text)),
+    agents: () => then(() => card.agents()),
+    select: (id) => apply($, { type: 'act.select', id }),
+    jump: (agentId) => then(() => viewAgent($, agentId)),
+  };
+}
+
+// `a` or a press on the nudge: the dialog opens (an open id is retitled)
+// with the keyboard, Esc to close it, and every other plugin's toasts held.
+// Called from a press, so it is placed at any width; a refusal is a toast.
+function openAct($: EngineInterface, id?: string): void {
+  apply($, { type: 'act.open', id: id ?? null });
+  $.ui
+    .open({ id: ACT_ID, title: 'cctop · act', focus: true, closeOnEscape: true, holdToasts: true, rows: ACT_ROWS })
+    .then((opened) => {
+      if (opened.isPlaced === false) {
+        apply($, { type: 'act.close' });
+        $.ui.toast(`cctop: the act dialog was not shown (${opened.reason ?? 'no room'})`);
+      }
+    })
+    .catch((err: unknown) => {
+      apply($, { type: 'act.close' });
+      $.ui.log(`cctop: act dialog failed: ${String(err)}`);
+    });
+}
+
+function closeAct($: EngineInterface): Promise<void> {
+  if (!model.actOpen) return Promise.resolve();
+  return $.ui.close({ id: ACT_ID }).then(() => {
+    apply($, { type: 'act.close' });
+  });
+}
+
+// A toast; while the dialog is open the words are drawn in it instead (toasts
+// are held while it is open and would reappear after it closes).
+function notice($: EngineInterface, text: string): void {
+  if (model.actOpen) apply($, { type: 'act.note', text });
+  else $.ui.toast(text);
+}
+
+// A fill never replaces what the person is typing: the box is read first,
+// and only an empty one is filled. The fill appends (`$.prompt.fill`
+// replaces by default), which on an empty box is the same text, and keeps a
+// draft typed between the read and the fill. A draft, or a box cctop cannot
+// read, keeps the draft and says so; a box already holding this very text is
+// left as it is and counts as filled.
+function fillPrompt($: EngineInterface, text: string): void {
+  readPromptBox($)
+    .then((box) => {
+      if (box === text) {
+        apply($, { type: 'coach.filled', text });
+        return;
+      }
+      if (box !== '') {
+        notice($, DRAFT_KEPT);
+        return;
+      }
+      return $.prompt.fill({ text, mode: 'append' }).then(({ isFilled }) => {
+        if (!isFilled) {
+          notice($, 'cctop: the prompt box is busy — the action was not filled');
+          return;
+        }
+        apply($, { type: 'coach.filled', text });
+      });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: prompt.fill failed: ${String(err)}`));
+}
+
+// The prompt box's draft; null when it cannot be read (a host without
+// `$.prompt.read`, or a read that failed), which a fill treats as a draft.
+function readPromptBox($: EngineInterface): Promise<string | null> {
+  // Called inside the chain: a host without the noun throws there, not here.
+  return Promise.resolve()
+    .then(() => $.prompt.read())
+    .then(
+      (box) => (typeof box?.text === 'string' ? box.text : null),
+      () => null,
+    );
+}
+
+// While the card says a fill is in the box, each poll looks at the box once:
+// emptied (sent, cleared, deleted), the line goes before the next turn does.
+function checkFilled($: EngineInterface): void {
+  if (model.coachFilled === null) return;
+  const filled = model.coachFilled;
+  readPromptBox($)
+    .then((box) => {
+      if (box === '' && model.coachFilled === filled) apply($, { type: 'coach.filled', text: null });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: prompt.read failed: ${String(err)}`));
+}
+
+// The settings file an action concerns, read when pressed (`/cd` moves the
+// root): the project's `.claude/settings.local.json` for an allow rule, the
+// person's `~/.claude/settings.json` for a setting; null when HOME is unset
+// (no shell expands `~`, so there is nothing to hand `open`).
+async function settingsFile($: EngineInterface, kind: SettingsKind): Promise<string | null> {
+  if (settingsScope(kind) === 'project') return settingsPath('project', await $.session.root(), '');
+  const home = await $.env.get('HOME');
+  return typeof home === 'string' && home !== '' ? settingsPath('user', '', home) : null;
+}
+
+function copySetting($: EngineInterface, text: string, kind: SettingsKind): void {
+  Promise.all([$.ui.copy({ text }), settingsFile($, kind)])
+    .then(([copied, path]) => {
+      notice($, copied.isCopied ? copiedText(text, kind, path ?? USER_SETTINGS) : `cctop: nothing was copied (${copied.reason})`);
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: copy failed: ${String(err)}`));
+}
+
+// `open` on macOS, `xdg-open` on Linux: the person's editor shows the file,
+// and what they change there is theirs. A file that is not there yet is not
+// created: the toast says so.
+function openSettings($: EngineInterface, kind: SettingsKind): void {
+  settingsFile($, kind)
+    .then(async (path) => {
+      if (path === null) {
+        notice($, `cctop: HOME is not set: open ${USER_SETTINGS} in your editor`);
+        return;
+      }
+      const opener = openerFor(model.sessionFacts?.platform);
+      if (opener === null) {
+        notice($, `cctop: open ${path} in your editor`);
+        return;
+      }
+      const result = await $.process.run([opener, path], { timeoutMs: 5000 });
+      notice(
+        $,
+        result.exitCode === 0
+          ? `cctop: opened ${path} in your editor. cctop never edits it`
+          : `cctop: could not open ${path} (is it there?): open it in your editor`,
+      );
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: opening settings.json failed: ${String(err)}`));
+}
+
+function snoozeRule($: EngineInterface, rule: string, flag: '--snooze' | '--snooze-session'): void {
+  const id = model.sessionId;
+  if (id === null) return;
+  $.process
+    .run(['cctop', 'query', 'coach', flag, rule, '--session', id, '--surface', 'pane'], { timeoutMs: 5000 })
+    .then((result) => {
+      if (result.exitCode !== 0) throw new Error(`exit ${result.exitCode}`);
+      // The session rotated (`/clear`) while the binary ran: the answer is
+      // the old session's coach, not the new one's.
+      if (model.sessionId !== id) return;
+      const answer = JSON.parse(result.stdout) as { snooze?: unknown };
+      if (typeof answer.snooze === 'string') notice($, `cctop: ${answer.snooze}`);
+      apply($, { type: 'query', verb: 'coach', data: answer });
+    })
+    .catch((err: unknown) => $.ui.log(`cctop: snooze failed: ${String(err)}`));
 }
 
 function apply($: EngineInterface, action: Action): void {
@@ -761,6 +1219,7 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
   const opened = model.open;
   const label = view === undefined ? undefined : VIEWS.find((v) => v.view === view)?.label;
   const openedAt = opened ? model.openedAt : await clockNow($);
+  const before = model;
   model = {
     ...model,
     open: true,
@@ -768,9 +1227,14 @@ async function openPane($: EngineInterface, view?: View): Promise<string> {
     openedAt,
     visibility: opened && model.visibility === 'visible' ? 'visible' : 'unknown',
   };
+  overviewChanged($, before);
   persistPane($);
   if (model.view === 'agents') void readAgents($);
   if (!opened) {
+    // Whatever happened while the pane was closed is history: the first
+    // coach and summary answers after this open are the placed rows'
+    // baseline again, so a miss located meanwhile is not placed here.
+    standingTaken = { coach: false, summary: false };
     // The id first, so a `/clear` since the last look does not wipe the
     // usage read next.
     await poller?.sync();
@@ -797,6 +1261,7 @@ function paneClosed($: EngineInterface): void {
   stopUsageTimer();
   stopRenderTimer();
   stopHiddenTimer();
+  stopChartTimers();
   unpinStatus($);
   if (model.coachStatus !== null) {
     $.ui.status(undefined);
@@ -814,7 +1279,9 @@ async function closePane($: EngineInterface): Promise<void> {
 // A view-bar press: the view changes, the choice is remembered, the pane
 // redraws.
 function selectView($: EngineInterface, view: View): void {
+  const before = model;
   model = { ...model, view };
+  overviewChanged($, before);
   if (view === 'agents') void readAgents($);
   persistPane($);
   invalidateNow($).catch((err: unknown) => $.ui.log(`cctop: redraw failed: ${String(err)}`));
@@ -837,10 +1304,12 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
       </Box>
     );
   }
+  // Raster and Image are the terminal's: elsewhere body 1 draws blank boxes.
+  const charts = e.surface === 'terminal' ? { el: $.ui.resolve(e), pictures: picturesForRender() } : undefined;
   return (
     <Box flexDirection="column">
       {viewBar($, el, columns)}
-      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($), agents: agentsActions($) })}
+      {renderView(model, el, columns, 'dock', now, { el, coach: coachActions($), overview: overviewActions($), agents: agentsActions($), ...(charts ? { charts } : {}) })}
       {model.binary === 'missing' && <Text wrap="truncate">{INSTALL_HINT}</Text>}
       {model.stale && <Text wrap="truncate">cctop query stale</Text>}
       {unsupportedVerbs(model).map((verb) => (
@@ -850,6 +1319,13 @@ function buildPane($: EngineInterface, e: RenderInput<'Pane'>, now: number): Ren
       ))}
     </Box>
   );
+}
+
+// The act dialog's tree: the items and the selected one's detail, drawn by
+// the dialog's own width. It is not the pane: nothing of the pane's render
+// bookkeeping (visibility, the width the status line follows) is touched.
+function buildAct($: EngineInterface, e: RenderInput<'Pane'>): RenderElement {
+  return renderAct(model, $.ui.resolve(e), e.props.bodyColumns, actActions($), e.props.isFocused);
 }
 
 // The view bar, the pane's first row: `cctop  Overview  Tools  …`. The
@@ -960,6 +1436,17 @@ export const register: Register = (on) => {
   renderPending = false;
   poller?.stop();
   poller = null;
+  chartRenderer = null;
+  placedRows.clear();
+  standing.clear();
+  standingTaken = { coach: false, summary: false };
+  pictures = new Map();
+  mounted = new Map();
+  chartsBusy = false;
+  chartsAgain = false;
+  stopChartTimers();
+  probeTries = 0;
+  chartsQuery = false;
 
   // The command is declared once the session is ready; session.start is
   // awaited before the first prompt, so the command is listed from turn one.
@@ -982,7 +1469,9 @@ export const register: Register = (on) => {
     const result = await next(e);
     void announce($, check);
     readModelName($);
-    void detectBinary($).then(() => restorePane($, e.isInteractive));
+    const detected = detectBinary($);
+    void initCharts($, detected).catch((err: unknown) => $.ui.log(`cctop: charts init failed: ${String(err)}`));
+    void detected.then(() => restorePane($, e.isInteractive));
     return result;
   }).catch(($, e, next) => {
     $.ui.log(`cctop: session.start failed: ${next.error.message ?? next.error.kind}`);
@@ -1005,6 +1494,7 @@ export const register: Register = (on) => {
 
   on('turn.complete', async ($, e, next) => {
     apply($, { type: 'turn.complete', at: await clockNow($), durationMs: e.durationMs, reason: e.reason });
+    placeNotes($, false, false);
     stopUsageTimer();
     poller?.reschedule();
     const result = await next(e);
@@ -1100,6 +1590,17 @@ export const register: Register = (on) => {
     return next(e);
   });
 
+  // The dialog's close, by Esc or by a Button: the state follows.
+  on('ui.close', { id: ACT_ID }, ($, e, next) => {
+    return next(e).then((result) => {
+      apply($, { type: 'act.close' });
+      return result;
+    });
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: ui.close failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
   // Every close of the pane, the person's and an unload's as much as the
   // command's, ends the timers and the poller; a close of another pane is
   // not ours.
@@ -1113,10 +1614,22 @@ export const register: Register = (on) => {
     return next(e);
   });
 
+  // A row this plugin placed in the transcript: drawn from what was kept
+  // when it was placed; another plugin's row is not ours.
+  on('ui.render', { component: 'Placed' }, ($, e, next) => {
+    const row = e.props.plugin === $.plugin.name ? placedRows.get(e.props.id) : undefined;
+    if (row === undefined || e.surface !== 'terminal') return next(e);
+    return placedTree(row, coachOf(model.query.coach), e.viewport?.columns ?? 80, $.ui.resolve(e), coachActions($));
+  }).catch(($, e, next) => {
+    $.ui.log(`cctop: render failed: ${next.error.message ?? next.error.kind}`);
+    return next(e);
+  });
+
   // A view that throws must not take the pane down: the error is drawn in
   // one line above the last tree that built, kept in the model for that.
   // The clock is read once per render, before the tree: the frame's time.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId === ACT_ID) return buildAct($, e);
     if (e.requestId !== PANE_ID) return next(e);
     const now = await clockNow($);
     noteRender($, e, now);
@@ -1124,6 +1637,7 @@ export const register: Register = (on) => {
     try {
       const tree = buildPane($, e, now);
       model = { ...model, lastTree: tree };
+      probeAfterRender($);
       return tree;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

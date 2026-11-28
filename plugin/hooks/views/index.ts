@@ -8,11 +8,11 @@ import { renderCoach, type CoachActions, type CoachElements } from './coach';
 import { renderAgents, type AgentsActions } from './agents';
 import { renderEvents } from './events';
 import { renderFiles } from './files';
-import { renderOverview, type OverviewActions, type ViewElements } from './overview';
+import { renderOverview, type OverviewActions, type OverviewCharts, type ViewElements } from './overview';
 import { renderTools } from './tools';
 
 /** What the pane hands the views that press: the Button element and the closures over `$`. */
-export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions; agents: Pick<AgentsActions, 'open' | 'jump'> };
+export type ViewActions = { el: CoachElements; coach: CoachActions; overview: OverviewActions; agents: Pick<AgentsActions, 'open' | 'jump'>; charts?: OverviewCharts };
 
 export function renderView(
   model: Model,
@@ -25,7 +25,7 @@ export function renderView(
   if (placement !== 'dock') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
     case 'coach':
-      return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach);
+      return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach, now);
     case 'tools':
       return renderTools(model, el, columns, now);
     case 'agents':
@@ -37,6 +37,6 @@ export function renderView(
     case 'advisor':
       return renderAdvisor(model, el, columns);
     case 'overview':
-      return renderOverview(model, el, columns, placement, now, actions === undefined ? undefined : { el: actions.el, actions: actions.overview });
+      return renderOverview(model, el, columns, placement, now, actions === undefined ? undefined : { el: actions.el, actions: actions.overview, ...(actions.charts ? { charts: actions.charts } : {}) });
   }
 }

@@ -14,6 +14,8 @@
 // Importing this module also installs the two JSX globals a hooks module
 // compiles against (`h`, `Fragment`): the engine provides them in its own
 // environment, Node does not, so they must exist before a render hook runs.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
   AgentInfo,
   CommandSpec,
@@ -28,6 +30,7 @@ import type {
   PaneCloseArgs,
   PaneOpenArgs,
   ProcessRunResult,
+  PromptBox,
   PromptFillArgs,
   PromptFilled,
   RenderElement,
@@ -38,6 +41,10 @@ import type {
   SessionUsage,
   SiteView,
   Timer,
+  UiBlitArgs,
+  UiBlitResult,
+  UiCopyArgs,
+  UiCopyResult,
   UiNotifyResult,
   UiViewResult,
 } from 'claude-code';
@@ -74,6 +81,17 @@ function h(tag: unknown, props: Props | null | undefined, ...children: unknown[]
 // `<>...</>`: a column Box around the children.
 function Fragment(props: { children?: RenderNode[] }): RenderElement {
   return { type: 'Box', props: { flexDirection: 'column' }, children: props.children ?? [] };
+}
+
+// The shipped charts.wasm, compiled once per test process.
+let compiled: Promise<WebAssembly.Module> | null = null;
+function chartsModule(): Promise<WebAssembly.Module> {
+  compiled ??= (async () => {
+    const bytes = readFileSync(join(__dirname, '..', '..', '..', 'plugin', 'hooks', 'charts.wasm'));
+    const wa = (globalThis as unknown as { WebAssembly: { compile(b: Uint8Array): Promise<WebAssembly.Module> } }).WebAssembly;
+    return wa.compile(bytes);
+  })();
+  return compiled;
 }
 
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -114,9 +132,16 @@ export function fakeElements(presses: Map<string, () => void>): ElementTable<'te
     const { children: _children, ...rest } = props;
     return { type: 'Code', props: rest } as unknown as RenderElement;
   };
+  // The picture leaves keep every prop (key, size, cells, source, alt): what a test inspects.
+  const picture = (type: string) => (props: Props): RenderElement => {
+    const { children: _children, ...rest } = props;
+    return { type, props: rest } as unknown as RenderElement;
+  };
   return {
     Box: plain('Box'),
     Text: plain('Text'),
+    Raster: picture('Raster'),
+    Image: picture('Image'),
     Button,
     Input: leaf('Input'),
     Select: leaf('Select'),
@@ -153,6 +178,8 @@ export type FakeEngineOptions = {
   store?: Record<string, unknown>;
   files?: Record<string, string>;
   plugin?: { name?: string; root?: string };
+  /** `$.wasm.compile('./charts.wasm')`: the real module (default) or a rejection (`CompileError`). */
+  wasm?: 'real' | 'fail';
 };
 
 // What the fake adds on top of `EngineInterface`: the inspection points.
@@ -160,8 +187,16 @@ export type FakeExtras = {
   prompt: {
     /** Every `$.prompt.fill` text, in order. */
     fills: string[];
+    /** Every `$.prompt.fill` mode, in order (`replace` when left out, as the engine takes it). */
+    fillModes: string[];
+    /** When set, what the person types right after a `$.prompt.read()` answers: the draft becomes it. */
+    typedAfterRead: string | null;
     /** What the next fills answer (`isFilled`). */
     filled: boolean;
+    /** The prompt box's draft: what `$.prompt.read()` answers; a fill that took writes it per its mode. */
+    draft: string;
+    /** When true, `$.prompt.read()` rejects. */
+    readFails: boolean;
   };
   ui: {
     /** `$.ui.invalidate` calls, counted per event name. */
@@ -181,12 +216,22 @@ export type FakeExtras = {
     /** `onPress` of every Button drawn, by key; `press(key)` runs one. */
     presses: Map<string, () => void>;
     press: (key: string) => void;
+    /** Every `$.ui.place` id, in order. */
+    places: string[];
     /** Every `$.ui.view` argument, in order; the next calls answer `viewAnswer`. */
     views: SiteView[];
     viewAnswer: UiViewResult;
     /** Run on every `$.ui.invalidate("ui.render")`: how `fakeOn`'s surface learns to draw. */
     renderListeners: (() => void)[];
+    /** Every `$.ui.blit` argument, in order; the next calls answer `blitAnswer`. */
+    blits: UiBlitArgs[];
+    blitAnswer: UiBlitResult;
+    /** Every `$.ui.copy` text, in order; the next calls answer `copyAnswer`. */
+    copies: string[];
+    copyAnswer: { current: UiCopyResult };
   };
+  /** Every path `$.wasm.compile` was asked for, in order. */
+  wasm: { compiles: string[] };
   clock: {
     /** Advances the clock by `ms`, firing every due timer in due order. */
     tick: (ms: number) => void;
@@ -278,7 +323,13 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
   const fills: string[] = [];
   const views: SiteView[] = [];
   const viewAnswer: UiViewResult = {};
+  const blits: UiBlitArgs[] = [];
+  const blitAnswer: UiBlitResult = {};
+  const copies: string[] = [];
+  const copyAnswer: { current: UiCopyResult } = { current: { isCopied: true } };
+  const compiles: string[] = [];
   const live: AgentInfo[] = [];
+  const places: string[] = [];
 
   const engine = {
     plugin: { name: opts.plugin?.name ?? 'cctop', root: opts.plugin?.root ?? '/plugins/cctop' },
@@ -313,6 +364,23 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
         if (event === 'ui.render') for (const fn of renderListeners) fn();
       },
       renderListeners,
+      blits,
+      blitAnswer,
+      blit: async (args: UiBlitArgs): Promise<UiBlitResult> => {
+        blits.push(args);
+        return { ...blitAnswer };
+      },
+      copies,
+      copyAnswer,
+      copy: async ({ text }: UiCopyArgs): Promise<UiCopyResult> => {
+        copies.push(text);
+        return { ...copyAnswer.current };
+      },
+      places,
+      place: async ({ id }: { id: string }) => {
+        places.push(id);
+        return { isPlaced: true as const, requestId: `placed-${id}` };
+      },
       views,
       viewAnswer,
       view: async (view: SiteView): Promise<UiViewResult> => {
@@ -355,6 +423,8 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       scripted,
       messages: async () => [],
       cwd: async () => scripted.cwd,
+      // The project root: the session's directory here.
+      root: async () => scripted.cwd,
       model: async () => scripted.model,
       turns: async () => scripted.turns,
       id: async () => scripted.id,
@@ -422,23 +492,47 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       run: async (argv: readonly string[]) => {
         calls.push([...argv]);
         const key = argv.join(' ');
-        const answer = script[key];
+        // A script for `cctop query overview` answers it at any `--max-turns`
+        // (the pane derives it from its width) unless one names the count.
+        const answer = script[key] ?? script[key.replace(/ --max-turns \d+$/, '')];
         if (answer === undefined) throw new Error(`fakeEngine: no script for process.run: ${key}`);
         if (answer instanceof Error) throw answer;
         if (typeof answer === 'function') return answer();
         return answer;
       },
     },
+    wasm: {
+      compiles,
+      compile: async (source: string | ArrayBuffer | ArrayBufferView): Promise<WebAssembly.Module> => {
+        compiles.push(String(source));
+        if (opts.wasm === 'fail') throw new Error('CompileError: WebAssembly.Module(): expected magic word');
+        return chartsModule();
+      },
+    },
     prompt: {
       fills,
+      fillModes: [] as string[],
+      typedAfterRead: null as string | null,
       filled: true,
+      draft: '',
+      readFails: false,
+      read: async (): Promise<PromptBox> => {
+        if (engine.prompt.readFails) throw new Error('fakeEngine: prompt.read failed');
+        const box = { text: engine.prompt.draft, cursor: engine.prompt.draft.length };
+        if (engine.prompt.typedAfterRead !== null) engine.prompt.draft = engine.prompt.typedAfterRead;
+        return box;
+      },
       // The return type is spelled so the body may read `engine` back (a
       // literal under `satisfies` cannot otherwise name itself). Since 2.1.278
       // the result carries the box after the fill and the cursor (PromptFilled).
-      fill: async ({ text }: PromptFillArgs): Promise<PromptFilled> => {
+      fill: async ({ text, mode }: PromptFillArgs): Promise<PromptFilled> => {
         fills.push(text);
+        engine.prompt.fillModes.push(mode ?? 'replace');
         const isFilled = engine.prompt.filled;
-        return { isFilled, text: isFilled ? text : '', cursor: isFilled ? text.length : 0 };
+        // `insert` is at the cursor, which the fake keeps at the end: the same as `append`.
+        if (isFilled) engine.prompt.draft = (mode ?? 'replace') === 'replace' ? text : engine.prompt.draft + text;
+        const box = engine.prompt.draft;
+        return { isFilled, text: isFilled ? box : '', cursor: isFilled ? box.length : 0 };
       },
       submit: async () => {
         throw new Error('fakeEngine: prompt.submit is never called by cctop');
@@ -622,4 +716,9 @@ export function paneRender(
       view: extra.view ?? {},
     },
   };
+}
+
+// A `ui.render` event for a `Placed` row `id` of `plugin`, as the terminal sends it.
+export function placedRender(id: string, columns: number, plugin = 'cctop'): RenderInput<'Placed', 'terminal'> {
+  return { surface: 'terminal', component: 'Placed', requestId: `placed-${id}`, viewport: { columns, rows: 40 }, props: { id, plugin } };
 }

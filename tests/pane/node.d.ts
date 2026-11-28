@@ -2,7 +2,7 @@
 // dependency (no @types/node) and tsconfig has `types: []`, so the two Node
 // modules the tests import are declared here with just the shape they use.
 declare module 'node:test' {
-  type TestFn = (t: { name: string }) => void | Promise<void>;
+  type TestFn = (t: { name: string; diagnostic(message: string): void }) => void | Promise<void>;
   export function test(name: string, fn: TestFn): void;
   export function describe(name: string, fn: () => void): void;
   export function it(name: string, fn: TestFn): void;
@@ -26,7 +26,10 @@ declare module 'node:assert/strict' {
 
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
+  // No encoding: the file's bytes (a Buffer in Node, typed as the Uint8Array it is).
+  export function readFileSync(path: string): Uint8Array;
   export function readdirSync(path: string): string[];
+  export function statSync(path: string): { isDirectory(): boolean };
 }
 
 declare module 'node:path' {
@@ -37,3 +40,7 @@ declare var __dirname: string;
 
 // Bare timers for a test that has to let promise chains settle.
 declare function setTimeout(fn: () => void, ms: number): unknown;
+
+declare var Buffer: { from(data: string, encoding: 'base64'): Uint8Array };
+declare var process: { env: Record<string, string | undefined> };
+declare var console: { log(...a: unknown[]): void };
