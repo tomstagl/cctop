@@ -13,6 +13,7 @@
 
 pub mod attachment;
 pub mod local_command;
+pub mod request;
 pub mod task_notification;
 pub mod tool_result;
 
@@ -24,6 +25,7 @@ use serde_json::Value;
 pub use crate::tail::{parse_file, Tailer};
 pub use attachment::{Attachment, AttachmentKind};
 pub use local_command::{ContextCapture, LocalCommand};
+pub use request::{ApiRequest, BlobFacts, Breakpoint, RequestParams, ShapeFacts, ToolFacts};
 pub use task_notification::{TaskNotification, TaskStatus, WorkflowNotification};
 pub use tool_result::{
     AgentResult, AskResult, BashResult, EditResult, GitOperation, ReadKind, ReadResult,
@@ -55,6 +57,12 @@ pub enum Line {
     BridgeSession(BridgeSession),
     /// A `/loop` or cron wake-up (kept raw: the shape is not yet observed).
     ScheduledTaskFire(Value),
+    /// `api-request`: one request's settings and cache breakpoints.
+    ApiRequest(ApiRequest),
+    /// `api-request-shape`: sizes of the system blocks and tools of a shape.
+    ApiRequestShape(ShapeFacts),
+    /// `api-request-blob`: the size of one message, keyed by hash.
+    ApiRequestBlob(BlobFacts),
     /// Any `type` cctop does not model, kept verbatim.
     Unknown(Value),
 }
@@ -72,6 +80,7 @@ impl Line {
         fn as_<T: for<'de> Deserialize<'de>>(raw: &Value) -> Option<T> {
             serde_json::from_value(raw.clone()).ok()
         }
+        let is_request = ty.starts_with("api-request");
         let parsed = match ty {
             "user" => as_(&raw).map(Line::User),
             "assistant" => as_(&raw).map(Line::Assistant),
@@ -91,9 +100,22 @@ impl Line {
             "scheduled_task_fire" | "scheduled-task-fire" => {
                 Some(Line::ScheduledTaskFire(raw.clone()))
             }
+            "api-request" => ApiRequest::from_raw(&raw).map(Line::ApiRequest),
+            "api-request-shape" => ShapeFacts::from_raw(&raw).map(Line::ApiRequestShape),
+            "api-request-blob" => BlobFacts::from_raw(&raw).map(Line::ApiRequestBlob),
             _ => None,
         };
-        parsed.unwrap_or(Line::Unknown(raw))
+        parsed.unwrap_or_else(|| {
+            let mut raw = raw;
+            // A malformed request line is prose: keep the envelope, not the body.
+            if let Some(o) = raw.as_object_mut() {
+                if is_request {
+                    o.remove("shape");
+                    o.remove("message");
+                }
+            }
+            Line::Unknown(raw)
+        })
     }
 
     /// A task notification this line carries, by whichever of the three
@@ -128,6 +150,9 @@ impl Line {
             Line::AgentSetting(_) => "agent-setting",
             Line::BridgeSession(_) => "bridge-session",
             Line::ScheduledTaskFire(_) => "scheduled_task_fire",
+            Line::ApiRequest(_) => "api-request",
+            Line::ApiRequestShape(_) => "api-request-shape",
+            Line::ApiRequestBlob(_) => "api-request-blob",
             Line::Unknown(v) => v.get("type").and_then(Value::as_str).unwrap_or("?"),
         }
     }
@@ -180,6 +205,9 @@ impl Line {
             Line::PrLink(p) => p.timestamp.as_deref(),
             Line::FileHistoryDelta(d) => d.timestamp.as_deref(),
             Line::ContinuedIn(c) => c.timestamp.as_deref(),
+            Line::ApiRequest(r) => r.timestamp.as_deref(),
+            Line::ApiRequestShape(s) => s.timestamp.as_deref(),
+            Line::ApiRequestBlob(b) => b.timestamp.as_deref(),
             _ => None,
         }
     }
