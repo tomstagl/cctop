@@ -3,12 +3,13 @@
 # does daily and on every push, and what `make check-contract` does here.
 #
 #   1. The headless load check of docs/verification/pane.md §A, with no model
-#      call and no credentials: the prompt is the native `/plugin-types`
-#      command, which fires session.start like any run and writes the
-#      contract beside it. The debug log must show the module loaded,
-#      /cctop-pane listed, the self-check line, nothing refused, no hook
-#      failed; the marker must say `loaded: true`.
-#   2. The contract surface: the d.ts just written against the checked-in
+#      call and no credentials: the prompt is `noop`, which fires
+#      session.start like any run and then stops at "Not logged in" (that
+#      non-zero exit is the expected pass path). The debug log must show the
+#      module loaded, /cctop-pane listed, the self-check line, nothing
+#      refused, no hook failed; the marker must say `loaded: true`.
+#   2. The contract surface: the d.ts core extracted from the installed
+#      claude binary (scripts/extract-dts.py) against the checked-in
 #      plugin/.claude/types/claude-code.d.ts, first line (the version) and
 #      the built-in tool tables (per machine: MCP servers, feature flags)
 #      aside. A difference names the declarations that moved.
@@ -41,13 +42,19 @@ pass() { echo "check-contract: ok: $1"; }
 
 # --- 1. the load check -------------------------------------------------------
 echo "check-contract: claude $claude_version, plugin $plugin_version"
+# env -u: an exported key would turn the noop into a model call.
 HOME="$work/home" CLAUDE_CONFIG_DIR="$work/config" CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
-  claude -p --debug --plugin-dir ./plugin "/plugin-types $work/types" >"$work/stdout.txt" 2>&1
+  env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
+  claude -p --debug --plugin-dir ./plugin "noop" </dev/null >"$work/stdout.txt" 2>&1
 exit_code=$?
 log="$work/config/debug/latest"
 if [ "$exit_code" -ne 0 ]; then
-  fail "claude -p exited $exit_code"
-  sed -n '1,20p' "$work/stdout.txt" >&2
+  if grep -q 'Not logged in' "$work/stdout.txt"; then
+    pass "claude -p exited $exit_code (Not logged in — expected without credentials)"
+  else
+    fail "claude -p exited $exit_code"
+    sed -n '1,20p' "$work/stdout.txt" >&2
+  fi
 fi
 if [ ! -f "$log" ]; then
   fail "no debug log at $log"
@@ -79,16 +86,23 @@ fi
 
 # --- 2. the contract surface -------------------------------------------------
 fresh="$work/types/claude-code.d.ts"
-if [ ! -f "$fresh" ]; then
-  fail "/plugin-types wrote no $fresh"
+if ! python3 -I scripts/extract-dts.py "$(command -v claude)" "$fresh"; then
+  fail "extract-dts.py found no declarations in $(command -v claude)"
 else
   fresh_version=$(sed -n '1p' "$fresh" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
   # The surface: everything after line 1 and before the tool tables.
   surface() {
     if ! grep -qF "$tools_marker" "$1"; then
-      echo "check-contract: note: $1 has no tool-table marker; comparing the whole file" >&2
+      if [ "$1" = "$fresh" ]; then
+        echo "check-contract: note: $1 has no tool-table marker (expected for the extracted core); comparing the whole file" >&2
+      else
+        echo "check-contract: note: $1 has no tool-table marker; comparing the whole file" >&2
+      fi
     fi
-    awk -v marker="$tools_marker" 'NR == 1 { next } index($0, marker) == 1 { exit } { print }' "$1"
+    # Trailing blank lines are dropped: the checked-in file has one before the
+    # tool tables, the extracted core ends at the closing brace.
+    awk -v marker="$tools_marker" 'NR == 1 { next } index($0, marker) == 1 { exit } { print }' "$1" \
+      | awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] == "") n--; for (i = 1; i <= n; i++) print l[i] }'
   }
   surface "$dts" >"$work/checked-in.txt"
   surface "$fresh" >"$work/fresh.txt"
@@ -112,7 +126,7 @@ else
     moved=${moved//$'\n'/, }
     fail "contract surface changed between $(sed -n '1p' "$dts" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') (checked in) and $fresh_version (installed); declarations that moved: ${moved:-see the diff}"
     diff -U 4 "$work/checked-in.txt" "$work/fresh.txt" | head -200 >&2
-    echo "check-contract: regenerate with: cd plugin && CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p '/plugin-types ./.claude/types'; then npm run typecheck names every call site" >&2
+    echo "check-contract: regenerate with: scripts/regen-dts.sh; then npm run typecheck names every call site" >&2
   fi
 fi
 
@@ -135,8 +149,13 @@ fi
 
 # --- the result line, in the shape docs/verification/pane.md §A records ------
 today=$(date -u +%Y-%m-%d)
+if [ "$exit_code" -eq 0 ]; then
+  exit_text="exit 0"
+else
+  exit_text="exit $exit_code (Not logged in, expected without credentials)"
+fi
 if [ "${#failures[@]}" -eq 0 ]; then
-  result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — exit 0, load line present, /cctop-pane listed, self-check ok, nothing refused, no hook failed, marker written with loaded: true; contract surface unchanged; validator and version pins green."
+  result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — $exit_text, load line present, /cctop-pane listed, self-check ok, nothing refused, no hook failed, marker written with loaded: true; contract surface unchanged; validator and version pins green."
 else
   result="Headless load check $today: Claude Code $claude_version, plugin $plugin_version — ${#failures[@]} failure(s): $(printf '%s; ' "${failures[@]}")"
 fi

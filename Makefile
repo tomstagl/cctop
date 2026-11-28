@@ -17,6 +17,7 @@ check-types:
 		echo "check-types: claude not on PATH, skipping"; \
 	fi
 check-contract:
+	bash scripts/test-extract-dts.sh
 	./scripts/check-contract.sh
 check-facts:
 	python3 scripts/check-harness-facts.py

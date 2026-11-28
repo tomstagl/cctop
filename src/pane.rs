@@ -469,6 +469,11 @@ pub fn report(inputs: &Inputs) -> Report {
                     "pane open, drawn above the prompt (inline)".to_string(),
                     None,
                 ),
+                Some("visible") if placement == "widget" => (
+                    Verdict::Ok,
+                    "pane open, drawn as a widget (inline)".to_string(),
+                    None,
+                ),
                 Some("visible") => (Verdict::Ok, format!("pane open, docked{width}"), None),
                 _ => (Verdict::Ok, "pane open".to_string(), None),
             };
@@ -1342,6 +1347,18 @@ mod tests {
         assert!(report.ready);
         let pane = report.checks.iter().find(|c| c.id == "pane").unwrap();
         assert_eq!(pane.text, "pane closed");
+    }
+
+    #[test]
+    fn a_widget_placement_is_not_reported_as_docked() {
+        let mut inputs = ready_inputs();
+        let mut m = marker(true, "visible", 0);
+        m["placement"] = serde_json::json!("widget");
+        inputs.marker = Some(m);
+        let report = super::report(&inputs);
+        let pane = report.checks.iter().find(|c| c.id == "pane").unwrap();
+        assert_eq!(pane.verdict, Verdict::Ok);
+        assert_eq!(pane.text, "pane open, drawn as a widget (inline)");
     }
 
     #[test]

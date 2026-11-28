@@ -62,7 +62,8 @@ export function parseQueryVerbs(help: string): QueryVerb[] {
   for (const line of lines.slice(start + 1)) {
     if (line.trim() === '') break;
     const m = /^\s+([a-z][\w-]*)/.exec(line);
-    if (m) found.add(m[1]);
+    const verb = m?.[1];
+    if (verb) found.add(verb);
   }
   return QUERY_VERBS.filter((verb) => found.has(verb));
 }

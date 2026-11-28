@@ -39,8 +39,9 @@ jobs:
   contract:
     # Everything that needs the `claude` CLI, against the latest release:
     # the headless load check of docs/verification/pane.md §A (no model
-    # call: `/plugin-types` is the prompt), the contract surface diffed
-    # against the checked-in d.ts, `claude plugin validate --strict`, and
+    # call: the prompt is `noop`, which stops at "Not logged in"), the
+    # contract surface (extracted from the claude binary) diffed against
+    # the checked-in d.ts, `claude plugin validate --strict`, and
     # the version pins (scripts/check-contract.sh). The step summary
     # carries the result line §A records.
     runs-on: ubuntu-latest
@@ -55,4 +56,6 @@ jobs:
         run: |
           npm install -g @anthropic-ai/claude-code@latest
           claude --version
+      - name: zstd
+        run: command -v zstd || sudo apt-get install -y zstd
       - run: ./scripts/check-contract.sh
