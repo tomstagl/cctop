@@ -158,6 +158,10 @@ pub struct Header {
     /// (its lines carry `agentName` / `teamName`); absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
+    /// `from <id8> · <via>` when the transcript says the session was started
+    /// from another (`derived-from`); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     pub phase: PhaseCell,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
@@ -457,6 +461,14 @@ fn header(state: &State, c: &Coach) -> Header {
     if let Some(t) = &team {
         parts.push(t.clone());
     }
+    let from = state
+        .agg
+        .derived_from
+        .as_ref()
+        .map(|(id, via)| crate::lineage::header_text(id, via));
+    if let Some(f) = &from {
+        parts.push(f.clone());
+    }
     // The workspace items come before the PR and the version, so a narrow
     // row cuts those first (`fit_workspace` then drops items from the right).
     let workspace = workspace_items(&state.status_facts);
@@ -476,6 +488,7 @@ fn header(state: &State, c: &Coach) -> Header {
         cwd,
         pr,
         team,
+        from,
         phase: PhaseCell {
             glyph,
             word,
@@ -669,12 +682,35 @@ fn cells(state: &State, c: &Coach) -> Vec<Cell> {
             l.five_hour_resets_at_ms
                 .map(|r| vec![fg(format!("↻ {}", coach::short_duration(r - now)))]),
         ),
-        None => cell(
-            '2',
-            "limits",
-            vec![fg("5h "), dim("—")],
-            Some(vec![dim("no status line")]),
-        ),
+        None => match budget_line(state) {
+            // A `--max-budget-usd` session has no status line: the budget is
+            // its limit.
+            Some((text, ratio, eta)) => {
+                let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Fg };
+                let amounts = text.strip_prefix("budget ").unwrap_or(&text);
+                let compact = amounts.replace(" / ", "/");
+                let mut c = cell(
+                    '2',
+                    "limits",
+                    vec![fg("budget "), seg(amounts.to_string(), tone)],
+                    eta.map(|e| vec![fg(e)]),
+                );
+                let mut mid = vec![seg(compact.clone(), tone)];
+                if let Some(e) = &c.label.get(3..) {
+                    mid.push(dim(" "));
+                    mid.extend(e.iter().cloned());
+                }
+                c.mid = mid;
+                c.short = vec![seg(compact, tone)];
+                c
+            }
+            None => cell(
+                '2',
+                "limits",
+                vec![fg("5h "), dim("—")],
+                Some(vec![dim("no status line")]),
+            ),
+        },
     };
     // 3 · cache: the countdown and the TTL.
     let ttl = if state.cache_ttl_ms() >= 3_600_000 {
@@ -1083,6 +1119,38 @@ pub fn spend_limit_text(facts: &crate::ui::state::StatusFacts) -> Option<String>
     Some(t)
 }
 
+/// The `--max-budget-usd` budget as one line for the limits panel and the
+/// dashboard's limits cell: the text (`budget $3.20 / $5.00`), the used ratio
+/// (0..=1, clamped; a zero total counts as spent) and, while money is left and
+/// the session is burning it, `halts in ~N min` when that is under an hour.
+pub fn budget_text(
+    used: f64,
+    total: f64,
+    burn_usd_per_ms: Option<f64>,
+) -> (String, f64, Option<String>) {
+    let text = format!("budget ${used:.2} / ${total:.2}");
+    let ratio = if total > 0.0 {
+        (used / total).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let remaining = total - used;
+    let eta = burn_usd_per_ms
+        .filter(|b| *b > 0.0 && remaining > 0.0)
+        .map(|b| remaining / b / 60_000.0)
+        .filter(|min| *min < 60.0)
+        .map(|min| format!("halts in ~{} min", min.round().max(1.0) as u64));
+    (text, ratio, eta)
+}
+
+/// The budget text for a state: burn from the trailing-window rate.
+pub fn budget_line(state: &State) -> Option<(String, f64, Option<String>)> {
+    let (used, total, _) = state.budget_usd?;
+    let rates = crate::metrics::cost::rates(&state.agg, state.cost.pricing(), state.clock_ms());
+    let burn = rates.usd_per_hour.map(|h| h / 3_600_000.0);
+    Some(budget_text(used, total, burn))
+}
+
 /// The limits body: the two windows as meters, then what the light says.
 fn body_limits(state: &State, c: &Coach) -> Body {
     let now = state.clock_ms();
@@ -1178,6 +1246,22 @@ fn body_limits(state: &State, c: &Coach) -> Body {
             ),
         };
         rows.push(vec![dim(label), fg(value)]);
+    }
+    if let Some((t, ratio, eta)) = budget_line(state) {
+        let tone = if ratio >= 0.9 { Tone::Crit } else { Tone::Ok };
+        let mut row = vec![
+            dim("  budget "),
+            seg(
+                t.strip_prefix("budget ").unwrap_or(&t).to_string(),
+                if ratio >= 0.9 { Tone::Crit } else { Tone::Fg },
+            ),
+            dim("  "),
+        ];
+        row.extend(bar(ratio * 100.0, 10, tone));
+        if let Some(e) = eta {
+            row.push(dim(format!("  {e}")));
+        }
+        rows.push(row);
     }
     if state.other_live_sessions > 0 {
         rows.push(vec![dim(format!(
@@ -2229,6 +2313,29 @@ mod tests {
         assert!(v["header"].get("team").is_none());
     }
 
+    #[test]
+    fn a_derived_session_names_its_origin_in_the_header() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        assert_eq!(d.header.from.as_deref(), Some("from 65b51d4c · subprocess"));
+        assert!(
+            d.header.line.contains(" · from 65b51d4c · subprocess"),
+            "{}",
+            d.header.line
+        );
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["header"]["from"], "from 65b51d4c · subprocess");
+        let (s, e) = fixture_b();
+        assert_eq!(snapshot(&s, &e).header.from, None);
+    }
+
     /// Schema 2 (US-102): six cells with contiguous keys, the act line,
     /// eight bodies with the keys `1`–`6`, `a`, `0`, nothing width-aware.
     #[test]
@@ -2562,5 +2669,101 @@ mod tests {
         assert!(crate::query::dashboard(&state_with_run())["header"]
             .get("workflow")
             .is_none());
+    }
+
+    #[test]
+    fn budget_text_normal() {
+        // $1.80 left at $0.10/min: 18 min.
+        let (t, ratio, eta) = budget_text(3.2, 5.0, Some(0.10 / 60_000.0));
+        assert_eq!(t, "budget $3.20 / $5.00");
+        assert!((ratio - 0.64).abs() < 1e-9);
+        assert_eq!(eta.as_deref(), Some("halts in ~18 min"));
+    }
+
+    #[test]
+    fn budget_text_total_zero_or_over() {
+        let (_, ratio, eta) = budget_text(1.0, 0.0, Some(1e-6));
+        assert_eq!((ratio, eta), (1.0, None));
+        let (t, ratio, eta) = budget_text(6.0, 5.0, Some(1e-6));
+        assert_eq!(t, "budget $6.00 / $5.00");
+        assert_eq!((ratio, eta), (1.0, None));
+    }
+
+    #[test]
+    fn budget_text_idle_no_eta() {
+        assert_eq!(budget_text(1.0, 5.0, None).2, None);
+        assert_eq!(budget_text(1.0, 5.0, Some(0.0)).2, None);
+    }
+
+    #[test]
+    fn budget_text_eta_over_an_hour_omitted() {
+        // $4 left at $0.01/min: 400 min.
+        assert_eq!(budget_text(1.0, 5.0, Some(0.01 / 60_000.0)).2, None);
+        // 59 min still shows.
+        assert_eq!(
+            budget_text(0.0, 5.9, Some(0.1 / 60_000.0)).2.as_deref(),
+            Some("halts in ~59 min")
+        );
+    }
+
+    #[test]
+    fn the_limits_body_carries_the_budget_beside_the_spend_limit() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(!text.contains("budget"), "{text}");
+        s.budget_usd = Some((3.2, 5.0, 1.8));
+        s.status_facts.spend_limit_pct = Some(40.0);
+        let text = body_text(&body_limits(&s, &c)).join("\n");
+        assert!(text.contains("  budget $3.20 / $5.00  ▇▇▇▇▇▇"), "{text}");
+        assert!(text.contains("  spend limit 40 %"), "{text}");
+    }
+
+    #[test]
+    fn a_budget_session_shows_the_budget_in_the_limits_cell() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let mut s = State::new(Pricing::bundled());
+        s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+        for l in crate::transcript::parse_file(&path).unwrap() {
+            s.apply(&l);
+        }
+        assert!(s.limits.is_none());
+        let (used, total, _) = s.budget_usd.expect("session-s has a budget");
+        let e = Engine::for_state(&s);
+        let d = snapshot(&s, &e);
+        let cell = &d.cells[1];
+        let want = format!("${used:.2} / ${total:.2}");
+        assert!(
+            text_of(&cell.label).starts_with(&format!("budget {want}")),
+            "{}",
+            text_of(&cell.label)
+        );
+        assert_eq!(text_of(&cell.short), want.replace(" / ", "/"));
+        assert!(text_of(&cell.mid).starts_with(&want.replace(" / ", "/")));
+        assert!(!text_of(&cell.label).contains("no status line"));
+        // Red from 90 %.
+        s.budget_usd = Some((4.6, 5.0, 0.4));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().any(|g| g.tone == Tone::Crit));
+        s.budget_usd = Some((2.0, 5.0, 3.0));
+        let d = snapshot(&s, &e);
+        assert!(d.cells[1].label.iter().all(|g| g.tone != Tone::Crit));
+    }
+
+    #[test]
+    fn the_budget_bar_is_red_from_ninety_percent() {
+        let (mut s, e) = fixture_b();
+        let c = coach::snapshot(&s, &e);
+        for (used, tone) in [(4.4, Tone::Ok), (4.5, Tone::Crit)] {
+            s.budget_usd = Some((used, 5.0, 5.0 - used));
+            let rows = body_limits(&s, &c).rows;
+            let row = rows
+                .iter()
+                .find(|r| r.iter().any(|g| g.text.contains("budget")))
+                .unwrap();
+            let bar_seg = row.iter().find(|g| g.text.starts_with('▇')).unwrap();
+            assert_eq!(bar_seg.tone, tone, "{used}");
+        }
     }
 }

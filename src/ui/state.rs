@@ -422,6 +422,9 @@ pub struct State {
     /// (`deferred_tools_delta`).
     pub mcp_needs_auth: Vec<String>,
     pub mcp_failed: Vec<String>,
+    /// The latest `--max-budget-usd` budget `(used, total, remaining)`, repeated
+    /// by Claude Code every turn; `None` for a session without one.
+    pub budget_usd: Option<(f64, f64, f64)>,
     /// Rate limits, when the status-line shim is installed.
     pub limits: Option<Limits>,
     /// `(epoch ms, 5 h used %)` samples for the exhaustion projection.
@@ -1471,6 +1474,14 @@ impl State {
             {
                 self.mcp_needs_auth = needs_auth_mcp_servers;
                 self.mcp_failed = failed_mcp_servers;
+            }
+            if let crate::transcript::AttachmentKind::BudgetUsd {
+                used,
+                total,
+                remaining,
+            } = att.kind()
+            {
+                self.budget_usd = Some((used, total, remaining));
             }
         }
         self.cost.push(line);

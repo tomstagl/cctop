@@ -77,6 +77,15 @@ pub mod first_seen {
     /// version that introduced them is not known, so this is an upper
     /// bound (team PRD §10.3).
     pub const TEAM_NAME: Version = Version(2, 1, 232);
+    /// `thinking_drop` attachments. The oldest of the 15 on this machine
+    /// is 2.1.308; the version that introduced them is not known, so this
+    /// is an upper bound (session-signals PRD §1).
+    pub const THINKING_DROP: Version = Version(2, 1, 308);
+    /// `budget_usd` attachments (a print / SDK run with `--max-budget-usd`);
+    /// all 317 on this machine are 2.1.332, an upper bound as above.
+    pub const BUDGET_USD: Version = Version(2, 1, 332);
+    // `derived-from` lines carry no version: seen by 2.1.332, on the second
+    // line of a session started by `/clear` or a subprocess.
 }
 
 /// The summary Claude Code writes as a `user` line after a compaction:

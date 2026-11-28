@@ -34,6 +34,8 @@ pub struct Row {
     pub api_errors: usize,
     pub steers: usize,
     pub interrupted: bool,
+    /// Thinking blocks Claude Code dropped from this turn's requests.
+    pub thinking_dropped: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -85,7 +87,7 @@ fn reason_agrees(api: &str, kind: &str) -> bool {
         "model_changed" => kind == "params_changed",
         "system_changed" => kind == "system_changed",
         "messages_changed" | "previous_message_not_found" => {
-            matches!(kind, "prefix_rewritten" | "expired")
+            matches!(kind, "prefix_rewritten" | "expired" | "thinking_drop")
         }
         r if r.starts_with("ttl_expired") => kind == "expired",
         _ => false,
@@ -191,6 +193,7 @@ pub fn rows(state: &State) -> Vec<Row> {
                 api_errors: t.api_errors,
                 steers: t.steers,
                 interrupted: t.interrupted_after_calls.is_some(),
+                thinking_dropped: t.thinking_dropped_blocks,
             }
         })
         .collect()
@@ -269,6 +272,7 @@ mod tests {
     ) -> crate::requests::LocatedMiss {
         crate::requests::LocatedMiss {
             message_id: "m".into(),
+            request_id: None,
             turn: Some(1),
             at: None,
             tokens: 30_000,
@@ -328,5 +332,25 @@ mod tests {
         let by_turn_asc = sorted(&s, Sort::Turn, true);
         assert_eq!(by_turn_asc[0].turn, 1);
         assert_eq!(calls_of(&s, 3).len(), 7);
+    }
+
+    #[test]
+    fn thinking_drop_lands_on_its_turn_only() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-t.jsonl");
+        let info = crate::ui::state::SessionInfo::from_fixture(&path);
+        let s = crate::load::state_from(&path, info);
+        let dropped: Vec<(usize, u64)> = rows(&s)
+            .iter()
+            .filter(|r| r.thinking_dropped > 0)
+            .map(|r| (r.turn, r.thinking_dropped))
+            .collect();
+        assert_eq!(dropped.len(), 1, "{dropped:?}");
+        assert_eq!(dropped[0].1, 10);
+        assert_eq!(dropped[0].0, s.agg.turns.last().unwrap().number);
+        let j = crate::query::ledger_json(&s, None);
+        let last = j.as_array().unwrap().last().unwrap();
+        assert_eq!(last["thinking_dropped"]["value"], 10);
+        assert_eq!(last["thinking_dropped"]["metric_id"], "thinking_dropped");
+        assert!(j[0]["thinking_dropped"].is_null());
     }
 }
