@@ -738,6 +738,14 @@ pub fn dashboard(state: &State) -> Value {
             "metric_id": "elicitation_wait",
         });
     }
+    // Absent without OpenTelemetry trace spans.
+    if let Some((total, by_event)) = state.hook_overhead() {
+        v["hook_overhead"] = json!({
+            "total_ms": total,
+            "by_event": by_event,
+            "metric_id": "hook_overhead",
+        });
+    }
     v
 }
 
@@ -1400,6 +1408,46 @@ mod tests {
         );
         // Absent where nothing was dropped.
         assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_carries_hook_overhead_only_when_traces_exist() {
+        let mut state = State::new(crate::metrics::Pricing::bundled());
+        assert!(dashboard(&state).get("hook_overhead").is_none());
+        let ids = |ms: u64| crate::otel::SpanIds {
+            trace_id: "t".into(),
+            span_id: "s".into(),
+            parent_span_id: None,
+            start_ns: 0,
+            end_ns: ms * 1_000_000,
+        };
+        state.apply_otel(&crate::otel::SessionData {
+            spans: vec![
+                crate::otel::Span::Hook {
+                    ids: ids(700),
+                    hook_event: Some("Stop".into()),
+                    hook_name: None,
+                    num_hooks: None,
+                    duration_ms: Some(700),
+                    num_blocking: None,
+                },
+                crate::otel::Span::Hook {
+                    ids: ids(100),
+                    hook_event: Some("PreToolUse".into()),
+                    hook_name: None,
+                    num_hooks: None,
+                    duration_ms: None,
+                    num_blocking: None,
+                },
+            ]
+            .into(),
+            ..Default::default()
+        });
+        let v = &dashboard(&state)["hook_overhead"];
+        assert_eq!(v["total_ms"], 800);
+        assert_eq!(v["by_event"]["Stop"], 700);
+        assert_eq!(v["by_event"]["PreToolUse"], 100);
+        assert_eq!(v["metric_id"], "hook_overhead");
     }
 
     #[test]

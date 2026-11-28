@@ -101,6 +101,17 @@ impl Log {
         }
     }
 
+    /// Remove one exact row (a derived row being replaced by a newer figure).
+    pub fn remove(&mut self, at: i64, kind: Kind, text: &str) {
+        if let Some(i) = self
+            .events
+            .iter()
+            .position(|e| e.at == at && e.kind == kind && e.text == text)
+        {
+            self.events.remove(i);
+        }
+    }
+
     pub fn note(&mut self, at: i64, text: impl Into<String>) {
         self.push(Event {
             at,
