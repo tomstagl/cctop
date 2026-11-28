@@ -124,6 +124,15 @@ for (const columns of [50, 80]) {
     assert.equal(lines.filter((r) => /\st\d+\s+≈\d+k?$/.test(r)).length, 5, 'five top consumers');
   });
 
+  test(`tools at ${columns} columns: a skill's shell commands are counted, only once one ran`, () => {
+    assert.ok(!rows('tools', build(), columns).some((r) => r.startsWith('skill shell')), 'none without the hook');
+    const tools = { ...(fixture('tools') as object), skill_shell: [{ skill: 'review', count: 3 }, { skill: 'deploy', count: 1 }] };
+    const lines = rows('tools', build({ query: { tools } }), columns);
+    fits(lines, columns);
+    has(lines, 'skill shell: review ×3');
+    has(lines, 'skill shell: deploy ×1');
+  });
+
   test(`agents at ${columns} columns: the fixture agent and the missing MCP hint`, () => {
     const lines = rows('agents', build(), columns);
     fits(lines, columns);

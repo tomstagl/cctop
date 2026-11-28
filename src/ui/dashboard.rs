@@ -62,6 +62,9 @@ fn cells_of(spans: &[Span]) -> usize {
     spans.iter().map(|s| s.content.chars().count()).sum()
 }
 
+/// The facts keep at least this many cells for the hooks badge to show.
+pub const MIN_FACTS_WITH_BADGE: usize = 12;
+
 /// Row 1: ` cctop` bold, the session facts dim, the phase cell
 /// (`● WORKING 52:11`) right-aligned in its colour.
 fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
@@ -71,10 +74,29 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
-    let facts_room = width.saturating_sub(8 + phase.chars().count() + 2);
+    // The hooks badge sits between the facts and the phase cell.
+    let mut badge = d.header.hooks.clone().unwrap_or_default();
+    let room_for = |badge: &str| {
+        let badge_room = if badge.is_empty() {
+            0
+        } else {
+            badge.chars().count() + 2
+        };
+        (
+            badge_room,
+            width as i64 - (8 + phase.chars().count() + 2 + badge_room) as i64,
+        )
+    };
+    // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge
+    // goes first, the phase cell stays.
+    if room_for(&badge).1 < MIN_FACTS_WITH_BADGE as i64 {
+        badge.clear();
+    }
+    let (badge_room, facts_room) = room_for(&badge);
+    let facts_room = facts_room.max(0) as usize;
     let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
-    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count());
+    let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count() + badge_room);
     let phase_style = match d.header.phase.glyph {
         '◆' => t.warn(),
         '○' => t.dim(),
@@ -85,6 +107,14 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         Span::styled(" cctop  ", t.accent().add_modifier(Modifier::BOLD)),
         Span::styled(facts, t.dim()),
         Span::raw(" ".repeat(pad)),
+        Span::styled(
+            if badge.is_empty() {
+                badge
+            } else {
+                format!("{badge}  ")
+            },
+            t.warn(),
+        ),
         Span::styled(phase, phase_style),
     ])
 }
@@ -419,6 +449,34 @@ mod tests {
             assert!(!r.contains("remote") || r.contains("acme/shop"), "{w}: {r}");
         }
         assert!(seen);
+    }
+
+    #[test]
+    fn header_hooks_badge_is_amber_when_events_are_missing() {
+        let (mut app, d) = dashboard_with(all_facts());
+        assert!(d.header.hooks.is_none());
+        let plain = header_row(&app, &d, 120);
+        assert!(!plain.contains("hooks:"), "{plain}");
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let d = app.dashboard();
+        assert_eq!(d.header.hooks.as_deref(), Some("hooks: 7 new"));
+        let rows = compose(&app.state.theme, &d, 120, 24, 0, false);
+        let badge = rows[0]
+            .spans
+            .iter()
+            .find(|s| s.content.contains("hooks: 7 new"))
+            .expect("the badge span");
+        assert_eq!(badge.style, app.state.theme.warn());
+        let row = header_row(&app, &d, 120);
+        assert_eq!(row.chars().count(), 120, "{row}");
+        assert!(row.contains("hooks: 7 new  ● "), "{row}");
+        insta::assert_snapshot!("header_hooks_missing_120", row);
+        // Too narrow for the facts to keep a dozen cells: the badge goes
+        // before the phase cell does.
+        let narrow = header_row(&app, &d, 40);
+        assert!(!narrow.contains("hooks:"), "{narrow}");
+        assert!(narrow.contains(&d.header.phase.word), "{narrow}");
+        insta::assert_snapshot!("header_hooks_missing_40", narrow);
     }
 
     #[test]

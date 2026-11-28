@@ -886,6 +886,36 @@ mod tests {
     }
 
     #[test]
+    fn the_team_group_with_a_hook_idle_member() {
+        // A minute and a half after the priced copy's last line: inside
+        // `IDLE_MS`, so only the `TeammateIdle` hook (half a minute after
+        // that line) can say it is idle, and for exactly one minute.
+        let mut app = fixture_app_d();
+        let last = app.state.team.as_ref().unwrap().members["diff-pane-research-2"]
+            .last_line_at
+            .unwrap();
+        app.state.clock_override = true;
+        app.state.now_ms = last + 90_000;
+        let before = render_to_string(&app, 120, 30);
+        assert!(!before.contains("idle 1:00"), "{before}");
+        app.state.apply_hook(&crate::hooks::HookEvent {
+            at: last + 30_000,
+            event: "TeammateIdle".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload: serde_json::json!({"teammate_name": "diff-pane-research-2", "team_name": "session-afd065d3"}),
+        });
+        app.state.open = Some(6);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let out = render_to_string(&app, 120, 30);
+        assert!(out.contains("idle 1:00"), "{out}");
+        // Idle for a minute is a word, not yet waste.
+        assert!(!out.contains("wasted"), "{out}");
+        insta::assert_snapshot!("agents_d_hook_idle_120x30", out);
+    }
+
+    #[test]
     fn the_team_group_on_fixture_d() {
         let mut app = fixture_app_d();
         app.state.open = Some(6);

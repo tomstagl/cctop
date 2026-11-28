@@ -113,6 +113,18 @@ function topCells(c: TopCtx): Cell[] {
   ];
 }
 
+/** `skill shell: review ×3` per skill whose commands ran; empty until one did. */
+export function skillShellRows(model: Model): string[] {
+  const listed = at(model.query.tools, 'skill_shell');
+  const out: string[] = [];
+  for (const s of Array.isArray(listed) ? listed : []) {
+    const skill = stringAt(s, 'skill');
+    const n = at(s, 'count');
+    if (skill !== null && typeof n === 'number') out.push(`skill shell: ${skill} ×${n}`);
+  }
+  return out;
+}
+
 /** `257 calls` for the frame's summary: the session total, else the listed tools' sum. */
 function callsSummary(model: Model): string | undefined {
   const total = measured(model.query.summary, 'tool_calls');
@@ -132,6 +144,7 @@ export function renderTools(model: Model, el: ViewElements, columns: number, now
   const rows: FrameRow[] = [row(HEADER, inner)];
   if (tools.length === 0) rows.push(line('no tool calls yet'));
   for (const r of tools) rows.push(row(toolCells(r), inner, 'tool_calls'));
+  for (const s of skillShellRows(model)) rows.push(line(s));
   if (top.length > 0) rows.push(line('top ctx'));
   for (const c of top) rows.push(row(topCells(c), inner, 'top_ctx'));
   return panel(p, rows, columns, el);

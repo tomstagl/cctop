@@ -32,6 +32,31 @@ pub const EVENTS: &[&str] = &[
     "Stop",
     "StopFailure",
     "SessionEnd",
+    // Added in 0.10: each is safe for a hook that prints nothing and exits 0.
+    "Elicitation",
+    "ElicitationResult",
+    "ConfigChange",
+    "CwdChanged",
+    "DirectoryAdded",
+    "TeammateIdle",
+    "PreSkillShellCommand",
+];
+
+/// Events cctop never subscribes to: a registered hook changes Claude Code's
+/// behaviour or has no value for a silent observer. `without_hooks` still
+/// strips cctop's entry from them, in case an older or hand-edited install
+/// put one there.
+pub const NEVER: &[&str] = &[
+    // The hook replaces worktree creation (stdout is the path): silence breaks it.
+    "WorktreeCreate",
+    // Same family: the hook performs the removal.
+    "WorktreeRemove",
+    // Carries the assistant's text and can replace what is displayed: prose, in the display path.
+    "MessageDisplay",
+    // Fires only for init/maintenance; exit-0 stdout goes to Claude as context.
+    "Setup",
+    // Needs a matcher naming files to watch, which cctop has no reason to choose.
+    "FileChanged",
 ];
 
 /// Bound on the command text kept from a `tool_input` or a background task.
@@ -92,11 +117,44 @@ impl HookEvent {
                 }
             }
             if let Some(input) = o.remove("tool_input") {
-                if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+                if event == "PreSkillShellCommand" {
+                    // Only the bounded command survives; the rest of the input is text.
+                    if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+                        o.insert(
+                            "tool_input".into(),
+                            serde_json::json!({ "command": bounded(cmd, COMMAND_CHARS) }),
+                        );
+                    }
+                } else if let Some(cmd) = input.get("command").and_then(Value::as_str) {
                     o.insert("command".into(), Value::String(bounded(cmd, COMMAND_CHARS)));
                 }
             }
             o.remove("transcript_path");
+            // MCP prompts: measured, never kept. Other events' `message`
+            // (a Notification's own text) is not the person's and stays.
+            if event == "Elicitation" {
+                if let Some(Value::String(text)) = o.remove("message") {
+                    o.insert("message_chars".into(), Value::from(text.chars().count()));
+                }
+                if let Some(schema) = o.remove("requested_schema") {
+                    let n = schema
+                        .get("properties")
+                        .and_then(Value::as_object)
+                        .map_or(0, |p| p.len());
+                    o.insert("schema_fields".into(), Value::from(n));
+                }
+                // A URL-mode prompt's link can carry a token: only its presence stays.
+                if let Some(url) = o.remove("url") {
+                    o.insert("has_url".into(), Value::Bool(!url.is_null()));
+                }
+            }
+            if event == "ElicitationResult" {
+                let n = o
+                    .remove("content")
+                    .and_then(|c| c.as_object().map(|m| m.len()))
+                    .unwrap_or(0);
+                o.insert("content_fields".into(), Value::from(n));
+            }
             for key in ["prompt", "last_assistant_message"] {
                 if let Some(Value::String(text)) = o.remove(key) {
                     o.insert(format!("{key}_chars"), Value::from(text.chars().count()));
@@ -280,7 +338,7 @@ pub fn with_hooks(settings: &Value) -> Value {
         .as_object_mut()
         .map(|m| m.entry("hooks").or_insert_with(|| serde_json::json!({})))
         .expect("settings is an object");
-    for ev in EVENTS {
+    for ev in EVENTS.iter().filter(|e| !NEVER.contains(e)) {
         let arr = hooks
             .as_object_mut()
             .map(|m| m.entry(*ev).or_insert_with(|| serde_json::json!([])))
@@ -379,6 +437,100 @@ mod tests {
     }
 
     #[test]
+    fn new_events_are_spooled_as_facts() {
+        let line = |ev: &HookEvent| serde_json::to_string(ev).unwrap();
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"Elicitation","mcp_server_name":"srv","message":"SECRET-MSG please","mode":"form","elicitation_id":"e1",
+            "requested_schema":{"type":"object","properties":{"a":{"description":"SECRET-SCHEMA"},"b":{}}},
+            "url":"https://x.example/auth?t=SECRET-TOKEN"
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(ev.payload["has_url"], true);
+        assert!(ev.payload.get("url").is_none());
+        assert_eq!(ev.payload["message_chars"], 17);
+        assert_eq!(ev.payload["schema_fields"], 2);
+        assert_eq!(ev.payload["mcp_server_name"], "srv");
+        assert_eq!(ev.payload["elicitation_id"], "e1");
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"ElicitationResult","mcp_server_name":"srv","action":"accept","mode":"form","elicitation_id":"e1",
+            "content":{"x":"SECRET-ANSWER","y":1,"z":2}
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(ev.payload["content_fields"], 3);
+        assert_eq!(ev.payload["action"], "accept");
+        assert_eq!(ev.payload["mode"], "form");
+        assert_eq!(ev.payload["elicitation_id"], "e1");
+        let ev = HookEvent::from_stdin(
+            1,
+            serde_json::json!({
+                "session_id":"s","hook_event_name":"ElicitationResult","action":"cancel"
+            }),
+        )
+        .unwrap();
+        assert_eq!(ev.payload["content_fields"], 0);
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"PreSkillShellCommand","command_name":"review","command_source":"project","invoked_by":"user",
+            "tool_input":{"command":"c".repeat(500),"description":"SECRET-DESC"}
+        })).unwrap();
+        assert!(!line(&ev).contains("SECRET"));
+        assert_eq!(
+            ev.payload["tool_input"]["command"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .count(),
+            200
+        );
+        assert_eq!(ev.payload["tool_input"].as_object().unwrap().len(), 1);
+        assert_eq!(ev.payload["command_name"], "review");
+        for (name, extra) in [
+            (
+                "ConfigChange",
+                serde_json::json!({"source":"project_settings","file_path":"/p/.claude/settings.json"}),
+            ),
+            (
+                "CwdChanged",
+                serde_json::json!({"old_cwd":"/a","new_cwd":"/b"}),
+            ),
+            ("DirectoryAdded", serde_json::json!({"directory":"/d"})),
+            (
+                "TeammateIdle",
+                serde_json::json!({"teammate_name":"t","team_name":"x"}),
+            ),
+        ] {
+            let mut v = extra.clone();
+            v["session_id"] = "s".into();
+            v["hook_event_name"] = name.into();
+            let ev = HookEvent::from_stdin(1, v).unwrap();
+            for (k, val) in extra.as_object().unwrap() {
+                assert_eq!(&ev.payload[k], val, "{name}.{k} kept");
+            }
+        }
+    }
+
+    #[test]
+    fn only_elicitation_loses_its_message() {
+        let ev = HookEvent::from_stdin(1, serde_json::json!({
+            "session_id":"s","hook_event_name":"Notification","notification_type":"permission_prompt","message":"Claude needs your permission to use Bash"
+        })).unwrap();
+        assert_eq!(
+            ev.payload["message"],
+            "Claude needs your permission to use Bash"
+        );
+        assert!(ev.payload.get("message_chars").is_none());
+        assert!(ev.payload.get("schema_fields").is_none());
+        let ev = HookEvent::from_stdin(
+            1,
+            serde_json::json!({
+                "session_id":"s","hook_event_name":"Elicitation","mcp_server_name":"srv"
+            }),
+        )
+        .unwrap();
+        assert!(ev.payload.get("message_chars").is_none());
+        assert!(ev.payload.get("schema_fields").is_none());
+    }
+
+    #[test]
     fn spool_keeps_facts_and_never_text() {
         let ev = HookEvent::from_stdin(1, serde_json::json!({
             "session_id":"s1","hook_event_name":"UserPromptSubmit","prompt":"what is the plan?","prompt_id":"p1"
@@ -421,7 +573,7 @@ mod tests {
             ev.payload["permission_suggestions"][0]["rules"][0]["ruleContent"],
             "gh api:*"
         );
-        assert_eq!(EVENTS.len(), 22);
+        assert_eq!(EVENTS.len(), 29);
     }
 
     #[test]
@@ -432,6 +584,38 @@ mod tests {
         let now = crate::app::now_ms();
         assert_eq!(prune(&home, now), 0);
         assert_eq!(prune(&home, now + PRUNE_AFTER_MS + 60_000), 1);
+    }
+
+    #[test]
+    fn events_and_never_disjoint() {
+        for ev in NEVER {
+            assert!(!EVENTS.contains(ev), "{ev} is in both");
+        }
+        assert_eq!(NEVER.len(), 5);
+        let mut seen = std::collections::BTreeSet::new();
+        assert!(EVENTS.iter().all(|e| seen.insert(*e)), "no duplicates");
+    }
+
+    #[test]
+    fn uninstall_removes_never_events_too() {
+        let user = serde_json::json!({"hooks":{"Setup":[{"hooks":[{"type":"command","command":"mine.sh"}]}]}});
+        let mut s = user.clone();
+        for ev in NEVER.iter().filter(|e| **e != "Setup") {
+            s["hooks"][*ev] =
+                serde_json::json!([{"hooks":[{"type":"command","command":HOOK_COMMAND}]}]);
+        }
+        s["hooks"]["Setup"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"hooks":[{"type":"command","command":HOOK_COMMAND}]}));
+        let out = without_hooks(&s);
+        assert_eq!(out, user, "only the user's Setup hook is left");
+        // And with_hooks never writes one.
+        for ev in NEVER {
+            assert!(with_hooks(&serde_json::json!({}))["hooks"]
+                .get(*ev)
+                .is_none());
+        }
     }
 
     #[test]
@@ -515,6 +699,238 @@ mod state_tests {
         let mut e = ev(event, at, id);
         e.payload = payload;
         e
+    }
+
+    #[test]
+    fn cwd_changed_moves_display() {
+        let mut s = State::new(Pricing::bundled());
+        s.session.cwd = "/work/proj".into();
+        assert_eq!(s.work_dir(), std::path::Path::new("/work/proj"));
+        s.apply_hook(&with(
+            "CwdChanged",
+            1_000,
+            "",
+            serde_json::json!({"old_cwd":"/work/proj","new_cwd":"/elsewhere/lib"}),
+        ));
+        // Git and file paths follow; the session's own folder does not move.
+        assert_eq!(s.work_dir(), std::path::Path::new("/elsewhere/lib"));
+        assert_eq!(s.session.cwd, std::path::PathBuf::from("/work/proj"));
+        assert!(s.events.iter().any(|e| e.text == "cwd proj → lib"));
+    }
+
+    #[test]
+    fn directory_added_no_double_count() {
+        let mut s = State::new(Pricing::bundled());
+        let added = |dir: &str| {
+            with(
+                "DirectoryAdded",
+                2_000,
+                "",
+                serde_json::json!({"directory": dir, "source": "command"}),
+            )
+        };
+        s.apply_hook(&added("/x/y"));
+        assert_eq!(s.added_dirs_count(), 1);
+        // The status line names the same folder, and another: union by path.
+        let st = crate::status::Sample::parse(
+            r#"{"session_id":"s","workspace":{"added_dirs":["/x/y","/z"]}}"#,
+        )
+        .unwrap();
+        s.apply_status(&st, &[]);
+        assert_eq!(s.added_dirs_count(), 2);
+        // The hook again, and one the status line already has.
+        s.apply_hook(&added("/x/y"));
+        s.apply_hook(&added("/z/"));
+        assert_eq!(s.added_dirs_count(), 2);
+        assert_eq!(
+            s.events
+                .iter()
+                .filter(|e| e.text == "dir added · y")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn skill_shell_counts() {
+        let mut s = State::new(Pricing::bundled());
+        let run = |name: &str, cmd: &str| {
+            with(
+                "PreSkillShellCommand",
+                3_000,
+                "",
+                serde_json::json!({"command_name": name, "tool_input": {"command": cmd}}),
+            )
+        };
+        s.apply_hook(&run("review", "git diff"));
+        s.apply_hook(&run("review", "git log"));
+        s.apply_hook(&run("deploy", "make"));
+        assert_eq!(s.skill_shell["review"], 2);
+        assert_eq!(s.skill_shell["deploy"], 1);
+        assert!(s
+            .events
+            .iter()
+            .any(|e| e.text == "skill shell: review · git diff"));
+        let q = crate::query::tools(&s);
+        assert_eq!(q["skill_shell"][0]["skill"], "deploy");
+        assert_eq!(q["skill_shell"][1]["count"], 2);
+    }
+
+    #[test]
+    fn teammate_idle_hook_reaches_a_team_loaded_later() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply_hook(&with(
+            "TeammateIdle",
+            4_000,
+            "",
+            serde_json::json!({"teammate_name": "t", "team_name": "x"}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "t idle"));
+        let mut team = crate::team::Team {
+            name: "session-x".into(),
+            source: crate::team::Source::Transcripts,
+            members: Default::default(),
+            looked_in: vec![],
+            dir_seen: false,
+        };
+        team.members.insert(
+            "t".into(),
+            crate::team::Teammate::new("t", Pricing::bundled()),
+        );
+        s.team = Some(team);
+        s.sync_teammate_idle();
+        assert!(s.team.as_ref().unwrap().members["t"].is_hook_idle());
+    }
+
+    #[test]
+    fn settings_row_names_the_file_and_source_on_either_separator() {
+        let mut s = State::new(Pricing::bundled());
+        for (at, path) in [
+            (1_000, "/p/.claude/settings.json"),
+            (2_000, r"C:\p\.claude\settings.local.json"),
+        ] {
+            s.apply_hook(&with(
+                "ConfigChange",
+                at,
+                "",
+                serde_json::json!({"source": "project_settings", "file_path": path}),
+            ));
+        }
+        let rows: Vec<&str> = s.events.iter().map(|e| e.text.as_str()).collect();
+        assert!(rows.contains(&"settings changed · settings.json (project_settings)"));
+        assert!(rows.contains(&"settings changed · settings.local.json (project_settings)"));
+        assert!(rows.iter().all(|r| !r.contains(".claude")), "{rows:?}");
+    }
+
+    #[test]
+    fn teammate_idle_with_an_agent_id_still_reaches_the_arm() {
+        let mut s = State::new(Pricing::bundled());
+        s.apply_hook(&with(
+            "TeammateIdle",
+            4_000,
+            "",
+            serde_json::json!({"teammate_name": "t", "agent_id": "t@x", "agent_type": "w"}),
+        ));
+        assert!(s.events.iter().any(|e| e.text == "t idle"));
+        assert!(s.agents.is_empty(), "not taken for a subagent's event");
+    }
+
+    #[test]
+    fn mcp_prompts_wait_fifo_per_server_and_are_counted_by_action() {
+        use crate::ui::state::WaitingKind;
+        let mut s = State::new(Pricing::bundled());
+        let el = |event: &str, at: i64, server: &str, action: &str| {
+            with(
+                event,
+                at,
+                "",
+                serde_json::json!({"mcp_server_name": server, "action": action}),
+            )
+        };
+        assert!(s.waiting().is_none());
+        s.apply_hook(&el("Elicitation", 1_000, "github", ""));
+        s.apply_hook(&el("Elicitation", 5_000, "linear", ""));
+        s.apply_hook(&el("Elicitation", 9_000, "github", ""));
+        let w = s.waiting().unwrap();
+        assert_eq!((w.kind, w.since_ms), (WaitingKind::Elicitation, 1_000));
+        assert_eq!(s.open_elicitation(), Some(("github", 1_000)));
+        // Review Focus 1: the result pops github's OLDEST prompt; its second
+        // stays open, and the oldest open is now linear's.
+        s.apply_hook(&el("ElicitationResult", 11_000, "github", "accept"));
+        assert_eq!(s.open_elicitation(), Some(("linear", 5_000)));
+        assert_eq!(s.elicitations["github"].len(), 1);
+        // Review Focus 2: a result for the other server leaves github's open.
+        s.apply_hook(&el("ElicitationResult", 12_000, "linear", "decline"));
+        assert_eq!(s.open_elicitation(), Some(("github", 9_000)));
+        assert!(!s.elicitations.contains_key("linear"));
+        s.apply_hook(&el("ElicitationResult", 20_000, "github", "cancel"));
+        assert!(s.waiting().is_none());
+        let w = s.elicitation_waits;
+        assert_eq!((w.count, w.accept, w.decline, w.cancel), (3, 1, 1, 1));
+        // 10 s + 7 s + 11 s
+        assert_eq!(w.total_wait_ms, 28_000);
+        // A result with nothing open counts as nothing.
+        s.apply_hook(&el("ElicitationResult", 30_000, "ghost", "accept"));
+        assert_eq!(s.elicitation_waits.total_wait_ms, 28_000);
+        assert_eq!(
+            (s.elicitation_waits.count, s.elicitation_waits.accept),
+            (3, 1)
+        );
+        assert!(s.waiting().is_none());
+    }
+
+    #[test]
+    fn stop_and_the_next_prompt_clear_every_open_mcp_prompt() {
+        for closer in ["Stop", "UserPromptSubmit"] {
+            let mut s = State::new(Pricing::bundled());
+            s.apply_hook(&with(
+                "Elicitation",
+                1_000,
+                "",
+                serde_json::json!({"mcp_server_name": "a"}),
+            ));
+            s.apply_hook(&with(
+                "Elicitation",
+                2_000,
+                "",
+                serde_json::json!({"mcp_server_name": "b"}),
+            ));
+            assert!(s.waiting().is_some());
+            s.apply_hook(&ev(closer, 3_000, ""));
+            assert!(s.waiting().is_none(), "{closer}");
+            assert_eq!(s.elicitation_waits.count, 0, "cleared, not completed");
+        }
+    }
+
+    #[test]
+    fn the_mcp_waiting_line_is_the_same_text_on_every_surface_and_fits_the_width() {
+        let long = "m".repeat(40);
+        for server in ["github", long.as_str()] {
+            let mut s = State::new(Pricing::bundled());
+            s.apply_hook(&with(
+                "Elicitation",
+                1_000,
+                "",
+                serde_json::json!({"mcp_server_name": server}),
+            ));
+            let act = crate::dashboard::text_of(
+                &crate::dashboard::snapshot(&s, &crate::advisor::Engine::for_state(&s))
+                    .act
+                    .line,
+            );
+            let state_line =
+                crate::coach::state_line(&s, crate::advisor::SessionMode::Interactive).line;
+            for line in [&act, &state_line] {
+                assert!(line.chars().count() <= crate::coach::WIDTH, "{line}");
+                assert!(line.starts_with("◆ WAITING "), "{line}");
+                assert!(line.ends_with(" asks"), "{line}");
+                assert!(line.contains("MCP "), "{line}");
+            }
+            if server == "github" {
+                assert!(act.ends_with("— MCP github asks"), "{act}");
+                assert!(state_line.ends_with("· MCP github asks"), "{state_line}");
+            }
+        }
     }
 
     #[test]

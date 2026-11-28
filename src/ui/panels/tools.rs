@@ -247,12 +247,30 @@ impl Panel for Tools {
                 ),
             ])
         });
+        // Skills' shell commands (the `PreSkillShellCommand` hook), when any ran.
+        let skill_line = (!state.skill_shell.is_empty()).then(|| {
+            let parts: Vec<String> = state
+                .skill_shell
+                .iter()
+                .map(|(n, c)| format!("skill shell: {n} ×{c}"))
+                .collect();
+            Line::from(vec![
+                Span::raw(" "),
+                Span::raw(fmt::clip(
+                    &parts.join(" · "),
+                    inner.width.saturating_sub(1) as usize,
+                )),
+            ])
+        });
         // Pin the summary lines to the last rows.
-        let pinned = 1 + err_line.is_some() as usize;
+        let pinned = 1 + err_line.is_some() as usize + skill_line.is_some() as usize;
         while lines.len() + pinned < inner.height as usize {
             lines.push(Line::from(""));
         }
         lines.truncate(inner.height.saturating_sub(pinned as u16) as usize);
+        if let Some(s) = skill_line {
+            lines.push(s);
+        }
         if let Some(e) = err_line {
             lines.push(e);
         }
@@ -391,6 +409,29 @@ mod tests {
             "anonymised texts: {wide}"
         );
         assert!(wide.contains("(re-read ×"), "{wide}");
+    }
+
+    #[test]
+    fn skill_shell_line_only_once_a_skill_ran_a_command() {
+        let mut app = fixture_app();
+        app.state.open = Some(5);
+        assert!(!render_to_string(&app, 80, 51).contains("skill shell"));
+        for (name, cmd) in [("review", "git diff"), ("review", "git log")] {
+            app.state.apply_hook(&crate::hooks::HookEvent {
+                at: 1,
+                event: "PreSkillShellCommand".into(),
+                session_id: "s".into(),
+                tool_use_id: None,
+                tool_name: None,
+                payload: serde_json::json!({"command_name": name, "tool_input": {"command": cmd}}),
+            });
+        }
+        let out = render_to_string(&app, 80, 51);
+        assert!(out.contains("skill shell: review ×2"), "{out}");
+        assert!(
+            out.contains("top ctx: "),
+            "the pinned lines still fit: {out}"
+        );
     }
 
     #[test]
