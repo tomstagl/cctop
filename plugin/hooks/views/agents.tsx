@@ -13,6 +13,7 @@ import type { ElementTable, RenderElement } from 'claude-code';
 import type { Model } from '../model';
 import { DASH, at, formatBytes, formatDuration, formatUsd, isMissing, measured, stringAt, tokensOf } from './format';
 import { NEEDS_BINARY, type Color, type ViewElements } from './overview';
+import { mapAgents, type AgentRow } from '../agentmap';
 import { THEME, seg, type Line } from './frame';
 import { bodyWidth, line, panel, row, type Cell, type FrameRow } from './table';
 
@@ -158,11 +159,21 @@ function listAt(obj: unknown, key: string): unknown[] {
   return Array.isArray(v) ? v : [];
 }
 
+/** Body columns from which the panel title carries `depth ≤ N` beside `no background` (the TUI keeps both). */
+const LIMITS_FULL = 76;
+
 /** `0/1 agents` as the TUI's panel summary: running over listed; a team alone as `1/3 team`. */
-function agentsSummary(data: unknown): string | undefined {
+function agentsSummary(data: unknown, inner: number): string | undefined {
   const agents = listAt(data, 'agents');
   const parts: string[] = [];
-  if (agents.length > 0) {
+  // With the pane's limits the query says the line (`3 / 10 running · depth ≤ 2`),
+  // the TUI's header text verbatim; the count of agents then stands alone.
+  const limits = stringAt(data, 'limits', 'line');
+  if (limits !== null) {
+    if (agents.length > 0) parts.push(`${agents.length} agents`);
+    // Below LIMITS_FULL body columns the depth bound makes way for `no background`.
+    parts.push(inner < LIMITS_FULL ? limits.replace(/ · depth ≤ \d+/, '') : limits);
+  } else if (agents.length > 0) {
     const running = agents.filter((a) => stringAt(a, 'state') === 'running').length;
     parts.push(`${running}/${agents.length} agents`);
   }
@@ -176,7 +187,7 @@ export const DETAIL_WIDE = 116;
 
 /** The elements the agents view presses with, and what a press does; built in pane.tsx over `$`. */
 export type AgentsElements = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>;
-export type AgentsActions = { el: AgentsElements; open(run: string | null): void };
+export type AgentsActions = { el: AgentsElements; open(run: string | null): void; jump(agentId: string): void };
 
 /** The run's row as the TUI's group line: dim, its `✗N` red when agents failed. */
 function runLine(w: unknown): Line {
@@ -206,9 +217,23 @@ function detailRows(rows: string[], heads: number): FrameRow[] {
   });
 }
 
+/** The agent rows as the mapping reads them: id, what the Agent call said, whether it runs. */
+function agentRows(agents: unknown[]): AgentRow[] {
+  return agents.flatMap((a) => {
+    const id = stringAt(a, 'id');
+    if (id === null || id === undefined) return [];
+    const row: AgentRow = { id, running: stringAt(a, 'state') === 'running' };
+    const type = stringAt(a, 'type');
+    const description = stringAt(a, 'description');
+    if (type !== null && type !== undefined) row.type = type;
+    if (description !== null && description !== undefined) row.description = description;
+    return [row];
+  });
+}
+
 export function renderAgents(model: Model, el: ViewElements, columns: number, now: number, actions?: AgentsActions): RenderElement {
   const data = model.query.agents;
-  const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data) };
+  const p = { hotkey: '6', title: 'Agents & MCP', summary: model.binary === 'missing' ? undefined : agentsSummary(data, bodyWidth(columns)) };
   if (model.binary === 'missing') return panel(p, [line(NEEDS_BINARY, { key: 'agent_state' })], columns, el);
   const inner = bodyWidth(columns);
   const fel = actions?.el ?? el;
@@ -217,6 +242,14 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
   const workflows = listAt(data, 'workflows').filter((w) => (stringAt(w, 'row') ?? '') !== '');
   const runs = new Set(workflows.map((w) => stringAt(w, 'run') ?? ''));
   const agents = listAt(data, 'agents');
+  // The rows the pane can put in the main view: cctop's id mapped to the engine's.
+  const live = actions === undefined ? new Map<string, string>() : mapAgents(agentRows(agents), model.liveAgents);
+  const agentRow = (a: unknown): FrameRow => {
+    const r = row(agentCells(a, inner), inner, 'agent_state');
+    const target = live.get(stringAt(a, 'id') ?? '');
+    if (actions !== undefined && target !== undefined) r.press = { key: `agent-${target}`, onPress: () => actions.jump(target) };
+    return r;
+  };
   const open = model.openRun === null ? undefined : workflows.find((w) => stringAt(w, 'run') === model.openRun);
   if (open !== undefined) {
     const rows: FrameRow[] = [];
@@ -226,14 +259,14 @@ export function renderAgents(model: Model, el: ViewElements, columns: number, no
     // The narrow header is two rows (the run, then its money), so its column heads are row 2.
     rows.push(...detailRows(Array.isArray(detail) ? detail.filter((t): t is string => typeof t === 'string') : [], wide ? 1 : 2));
     // The run's agents under its phase table, one row each, as the TUI's detail (spec §4.4).
-    for (const a of agents) if (at(a, 'workflow') === model.openRun) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+    for (const a of agents) if (at(a, 'workflow') === model.openRun) rows.push(agentRow(a));
     return panel(p, rows, columns, fel);
   }
   const rows: FrameRow[] = [];
   // A run's agents are its row, not a row each (the TUI's list).
   for (const a of agents) {
     const run = at(a, 'workflow');
-    if (typeof run !== 'string' || !runs.has(run)) rows.push(row(agentCells(a, inner), inner, 'agent_state'));
+    if (typeof run !== 'string' || !runs.has(run)) rows.push(agentRow(a));
   }
   for (const w of workflows) {
     const run = stringAt(w, 'run') ?? '';

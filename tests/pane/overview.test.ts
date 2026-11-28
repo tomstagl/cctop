@@ -399,3 +399,26 @@ test('the hooks badge renders row-identical on both surfaces and is absent witho
   assert.match(pane40, /COMMITTING/);
   assert.equal(pane40, tui40);
 });
+
+// The data rules (PRD 6): the marker's `facts.dataRules` become the object's
+// `header.rules`, drawn beside the hooks badge; the TUI's insta snapshots
+// are the reference rows.
+test('the rules badge renders row-identical on both surfaces and is absent without it', () => {
+  const dash = JSON.parse(JSON.stringify(fixture('dashboard-b')));
+  const workspace = ['acme/shop', 'wt feat', '+1 dir', 'style Concise', 'agent: reviewer', 'remote'];
+  dash.header.workspace = workspace;
+  dash.header.line = `cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home/user/project · ${workspace.join(' · ')} · PR #121 · v2.1.270`;
+  dash.header.phase = { glyph: '●', word: 'COMMITTING', elapsed: '8h 40m', tokens: [] };
+  assert.doesNotMatch(raw(build({ dashboard: dash }), 120)[0], /ZDR/);
+  const snapRow = (name: string): string => {
+    const snap = readFileSync(join(repo, 'src', 'ui', 'snapshots', `cctop__ui__dashboard__tests__${name}.snap`), 'utf8');
+    return snap.split('\n---\n')[1].split('\n')[0].replace(/\s+$/, '');
+  };
+  dash.header.rules = 'ZDR HIPAA rules';
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), snapRow('header_rules_120'));
+  dash.header.hooks = 'hooks: 7 new';
+  assert.equal(raw(build({ dashboard: dash }), 120)[0].replace(/\s+$/, ''), snapRow('header_rules_hooks_120'));
+  const pane40 = raw(build({ dashboard: dash }), 40)[0].replace(/\s+$/, '');
+  assert.doesNotMatch(pane40, /ZDR/);
+  assert.equal(pane40, snapRow('header_rules_hooks_40'));
+});

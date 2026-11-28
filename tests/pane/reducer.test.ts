@@ -391,3 +391,20 @@ test('a failed breakdown write logs once, still debounces, retries after 15 s; a
   assert.equal(reads.breakdowns.length, 3);
   assert.equal(failures(), 2, 'a rotated session id resets the once-per-session log');
 });
+
+test('turn.stop ends a running turn with no duration; on an idle pane it changes nothing', () => {
+  const done = run([
+    { type: 'session.start', at: T0 },
+    { type: 'turn.start', at: T0 + 100 },
+    { type: 'turn.complete', at: T0 + 1100, durationMs: 1000, reason: 'answer' },
+  ]);
+  const running = run([{ type: 'turn.start', at: T0 + 2000 }, { type: 'tool.start', name: 'Bash', at: T0 + 2100 }], done);
+  assert.equal(running.turn.state, 'busy');
+  const stopped = reduce(running, { type: 'turn.stop', at: T0 + 2500 });
+  assert.equal(stopped.turn.state, 'idle');
+  assert.equal(stopped.turn.startedAt, null);
+  assert.equal(stopped.turn.runningTool, null);
+  assert.equal(stopped.turn.lastDurationMs, 1000, 'the last completed turn keeps its duration: a Stop adds none');
+  assert.equal(stopped.turn.lastReason, 'answer');
+  assert.equal(reduce(done, { type: 'turn.stop', at: T0 + 5000 }), done, 'no turn running: no state change, no negative duration');
+});

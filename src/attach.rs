@@ -148,6 +148,16 @@ pub fn attach(app: &mut App, transcript: &Path, info: SessionInfo, live: bool) {
             state.apply_hook(&ev);
         }
     }));
+    // The pane marker's `facts` (data rules, screen reader): the pane
+    // rewrites them when they change, so they are read again every few seconds.
+    app.state.load_pane_facts();
+    let mut facts_at = Instant::now();
+    app.tick_hooks.push(Box::new(move |state: &mut State| {
+        if facts_at.elapsed() >= Duration::from_secs(3) {
+            facts_at = Instant::now();
+            state.load_pane_facts();
+        }
+    }));
     if let Some(v) = crate::claude_home::read() {
         app.state.apply_claude_home(&v);
     }

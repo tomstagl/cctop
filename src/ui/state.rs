@@ -547,6 +547,9 @@ pub struct State {
     /// without a `cctop hook` entry in settings). Empty when nothing is
     /// installed, when the install is current, and for a fixture.
     pub hooks_missing: Vec<&'static str>,
+    /// The pane marker's `facts` (data rules, platform, screen reader, agent
+    /// limits); `None` while no pane has written one for this session.
+    pub pane_facts: Option<crate::pane::PaneFacts>,
     pub prefix: crate::prefix::Prefix,
     /// The pane's latest breakdown spool, raw: anchored and checked against
     /// compactions when read, since the transcript may lag it.
@@ -968,6 +971,10 @@ impl State {
                 kind: Kind::Agent,
                 text: ev.event.trim_start_matches("Subagent").to_lowercase(),
             }),
+            // A Notification raised by a plugin's `$.ui.notify` (cctop's own
+            // opt-in pane notifications included) carries `plugin_notification`;
+            // it says nothing of Claude Code waiting on the person.
+            "Notification" if p.get("plugin_notification").is_some_and(|v| !v.is_null()) => {}
             "Notification" => {
                 let kind = pstr("notification_type").unwrap_or_else(|| "notification".into());
                 let msg = ev
@@ -2467,6 +2474,17 @@ impl State {
         );
     }
 
+    /// Read the pane marker's `facts` for this session (a fixture has none).
+    pub fn load_pane_facts(&mut self) {
+        // A marker read that fails (the pane is rewriting it) keeps what was
+        // known: the badges do not blink out and back.
+        match crate::pane::read_facts(&self.session.session_id) {
+            crate::pane::ReadFacts::Facts(f) => self.pane_facts = Some(f),
+            crate::pane::ReadFacts::Absent => self.pane_facts = None,
+            crate::pane::ReadFacts::Unreadable => {}
+        }
+    }
+
     /// Read the autocompact overrides for a live session: settings.json and
     /// the claude process environment; price the enabled plugins with the
     /// catalog cache.
@@ -2988,5 +3006,34 @@ mod tests {
             machine: false,
         });
         assert_eq!(s.context_capture().unwrap().1, 2);
+    }
+
+    #[test]
+    fn a_plugin_notification_is_not_claude_codes_attention_request() {
+        let mut s = State::new(Pricing::bundled());
+        let ev = |payload: serde_json::Value| crate::hooks::HookEvent {
+            at: 5_000,
+            event: "Notification".into(),
+            session_id: "s".into(),
+            tool_use_id: None,
+            tool_name: None,
+            payload,
+        };
+        // What `$.ui.notify` raises: the person's Notification hooks see it,
+        // marked by `plugin_notification`, and it changes nothing here.
+        s.apply_hook(&ev(serde_json::json!({
+            "notification_type": "permission_prompt",
+            "message": "▸ Rate limit",
+            "plugin_notification": {"plugin": "cctop"}
+        })));
+        assert!(!s.session.permission_pending);
+        assert!(s.session.notification.is_none());
+        assert!(s.events.is_empty());
+        // Claude Code's own still counts.
+        s.apply_hook(&ev(
+            serde_json::json!({"notification_type": "permission_prompt", "message": "needs you"}),
+        ));
+        assert!(s.session.permission_pending);
+        assert!(s.session.notification.is_some());
     }
 }
