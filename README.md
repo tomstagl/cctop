@@ -408,7 +408,7 @@ OTel data is live in `cctop run --otlp` only: `cctop query` and the pane run in 
 
 <!-- install:start -->
 ```
-brew install tomstagl/tap/cctop           # currently v0.9.1; or: cargo install cctop
+brew install tomstagl/tap/cctop           # currently v0.10.0; or: cargo install cctop
 claude plugin marketplace add tomstagl/cctop
 claude plugin install cctop               # adds /cctop and cctop-insights
 /cctop                                     # opens the dashboard: panel or terminal split

@@ -15,7 +15,7 @@ Two skills, plus a docked pane on builds with function hooks:
 The binary first:
 
 ```
-brew install tomstagl/tap/cctop     # currently v0.9.1; or: cargo install cctop
+brew install tomstagl/tap/cctop     # currently v0.10.0; or: cargo install cctop
 ```
 
 Then the plugin, from a local checkout or the marketplace entry:
@@ -165,7 +165,7 @@ without — the clock resolves a number, `HOME` is set, the session has an id
 `~/.claude/debug/latest`) before anything else:
 
 ```
-cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok
+cctop: plugin 0.12.0 (hooks contract 2.1.332) loaded; self-check ok
 ```
 
 When a surface moved, the line reads `self-check failed: <what>` with the
@@ -214,8 +214,8 @@ what it was tested with is the module's `TESTED_WITH` (the header's `hooks
 …` light), read from the marker or from the install's `hooks/model.ts`:
 
 ```
-  ✓ cctop plugin 0.11.0 tested with Claude Code 2.1.332
-  ! Claude Code 2.1.340 is newer than cctop plugin 0.11.0 was tested with (2.1.332); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
+  ✓ cctop plugin 0.12.0 tested with Claude Code 2.1.332
+  ! Claude Code 2.1.340 is newer than cctop plugin 0.12.0 was tested with (2.1.332); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
   ✗ cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3) → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code
 ```
 
