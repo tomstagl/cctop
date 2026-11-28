@@ -15,7 +15,7 @@ Two skills, plus a docked pane on builds with function hooks:
 The binary first:
 
 ```
-brew install tomstagl/tap/cctop     # currently v0.9.1; or: cargo install cctop
+brew install tomstagl/tap/cctop     # currently v0.10.0; or: cargo install cctop
 ```
 
 Then the plugin, from a local checkout or the marketplace entry:
@@ -43,6 +43,7 @@ between the last contract change and the next one:
 | 0.9.0 | 2.1.278 | 2.1.269 – 2.1.284 (an `Image` element, sub-cell pointer coordinates, `$.ui.panes()` / `$.ui.root()`, `$.prompt.read()`, a budget on `next` and four events, and re-typed `$.fs.read` (a bytes form) and `$.prompt.fill`'s result — additive, nothing the pane calls moved); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) and writes `testedWith` into the marker, which `cctop pane status` pairs with `claude --version` |
 | 0.10.0 | 2.1.284 | 2.1.269 – 2.1.284 (`$.process.spawn`, truncation flags on `$.process.run`'s result, `startedAt` on `$.session.usage()`, and `$.ui.open` resolving whether the pane was placed — additive; the poller's engine facade now takes `run` alone from `$.process`, so the new `spawn` is not required of it); says so at session start (`cctop: plugin 0.10.0 (hooks contract 2.1.284) loaded; self-check ok`) |
 | 0.11.0 | 2.1.332 | 2.1.332 and later, as far as CI has seen (the validator type-checks with `noUncheckedIndexedAccess`, and `e.props.placement` gained `widget`, laid out as inline); says so at session start (`cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok`) |
+| 0.12.0 | 2.1.332 | 2.1.332 and later, as far as CI has seen (additive: `$.wasm.compile` for the bundled `charts.wasm`, the `Image` and `Raster` elements for the charts, `$.ui.place` for rows placed in the transcript, the `$.ui.open` dialog for the act dialog, and `$.prompt.read` before every `$.prompt.fill`); says so at session start (`cctop: plugin 0.12.0 (hooks contract 2.1.332) loaded; self-check ok`) |
 
 Function hooks are early access and change between Claude Code releases.
 CI checks the contract against the latest release daily
@@ -66,7 +67,7 @@ lit and pressed as one area. It shows the same views as the TUI:
 
 | View | TUI | What it shows |
 |---|---|---|
-| Coach | `c` | The 56-column card: the state line, the four lights, the one nudge with `[1 fill]` `[2 snooze]` `[3 why]`, what is next and what is snoozed, the detail frame of the highest light |
+| Coach | `c` | The NOW card: the state line and the nudge in full (plain name, age, rule id, headline, body, evidence), its fix prompt as a card a click puts in the prompt box, Buttons by action kind and snooze, and `a` (or a press on the headline) while the pane has focus opening the act dialog: the items on the left, the selected one's detail on the right (an allow rule as a settings diff, the exact text, Buttons; a key step such as "Press Esc to stop the turn" first; cctop never stops a turn); "Up next" and the four lights opening in place (context: what fills the window and what put it there) |
 | Overview | the dashboard | Console: the header, the six cells (`1`–`6`), the act line (`a`), the rule line (`0` home, `? keys`), the open body in place — every figure the TUI's nine panels carry, one body at a time |
 | Tools | 5 | Calls, errors, p50/p95, tokens pushed into context, per tool |
 | Agents | 6 | Subagents, MCP servers, background tasks |
@@ -75,17 +76,33 @@ lit and pressed as one area. It shows the same views as the TUI:
 | Advisor | 9 | The slot's occupant, then what is queued and what is snoozed |
 
 The Coach and Overview views draw `cctop query coach` and `cctop query
-dashboard` verbatim — the same objects the TUI draws — so the pane and the
-terminal show the same nudge at the same moment. The frames inside the other
+dashboard` verbatim, with the Overview's body 1 (its charts) drawn from
+`cctop query overview`. These are the same objects the TUI draws, so the
+pane and the terminal show the same nudge at the same moment. The frames inside the other
 views carry the TUI's panel digits (`╭5 Tools ─ 257 calls╮`), the same
-numbers the guide and `cctop query` use. `[1 fill]` writes a prompt-class
-action into the prompt box (`$.prompt.fill`) and never submits it; the
+numbers the guide and `cctop query` use. A fix prompt or a command goes
+into an empty prompt box (`$.prompt.fill`, after `$.prompt.read`: a draft is
+never replaced) and is never submitted; a rule is copied (`$.ui.copy`) and
+the project's `.claude/settings.local.json` opened in your editor, a setting
+copied and `~/.claude/settings.json` opened, neither ever written; a
+key-kind nudge (stop the turn) is a step you take with Esc; the
 coach's one-line form sits under the prompt (`$.ui.status`) and changes only
 when a light's level or the nudge changes.
 
 `/cctop-pane [view|close]` opens the pane (optionally straight to a view — one
 of `coach`, `overview`, `tools`, `agents`, `files`, `events`, `advisor`), or
 closes it; with no argument it toggles.
+
+### Best look
+
+Terminal settings that make the pane look as designed:
+
+- **Ghostty**: `font-family = JetBrains Mono`, `font-size = 13`, `adjust-cell-height = 23%`.
+- **Terminal.app**: SF Mono Regular 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
+
+**Pictures or cells.** The Overview's charts are drawn as pictures (`Image`, rendered by the bundled `charts.wasm`) on kitty, Ghostty and iTerm2 3.5+, and in tmux only with passthrough and focus events on (`set -g allow-passthrough on` and `set -g focus-events on`). Terminal.app and the VS Code terminal show cells (a `Raster`), the same characters the terminal view draws. A terminal cctop does not recognise tries pictures first and falls back to cells if it refuses the first one. `CCTOP_PANE_CHARTS=image|cells` forces one, and `[pane] charts = "auto" | "image" | "cells"` in `~/.cctop/config.toml` sets the default; the variable wins. There is no text inside any picture: labels are terminal text beside it.
+
+**The act dialog, placed rows, fills.** `a` opens the act dialog (`$.ui.open`): the items on the left, the selected one's detail on the right; a settings change is shown as the line to add, copied and the file opened, never written. Notes and misses are placed in the transcript where they happened (`$.ui.place`: display only and never written to the transcript, so they are gone after `--resume`). A fill (`$.prompt.fill`, after `$.prompt.read`) goes only into an empty prompt box: a draft is never replaced, and nothing is submitted.
 
 ### Switching views
 
@@ -148,7 +165,7 @@ without — the clock resolves a number, `HOME` is set, the session has an id
 `~/.claude/debug/latest`) before anything else:
 
 ```
-cctop: plugin 0.11.0 (hooks contract 2.1.332) loaded; self-check ok
+cctop: plugin 0.12.0 (hooks contract 2.1.332) loaded; self-check ok
 ```
 
 When a surface moved, the line reads `self-check failed: <what>` with the
@@ -197,8 +214,8 @@ what it was tested with is the module's `TESTED_WITH` (the header's `hooks
 …` light), read from the marker or from the install's `hooks/model.ts`:
 
 ```
-  ✓ cctop plugin 0.11.0 tested with Claude Code 2.1.332
-  ! Claude Code 2.1.340 is newer than cctop plugin 0.11.0 was tested with (2.1.332); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
+  ✓ cctop plugin 0.12.0 tested with Claude Code 2.1.332
+  ! Claude Code 2.1.340 is newer than cctop plugin 0.12.0 was tested with (2.1.332); function hooks are early access and change between releases → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` when a newer plugin is out, then restart Claude Code; if a hook fails meanwhile, report it with both versions
   ✗ cctop plugin 0.4.0 does not work on Claude Code 2.1.272: 2.1.271 made `$.clock.now()` resolve a Promise and the module did arithmetic on it, so every hook failed (issue #3) → `claude plugin marketplace update cctop && claude plugin update cctop@cctop` (plugin 0.4.1 or newer), then restart Claude Code
 ```
 

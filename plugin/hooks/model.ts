@@ -3,6 +3,7 @@
 // views draw the model. Kept pure so it is testable from plain data.
 import type { RenderElement, SessionUsage } from 'claude-code';
 import type { LiveAgent } from './agentmap';
+import type { ChartsInfo, Probe } from './charts';
 
 export type TurnState = 'idle' | 'busy' | 'waiting';
 export type View = 'coach' | 'overview' | 'tools' | 'agents' | 'files' | 'events' | 'advisor';
@@ -24,9 +25,11 @@ export const TESTED_WITH = '2.1.332';
 export const MIN_DOCK_COLUMNS = 110;
 
 /** The `cctop query` verbs the pane polls, in the order one tick runs them. */
-export const QUERY_VERBS = ['summary', 'dashboard', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
+export const QUERY_VERBS = ['summary', 'dashboard', 'overview', 'coach', 'tools', 'files', 'agents', 'advice', 'events'] as const;
 /** Verbs a busy tick (every 2 s) skips: they change at turn boundaries, the idle tick reads them. */
 export const IDLE_ONLY_VERBS: readonly QueryVerb[] = ['advice'];
+/** Verbs read only while the pane shows them: the overview's charts are drawn for body 1 of the Overview alone. */
+export const SHOWN_ONLY_VERBS: readonly QueryVerb[] = ['overview'];
 export type QueryVerb = (typeof QUERY_VERBS)[number];
 /** The parsed JSON of the last successful `cctop query <verb>`, per verb. */
 export type QueryData = Partial<Record<QueryVerb, unknown>>;
@@ -71,6 +74,8 @@ export type SessionFacts = {
 export type AgentLimits = { concurrent: number; depth: number; isBackgroundEnabled: boolean };
 
 export type Model = {
+  /** What the pane knows of picture-or-cells (charts.ts); null until `initCharts` has read the environment. */
+  charts: ChartsInfo | null;
   /** The last `$.session.usage()` answer and when it was read. */
   usage: SessionUsage | null;
   usageAt: number | null;
@@ -127,18 +132,29 @@ export type Model = {
   viewportColumns: number | null;
   /** The context size at the end of each turn (the last HISTORY_TURNS), for the Context sparkline. */
   contextHistory: number[];
-  /** The coach view: which light's detail frame is open (null = the highest light) and whether the why frame is. */
-  coachLight: 'context' | 'cache' | 'limits' | 'rework' | null;
-  coachWhy: boolean;
+  /** The coach view: which light is open in place (null = the highest light, `none` = every light closed). */
+  coachLight: 'context' | 'cache' | 'limits' | 'rework' | 'none' | null;
+  /** The coach view: the "Up next" row open in place (its rule id); null = closed. */
+  coachNext: string | null;
+  /** The text the coach last put in the prompt box (`$.prompt.fill` said it took): the card's "nothing has been sent" line. Cleared by the next turn. */
+  coachFilled: string | null;
   /** `id:fired_at_ms` of the nudge last toasted, and the turn it was toasted in (one toast per turn). */
   coachToasted: string | null;
   coachToastTurn: number | null;
   /** The last `$.ui.status` line the coach set; set again only when it changes. */
   coachStatus: string | null;
-  /** Console's open body (its id); events, the way home, by default. */
+  /** The act dialog (`cctop-act`) is open. */
+  actOpen: boolean;
+  /** The act dialog's selected item (a rule id); null = the first. */
+  actSel: string | null;
+  /** What the last action in the dialog did, drawn in it (toasts are held while it is open). */
+  actNote: string | null;
+  /** Console's open body (its id): the overview's charts (`context`, key 1) by default, as spec §5.2 opens the Overview; `0` is events, the way home. */
   body: string;
   /** Console's rule line expanded into the key map (`? keys` pressed). */
   keys: boolean;
+  /** The overview's picked readout per per-turn chart (chart id → turn), a turn number's press; absent = the latest turn. Cleared by a new turn and by pressing the picked turn again. */
+  readouts: Record<string, number>;
   /** The agents view's open workflow run (its id, a `Button` press); null = the list. */
   openRun: string | null;
   /** `$.agent.list()` as last read: what the agent rows' ids are mapped against (agentmap.ts). */
@@ -168,6 +184,9 @@ export type Action =
   | { type: 'session.id'; id: string }
   | { type: 'session.info'; facts: SessionFacts }
   | { type: 'agent.limits'; limits: AgentLimits }
+  | { type: 'charts.info'; info: ChartsInfo }
+  // A probe blit's answer; `fix` is `$.ui.blit`'s stable code when it was denied.
+  | { type: 'charts.probe'; probe: Probe; fix?: string }
   | { type: 'verbs'; verbs: readonly QueryVerb[] }
   | { type: 'query'; verb: QueryVerb; data: unknown }
   // One poller tick ended; `ok` when every verb it called parsed.
@@ -176,12 +195,19 @@ export type Action =
   // The engine asked for the pane's tree: it is being drawn, here and this wide.
   | { type: 'render'; at: number; placement: Placement; bodyColumns: number; viewportColumns: number | null }
   | { type: 'visibility'; visibility: Visibility }
-  | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | null }
-  | { type: 'coach.why'; why: boolean }
+  | { type: 'coach.light'; light: 'context' | 'cache' | 'limits' | 'rework' | 'none' | null }
+  // An "Up next" row pressed: opens it, or closes it when it is the open one.
+  | { type: 'coach.next'; id: string }
+  | { type: 'coach.filled'; text: string | null }
   | { type: 'coach.toasted'; key: string; turn: number }
   | { type: 'coach.status'; status: string | null }
+  | { type: 'act.open'; id: string | null }
+  | { type: 'act.close' }
+  | { type: 'act.select'; id: string }
+  | { type: 'act.note'; text: string | null }
   | { type: 'overview.body'; id: string }
   | { type: 'overview.keys'; keys: boolean }
+  | { type: 'overview.readout'; chart: string; turn: number }
   | { type: 'agents.run'; run: string | null }
   | { type: 'agents.live'; agents: LiveAgent[] }
   | { type: 'agents.viewed'; id: string | null };
@@ -196,6 +222,7 @@ export function breakdownDue(model: Model, now: number): boolean {
 
 export function initialModel(): Model {
   return {
+    charts: null,
     usage: null,
     usageAt: null,
     lastBreakdownAt: null,
@@ -233,12 +260,17 @@ export function initialModel(): Model {
     viewportColumns: null,
     contextHistory: [],
     coachLight: null,
-    coachWhy: false,
+    coachNext: null,
+    coachFilled: null,
     coachToasted: null,
     coachToastTurn: null,
     coachStatus: null,
-    body: 'events',
+    actOpen: false,
+    actSel: null,
+    actNote: null,
+    body: 'context',
     keys: false,
+    readouts: {},
     openRun: null,
     liveAgents: [],
     viewedAgent: null,
@@ -259,6 +291,10 @@ export function reduce(model: Model, action: Action): Model {
     case 'turn.start':
       return {
         ...model,
+        // A new turn is the latest again: a picked readout gives way to it.
+        readouts: {},
+        // The draft the coach filled was sent or replaced: its line goes.
+        coachFilled: null,
         turn: { ...model.turn, number: model.turn.number + 1, state: 'busy', startedAt: action.at, toolMs: 0 },
       };
     case 'turn.complete': {
@@ -316,6 +352,13 @@ export function reduce(model: Model, action: Action): Model {
       return JSON.stringify(model.sessionFacts) === JSON.stringify(action.facts) ? model : { ...model, sessionFacts: action.facts };
     case 'agent.limits':
       return JSON.stringify(model.agentLimits) === JSON.stringify(action.limits) ? model : { ...model, agentLimits: action.limits };
+    case 'charts.info':
+      return { ...model, charts: action.info };
+    case 'charts.probe': {
+      if (model.charts === null || model.charts.probe === action.probe) return model;
+      const { fix: _old, ...rest } = model.charts;
+      return { ...model, charts: { ...rest, probe: action.probe, ...(action.fix !== undefined ? { fix: action.fix } : {}) } };
+    }
     case 'session.id':
       if (model.sessionId === action.id) return model;
       if (model.sessionId === null) return { ...model, sessionId: action.id };
@@ -343,6 +386,11 @@ export function reduce(model: Model, action: Action): Model {
         coachToasted: null,
         coachToastTurn: null,
         coachStatus: null,
+        coachNext: null,
+        coachFilled: null,
+        actSel: null,
+        actNote: null,
+        readouts: {},
         openRun: null,
         liveAgents: [],
         viewedAgent: null,
@@ -367,9 +415,19 @@ export function reduce(model: Model, action: Action): Model {
     case 'visibility':
       return model.visibility === action.visibility ? model : { ...model, visibility: action.visibility };
     case 'coach.light':
-      return { ...model, coachLight: action.light, coachWhy: false };
-    case 'coach.why':
-      return { ...model, coachWhy: action.why };
+      return model.coachLight === action.light ? model : { ...model, coachLight: action.light };
+    case 'coach.next':
+      return { ...model, coachNext: model.coachNext === action.id ? null : action.id };
+    case 'coach.filled':
+      return model.coachFilled === action.text ? model : { ...model, coachFilled: action.text };
+    case 'act.open':
+      return { ...model, actOpen: true, actSel: action.id ?? model.actSel, actNote: null };
+    case 'act.close':
+      return model.actOpen ? { ...model, actOpen: false, actNote: null } : model;
+    case 'act.select':
+      return model.actSel === action.id ? model : { ...model, actSel: action.id, actNote: null };
+    case 'act.note':
+      return model.actNote === action.text ? model : { ...model, actNote: action.text };
     case 'coach.toasted':
       return { ...model, coachToasted: action.key, coachToastTurn: action.turn };
     case 'coach.status':
@@ -378,6 +436,11 @@ export function reduce(model: Model, action: Action): Model {
       return model.body === action.id ? model : { ...model, body: action.id };
     case 'overview.keys':
       return model.keys === action.keys ? model : { ...model, keys: action.keys };
+    case 'overview.readout': {
+      // A second press on the picked turn lets the latest show again.
+      const { [action.chart]: picked, ...rest } = model.readouts;
+      return picked === action.turn ? { ...model, readouts: rest } : { ...model, readouts: { ...rest, [action.chart]: action.turn } };
+    }
     case 'agents.run':
       return model.openRun === action.run ? model : { ...model, openRun: action.run };
     case 'agents.live':
@@ -410,6 +473,11 @@ export function outcomeText(model: Model, viewLabel?: string): string {
     return `${subject} drawn above the prompt: the terminal is ${columns} columns wide, ${MIN_DOCK_COLUMNS} or more dock it beside the transcript.`;
   }
   return `${subject} drawn above the prompt: /tui fullscreen docks it beside the transcript.`;
+}
+
+/** Whether the pane shows the overview's charts: Console's body 1, docked. */
+export function overviewShown(model: Model): boolean {
+  return model.open && model.view === 'overview' && model.body === 'context' && model.placement === 'dock';
 }
 
 /** Whether `verb` may be polled: unknown until `--help` is read, then as listed. */

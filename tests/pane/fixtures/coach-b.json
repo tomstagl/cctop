@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far $18.75 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "142k ▇▁▁▁▁▁▁▁▁▁ 14% · re-reads 142k/call",
@@ -80,14 +81,29 @@
     "acting": false,
     "action_kind": "prompt",
     "action_text": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "Run builds and test suites longer than a minute in the background and keep working meanwhile."
+      }
+    ],
+    "body": "A shell command ran in the foreground for 9 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
     "class": "LATER",
-    "evidence": "  LATER · since turn 6 · +0 queued",
+    "evidence": [
+      "a foreground Bash call longer than a minute; Claude waited for it"
+    ],
     "explain": "A foreground Bash call blocks the turn until it exits. For builds and test suites that take more than a minute, run them in the background (`run_in_background`): Claude keeps working and is notified when the command finishes. Calls Claude Code backgrounded itself do not count.",
     "family": "long-foreground",
     "fired_at_ms": 1789428525471,
+    "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+    "foot": "goes away when Claude backgrounds a command, or after three turns",
+    "headline": "A shell command blocked the turn for 9:09",
     "id": "A10",
-    "line1": "▸ `cd lorem_ipsum_dolor_sit_amet…` blocked the turn…",
+    "line1": "▸ A shell command blocked the turn for 9:09",
     "line2": "  queue: 'run builds and test suites longer than a …",
+    "line3": "  LATER · since turn 6 · +0 queued",
+    "name": "A long command blocked the turn",
     "queued": 0,
     "retires_on": "3 turns",
     "saving": "~9:09/turn",
@@ -97,7 +113,7 @@
   "queued": 0,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-b",
   "session_mode": "interactive",
   "snoozed": [],

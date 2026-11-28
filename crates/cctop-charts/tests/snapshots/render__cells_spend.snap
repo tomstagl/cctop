@@ -1,0 +1,26 @@
+---
+source: crates/cctop-charts/tests/render.rs
+expression: "pixels_text(&cells, f.cols)"
+---
+..............................................
+.............................................a
+b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.b.baba
+......................................aaaaaaaa
+...................................aaaaaaaaaaa
+................................aaaaaaaaaaaaaa
+..............................caaaaaaaaaaaaaaa
+............................cccaaaaaaaaaaaaaaa
+.......................d.ccccccaaaaaaaaaaaaaaa
+......................cdcccccccaaaaaaaaaaaaaaa
+.....................ccdcccccccaaaaaaaaaaaaaaa
+..................cccccdcccccccaaaaaaaaaaaaaaa
+............cccccccccccdcccccccaaaaaaaaaaaaaaa
+.....e.ccccccccccccccccdcccccccaaaaaaaaaaaaaaa
+....cecccccccccccccccccdcccccccaaaaaaaaaaaaaaa
+.ccccecccccccccccccccccdcccccccaaaaaaaaaaaaaaa
+
+a #005f5f
+b #d7af5f
+c #5fd7d7
+d #d75f5f
+e #af87d7

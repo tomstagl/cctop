@@ -606,12 +606,33 @@ impl App {
                 };
                 self.state.set_toast(msg);
             }
+            KeyCode::Char('j' | 'k')
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Down
+            | KeyCode::Up
+                if self.state.open.is_none()
+                    && self.state.view == crate::ui::state::View::Dashboard
+                    && self.state.console_body() == 0 =>
+            {
+                // Console, the overview: scroll the body (j/k a row, PgUp/PgDn ten).
+                let s = &mut self.state;
+                s.console_offset = match key.code {
+                    KeyCode::Char('k') | KeyCode::Up => s.console_offset.saturating_sub(1),
+                    KeyCode::PageUp => s.console_offset.saturating_sub(10),
+                    KeyCode::PageDown => s.console_offset + 10,
+                    _ => s.console_offset + 1,
+                }
+                .min(s.console_offset_max.get());
+            }
             KeyCode::Char('a') if self.state.open.is_none() => {
                 // Console: the advisor body.
+                reset_scroll(&mut self.state);
                 self.state.console_body = Some(crate::dashboard::ADVISOR_BODY);
             }
             KeyCode::Char('0') | KeyCode::Esc if self.state.open.is_none() => {
                 // Console: home — the events body.
+                reset_scroll(&mut self.state);
                 self.state.console_body = None;
             }
             KeyCode::Char('a') | KeyCode::Char('A') => {
@@ -659,6 +680,7 @@ impl App {
             }
             KeyCode::Char(c @ '1'..='6') if self.state.open.is_none() => {
                 // Console: the cell's body swaps in; the header never moves.
+                reset_scroll(&mut self.state);
                 self.state.console_body = Some((c as u8 - b'1') as usize);
             }
             KeyCode::Char(c @ '1'..='9') if self.state.open.is_some() => {
@@ -734,26 +756,8 @@ impl App {
                     self.state.set_toast("nothing to act on");
                     return true;
                 };
-                use crate::advisor::ActionKind;
-                let (text, sendable) = match a.action_kind {
-                    ActionKind::Prompt | ActionKind::Slash if !a.action_text.is_empty() => {
-                        (a.action_text.clone(), true)
-                    }
-                    ActionKind::AllowRule => (
-                        format!("\"permissions\": {{ \"allow\": [\"{}\"] }}", a.action_text),
-                        false,
-                    ),
-                    ActionKind::Setting | ActionKind::Key if !a.action_text.is_empty() => {
-                        (a.action_text.clone(), false)
-                    }
-                    _ => (
-                        format!(
-                            "cctop advises: {} — {} ({}). Can you apply this now in this session?",
-                            a.headline, a.action, a.evidence
-                        ),
-                        true,
-                    ),
-                };
+                // The fix prompt when the rule has one (mod-pane US-001).
+                let (text, sendable) = a.act();
                 if i == 0 && self.state.advice_view.has_occupant {
                     self.state.advice_acting = true;
                 }
@@ -832,7 +836,12 @@ impl App {
                 }
             }
             None => {
-                let d = crate::dashboard::snapshot(&self.state, &self.advisor);
+                let mut d = crate::dashboard::snapshot(&self.state, &self.advisor);
+                // Body 1 is the overview, built here where the width is known.
+                if self.state.console_body() == 0 {
+                    d.overview = Some(crate::ui::overview_view::build(&self.state, body.width));
+                    d.scroll = self.state.console_offset;
+                }
                 crate::ui::dashboard::render(
                     frame,
                     body,
@@ -840,6 +849,7 @@ impl App {
                     &self.state.theme,
                     self.state.console_body(),
                     self.state.console_keys,
+                    &self.state.console_offset_max,
                 );
             }
         }
@@ -1174,6 +1184,11 @@ pub fn run_tui(mut app: App) -> std::io::Result<()> {
     }
     app.release_advisor();
     Ok(())
+}
+
+/// A body change starts at the top of the new body.
+fn reset_scroll(state: &mut State) {
+    state.console_offset = 0;
 }
 
 pub fn now_ms() -> i64 {

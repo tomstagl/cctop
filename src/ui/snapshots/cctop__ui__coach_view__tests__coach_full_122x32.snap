@@ -1,0 +1,36 @@
+---
+source: src/ui/coach_view.rs
+expression: wide
+---
+╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮  A command keeps being blocked
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · … │  NOW A45 · denial-streak
+├──────────────────────────────────────────────────────┤  rm is denied by your rules
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │
+│ ○ cache    warm 1h00 (1h) ≈                          │  rm is denied by a permissions.deny rule in your settings, so
+│ ○ limits   — no status line                          │  Claude cannot run it however it tries. Tell it the alternative,
+│ ● rework   4 blocked · edits 3 ✓ none 18m            │  or what you need instead.
+├──────────────────────────────────────────────────────┤
+│ ▸ rm is denied by your rules                         │  fix ↵ You can't run `rm` here (it's denied by my settings). Use
+│   tell Claude the alternative — it cannot run this   │        another way or tell me what you need.
+│   NOW · fired at call 6 · +4 queued (n)              │
+│                                                      │  evidence  a permissions.deny rule in settings
+│ next     context-reset → next-row only · ctx 720k →… │  slot      NOW · fired at call 6 · +4 queued (n)
+│ snoozed  —                                           │  retires   on turn end · since turn 5
+╰──────────────────────────────────────────────────────╯  saving    avoids a hard stop (an estimate)
+
+                                                          Auto mode blocks a command shape by a classifier; a second block
+                                                          of the same shape within a turn (or three turns) means the model
+                                                          will keep trying variants, and three blocks in a row pause auto
+                                                          mode. An allow rule — Claude Code's own suggestion when it made
+                                                          one, else Tool(argv0 subcommand:*) — lets the shape through; a
+                                                          bare Bash rule allows everything and is never suggested. A
+                                                          settings deny rule is different: the model cannot run it, tell
+                                                          it the alternative.
+
+
+
+
+
+
+
+ ▸ rm is denied by your rules

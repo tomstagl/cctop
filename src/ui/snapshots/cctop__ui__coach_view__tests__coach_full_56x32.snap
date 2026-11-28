@@ -1,0 +1,36 @@
+---
+source: src/ui/coach_view.rs
+expression: narrow
+---
+╭coach ─ session-b ─────────────────── opus-5 · turn 5 ╮
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · … │
+├──────────────────────────────────────────────────────┤
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call          │
+│ ○ cache    warm 1h00 (1h) ≈                          │
+│ ○ limits   — no status line                          │
+│ ● rework   4 blocked · edits 3 ✓ none 18m            │
+├──────────────────────────────────────────────────────┤
+│ ▸ rm is denied by your rules                         │
+│   tell Claude the alternative — it cannot run this   │
+│   NOW · fired at call 6 · +4 queued (n)              │
+│                                                      │
+│ A command keeps being blocked                        │
+│ rm is denied by a permissions.deny rule in your      │
+│ settings, so Claude cannot run it however it tries.  │
+│ Tell it the alternative, or what you need instead.   │
+│ fix ↵ You can't run `rm` here (it's denied by my     │
+│       settings). Use another way or tell me what you │
+│       need.                                          │
+│                                                      │
+│ next     context-reset → next-row only · ctx 720k →… │
+│ snoozed  —                                           │
+╰──────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+ ▸ rm is denied by your rules

@@ -1,6 +1,7 @@
 {
   "agents": null,
   "exposed": true,
+  "footer": "spent so far ≈$19.38 · what this session would cost at API prices",
   "lights": [
     {
       "alt": "193k ▇▇▁▁▁▁▁▁▁▁ 19% · re-reads 193k/call",
@@ -69,32 +70,61 @@
     }
   ],
   "lines": {
-    "l0": "◐193k ≈$.11/call (cold: next call ≈$1.9) · ◐cache 193k · ○5h — · ◐corrections 1 · ▸ trim CLAUDE.md, move rarely-used rules to skills,…",
+    "l0": "◐193k ≈$.11/call (cold: next call ≈$1.9) · ◐cache 193k · ○5h — · ◐corrections 1 · ▸ /context or i on Context shows the prefix; trim C…",
     "l1": "◐19% ○— ◐193k ◐1 open ▸",
     "l2": "◐◐○◐"
   },
   "model": "claude-opus-5",
   "next": {
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "Run builds and test suites longer than a minute in the background and keep working meanwhile."
+      }
+    ],
+    "body": "A shell command ran in the foreground for 9 minutes and Claude waited for it. Builds and test suites that take more than a minute can run in the background: Claude keeps working and hears when they finish.",
     "class": "LATER",
+    "evidence": [
+      "a foreground Bash call longer than a minute; Claude waited for it"
+    ],
     "family": "long-foreground",
-    "headline": "`cd lorem_ipsum_dolor_sit_amet…` blocked the turn for 9:09",
+    "fix_prompt": "Run builds and test suites longer than a minute in the background and keep working meanwhile.",
+    "foot": "goes away when Claude backgrounds a command, or after three turns",
+    "headline": "A shell command blocked the turn for 9:09",
     "id": "A10",
+    "name": "A long command blocked the turn",
     "promotes": "when the slot frees",
-    "row": "next     long-foreground → when the slot frees · `c…"
+    "row": "next     long-foreground → when the slot frees · A …"
   },
-  "next_row": "next     long-foreground → when the slot frees · `c…",
+  "next_row": "next     long-foreground → when the slot frees · A …",
   "nudge": {
     "acting": false,
-    "action_kind": "setting",
-    "action_text": "",
+    "action_kind": "slash",
+    "action_text": "/context",
+    "actions": [
+      {
+        "kind": "slash",
+        "label": "Put /context in the box",
+        "payload": "/context"
+      }
+    ],
+    "body": "Every request starts with the same 49k tokens: system prompt, CLAUDE.md, tool schemas, skills and plugins. Even as a cache read that costs about $0.37 a turn at 15 calls per turn. The largest part is built-in tools (schemas) (12k tokens). /context shows what fills it, and i on cctop's Context panel breaks the prefix down. Then trim CLAUDE.md, move rarely used rules into skills, and turn off the MCP servers (/mcp) and plugins (/plugin) this project doesn't use.",
     "class": "LATER",
-    "evidence": "  LATER · since turn 6 · +1 queued (n)",
+    "evidence": [
+      "largest: built-in tools (schemas) (12k)"
+    ],
     "explain": "The fixed prefix (system prompt, CLAUDE.md, tool schemas, skills, plugins) is sent on every request. Even as a cache read it is billed on every call, so its cost per turn is prefix × cache-read price × calls per turn; it fires from 50 k tokens whatever the window, because the cost is absolute — once a /context you ran has measured the prefix, since the first call's own figure overstates it by about a third. Trim CLAUDE.md, move rarely used rules into skills, and disable MCP servers and plugins you do not use in this project. On the Context panel, i breaks the prefix down and m shows what else fills the window.",
     "family": "prefix-tip",
     "fired_at_ms": 1789428336352,
+    "fix_prompt": null,
+    "foot": "goes away when you open the breakdown (i or m on Context)",
+    "headline": "Fixed prefix 49k tokens ≈$0.37/turn at 15 calls",
     "id": "A17",
     "line1": "▸ Fixed prefix 49k tokens ≈$0.37/turn at 15 calls",
-    "line2": "  trim CLAUDE.md, move rarely-used rules to skills,…",
+    "line2": "  /context or i on Context shows the prefix; trim C…",
+    "line3": "  LATER · since turn 6 · +1 queued (n)",
+    "name": "Heavy always-on context",
     "queued": 1,
     "retires_on": "an inspector opened (i or m on Context)",
     "saving": "~147k/turn",
@@ -104,7 +134,7 @@
   "queued": 1,
   "quiet_row": "  quiet · nothing to act on · 1 nudge this hour",
   "recent": [],
-  "schema": 1,
+  "schema": 2,
   "session": "session-b",
   "session_mode": "interactive",
   "snoozed": [],

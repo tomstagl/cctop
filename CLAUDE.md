@@ -7,20 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cctop is a read-only, btop-style dashboard for a running Claude Code session. Two deliverables live in one repo:
 
 - **The `cctop` binary** (Rust, ratatui): `src/`. Reads what Claude Code already writes (`~/.claude/sessions`, the transcript `.jsonl`, hook spool, status-line shim, process tree) and shows it as a TUI, prints it as JSON (`cctop query`), or serves it as MCP tools (`cctop mcp`).
-- **The Claude Code plugin** (`plugin/`): two skills (`/cctop`, `cctop-insights`) and a function-hooks module (`plugin/hooks/*.ts[x]`) that docks the same dashboard inside Claude Code as a pane. `plugin/` is exactly what the marketplace ships — no `package.json`, tests or build output under it; the TS toolchain lives at the repo root and tests in `tests/pane/`.
+- **The Claude Code plugin** (`plugin/`): two skills (`/cctop`, `cctop-insights`) and a function-hooks module (`plugin/hooks/*.ts[x]`) that docks the same dashboard inside Claude Code as a pane. `plugin/` is exactly what the marketplace ships — no `package.json`, tests or build output under it, with one exception: `plugin/hooks/charts.wasm` (+ `charts.wasm.inputs`), the chart renderer built from `crates/cctop-charts` by `make wasm` and committed, because the marketplace ships the plugin without a build step; the TS toolchain lives at the repo root and tests in `tests/pane/`.
 
 ## Commands
 
 Rust (this is what CI runs):
 
 ```
-make check                       # cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+make check                       # cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo test <name>                # one test / module, e.g. cargo test advisor::rules::outcome
 cargo build --release            # target/release/cctop
 make check-types                 # d.ts + harness_facts version vs installed `claude` (skips if no claude)
 make check-contract              # what CI's `contract` job runs: scripts/test-extract-dts.sh, the §A load check (no model call), the d.ts surface diff, the validator, the pins (needs `zstd` on PATH)
 scripts/regen-dts.sh                                    # plugin/.claude/types/claude-code.d.ts, in full, from the installed claude (one model call, logged in)
 python3 -I scripts/extract-dts.py "$(command -v claude)" out.d.ts   # the d.ts surface read from the binary, no credentials (what CI diffs)
+make wasm                        # plugin/hooks/charts.wasm from crates/cctop-charts (isolated toolchain at ~/.cctop-toolchain if present); tests/wasm_fresh.rs fails when the sources moved
+# the isolated toolchain: rustup-init with RUSTUP_HOME=~/.cctop-toolchain/rustup CARGO_HOME=~/.cctop-toolchain/cargo, --no-modify-path, then `rustup target add wasm32-unknown-unknown`; the Makefile finds it, PATH and shell config stay untouched
 make check-facts                 # src/harness_facts.rs constants re-read from the installed Claude Code bundle; then bump READ_FROM
 ```
 
@@ -30,6 +32,7 @@ Pane (TypeScript, Node ≥ 22, no bun):
 npm run typecheck                                       # tsconfig.json (plugin/, noUncheckedIndexedAccess on, as the validator checks it) and tsconfig.test.json (tests/pane, flag off)
 npm test                                                # tsc -p tsconfig.test.json → node --test '.test-build/tests/pane/**/*.test.js'
 node --test .test-build/tests/pane/poller.test.js       # one file, after the tsc step above
+CCTOP_WASM_TIMING=1 npm test                             # also asserts the 30 ms per-chart wasm budget (plain npm test asserts < 100 ms and prints the times)
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate --strict ./plugin
 ```
 
@@ -39,6 +42,7 @@ Generated artefacts that tests assert are fresh (regenerate, never hand-edit):
 cctop metrics --md > docs/metrics.md && cctop metrics --readme README.md   # from src/metrics/registry.rs
 scripts/pane-fixtures.sh                          # tests/pane/fixtures/<verb>.json from fixtures/session-a.jsonl
 scripts/pane-fixtures.sh fixtures/session-b.jsonl b   # the -b and coach-<moment> fixtures — rerun after any change to the coach or dashboard objects
+scripts/pane-fixtures.sh fixtures/session-d.jsonl d   # the -d fixtures (fixture D's coach and advice carry nudges) — rerun with -b
 INSTA_UPDATE=always cargo test                    # accept insta snapshots (src/snapshots, src/ui/snapshots); then strip `assertion_line:` and delete *.snap.new
 make site                                         # site/ from README marked blocks + docs/metrics.md + themes
 ```
@@ -48,7 +52,7 @@ Release checklist (issue #4 — the contract moves between Claude Code releases;
 1. `claude update`, then `scripts/regen-dts.sh` (the full d.ts, one model call, logged in) — regenerate the d.ts against the latest `claude`; `npm run typecheck` names every call site a changed surface touches.
 2. `make check-contract` — the §A headless load check (no model call), the surface diff, the validator, the pins; then `make check-facts` and bump `READ_FROM` in `src/harness_facts.rs` (`make check-types` fails past 5 releases behind).
 3. `TESTED_WITH` in `plugin/hooks/model.ts` to the version of step 1; the plugin manifest version; the "Claude Code versions" table in `plugin/README.md` (the range the release runs on, and a new row when a contract change forced it); `KNOWN_INCOMPATIBLE` in `src/pane.rs` when a pair is known to fail.
-4. `make check && npm test`, the install lines and `make site`, then the release commit and the tag on `main`'s tip after the merge.
+4. `make wasm` when `crates/cctop-charts` or `Cargo.lock` moved (tests/wasm_fresh.rs says so), then `make check && npm test`, the install lines and `make site`, then the release commit and the tag on `main`'s tip after the merge.
 
 Useful for poking at behaviour without a live session: `--session` accepts a fixture path (`cctop query dashboard --session fixtures/session-b.jsonl`), `--lines N` feeds only the first N transcript lines (a point in time), and `CCTOP_FAKE_NOW=<epoch ms>` fixes the clock. For a recording, `scripts/replay-session.py fixtures/session-b.jsonl /tmp/replay.jsonl --from 700 --speed 60` appends the fixture on the real clock and `CCTOP_FIXTURE_LIVE=1 cctop run --session /tmp/replay.jsonl` shows it as a live session (fixture B compacts at line 766: ctx 33 % → 19 %). Never run `cctop run` or `claude` interactively in the foreground of a tool call; `claude -p … --max-turns 1` is fine for load checks, and its debug log is `~/.claude/debug/latest`.
 

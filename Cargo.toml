@@ -1,6 +1,6 @@
 [package]
 name = "cctop"
-version = "0.9.1"
+version = "0.10.0"
 edition = "2021"
 rust-version = "1.85"
 description = "btop-style live dashboard for Claude Code internals, in a pane beside your session"
@@ -11,8 +11,12 @@ keywords = ["claude", "tui", "dashboard", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = ["brand/", "fixtures/", "ralph/", "tasks/", "docs/verification/", "site/", "plugin/", ".github/", "scripts/", "packaging/"]
 
+[workspace]
+members = [".", "crates/cctop-charts"]
+
 [dependencies]
 anyhow = "1"
+cctop-charts = { path = "crates/cctop-charts", version = "0.1.0" }
 libc = "0.2"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
@@ -28,8 +32,16 @@ toml = "0.8"
 
 [dev-dependencies]
 insta = "1"
+sha2 = "0.10"
 
 [profile.release]
 lto = true
 codegen-units = 1
 strip = true
+
+# plugin/hooks/charts.wasm (make wasm): small before fast, and no unwinding
+# machinery. A separate profile so the native binary is unchanged.
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+panic = "abort"

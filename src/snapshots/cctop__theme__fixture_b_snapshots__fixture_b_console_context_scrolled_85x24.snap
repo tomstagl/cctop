@@ -1,0 +1,28 @@
+---
+source: src/theme.rs
+expression: "render_to_string(&app, 85, 24)"
+---
+ cctop  claude-sonnet-5 · turn 6 · 9h 25m · ENDED 23:28 · /home…  ● COMMITTING 8h 40m
+ 1: ctx 14% · 425k left     2: 5h — · no status line   3: cache 59m≈ · 1h TTL
+ 4: spend $18.7 · ≈$1.01/h  5: ✓ python3 -… 9h01 · re… 6: 140 calls · 6 err
+ ▸ A shell command blocked the turn for 9:09 — queue: 'run builds and     a: advisor
+   test suites longer than a …  LATER · turn 6
+─── context ────────────────────────────────────────────────── 0: home  ·  ? keys ───
+ ↑ 44 more
+ Turn 6 · $0.36. A normal turn.
+ ───────────────────────────────────────────────────────────────────────────────────
+ Prompt cache  reused 99 %
+ Good Reused 99 %. Do: reply within 1 hour so the cache stays warm.
+ ■ reused  ■ first turn writes the cache
+ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀
+ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀ ▀▀
+ 1  2  3  4  5  6
+ stays warm ≈ 60 minutes ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+ Tool calls per turn  140 calls
+ Good 140 calls, 2 failed. Do: ask Claude to search (grep) before it reads whole
+      files.
+ ■ brighter = more calls  ■ failed
+         Bash ▀▀▀▀▀▀▀▀▀▀▀▀
+         Read ▀▀▀▀▀▀▀▀▀▀▀▀
+ ↓ 7 more

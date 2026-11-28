@@ -4,12 +4,24 @@
       "action": "queue: 'run make check, fix failures' or /goal",
       "action_kind": "prompt",
       "action_text": "Run make check and fix any failures before continuing.",
+      "actions": [
+        {
+          "kind": "prompt",
+          "label": "Put the fix prompt in the box",
+          "payload": "Run make check and fix any failures before continuing."
+        }
+      ],
+      "body": "Claude edited 1 source file 21 minutes ago (1 edit over 126 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
       "class": "NEXT",
       "doc_key": "A32",
       "evidence": "1 edits since the last check · 20:41 · 126 calls",
+      "evidence_rows": [],
       "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
       "family": "verify-gap",
+      "fix_prompt": "Run make check and fix any failures before continuing.",
+      "foot": "goes away after a test run or a read of an edited file",
       "headline": "Edited 1 src file, no test/build run yet",
+      "name": "Edits not tested yet",
       "retires_on": "a test run or a read of an edited file",
       "rule": "A32",
       "saving": "avoids a hard stop",
@@ -20,12 +32,24 @@
       "action": "at the next clean stop: /compact <focus>, or hand-off + /clear",
       "action_kind": "slash",
       "action_text": "/compact ",
+      "actions": [
+        {
+          "kind": "slash",
+          "label": "Put /compact in the box",
+          "payload": "/compact "
+        }
+      ],
+      "body": "At 396k tokens every call re-reads the whole context: about $0.08 a call and $0.66 a turn at this session's 8 calls per turn, against $0.18 a turn at 100k. The next 30 calls cost about $2.47. At the next clean stop: /compact with a focus, or a hand-off note and /clear, brings it back down.",
       "class": "NEXT",
       "doc_key": "A23",
       "evidence": "8 calls per turn on this session · next 30 calls ≈$2.5",
+      "evidence_rows": [],
       "explain": "Every API call re-reads the whole context at the cache-read price, and a turn is many calls. Past 300 k on a 1M window each call costs several times what it did at 100 k, so a clean stop (end_turn, nothing in the background) is the moment to /compact with a focus or to write a hand-off note and /clear. The projection uses this session's own calls per turn, never a constant.",
       "family": "context-reset",
+      "fix_prompt": null,
+      "foot": "goes away after a /compact or /clear",
       "headline": "ctx 396k → ≈$.08/call, ≈$.66/turn (was ≈$.18)",
+      "name": "The context is getting expensive",
       "retires_on": "a /compact or /clear",
       "rule": "A23",
       "saving": "~2.37M/turn",
@@ -36,12 +60,29 @@
       "action": "pipe through head/grep or Glob, or ask a subagent for a summary — every later call re-reads it",
       "action_kind": "advice",
       "action_text": "",
+      "actions": [
+        {
+          "kind": "prompt",
+          "label": "Put the fix prompt in the box",
+          "payload": "Keep tool output small from here on: pipe long commands through head or grep, use Glob and ranged reads, and hand big explorations to a subagent that returns a summary."
+        },
+        {
+          "kind": "read",
+          "label": "Got it",
+          "payload": ""
+        }
+      ],
+      "body": "mcp:claude-in-chrome results take up 152k tokens since the last /clear or compaction, 15 % of the window. They stay in context and every later call re-reads them. Narrow the command (head, grep, Glob), or let a subagent read it and return a summary.",
       "class": "LATER",
       "doc_key": "A03",
-      "evidence": "biggest: `mcp:claude-in-chrome lorem` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
+      "evidence": "biggest: `mcp:claude-in-chrome` pushed 1.6k tokens into context · re-read 89× ≈$0.03",
+      "evidence_rows": [],
       "explain": "Every byte of a tool result stays in context for the rest of the session and is re-read (and billed) on every later request; `/context` flags a tool once its results pass 15 % of the window. Narrow the command (head, grep, Glob) or delegate the exploration to a subagent that returns a summary. A result Claude Code spilled to disk (`<persisted-output>`) kept only its head; the rest cost the run, not the context.",
       "family": "runaway-result",
+      "fix_prompt": "Keep tool output small from here on: pipe long commands through head or grep, use Glob and ranged reads, and hand big explorations to a subagent that returns a summary.",
+      "foot": "goes away at the next /clear or compaction",
       "headline": "mcp:claude-in-chrome results: 152k since the last boundary (15 % of the window)",
+      "name": "Large tool results",
       "retires_on": "the next boundary",
       "rule": "A03",
       "saving": "~152k/turn",
@@ -60,13 +101,25 @@
     "action": "queue: 'run make check, fix failures' or /goal",
     "action_kind": "prompt",
     "action_text": "Run make check and fix any failures before continuing.",
+    "actions": [
+      {
+        "kind": "prompt",
+        "label": "Put the fix prompt in the box",
+        "payload": "Run make check and fix any failures before continuing."
+      }
+    ],
+    "body": "Claude edited 1 source file 21 minutes ago (1 edit over 126 calls) and nothing has run a test or a build since. The later a failure shows up, the more of the work has to be redone; a test run now is cheap and the files are still in context.",
     "class": "NEXT",
     "doc_key": "A32",
     "evidence": "1 edits since the last check · 20:41 · 126 calls",
+    "evidence_rows": [],
     "explain": "Source edits with no test, build or type-check between them accumulate unverified assumptions; the later a failure surfaces, the more of the turn has to be redone. A test run right after the edit is cheap (its output is short) and lets the model fix the failure while the file is still in context. Reads of an edited file count as a check too — only when Claude re-reads the whole result. Documentation edits and sessions that have never run a test are exempt.",
     "family": "verify-gap",
     "fired_at_ms": 1787825847564,
+    "fix_prompt": "Run make check and fix any failures before continuing.",
+    "foot": "goes away after a test run or a read of an edited file",
     "headline": "Edited 1 src file, no test/build run yet",
+    "name": "Edits not tested yet",
     "retires_on": "a test run or a read of an edited file",
     "rule": "A32",
     "saving": "avoids a hard stop",

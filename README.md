@@ -57,7 +57,25 @@ Claude Code as a panel when the build supports it, otherwise attached as a
   14:46  tool    TaskUpdate completed ▶
 ```
 
-Claude Code keeps running in the left pane; `cctop` attaches to it from the right. A header that never moves and one body that fills the rest: the identity line with the phase cell (`● COMMITTING 8h 40m`) at the right; six cells — context, limits, cache, spend, work, tools — three per row from 80 columns and two below, each a target whose digit opens its body in place; the act line, the coach's slot, wrapped rather than cut, `a` for the advisor; the rule line naming the open body, `0` the way home, `?` its key map; then the body — `1` above opens the context body, the five slices of the window as bars in order of what you can do about them, the counters and what the light says; `4` the spend with its provenance and the token mix; `6` the by-tool table with the agents and the team. `Enter` opens the body's full-screen panel (`Esc` back), and inside a panel the digits `1`–`9` still switch panels: inside panels 1 and 2 `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
+Claude Code keeps running in the left pane; `cctop` attaches to it from the right. A header that never moves and one body that fills the rest: the identity line with the phase cell (`● COMMITTING 8h 40m`) at the right; six cells — context, limits, cache, spend, work, tools — three per row from 80 columns and two below, each a target whose digit opens its body in place; the act line, the coach's slot, wrapped rather than cut, `a` for the advisor; the rule line naming the open body, `0` the way home, `?` its key map; then the body — `1` above opens the overview, the same five charts the pane draws (`cctop query overview`) — context across the width, then spend beside cost per turn, then the cache beside the tool calls, each with its verdict and the one thing to do, wrapped rather than cut (retries, the located rebuilds and the `/context` composition appear when the session has them); it scrolls with `j`/`k` and `PgUp`/`PgDn`; `4` the spend with its provenance and the token mix; `6` the by-tool table with the agents and the team. `Enter` opens the body's full-screen panel (`Esc` back), and inside a panel the digits `1`–`9` still switch panels: inside panels 1 and 2 `Enter` opens the turn ledger; inside panel 6 it opens the agents view — one row per subagent with its model, time, tokens, priced cost, what came back (`ret`) and what was wasted, with the reason (`failed`, `killed`, `no ret`, `idle`), workflow runs folded into one row each, and the team the session leads as a second group — one row per teammate with its context, tokens, its own cost (Claude Code's own figure once it ended) and turns — sorted with `s`/`S`. Press `c` for the coach view: the same four lights as a 56-column card with the nudge, what is next and what is snoozed.
+
+## Best look
+
+The pane and the terminal view draw their charts in cells, and the pane draws them as pictures where the terminal can show them. Two terminal settings make both look as designed.
+
+**Ghostty** (`~/.config/ghostty/config`):
+
+```
+font-family = JetBrains Mono
+font-size = 13
+adjust-cell-height = 23%
+```
+
+**Terminal.app**: SF Mono Regular, 13 pt, character spacing 1, antialias text on, "Use bright colors for bold text" off.
+
+**Which terminals show pictures.** kitty, Ghostty and iTerm2 3.5+ show the pane's charts as images; inside tmux only with passthrough and focus events on (`set -g allow-passthrough on` and `set -g focus-events on`). Terminal.app and the VS Code terminal show the same charts as cells, character for character what the terminal view draws. A terminal cctop does not recognise tries pictures first and falls back to cells if it refuses the first one. `CCTOP_PANE_CHARTS=image|cells` forces one or the other, and `charts = "auto" | "image" | "cells"` under `[pane]` in `~/.cctop/config.toml` sets the default (the environment variable wins). No chart carries text inside the picture: labels are terminal text beside it.
+
+In the pane, `a` opens the act dialog (the items on the left, the selected one's detail on the right), notes and misses are placed in the transcript where they happened (display only and never written to the transcript, so they are gone after `--resume`), and a fix prompt only ever goes into an empty prompt box: it never replaces a draft and is never sent.
 
 ## Two ways to see it
 
@@ -73,40 +91,60 @@ docks the same dashboard *inside* Claude Code, above the prompt, drawn in
 Claude Code's own frame and colour style — no multiplexer needed. Its
 Overview is Console above, row for row — the cells, the act line and
 `0: home` are the engine's own clickable chrome, the digit each draws being
-its hotkey; its Coach view is the card the TUI's `c` shows, with buttons:
+its hotkey; its Coach view is the coach's advice in full, with buttons:
 
 ```
 ╭coach ─ opus-5 · turn 5 ──────────────────────────────────╮
-│ PLANNING · 5c +490 · silent 13m · ▸ steer window         │
+│ PLANNING · 5 calls · silent 13m · ▸ steer window · …     │
 │ ──────────────────────────────────────────────────────── │
-│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call              │
-│ ○ cache    warm 1h00 (1h) ≈                              │
-│ ○ limits   — no status line                              │
-│ ● rework   4 blocked · edits 3 ✓ none 18m                │
-│ ──────────────────────────────────────────────────────── │
-│ ▸ rm is denied by your rules                             │
-│   tell Claude the alternative — it cannot run this       │
-│   NOW · fired at call 6 · +4 queued (n)                  │
+│  NOW  A command keeps being blocked    7m ago · rule A45 │
+│ rm is denied by your rules                               │
 │                                                          │
-│ next     context-reset → next-row only · ctx 720k →…     │
-│ snoozed  —                                               │
+│ rm is denied by a permissions.deny rule in your          │
+│ settings, so Claude cannot run it however it tries. Tell │
+│ it the alternative, or what you need instead.            │
+│                                                          │
+│ · a permissions.deny rule in settings                    │
+│                                                          │
+│ Fix it with this prompt · click to put it in your prompt │
+│ box                                                      │
+│ ↵ You can't run `rm` here (it's denied by my settings).  │
+│   Use another way or tell me what you need.              │
+│                                                          │
+│ 1: Put the fix prompt in the box  2: Snooze              │
+│ goes away at the end of the turn                         │
 ╰──────────────────────────────────────────────────────────╯
-[1 fill] [2 snooze] [3 why]
-╭● rework ─ transcript ────────────────────────────────────╮
-│ last check `python3 - lorem_i lorem…` ok 19m ago         │
-│ fails: Denied 4 · Other 2                                │
-│ rewind 1 checkpoints this turn                           │
+╭Up next ─ click a row to open it ─────────────────────────╮
+│ NEXT  The context is getting expensive                 › │
+│       ctx 720k → ≈$.37/call, ≈$5.6/turn (was ≈$.96)      │
 ╰──────────────────────────────────────────────────────────╯
-[◐ context] [○ cache] [○ limits]  ● rework
+╭Session ─ click a row for the detail ─────────────────────╮
+│ ◐ context  720k ▇▇▇▇▇▇▇▁▁▁ 72% · ≈$.37/call            › │
+│ ○ cache    warm 1h00 (1h) ≈                            › │
+│ ○ limits   — no status line                            › │
+│ ● rework   4 blocked · edits 3 ✓ none 18m              ▾ │
+│   last check `python3 - lorem_i lorem…` ok 19m ago       │
+│   fails: Denied 4 · Other 2                              │
+│   rewind 1 checkpoints this turn                         │
+│   from the transcript                                    │
+╰──────────────────────────────────────────────────────────╯
+spent so far ≈$19.26 · what this session would cost at API
+prices
 ```
 
 The view bar switches between the Overview, the Coach, Tools, Agents, Files,
 Events and the Advisor, the same way `c`/`s`/`f`/`p` work in the terminal
-view. The Coach view is the same 56-column card as the TUI's `c` view — the
-state line, four lights, the one nudge — with `[1 fill]` (writes a
-prompt-class action into the prompt box; nothing is ever submitted),
-`[2 snooze]` and `[3 why]`, a detail frame that follows the highest light,
-and the coach's one-line form pinned under the prompt. It needs
+view. The Coach view draws the same coach object as the TUI's `c` view: the
+NOW card carries the nudge's plain name, headline, body and evidence wrapped
+at the pane's width, and its fix prompt as a card — a click puts it in the
+prompt box and nothing is ever submitted (an empty box only: a draft you are
+typing is never replaced). The Buttons follow the action: fill a command,
+copy an allow rule (and open `.claude/settings.local.json`) or a setting (and
+open `~/.claude/settings.json`) — cctop never edits either — `Got it` for a
+tip, snooze; a key-kind nudge shows "Press
+Esc to stop the turn" as a step, never a stop button. "Up next" and the four
+lights open in place (the context light into what fills the window, per
+Claude Code), and the coach's one-line form is pinned under the prompt. It needs
 `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of
 `~/.claude/settings.json` and `/tui fullscreen`; `cctop pane status` tells you
 which prerequisite is missing. The `/diff` panel and the cctop panel share one
@@ -121,7 +159,7 @@ The nine panels of the terminal view collapse into eight bodies on Console; ever
 <!-- panels:start -->
 | key | Body | Answers | `Enter` opens |
 |---|---|---|---|
-| `1` | **context** | How full is the window, what it is made of and which part you can move, how many turns until autocompact | panel 1 Context |
+| `1` | **overview** | The five charts the pane draws (`cctop query overview`): context, spend, cost per turn, cache and tool calls, each with its verdict and the one thing to do | panel 1 Context |
 | `2` | **limits** | 5 h and 7 d usage as meters, reset countdown, the model's weight, will I run out before the reset | panel 3 Limits |
 | `3` | **cache** | The countdown while the entry is warm, misses, the hit ratio, the re-write at stake if it goes cold | panel 2 Tokens & Cost |
 | `4` | **cost** | The session's spend with its provenance (ledger, since, agents, team), the token mix, burn rate, the cost of continuing, who spent it | panel 2 Tokens & Cost |
@@ -212,6 +250,7 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **Last miss: system prompt change** <a id="cache_miss_system_delta"></a> `cache_miss_system_delta` | chars | `prompt_cache.last_miss_cause.system_char_delta` from the status line: characters the system prompt grew (negative: shrank) | D3 | Describes the status line's last miss only | never |
 | **Thinking dropped** <a id="thinking_dropped"></a> `thinking_dropped` | count | Σ `thinking_drop` attachments: `newlyDropped.blockCount` (blocks) and `turnCount` (turns) Claude Code removed from a request because the history it re-sent no longer matched, per turn in the ledger and in total (`by_kind`: blocks by `clientChange.kinds`, e.g. `messagesHistoryChanged`). A located cache miss with no other cause takes the drop's kind (`thinking_drop`) | D2 | Only on 2.1.308+; counts blocks no longer sent, not tokens | never |
 | **Located cache misses** <a id="cache_miss_located"></a> `cache_miss_located` | count | One row per cache miss, with the located cause: the request's `api-request` line compared with the request sent just before it — idle past the TTL first (a lost cache entry explains the miss whatever else changed), then params (model, effort, betas, max tokens) › tool list (`api-request-shape`: names added, removed, resized) › system block sizes › messages re-sent (`keep` shrank). A miss is a response named by `diagnostics.cache_miss_reason` (not `unavailable`), or whose cached prefix shrank by ≥ 20 000 tokens | D2 | Requests and responses are paired in order, so a response line that is missing or out of order shifts the pairing. Main thread and `sdk` only: sidechains are not chained. Needs Claude Code 2.1.302+ transcripts; older ones carry the API's reason only | never |
+| **Re-write cost of a located miss** <a id="cache_miss_cost"></a> `cache_miss_cost` | USD | The located miss's `cache_write` tokens × the cache-write price of the model that wrote them (the price A01 and the overview use) | D2 D11 | Absent when the model has no price row; API-equivalent prices | always |
 | **Cost** <a id="cost"></a> `cost` | USD | Claude Code's `cost-state.totalCostUSD`, the latest per writing process (`startTime`: a `--resume` beside the live session or a bridge appends a second process's own running total to the same file) summed, plus a priced estimate of responses newer than the last ledger | D11 D2 D9 | Subscription plans have no per-token bill; the figure is the API-equivalent list price. A ledger that covers less than the transcript's own responses are worth is another process's (this one's is still to come) and does not displace the estimate — so two readers of one file never disagree by a process, and a `$0` ledger from a process that did nothing never zeroes a busy session | ≈ when any part is estimated, or while the ledgers cover less than the responses |
 | **Combined cost** <a id="cost_combined"></a> `cost_combined` | USD | The session's whole spend: `cost-state.totalCostUSD` (every process's, as `cost`; it already holds the subagents' calls and calls no transcript shows), plus the priced main responses after it, plus the priced subagent calls whose line timestamp is after the ledger's moment (the last timestamped line before the cost-state); with no cost-state, every main and agent call priced. Panel 2's headline, dashboard row 2, `cctop report` and `cctop query`'s `cost_combined` | D2 D2a D9 D11 | Never a subtraction: `main` and `agents` are not derived from the ledger. A fork's replayed parent message is not priced. `source` says ledger / priced / mixed; `cost` keeps the main-only meaning for one release | ≈ when any priced part is non-zero |
 | **Cost by model** <a id="cost_by_model"></a> `cost_by_model` | USD | `cost-state.modelUsage[*].costUSD` plus estimates per model | D11 D9 | — | ≈ when any part is estimated |
@@ -339,6 +378,16 @@ Everything on screen is defined once in a metrics registry (`src/metrics/registr
 | **Cache light** <a id="coach_cache"></a> `coach_cache` | minutes|tokens | Minutes of cache left (`prompt_cache.expires_at`, else last call + observed TTL ≈), or the re-write size when cold; ◐ inside the countdown band (the last 5 min of a 1 h entry, 2 min of a 5 m one), ● when a reply now would save ≥ 50k | D1 D3 | — | ≈ without the status-line shim |
 | **Limits light** <a id="coach_limits"></a> `coach_limits` | percent | The 5 h window used; ◐ when the exhaustion fit lands before the reset or ≥ 80 %, ● on a rate-limit or spend-limit error line; `—` without the status line | D3 D1 | — | never |
 | **Rework light** <a id="coach_rework"></a> `coach_rework` | state | Open issues: consecutive failed calls of the turn (denials excluded), corrections (interrupts, rejected calls) in the last three turns, blocked calls; else the source edits since the last confirmed test run. The figure is a state word — `N open`, `N unchecked`, `ok`, or `—` before the session has called anything — never a `0` that means healthy and no data alike. ◐ after 10 min or 14 calls unverified, two fails, a PR without a review, an uncommitted tail; ● on a cascade, a denial streak, a correction streak, destructive git on a dirty tree, a commit without a check | D1 D7 | — | never |
+
+### Overview
+
+| Metric | Unit | How it is computed | Sources | Caveats | Estimate |
+|---|---|---|---|---|---|
+| **Context verdict** <a id="verdict_context"></a> `verdict_context` | level | good / watch / act, the worst of: turns until autocompact (`ctx_turns_left`: watch ≤ 15, act ≤ 5 — trusted only after `ctx_growth_deltas`, 2 turn-to-turn steps since the last compaction), headroom below the autocompact threshold (`ctx_headroom`: act ≤ 20 000, Claude Code's own "Context low" band), the window's size (`ctx_size`: watch ≥ 300 000) and MCP tools per the `/context` capture (`ctx_mcp`: watch ≥ 25 000) — never above the coach's context light for the same state (a quiet light reads Good). A Good verdict offers "/compact when you finish this task" only within `ctx_compact_do` (30 turns) and says the window is nearly all conversation at `ctx_messages` (≥ 0.8). Good before the first API call; the chart's forecast follows the same trust rule | D2 D3 | The MCP share counts only while a capture of the current window exists | when the threshold or the window is an estimate (turns_until_compaction, context_window) |
+| **Spend verdict** <a id="verdict_spend"></a> `verdict_spend` | level | good / watch / act, the worst of: spend per minute over the last 15 minutes (`spend_rate`: watch ≥ $0.30, act ≥ $1.00), the share of a `--max-budget-usd` budget used (`spend_budget`: watch ≥ 0.75, act ≥ 0.90), the minutes until it halts at that rate (`spend_halt`: watch ≤ 60, act ≤ 15) and the account's spend limit used per the status line (`spend_limit`: watch ≥ 0.80). Names the last two jumps — from `spend_jump_from` (3) priced turns on, turns at ≥ 2× the median turn and ≥ $0.50, never the first (which writes the cache) — by what cost most in them: the agents launched (priced) or the located cache rebuilds (at the write price), else a costly turn; the Do follows the latest jump. The chart's line is the turns priced one by one (≈), the figure Claude Code's own count (`cost_combined`); past `spend_priced_gap` (2 %) apart, a readout names both | D2 D2a D3 D9 D11 | API-equivalent prices; a subscription is not billed per token | always |
+| **Cost-per-turn verdict** <a id="verdict_cost_per_turn"></a> `verdict_cost_per_turn` | level | The last two priced turns' mean (a turn's own calls plus the agents it launched) against the median of the turns before them: watch at ≥ 2× and ≥ $0.50, act at ≥ 4× and ≥ $2.00 (`cost_turn_ratio`, `cost_turn_floor` — both must pass). The sentence names the cause: agents or located rebuilds when either is at least `cost_cause_share` (half) of the two turns' cost, else the context every turn re-sends. The figure is the median of every priced turn; an unpriced turn has no bar | D2 D2a D9 | Needs three priced turns; the `>200k` markers only with the status line's `exceeds_200k_tokens` | always |
+| **Cache verdict** <a id="verdict_cache"></a> `verdict_cache` | level | From the cache hit ratio (`cache_hit`: watch ≤ 0.80, act ≤ 0.50, the cost body's tones), from the second turn with an API call. Counts the located rebuilds (the request chain, Claude Code 2.1.302+) that a habit avoids — an MCP tool came or went (a built-in tool Claude Code loads on demand does not count), an earlier message changed, effort or model changed, the TTL expired — and the Do is the habit of the costliest; with none, replying within the TTL. A chart that shows only the latest turns says how many of them it shows. The countdown turns warn inside `cache_countdown_1h` (5 min) of a 1 h entry or `cache_countdown_5m` (2 min) of a 5 m one | D2 D3 | Rebuilds are located only on transcripts with request lines | when the hit ratio comes from the transcript |
+| **Tool-calls verdict** <a id="verdict_tool_calls"></a> `verdict_tool_calls` | level | good / watch / act, the worst of: the failed share (denials excluded) of the last three turns' calls from `tools_failed_from` (6) calls (`tools_failed`: watch ≥ 0.15, act ≥ 0.30), hook time per turn from trace spans (`tools_hooks`: watch ≥ 500 ms, act ≥ 2 000 ms), the most re-read file's whole reads with no edit between (`tools_reread`: watch ≥ 3) and reads per edit from `tools_reads_from` (15) reads (`tools_reads_per_edit`: watch ≥ 3) | D2 D8 D10 | Hook time needs OpenTelemetry trace spans | never |
 <!-- metrics:end -->
 
 ## OpenTelemetry (optional)
@@ -359,7 +408,7 @@ OTel data is live in `cctop run --otlp` only: `cctop query` and the pane run in 
 
 <!-- install:start -->
 ```
-brew install tomstagl/tap/cctop           # currently v0.9.1; or: cargo install cctop
+brew install tomstagl/tap/cctop           # currently v0.10.0; or: cargo install cctop
 claude plugin marketplace add tomstagl/cctop
 claude plugin install cctop               # adds /cctop and cctop-insights
 /cctop                                     # opens the dashboard: panel or terminal split

@@ -88,3 +88,20 @@ export function formatUsd(v: number): string {
   if (v >= 0.01) return `$${v.toFixed(2)}`;
   return `$${v.toFixed(3)}`;
 }
+
+/** Tokens as the TUI's fmt::tokens: `812`, `4.8k`, `42k`, `1.00M`. */
+export function formatTokensTui(n: number): string {
+  const t = Math.max(0, Math.round(n));
+  if (t < 1000) return String(t);
+  if (t < 10_000) return `${(t / 1e3).toFixed(1)}k`;
+  if (t < 1_000_000) return `${Math.floor(t / 1000)}k`;
+  return `${(t / 1e6).toFixed(2)}M`;
+}
+
+/** An age as the coach's `ago` (src/coach.rs): `42s`, `3m`, `1h05`. */
+export function formatAgo(ms: number): string {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+}

@@ -336,6 +336,19 @@ test('agents: a run entry without a row (an older binary) keeps its agents in th
   assert.equal(presses.size, 0, 'no Button');
 });
 
+// PRD 5: a `TeammateIdle` hook makes the member's status word `idle <age>`
+// (the TUI's agents_d_hook_idle snapshot); the pane draws the query's word.
+test('a teammate that went idle by its hook says so in its row, and says nothing without it', () => {
+  const data = JSON.parse(JSON.stringify(fixture('agents-d'))) as { teammates: { state: string; status?: string }[] };
+  const base = rows('agents', build({ query: { agents: data } }), 120);
+  assert.ok(!base.some((r) => r.includes('idle 1:00')));
+  const idle = data.teammates.find((t) => t.state === 'active')!;
+  idle.status = 'idle 1:00';
+  const lines = rows('agents', build({ query: { agents: data } }), 120);
+  fits(lines, 120);
+  has(lines, /^● diff-pa….*0\/1\s+idle 1:00$/);
+});
+
 test('agents on fixture D: the team group under the subagents, its members in the TUI columns', () => {
   // `cctop query agents` on fixture D (tests/pane/fixtures/agents-d.json):
   // no subagents; a team of three — the real teammate (ended, Claude

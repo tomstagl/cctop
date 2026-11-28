@@ -7,6 +7,7 @@
 pub mod events;
 pub mod outcome;
 pub mod token;
+pub mod witness;
 
 use super::Rule;
 use crate::metrics::Turn;
@@ -20,6 +21,92 @@ pub fn all() -> Vec<Box<dyn Rule>> {
     v.extend(outcome::all());
     v.sort_by_key(|r| r.id());
     v
+}
+
+/// A small fixed phrase a rule chooses in code and puts into a `{hole}` of
+/// its words: listed here, in one table, so that `docs/coach-copy.md` shows
+/// every word the person reads (mod-pane PRD US-013).
+pub struct Phrase {
+    pub rule: &'static str,
+    /// The hole (or part of it) the phrase fills.
+    pub slot: &'static str,
+    /// Which case picks it.
+    pub key: &'static str,
+    pub text: &'static str,
+}
+
+const fn p(
+    rule: &'static str,
+    slot: &'static str,
+    key: &'static str,
+    text: &'static str,
+) -> Phrase {
+    Phrase {
+        rule,
+        slot,
+        key,
+        text,
+    }
+}
+
+pub const PHRASES: &[Phrase] = &[
+    // A01: what changed (`cause`) and the habit that avoids it next time.
+    p("A01", "cause", "model", "the model changed"),
+    p("A01", "habit", "model", "Pick the model at the start of a task, or switch right after /clear while the context is small."),
+    p("A01", "cause", "messages", "an earlier message changed (a rewind or an edited turn)"),
+    p("A01", "habit", "messages", "Steering forward with a new message is cheaper than rewriting an earlier one."),
+    p("A01", "cause", "expired", "the cache had expired between turns"),
+    p("A01", "habit", "expired", "Replies within the cache's lifetime keep it warm; a longer break costs one rebuild like this."),
+    p("A01", "cause", "tools", "the tool list changed: an MCP server connected or Claude loaded a deferred tool"),
+    p("A01", "habit", "tools", "Next time, connect the tools you need early in the session, then leave the list alone."),
+    p("A01", "cause", "tools_old", "the tool list changed: an MCP server connected or Claude loaded a deferred tool"),
+    p("A01", "habit", "tools_old", "This Claude Code is older than 2.1.267 and rebuilds the list often: run claude update."),
+    p("A01", "cause", "system", "the system prompt changed (a settings, CLAUDE.md or output-style edit)"),
+    p("A01", "habit", "system", "Make such edits between sessions, not in the middle of one."),
+    p("A01", "cause", "effort", "the effort level changed"),
+    p("A01", "habit", "effort", "Set the effort at the start of a session, or right after /clear."),
+    p("A01", "cause", "betas", "Claude Code's request features changed (an update or a feature toggle)"),
+    p("A01", "habit", "betas", "Update Claude Code between sessions."),
+    p("A01", "cause", "setting", "a request setting changed"),
+    p("A01", "habit", "setting", "Keep request settings fixed within a session."),
+    // A23: how the sentence opens.
+    p("A23", "when", "clean", "This is a clean stop"),
+    p("A23", "when", "not_clean", "At the next clean stop"),
+    // A41: what Claude is waiting on, and what to do about it.
+    p("A41", "what", "question", "Claude asked a question"),
+    p("A41", "what", "permission", "A permission dialog opened"),
+    p("A41", "what", "notification", "Claude asked for your input"),
+    p("A41", "what", "asked", "The turn ended with a question"),
+    p("A41", "what", "elicitation", "MCP {server} asked you something"),
+    p("A41", "hint", "permission", "Approve, deny, or choose 'always' for this kind of command."),
+    p("A41", "hint", "other", "A one-word reply is enough; /btw asks a side question first if you need a detail."),
+    // A42: why this is a moment to start fresh.
+    p("A42", "why", "task_done", "A task just completed"),
+    p("A42", "why", "done_prompt", "You said the work is done"),
+    p("A42", "why", "question_ended", "The turn ended with a question"),
+    // A48: the reason agents' work did not come back (one, and counted).
+    p("A48", "why_one", "failed", "agent that failed"),
+    p("A48", "why_many", "failed", "agents that failed"),
+    p("A48", "why_one", "killed", "agent that was stopped"),
+    p("A48", "why_many", "killed", "agents that were stopped"),
+    p("A48", "why_one", "no_return", "agent that returned nothing"),
+    p("A48", "why_many", "no_return", "agents that returned nothing"),
+    p("A48", "why_one", "idle", "agent that went quiet mid-run"),
+    p("A48", "why_many", "idle", "agents that went quiet mid-run"),
+];
+
+/// The phrase a rule picks for `slot` in the case `key`.
+pub fn phrase(rule: &str, slot: &str, key: &str) -> &'static str {
+    match PHRASES
+        .iter()
+        .find(|p| p.rule == rule && p.slot == slot && p.key == key)
+    {
+        Some(p) => p.text,
+        None => {
+            debug_assert!(false, "no phrase {rule} {slot} {key}");
+            ""
+        }
+    }
 }
 
 /// Explanation shown for `Enter` / `e` on an advice.
@@ -128,7 +215,53 @@ pub(crate) fn calls_per_turn(state: &State) -> f64 {
     crate::metrics::cost::p50_calls_per_turn(&state.agg).max(1.0)
 }
 
-#[cfg(test)]
+/// `$0.70` (the words' money form).
+pub(crate) fn money(v: f64) -> String {
+    crate::ui::fmt::usd(v)
+}
+
+/// `, about $0.70` at the current model's price of `kind`, or nothing:
+/// the words' optional price clause.
+pub(crate) fn about_usd(state: &State, tokens: u64, kind: PriceKind) -> String {
+    usd(state, tokens, kind)
+        .map(|v| format!(", about {}", money(v)))
+        .unwrap_or_default()
+}
+
+/// A duration in words: `40 seconds`, `4 minutes`, `2 hours 10 minutes`.
+pub(crate) fn spoken(ms: i64) -> String {
+    let s = ms.max(0) / 1000;
+    let unit = |n: i64, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
+    if s < 90 {
+        unit(s, "second")
+    } else if s < 3600 {
+        unit((s + 30) / 60, "minute")
+    } else {
+        let (h, m) = (s / 3600, (s % 3600) / 60);
+        if m == 0 {
+            unit(h, "hour")
+        } else {
+            format!("{} {}", unit(h, "hour"), unit(m, "minute"))
+        }
+    }
+}
+
+/// A structural name (a file's basename, a server, hook, plugin, agent or
+/// tool name) as the words carry it: cut at 40 cells.
+pub(crate) fn ident(s: &str) -> String {
+    crate::ui::fmt::clip(s, 40)
+}
+
+/// `1 file`, `3 files`.
+pub(crate) fn count(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// `41 %`.
+pub(crate) fn percent(v: f64) -> String {
+    format!("{v:.0} %")
+}
+
 pub(crate) mod fixtures {
     //! Transcript lines the rule tests share.
     use crate::transcript::Line;
@@ -173,5 +306,119 @@ mod tests {
         }
         assert!(explain("A06").contains("/compact"));
         assert!(explain("nope").starts_with("No explanation"));
+    }
+
+    /// `A38`, `A21b`: a rule id anywhere in `s`.
+    fn has_rule_id(s: &str) -> bool {
+        let b = s.as_bytes();
+        b.windows(3)
+            .any(|w| w[0] == b'A' && w[1].is_ascii_digit() && w[2].is_ascii_digit())
+    }
+
+    /// Every nudge the rules fire on the fixture sessions, fed line by line
+    /// and read every few lines at two clocks (live, and ten minutes idle):
+    /// whole words, no hole left, and an action payload that fits its kind
+    /// — something to fill, copy or press, empty only for `read`.
+    #[test]
+    fn every_fired_nudge_has_whole_words_and_fitting_payloads() {
+        use crate::advisor::ActionKind;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+        let rules = all();
+        let mut fired = std::collections::BTreeSet::new();
+        for name in ["a", "b", "c", "d", "e", "r", "s", "t", "w", "w-live"] {
+            let path = root.join(format!("session-{name}.jsonl"));
+            let parsed = crate::transcript::parse_file(&path).unwrap();
+            let step = (parsed.len() / 40).max(1);
+            let mut s = State::new(crate::metrics::Pricing::bundled());
+            s.session = crate::ui::state::SessionInfo::from_fixture(&path);
+            for (i, line) in parsed.iter().enumerate() {
+                s.apply(line);
+                let lines = i + 1;
+                if lines % step != 0 && lines != parsed.len() {
+                    continue;
+                }
+                for idle_ms in [30_000, 600_000] {
+                    s.clock_override = true;
+                    s.now_ms = s.last_line_at_ms.unwrap_or(0) + idle_ms;
+                    for r in &rules {
+                        let Some(a) = r.evaluate(&s) else { continue };
+                        fired.insert(r.id());
+                        let at = format!("{} on session-{name} at {lines}", r.id());
+                        assert_eq!(a.name, r.name(), "{at}");
+                        for text in [&a.body, &a.foot].into_iter().chain(a.fix_prompt.as_ref()) {
+                            assert!(!text.trim().is_empty(), "{at}: empty words");
+                            assert!(!text.contains('{') && !text.contains('}'), "{at}: {text}");
+                        }
+                        assert!(!a.actions.is_empty(), "{at}");
+                        for x in &a.actions {
+                            assert_eq!(
+                                x.kind == ActionKind::Advice,
+                                x.payload.trim().is_empty(),
+                                "{at}: {x:?}"
+                            );
+                            assert!(!x.label.is_empty(), "{at}: {x:?}");
+                            if x.kind == ActionKind::Prompt {
+                                assert!(
+                                    Some(&x.payload) == a.fix_prompt.as_ref()
+                                        || x.payload == a.action_text,
+                                    "{at}: {x:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(fired.len() >= 15, "only {fired:?} fired");
+    }
+
+    #[test]
+    fn every_rule_has_a_plain_name_and_words() {
+        let rules = all();
+        assert_eq!(rules.len(), 36);
+        let mut names = std::collections::BTreeSet::new();
+        for r in &rules {
+            let (id, name) = (r.id(), r.name());
+            assert!(!name.is_empty(), "{id} has no name");
+            assert!(name.chars().count() <= 32, "{id}: {name:?} is over 32");
+            assert!(!has_rule_id(name), "{id}: {name:?} carries a rule id");
+            assert!(names.insert(name), "{id}: {name:?} is not unique");
+            let words = r.words();
+            assert!(
+                words.iter().any(|w| w.variant.is_empty()),
+                "{id} has no default words"
+            );
+            let mut variants = std::collections::BTreeSet::new();
+            for w in words {
+                assert!(
+                    variants.insert(w.variant),
+                    "{id}: variant {:?} twice",
+                    w.variant
+                );
+                for text in [w.body, w.foot].into_iter().chain(w.fix_prompt) {
+                    assert!(!text.trim().is_empty(), "{id} {:?}: empty words", w.variant);
+                    assert!(!has_rule_id(text), "{id}: {text:?} carries a rule id");
+                    // Every hole is a plain name.
+                    let mut rest = text;
+                    while let Some(i) = rest.find('{') {
+                        let j = rest[i..].find('}').expect("closed hole") + i;
+                        let hole = &rest[i + 1..j];
+                        assert!(
+                            !hole.is_empty()
+                                && hole.chars().all(|c| c.is_ascii_lowercase()
+                                    || c.is_ascii_digit()
+                                    || c == '_'),
+                            "{id}: bad hole {hole:?}"
+                        );
+                        rest = &rest[j + 1..];
+                    }
+                }
+                assert!(
+                    w.body.ends_with('.') || w.body.ends_with('}'),
+                    "{id}: {:?}",
+                    w.body
+                );
+            }
+        }
     }
 }

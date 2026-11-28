@@ -8,24 +8,41 @@ expression: text
  5: v none rework 1 open      6: 257 calls 5 err
  > Edited 1 src file, no test/build run yet
 --- context ------------------------- 0: home  .  ? keys ---
-  396k of 1.00M est   autocompact 967k   570k left   +50k/t.
+ Context window  396k of 1M . 40 %
+ Watch About 12 more turns before Claude Code compacts on
+       its own. Do: /compact at the next break, not
+       mid-task.
+ # context so far  # forecast . +50k a turn
+ # auto-compact at 967k
+ 1.00M # # # # # # # # # # # # # # # # # # # # # # # # ####
+                                                  #########
+                                             ##############
+ 500k                                   ###################
+                                  #########################
+                                ###########################
+                          #################################
+ 0     ####################################################
+       turn 1                                            26
+ Turn 14 . 396k (+121k)
+ ----------------------------------------------------------
+ Spend  $10.03 . ~ $26.30 in an hour
+ Good $0.27 a minute. Two jumps: a costly turn in turn 12
+      ($2.09) and a costly turn in turn 14 ($4.07). Do:
+      /clear between unrelated tasks to keep it that way.
+ # spent  # forecast . $0.27 a minute
+ $25.92                                                ####
+                                                  #########
+                                            ###############
+ $12.96                                ####################
+                                 ##########################
+                          #################################
+                    #######################################
+ $0      ##################################################
+        min 0                                           113
 
-  prefix    ~60k  #####---------
-  harness  ~3.0k  --------------
-  thinking  ~30k  ###-----------
-  inputs   ~1.4k  --------------
-  results  ~166k  ##############
-
-  since session start . 143 calls
-  files            ~2.2k   0%
-  bash output      ~3.9k   0%
-  mcp results      ~150k  38%
-  other results    ~9.3k   2%
-  prompts          ~1.6k   0%
-  other             ~98k  24%
-  prefix ~ the first call's cached part - run /context once.
-
-  compactions 0   re-reads 0   stale 0   autocompact in ~12.
-
-  next 8c ~$.66 . fresh ~$.18
-  threshold 967k . 570k left . prefix 60k (15 %)
+ Cost per turn  ~ $0.56 typical
+ Act The last two turns cost $1.02 and $4.07, 6x the turns
+     before: every turn now re-sends 396k. Do: /compact
+     now, or write a hand-off note and /clear.
+ # a turn  # cache rebuilt
+ v 34 more
