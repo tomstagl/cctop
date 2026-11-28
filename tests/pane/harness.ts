@@ -397,6 +397,7 @@ export function fakeEngine(opts: FakeEngineOptions = {}): FakeEngine {
       set: async (name: string, value: string | undefined) => {
         if (value === undefined) delete env[name];
         else env[name] = value;
+        return {};
       },
     },
   } satisfies Implemented & FakeExtras;
@@ -464,7 +465,7 @@ export type FakeSurface = {
   /** The whole screen's width (`e.viewport.columns`). */
   columns: number;
   rows?: number;
-  placement?: 'dock' | 'inline';
+  placement?: 'dock' | 'inline' | 'widget';
   /** The pane body's width; defaults to `columns`. */
   bodyColumns?: number;
   hidden?: boolean;
@@ -543,7 +544,7 @@ export function paneRender(
   columns: number,
   extra: {
     rows?: number;
-    placement?: 'dock' | 'inline';
+    placement?: 'dock' | 'inline' | 'widget';
     isFocused?: boolean;
     title?: string;
     /** Cells across the pane body; defaults to `columns` (the whole screen). */

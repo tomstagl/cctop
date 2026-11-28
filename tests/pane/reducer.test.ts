@@ -6,7 +6,7 @@ import { fakeElements, fakeEngine, fakeOn, paneRender, type FakeEngine } from '.
 const SURFACE = { columns: 160, bodyColumns: 72 };
 import { renderToText } from './render';
 import { fixture } from './fixture';
-import { HISTORY_TURNS, initialModel, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
+import { HISTORY_TURNS, initialModel, outcomeText, percentile, reduce, usageRows, type Action, type Model } from '../../plugin/hooks/model';
 import { renderOverview } from '../../plugin/hooks/views/overview';
 import { register } from '../../plugin/hooks/pane';
 
@@ -288,4 +288,15 @@ test('agents.run opens a run and closes it; a new session id closes it', () => {
   assert.equal(reduce(opened, { type: 'agents.run', run: null }).openRun, null);
   assert.equal(reduce(opened, { type: 'session.id', id: 'session-a' }).openRun, 'wf_0aa065ff-0a0', 'the same id keeps it');
   assert.equal(reduce(opened, { type: 'session.id', id: 'session-b' }).openRun, null);
+});
+
+test('a widget render is laid out as inline', () => {
+  const render = (placement: 'inline' | 'widget'): Action => ({ type: 'render', placement, bodyColumns: 60, viewportColumns: 120, at: 0 });
+  const inline = run([render('inline')]);
+  const widget = run([render('widget')]);
+  assert.equal(widget.placement, 'widget');
+  assert.deepEqual({ ...widget, placement: 'inline' }, inline);
+  assert.equal(outcomeText(widget), outcomeText(inline));
+  const draw = (model: Model): string[] => renderToText(renderOverview(model, fakeElements(new Map()), 60, model.placement, T0), 60);
+  assert.deepEqual(draw(widget), draw(inline));
 });

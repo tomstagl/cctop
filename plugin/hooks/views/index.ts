@@ -22,7 +22,7 @@ export function renderView(
   now: number,
   actions?: ViewActions,
 ): RenderElement {
-  if (placement === 'inline') return renderOverview(model, el, columns, placement, now);
+  if (placement !== 'dock') return renderOverview(model, el, columns, placement, now);
   switch (model.view) {
     case 'coach':
       return actions === undefined ? renderOverview(model, el, columns, placement, now) : renderCoach(model, actions.el, columns, actions.coach);

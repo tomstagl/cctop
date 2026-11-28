@@ -2,10 +2,12 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
+    "noUncheckedIndexedAccess": false,
     "module": "commonjs",
     "moduleResolution": "node10",
     "rootDir": ".",
     "outDir": ".test-build",
     "esModuleInterop": true
-  }
+  },
+  "include": ["plugin/.claude/types", "plugin/hooks", "tests/pane"]
 }
