@@ -652,6 +652,106 @@ pub fn session_from_env(explicit: Option<&str>) -> Option<String> {
         .find_map(|k| std::env::var(k).ok().filter(|v| !v.trim().is_empty()))
 }
 
+/// The `agentLimits` the pane read of `$.agent.limits()`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentLimits {
+    pub concurrent: u32,
+    pub depth: u32,
+    pub is_background_enabled: bool,
+}
+
+/// The marker's `facts`: what the pane read of `$.session.info()` (and
+/// `$.agent.limits()`), which the transcript cannot say. Every field is
+/// absent when the pane did not know it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PaneFacts {
+    /// The data rules in force. `None`: not known (never the same as `[]`,
+    /// which is "settled, none applies").
+    pub data_rules: Option<Vec<String>>,
+    pub platform: Option<String>,
+    pub is_screen_reader: Option<bool>,
+    pub agent_limits: Option<AgentLimits>,
+}
+
+impl PaneFacts {
+    /// The marker's `facts` object; `None` when the marker has none.
+    pub fn from_marker(marker: &serde_json::Value) -> Option<PaneFacts> {
+        let f = marker.get("facts")?.as_object()?;
+        let count = |v: &serde_json::Value, k: &str| v.get(k)?.as_u64().map(|n| n as u32);
+        Some(PaneFacts {
+            data_rules: f.get("dataRules").and_then(|v| v.as_array()).map(|a| {
+                a.iter()
+                    .filter_map(|r| r.as_str().map(str::to_string))
+                    .collect()
+            }),
+            platform: f
+                .get("platform")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            is_screen_reader: f.get("isScreenReader").and_then(|v| v.as_bool()),
+            agent_limits: f.get("agentLimits").and_then(|l| {
+                Some(AgentLimits {
+                    concurrent: count(l, "concurrent")?,
+                    depth: count(l, "depth")?,
+                    is_background_enabled: l.get("isBackgroundEnabled")?.as_bool()?,
+                })
+            }),
+        })
+    }
+
+    /// The header's rules badge: `ZDR` and `HIPAA` by name, and `rules` once
+    /// for any other name (the d.ts: a name not known is a rule in force).
+    /// `None` when no rule is listed, whether none applies or none is known.
+    pub fn rules_badge(&self) -> Option<String> {
+        let mut out: Vec<&str> = Vec::new();
+        for r in self.data_rules.iter().flatten() {
+            let word = match r.as_str() {
+                "zdr" => "ZDR",
+                "hipaa" => "HIPAA",
+                _ => "rules",
+            };
+            if !out.contains(&word) {
+                out.push(word);
+            }
+        }
+        (!out.is_empty()).then(|| out.join(" "))
+    }
+}
+
+/// What reading `~/.cctop/pane/<session>.json`'s `facts` found.
+#[derive(Debug, PartialEq)]
+pub enum ReadFacts {
+    Facts(PaneFacts),
+    /// No marker, no `facts` in it, or no `HOME`: nothing is known.
+    Absent,
+    /// The marker exists but did not read or parse (the pane is rewriting
+    /// it): the caller keeps what it had.
+    Unreadable,
+}
+
+/// The marker's `facts` for a session id.
+pub fn read_facts(session_id: &str) -> ReadFacts {
+    if session_id.is_empty() || session_id.contains(['/', '\\']) {
+        return ReadFacts::Absent;
+    }
+    let Some(home) = std::env::var_os("HOME") else {
+        return ReadFacts::Absent;
+    };
+    read_facts_at(&Path::new(&home).join(format!(".cctop/pane/{session_id}.json")))
+}
+
+fn read_facts_at(path: &Path) -> ReadFacts {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return ReadFacts::Absent,
+        Err(_) => return ReadFacts::Unreadable,
+    };
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(marker) => PaneFacts::from_marker(&marker).map_or(ReadFacts::Absent, ReadFacts::Facts),
+        Err(_) => ReadFacts::Unreadable,
+    }
+}
+
 fn read_json(path: &Path) -> Option<serde_json::Value> {
     let text = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&text).ok()
@@ -860,9 +960,65 @@ pub fn run_status(session: Option<&str>, json: bool) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_marker_that_does_not_parse_is_unreadable_not_absent() {
+        let dir = std::env::temp_dir().join(format!("cctop-facts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("m.json");
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(read_facts_at(&p), ReadFacts::Absent);
+        std::fs::write(&p, r#"{"facts": {"platform": "ma"#).unwrap();
+        assert_eq!(read_facts_at(&p), ReadFacts::Unreadable);
+        std::fs::write(&p, r#"{"version": "1"}"#).unwrap();
+        assert_eq!(read_facts_at(&p), ReadFacts::Absent);
+        std::fs::write(&p, r#"{"facts": {"platform": "macos"}}"#).unwrap();
+        assert!(
+            matches!(read_facts_at(&p), ReadFacts::Facts(f) if f.platform.as_deref() == Some("macos"))
+        );
+    }
+
     use super::*;
 
     const T0: i64 = 1_789_400_000_000;
+
+    #[test]
+    fn facts_are_parsed_from_the_marker_and_badged() {
+        let marker = serde_json::json!({
+            "facts": {
+                "dataRules": ["zdr", "hipaa", "zdr", "acme"],
+                "platform": "macos",
+                "isScreenReader": true,
+                "agentLimits": { "concurrent": 4, "depth": 2, "isBackgroundEnabled": false }
+            }
+        });
+        let f = PaneFacts::from_marker(&marker).unwrap();
+        assert_eq!(f.platform.as_deref(), Some("macos"));
+        assert_eq!(f.is_screen_reader, Some(true));
+        assert_eq!(
+            f.agent_limits,
+            Some(AgentLimits {
+                concurrent: 4,
+                depth: 2,
+                is_background_enabled: false
+            })
+        );
+        assert_eq!(f.rules_badge().as_deref(), Some("ZDR HIPAA rules"));
+        // `[]` is settled-none, absent is not known: neither draws a badge.
+        let none =
+            PaneFacts::from_marker(&serde_json::json!({"facts": {"dataRules": []}})).unwrap();
+        assert_eq!(none.data_rules, Some(vec![]));
+        assert_eq!(none.rules_badge(), None);
+        let unknown = PaneFacts::from_marker(&serde_json::json!({"facts": {}})).unwrap();
+        assert_eq!(unknown.data_rules, None);
+        assert_eq!(unknown.rules_badge(), None);
+        // No facts, or a bad shape: no badge, never a panic.
+        assert!(PaneFacts::from_marker(&serde_json::json!({"open": true})).is_none());
+        let bad = PaneFacts::from_marker(
+            &serde_json::json!({"facts": {"dataRules": "zdr", "agentLimits": {"depth": 1}}}),
+        )
+        .unwrap();
+        assert_eq!(bad, PaneFacts::default());
+    }
 
     fn marker(open: bool, visibility: &str, heartbeat_offset_ms: i64) -> serde_json::Value {
         // A fixed-format ISO string parse_ts_ms accepts.

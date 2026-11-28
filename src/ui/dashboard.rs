@@ -65,6 +65,17 @@ fn cells_of(spans: &[Span]) -> usize {
 /// The facts keep at least this many cells for the hooks badge to show.
 pub const MIN_FACTS_WITH_BADGE: usize = 12;
 
+/// The text between the facts and the phase cell: the hooks badge and the
+/// data rules, two cells apart (the pane's `headerLine` in `views/overview.tsx` mirrors it with
+/// an inline join).
+pub fn header_badge(hooks: Option<&str>, rules: Option<&str>) -> String {
+    [hooks, rules]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
 /// Row 1: ` cctop` bold, the session facts dim, the phase cell
 /// (`● WORKING 52:11`) right-aligned in its colour.
 fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
@@ -74,8 +85,9 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
         d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
-    // The hooks badge sits between the facts and the phase cell.
-    let mut badge = d.header.hooks.clone().unwrap_or_default();
+    // The badges (hooks, then the data rules) sit between the facts and the
+    // phase cell.
+    let mut badge = header_badge(d.header.hooks.as_deref(), d.header.rules.as_deref());
     let room_for = |badge: &str| {
         let badge_room = if badge.is_empty() {
             0
@@ -477,6 +489,31 @@ mod tests {
         assert!(!narrow.contains("hooks:"), "{narrow}");
         assert!(narrow.contains(&d.header.phase.word), "{narrow}");
         insta::assert_snapshot!("header_hooks_missing_40", narrow);
+    }
+
+    #[test]
+    fn header_shows_the_data_rules_beside_the_hooks_badge() {
+        let (mut app, d) = dashboard_with(all_facts());
+        assert!(d.header.rules.is_none());
+        app.state.pane_facts = Some(crate::pane::PaneFacts {
+            data_rules: Some(vec!["zdr".into(), "hipaa".into(), "acme-tier".into()]),
+            ..Default::default()
+        });
+        let d = app.dashboard();
+        assert_eq!(d.header.rules.as_deref(), Some("ZDR HIPAA rules"));
+        let row = header_row(&app, &d, 120);
+        assert!(row.contains("ZDR HIPAA rules  ● "), "{row}");
+        insta::assert_snapshot!("header_rules_120", row);
+        app.state.hooks_missing = crate::hooks::EVENTS[22..].to_vec();
+        let d = app.dashboard();
+        let row = header_row(&app, &d, 120);
+        assert!(row.contains("hooks: 7 new  ZDR HIPAA rules  ● "), "{row}");
+        insta::assert_snapshot!("header_rules_hooks_120", row);
+        // Too narrow: the badges go before the phase cell does.
+        let narrow = header_row(&app, &d, 40);
+        assert!(!narrow.contains("ZDR"), "{narrow}");
+        assert!(narrow.contains(&d.header.phase.word), "{narrow}");
+        insta::assert_snapshot!("header_rules_hooks_40", narrow);
     }
 
     #[test]

@@ -107,6 +107,8 @@ export type Dashboard = {
   workspace: string[];
   /** The amber hooks badge (`header.hooks`, `hooks: 7 new`) between the facts and the phase; null when the install is current. */
   hooksBadge: string | null;
+  /** The data rules (`header.rules`, `ZDR HIPAA rules`) read from the pane's own `$.session.info()`, beside the hooks badge; null when none is listed. */
+  rulesBadge: string | null;
   /** The header's second row, the workflow strip, while a run is live (`header.workflow`); null otherwise. */
   workflow: Seg[] | null;
   phase: { glyph: string; word: string; elapsed: string; tokens: string[] };
@@ -170,6 +172,7 @@ export function dashboardOf(query: unknown): Dashboard | null {
     headerLine: stringAt(query, 'header', 'line') ?? '',
     workspace: strings(at(query, 'header', 'workspace')),
     hooksBadge: stringAt(query, 'header', 'hooks') ?? null,
+    rulesBadge: stringAt(query, 'header', 'rules') ?? null,
     workflow: Array.isArray(at(query, 'header', 'workflow')) ? segsOf(at(query, 'header', 'workflow')) : null,
     phase: {
       glyph: stringAt(phase, 'glyph') ?? '○',
@@ -258,7 +261,9 @@ function headerLine(d: Dashboard, columns: number): Line {
   const phaseText = clip(`${d.phase.glyph} ${d.phase.word} ${d.phase.elapsed}`, Math.min(40, Math.max(0, columns - 10)));
   const roomFor = (b: string): number => columns - 8 - width(phaseText) - 2 - (b === '' ? 0 : width(b) + 2);
   // Too narrow to leave the facts MIN_FACTS_WITH_BADGE cells: the badge goes first, the phase cell stays.
-  const badge = d.hooksBadge !== null && roomFor(d.hooksBadge) >= MIN_FACTS_WITH_BADGE ? d.hooksBadge : '';
+  // The hooks badge and the data rules, two cells apart (the TUI's `header_badge`).
+  const both = [d.hooksBadge, d.rulesBadge].filter((b): b is string => b !== null).join('  ');
+  const badge = both !== '' && roomFor(both) >= MIN_FACTS_WITH_BADGE ? both : '';
   const badgeRoom = badge === '' ? 0 : width(badge) + 2;
   const factsRoom = Math.max(0, roomFor(badge));
   const factsText = clip(fitWorkspace(facts, d.workspace, factsRoom), factsRoom);

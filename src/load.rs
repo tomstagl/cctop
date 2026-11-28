@@ -29,13 +29,62 @@ pub fn fixture_path(session: &str) -> Option<PathBuf> {
     with_ext.is_file().then_some(with_ext)
 }
 
+/// The discover key of a `--session` value. A `.jsonl` path that is not an
+/// existing file (the pane passes the transcript path of a session whose
+/// first line is not written yet) names its session by the file stem, so the
+/// registry still resolves it; anything else is the key as given.
+fn session_key(session: &str) -> String {
+    let p = Path::new(session);
+    if p.extension().is_some_and(|x| x == "jsonl") && !p.is_file() {
+        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+            return stem.to_string();
+        }
+    }
+    session.to_string()
+}
+
+/// What a transcript path the pane passes (`$.session.info().transcriptPath`)
+/// says of its session: the live registry entry whose id is the file's stem,
+/// else, for a file under `~/.claude/projects`, an ended session keeping that
+/// id (`SessionInfo::from_transcript`). `None` for anything else: a fixture.
+fn real_transcript_info(p: &Path) -> Option<SessionInfo> {
+    real_transcript_info_in(
+        p,
+        crate::registry::default_dir(),
+        crate::baseline::default_projects_dir(),
+    )
+}
+
+fn real_transcript_info_in(
+    p: &Path,
+    registry: Option<PathBuf>,
+    projects: Option<PathBuf>,
+) -> Option<SessionInfo> {
+    let stem = p.file_stem()?.to_str()?;
+    if let Some(dir) = registry {
+        let live = crate::registry::list(&dir)
+            .into_iter()
+            .filter(|s| s.session_id == stem && s.is_alive())
+            .max_by_key(|s| s.started_at);
+        if let Some(s) = live {
+            return Some(SessionInfo::from_registry(&s));
+        }
+    }
+    let projects = projects?;
+    let under = std::fs::canonicalize(p)
+        .ok()
+        .zip(std::fs::canonicalize(projects).ok())
+        .is_some_and(|(p, root)| p.starts_with(root));
+    under.then(|| SessionInfo::from_transcript(p))
+}
+
 /// Resolve the target to a transcript path and session info.
 pub fn resolve(t: &Target) -> Result<(PathBuf, SessionInfo), DiscoverError> {
     if let Some(p) = t.session.as_deref().and_then(fixture_path) {
-        let info = SessionInfo::from_fixture(&p);
+        let info = real_transcript_info(&p).unwrap_or_else(|| SessionInfo::from_fixture(&p));
         return Ok((p, info));
     }
-    let q = Query::from_env(t.session.clone(), t.cwd.clone());
+    let q = Query::from_env(t.session.as_deref().map(session_key), t.cwd.clone());
     match discover::resolve_system(&q, t.wait) {
         Ok(s) => Ok((crate::transcript_path(&s), SessionInfo::from_registry(&s))),
         // The key names no live session, but its transcript may still be on
@@ -168,6 +217,7 @@ pub fn state_from_prefix(transcript: &Path, info: SessionInfo, n: usize) -> Stat
             state.refresh_insights(&dir);
         }
     }
+    state.load_pane_facts();
     let mut hooks =
         crate::hooks::Watcher::new(&crate::status::cctop_dir(), &state.session.session_id);
     for ev in hooks.poll() {
@@ -262,6 +312,96 @@ mod tests {
     use super::*;
     use std::fs;
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn a_transcript_path_under_projects_keeps_its_session_id() {
+        let root = projects("path");
+        let p = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        let info = real_transcript_info_in(&p, None, Some(root.clone())).unwrap();
+        assert_eq!(info.session_id, A);
+        assert!(!info.alive);
+        // A fixture elsewhere stays a fixture.
+        let fixture = std::env::temp_dir().join("cctop-load-fixture.jsonl");
+        fs::write(&fixture, "{}\n").unwrap();
+        assert!(real_transcript_info_in(&fixture, None, Some(root)).is_none());
+        // No registry entry, no projects dir: nothing to say.
+        assert!(real_transcript_info_in(&p, None, None).is_none());
+    }
+
+    #[test]
+    fn a_transcript_path_naming_a_live_registry_session_reads_its_registry_entry() {
+        let root = projects("live");
+        let reg = root.join("sessions");
+        fs::create_dir_all(&reg).unwrap();
+        let pid = std::process::id();
+        // A live entry for A (this test process), and a dead one for B.
+        fs::write(
+            reg.join(format!("{pid}.json")),
+            format!(
+                r#"{{"pid":{pid},"sessionId":"{A}","cwd":"/tmp/live","status":"busy","startedAt":1}}"#
+            ),
+        )
+        .unwrap();
+        fs::write(
+            reg.join("4194000.json"),
+            format!(r#"{{"pid":4194000,"sessionId":"{B}","cwd":"/tmp/dead","startedAt":1}}"#),
+        )
+        .unwrap();
+        let p = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        // The live branch wins even without a projects dir.
+        let info = real_transcript_info_in(&p, Some(reg.clone()), None).unwrap();
+        assert_eq!(info.session_id, A);
+        assert!(info.alive);
+        assert_eq!(info.pid, Some(pid));
+        // A dead entry is not live: B falls through to the projects branch
+        // (an ended session) or, without one, to nothing.
+        let dead = root.join("-Users-me-code-two").join(format!("{B}.jsonl"));
+        assert!(real_transcript_info_in(&dead, Some(reg.clone()), None).is_none());
+        let ended = real_transcript_info_in(&dead, Some(reg), Some(root)).unwrap();
+        assert!(!ended.alive);
+    }
+
+    #[test]
+    fn a_missing_transcript_path_resolves_by_its_stem_through_the_registry() {
+        struct NoEnv;
+        impl discover::Env for NoEnv {
+            fn tmux_panes(&self) -> Vec<(String, u32)> {
+                Vec::new()
+            }
+            fn tty_of(&self, _: u32) -> Option<String> {
+                None
+            }
+            fn is_alive(&self, _: &crate::registry::Session) -> bool {
+                true
+            }
+        }
+        let root = projects("missing");
+        let reg = root.join("sessions");
+        fs::create_dir_all(&reg).unwrap();
+        fs::write(
+            reg.join("4194001.json"),
+            format!(r#"{{"pid":4194001,"sessionId":"{A}","cwd":"/tmp/fresh","startedAt":1}}"#),
+        )
+        .unwrap();
+        // The transcript is not written yet: the file does not exist.
+        let p = root.join("-x").join(format!("{A}.jsonl"));
+        assert!(!p.exists());
+        let key = session_key(p.to_str().unwrap());
+        assert_eq!(key, A);
+        let q = Query {
+            session: Some(key),
+            ..Query::default()
+        };
+        let s = discover::resolve(&crate::registry::list(&reg), &q, &NoEnv).unwrap();
+        assert_eq!(s.session_id, A);
+        // An existing file and a plain id are left alone.
+        let there = root.join("-Users-me-code-one").join(format!("{A}.jsonl"));
+        assert_eq!(
+            session_key(there.to_str().unwrap()),
+            there.to_str().unwrap()
+        );
+        assert_eq!(session_key(A), A);
+    }
 
     const A: &str = "b34fc081-f0e9-48ae-9c1a-552587db6403";
     const B: &str = "b34fc081-0000-4000-8000-000000000000";

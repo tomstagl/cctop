@@ -168,6 +168,11 @@ pub struct Header {
     /// Absent when the install is current, not installed, or a fixture.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hooks: Option<String>,
+    /// `ZDR HIPAA rules`: the data rules the pane read of `$.session.info()`
+    /// (`rules` for a name cctop does not know), drawn beside the hooks
+    /// badge. Absent without a pane marker, and when no rule is listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<String>,
     /// What the status line says about where the session runs, in priority
     /// order: repo, worktree, `+N dirs`, output style, agent, `remote`.
     /// Inside `line`, before the PR and the version; both surfaces drop
@@ -507,6 +512,10 @@ fn header(state: &State, c: &Coach) -> Header {
         },
         hooks: (!state.hooks_missing.is_empty())
             .then(|| format!("hooks: {} new", state.hooks_missing.len())),
+        rules: state
+            .pane_facts
+            .as_ref()
+            .and_then(crate::pane::PaneFacts::rules_badge),
         workspace,
         line: format!("cctop  {}", parts.join(" · ")),
         workflow: workflow_strip(state),
