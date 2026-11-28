@@ -338,6 +338,11 @@ impl Panel for Tokens {
                 dim,
             ));
         }
+        // The status line says the window passed 200 k: Claude Code prices
+        // the session at its long-context rates from there.
+        if state.status_facts.exceeds_200k_tokens {
+            l10.push(Span::styled("  >200k", state.theme.warn()));
+        }
         if let Some(tip) = flags.tips().first() {
             l10.push(Span::styled(format!("  {tip}"), state.theme.warn()));
         }
@@ -370,6 +375,20 @@ mod tests {
         app.state.session.ended_at_ms = app.state.last_line_at_ms;
         app.state.agents = crate::agents::load(&path.with_extension(""));
         app
+    }
+
+    #[test]
+    fn cost_panel_long_context_marker() {
+        let mut app = fixture_app();
+        app.state.open = Some(2);
+        assert!(!render_to_string(&app, 100, 51).contains(">200k"));
+        app.state.status_facts.exceeds_200k_tokens = true;
+        let out = render_to_string(&app, 100, 51);
+        let row = out
+            .lines()
+            .find(|l| l.contains("weight"))
+            .expect("weight row");
+        assert!(row.contains(">200k"), "{out}");
     }
 
     #[test]

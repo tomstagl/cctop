@@ -39,7 +39,7 @@ pub enum LocatedCause {
 }
 
 /// `+1.2k` / `-340`: a signed count, thousands with one decimal.
-fn signed(n: i64) -> String {
+pub(crate) fn signed(n: i64) -> String {
     let sign = if n < 0 { '-' } else { '+' };
     let a = n.unsigned_abs();
     if a >= 1000 {

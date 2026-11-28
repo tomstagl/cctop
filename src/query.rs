@@ -62,6 +62,13 @@ pub fn summary(state: &State) -> Value {
             o.insert("team_cost".into(), team);
         }
     }
+    // The status line's extra facts only once a sample carried any, so a
+    // session without a status line prints exactly what it did before.
+    if state.status_facts != Default::default() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("status".into(), status_object(state));
+        }
+    }
     v
 }
 
@@ -190,6 +197,42 @@ fn summary_object(state: &State) -> Value {
     })
 }
 
+/// What the status line carries beyond the numbers: the workspace (the
+/// added directories as a count, never paths; the remote id never), the spend
+/// limit in dollars (gateway accounts with an overage) and the long-context
+/// flag. Absent facts are `null`.
+fn status_object(state: &State) -> Value {
+    let f = &state.status_facts;
+    let w = f.workspace.as_ref();
+    let repo = w
+        .and_then(|w| w.repo.as_ref())
+        .and_then(|r| Some(format!("{}/{}", r.owner.as_deref()?, r.name.as_deref()?)));
+    let spend = f.spend_limit_usd.map(|(used, limit)| {
+        json!({
+            "used_usd": m(used, "USD", "spend_limit_usd", false),
+            "limit_usd": limit.map(|l| m(l, "USD", "spend_limit_usd", false)),
+            "period": f.spend_limit_period,
+            "resets_at_ms": f.spend_limit_resets_at_ms,
+        })
+    });
+    json!({
+        "workspace": {
+            "repo": repo,
+            "worktree": w.and_then(|w| w.git_worktree.clone()),
+            "added_dirs": w.map(|w| m(w.added_dirs.len(), "count", "workspace_added_dirs", false)),
+            "output_style": f.output_style.as_ref().map(|s| m(s.clone(), "enum", "output_style", false)),
+            "agent": f.agent_name,
+            "remote": f.remote_session_id.is_some(),
+        },
+        "spend_limit": spend,
+        "pr": (f.pr_url.is_some() || f.pr_kind.is_some()).then(|| json!({
+            "url": f.pr_url,
+            "kind": f.pr_kind,
+        })),
+        "exceeds_200k_tokens": m(f.exceeds_200k_tokens, "bool", "exceeds_200k_tokens", false),
+    })
+}
+
 /// `/usage`'s behaviour flags for the session.
 fn behaviour_flags(state: &State) -> Value {
     let f = state.behaviour_flags();
@@ -225,6 +268,25 @@ pub fn cache_object(state: &State) -> Value {
         "miss_causes": c.miss_causes,
         "hit_ratio": c.hit_ratio.or_else(|| state.agg.total.cache_hit_ratio()).map(|r| m(r, "ratio", "cache_hit_ratio", approx)),
     });
+    // What the status line counts and diagnoses beyond the headline figures;
+    // shim only, so a transcript-sourced block has none of these keys.
+    if c.from_shim {
+        v["requests"] = m(c.requests, "count", "cache_requests", false);
+        v["cache_write_tokens"] = m(c.cache_write_tokens, "tokens", "cache_write_shim", false);
+        v["miss_recache_tokens"] = m(c.miss_recache_tokens, "tokens", "cache_miss_recache", false);
+        v["last_miss_tools_added"] = c
+            .last_miss_tools_added
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_tools_removed"] = c
+            .last_miss_tools_removed
+            .map(|n| m(n, "count", "cache_miss_tools_delta", false))
+            .into();
+        v["last_miss_system_char_delta"] = c
+            .last_miss_system_delta
+            .map(|n| m(n, "chars", "cache_miss_system_delta", false))
+            .into();
+    }
     // Absent on transcripts before 2.1.302 (no request lines), so their output is unchanged.
     let located = located_misses(state);
     if located.as_array().is_some_and(|a| !a.is_empty()) {
@@ -792,6 +854,116 @@ mod tests {
             .starts_with("tools changed"));
         assert_eq!(first["message_id"], "msg_011CgMcApk8Wt1XX5BxnZmun");
         assert_eq!(first["tokens"]["metric_id"], "cache_write");
+    }
+
+    #[test]
+    fn query_summary_status_keys() {
+        // No status sample: no key, nothing moves.
+        let s = state_b();
+        assert!(summary(&s).get("status").is_none());
+        let mut s = s;
+        s.status_facts.workspace = Some(crate::status::Workspace {
+            added_dirs: vec!["/secret/a".into(), "/secret/b".into()],
+            git_worktree: Some("feat".into()),
+            repo: Some(crate::status::Repo {
+                host: None,
+                owner: Some("acme".into()),
+                name: Some("shop".into()),
+            }),
+            ..Default::default()
+        });
+        s.status_facts.output_style = Some("Concise".into());
+        s.status_facts.agent_name = Some("reviewer".into());
+        s.status_facts.remote_session_id = Some("r-secret".into());
+        s.status_facts.exceeds_200k_tokens = true;
+        s.status_facts.spend_limit_usd = Some((412.0, Some(500.0)));
+        s.status_facts.spend_limit_period = Some("monthly".into());
+        s.status_facts.spend_limit_resets_at_ms = Some(1_790_000_000_000);
+        let v = summary(&s);
+        let st = &v["status"];
+        assert_eq!(st["workspace"]["repo"], "acme/shop");
+        assert_eq!(st["workspace"]["worktree"], "feat");
+        assert_eq!(st["workspace"]["added_dirs"]["value"], 2);
+        assert_eq!(
+            st["workspace"]["added_dirs"]["metric_id"],
+            "workspace_added_dirs"
+        );
+        assert_eq!(st["workspace"]["output_style"]["value"], "Concise");
+        assert_eq!(st["workspace"]["output_style"]["metric_id"], "output_style");
+        assert_eq!(st["workspace"]["agent"], "reviewer");
+        assert_eq!(st["workspace"]["remote"], true);
+        assert_eq!(st["spend_limit"]["used_usd"]["value"], 412.0);
+        assert_eq!(
+            st["spend_limit"]["used_usd"]["metric_id"],
+            "spend_limit_usd"
+        );
+        assert_eq!(st["spend_limit"]["limit_usd"]["value"], 500.0);
+        assert_eq!(st["spend_limit"]["period"], "monthly");
+        assert_eq!(st["spend_limit"]["resets_at_ms"], 1_790_000_000_000i64);
+        assert_eq!(st["exceeds_200k_tokens"]["value"], true);
+        assert_eq!(
+            st["exceeds_200k_tokens"]["metric_id"],
+            "exceeds_200k_tokens"
+        );
+        // Paths and the remote id are never in the object.
+        let text = v.to_string();
+        assert!(
+            !text.contains("/secret/") && !text.contains("r-secret"),
+            "{text}"
+        );
+        // Without spend, the key is null.
+        s.status_facts.spend_limit_usd = None;
+        assert!(summary(&s)["status"]["spend_limit"].is_null());
+        // The PR's link and kind: present with them, null without.
+        assert!(summary(&s)["status"]["pr"].is_null());
+        s.status_facts.pr_url = Some("https://github.com/acme/shop/pull/142".into());
+        s.status_facts.pr_kind = Some("github".into());
+        let pr = &summary(&s)["status"]["pr"];
+        assert_eq!(pr["url"], "https://github.com/acme/shop/pull/142");
+        assert_eq!(pr["kind"], "github");
+    }
+
+    #[test]
+    fn cache_object_carries_the_shims_counters_only_from_the_shim() {
+        let mut s = state_b();
+        let v = cache_object(&s);
+        for k in [
+            "requests",
+            "cache_write_tokens",
+            "miss_recache_tokens",
+            "last_miss_tools_added",
+            "last_miss_tools_removed",
+            "last_miss_system_char_delta",
+        ] {
+            assert!(v.get(k).is_none(), "{k} without a shim sample");
+        }
+        s.cache.from_shim = true;
+        s.cache.requests = 49;
+        s.cache.cache_write_tokens = 257_729;
+        s.cache.miss_recache_tokens = 95_700;
+        s.cache.last_miss_tools_added = Some(2);
+        s.cache.last_miss_tools_removed = Some(0);
+        s.cache.last_miss_system_delta = Some(-800);
+        let v = cache_object(&s);
+        for (k, val, id) in [
+            ("requests", 49, "cache_requests"),
+            ("cache_write_tokens", 257_729, "cache_write_shim"),
+            ("miss_recache_tokens", 95_700, "cache_miss_recache"),
+            ("last_miss_tools_added", 2, "cache_miss_tools_delta"),
+            ("last_miss_tools_removed", 0, "cache_miss_tools_delta"),
+            (
+                "last_miss_system_char_delta",
+                -800,
+                "cache_miss_system_delta",
+            ),
+        ] {
+            assert_eq!(v[k]["value"], val, "{k}");
+            assert_eq!(v[k]["metric_id"], id, "{k}");
+            assert!(crate::metrics::registry::get(id).is_some(), "{id}");
+        }
+        // A shim sample whose miss carried no deltas: the keys are null.
+        s.cache.last_miss_tools_added = None;
+        assert!(cache_object(&s)["last_miss_tools_added"].is_null());
     }
 
     #[test]
