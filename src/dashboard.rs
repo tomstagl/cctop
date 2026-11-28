@@ -191,6 +191,115 @@ pub struct Cell {
     pub mid: Line,
     /// `ctx 35%`.
     pub short: Line,
+    /// The window's composition from `/context`'s own numbers: only on
+    /// the context cell, only while a capture exists (PRD context-breakdown
+    /// §3.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub composition: Option<Composition>,
+}
+
+/// The window by category, as Claude Code itself counted it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Composition {
+    /// `per /context` (the transcript's table) or `per Claude Code` (the
+    /// pane's spool).
+    pub source: &'static str,
+    /// The used categories in `/context`'s order, then `free`, then
+    /// `buffer` where the capture has them.
+    #[serde(serialize_with = "items_as_objects")]
+    pub items: Vec<(String, u64)>,
+    /// The row's text, cut whole item by whole item at [`coach::WIDTH`].
+    pub line: String,
+}
+
+fn items_as_objects<S: serde::Serializer>(
+    items: &[(String, u64)],
+    ser: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeSeq;
+    let mut seq = ser.serialize_seq(Some(items.len()))?;
+    for (name, tokens) in items {
+        seq.serialize_element(&serde_json::json!({"name": name, "tokens": tokens}))?;
+    }
+    seq.end()
+}
+
+/// A category's name for the row. Display only; nothing branches on it.
+fn short_category(name: &str) -> String {
+    match name.to_lowercase().as_str() {
+        "system prompt" => "sys".into(),
+        "system tools" => "tools".into(),
+        "mcp tools" => "mcp".into(),
+        "memory files" => "mem".into(),
+        "messages" => "msgs".into(),
+        "custom agents" => "agents".into(),
+        "skills" => "skills".into(),
+        _ => name.to_string(),
+    }
+}
+
+impl Composition {
+    pub fn of(state: &State) -> Option<Composition> {
+        use crate::ui::state::CaptureSource;
+        let (cap, _, src, _) = state.current_context_capture()?;
+        let mut items: Vec<(String, u64)> = cap.categories.clone();
+        if items.is_empty() {
+            return None;
+        }
+        let used = items.len();
+        if let Some(f) = cap.free_tokens {
+            items.push(("free".into(), f));
+        }
+        if let Some(b) = cap.autocompact_buffer {
+            items.push(("buffer".into(), b));
+        }
+        let source = match src {
+            CaptureSource::Transcript => "per /context",
+            CaptureSource::Spool => "per Claude Code",
+        };
+        // What goes first when the line is too long: the buffer, then the
+        // smallest used categories other than Messages. The rest keep
+        // /context's order.
+        let mut order: Vec<usize> = Vec::new();
+        if cap.autocompact_buffer.is_some() {
+            order.push(items.len() - 1);
+        }
+        let mut small: Vec<usize> = (0..used)
+            .filter(|&i| short_category(&items[i].0) != "msgs")
+            .collect();
+        small.sort_by_key(|&i| (items[i].1, std::cmp::Reverse(i)));
+        order.extend(small);
+        let render = |keep: &[bool]| {
+            let mut line = source.to_string();
+            for (i, (name, tokens)) in items.iter().enumerate() {
+                if keep[i] {
+                    line.push_str(&format!(
+                        " {} {}",
+                        short_category(name),
+                        fmt::tokens(*tokens)
+                    ));
+                }
+            }
+            if keep.iter().any(|k| !k) {
+                line.push_str(" …");
+            }
+            line
+        };
+        let mut keep = vec![true; items.len()];
+        let mut line = render(&keep);
+        for i in order {
+            if line.chars().count() <= coach::WIDTH {
+                break;
+            }
+            keep[i] = false;
+            line = render(&keep);
+        }
+        Some(Composition {
+            source,
+            items,
+            line,
+        })
+    }
 }
 
 /// The act line: the coach's slot, whole. A pending wait pre-empts the
@@ -518,6 +627,7 @@ fn cell(key: char, id: &'static str, first: Line, second: Option<Line>) -> Cell 
         label,
         mid,
         short: first,
+        composition: None,
     }
 }
 
@@ -533,12 +643,13 @@ fn cells(state: &State, c: &Coach) -> Vec<Cell> {
         "—".into()
     };
     let left = v.threshold.saturating_sub(v.size);
-    let context = cell(
+    let mut context = cell(
         '1',
         "context",
         vec![fg("ctx "), seg(pct, level_tone(ctx_level))],
         (v.window > 0).then(|| vec![fg(format!("{} left", fmt::tokens(left)))]),
     );
+    context.composition = Composition::of(state);
     // 2 · limits: the 5-hour window and its reset.
     let limits = match &state.limits {
         Some(l) => cell(
@@ -815,7 +926,13 @@ fn body_context(state: &State, c: &Coach) -> Body {
         None => top.push(dim("   velocity — (one turn)")),
     }
     rows.push(top);
-    rows.push(Vec::new());
+    // The window by category as Claude Code counted it, when a `/context`
+    // table or the pane's spool exists: the same line on both surfaces.
+    // It takes the blank row's place, so a short dock keeps its last row.
+    match Composition::of(state) {
+        Some(comp) => rows.push(vec![dim(format!("  {}", comp.line))]),
+        None => rows.push(Vec::new()),
+    }
     let slices = vec![
         Slice {
             label: "prefix",
@@ -2225,6 +2342,150 @@ mod tests {
         assert_eq!(v["bodies"][6]["key"], "a");
         assert_eq!(v["bodies"][7]["key"], "0");
         assert_eq!(v["bodies"][0]["slices"][0]["step"], 0);
+    }
+
+    fn composition_of(d: &Dashboard) -> Option<&Composition> {
+        d.cells[0].composition.as_ref()
+    }
+
+    /// A transcript capture labels the row `per /context`, in the table's
+    /// order, then free and buffer, and the context body carries the same
+    /// line.
+    #[test]
+    fn a_transcript_capture_draws_the_composition_row() {
+        let (s, e) = fixture_at("d", usize::MAX);
+        let d = snapshot(&s, &e);
+        let c = composition_of(&d).expect("fixture D has the table");
+        assert_eq!(c.source, "per /context");
+        assert!(c.line.starts_with("per /context "), "{}", c.line);
+        assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
+        let cap = s.prefix.context_capture.as_ref().unwrap();
+        assert_eq!(c.items[0].0, cap.categories[0].0);
+        assert_eq!(
+            serde_json::to_value(&d).unwrap()["cells"][0]["composition"]["items"][0]["name"],
+            c.items[0].0.as_str()
+        );
+        if let Some(f) = cap.free_tokens {
+            assert!(c.items.iter().any(|(n, t)| n == "free" && *t == f));
+        }
+        let text = body_text(body(&d, "context"));
+        assert!(text.iter().any(|r| r == &format!("  {}", c.line)));
+        let q = crate::query::dashboard(&s);
+        assert_eq!(q["composition_source"], "per /context");
+        assert_eq!(q["composition"][0]["name"], c.items[0].0.as_str());
+        assert_eq!(q["composition"][0]["tokens"], c.items[0].1);
+        insta::assert_snapshot!("composition_row_d", c.line);
+    }
+
+    /// The pane's spool, newer than anything in the transcript, reads `per
+    /// Claude Code`.
+    #[test]
+    fn a_spool_capture_is_labelled_per_claude_code() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        s.apply_context_spool(crate::context_spool::SpoolCapture {
+            at_ms: at,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: 100_000,
+                window_tokens: 1_000_000,
+                categories: vec![("System prompt".into(), 8_000), ("Messages".into(), 60_000)],
+                free_tokens: Some(850_000),
+                autocompact_buffer: Some(33_000),
+                ..Default::default()
+            },
+        });
+        let c = Composition::of(&s).expect("a spool capture");
+        assert_eq!(c.source, "per Claude Code");
+        assert_eq!(
+            c.items.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            ["System prompt", "Messages", "free", "buffer"]
+        );
+        assert_eq!(c.line, "per Claude Code sys 8.0k msgs 60k free 850k …");
+        assert!(c.line.chars().count() <= coach::WIDTH);
+    }
+
+    /// Deferred tools are not in the window: a spool's `deferred` row is in
+    /// neither the row nor `composition[]`.
+    #[test]
+    fn a_deferred_row_is_left_out() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        let json = format!(
+            r#"{{"v":1,"at":{at},"tokens":100000,"window":1000000,"categories":[{{"name":"System prompt","tokens":8000,"kind":"used"}},{{"name":"MCP tools (deferred)","tokens":900,"kind":"deferred"}},{{"name":"Messages","tokens":60000,"kind":"used"}},{{"name":"Free space","tokens":850000,"kind":"free"}}]}}"#
+        );
+        s.apply_context_spool(crate::context_spool::parse(&json).unwrap());
+        let c = Composition::of(&s).unwrap();
+        assert!(
+            !c.line.contains("deferred") && !c.line.contains("mcp"),
+            "{}",
+            c.line
+        );
+        assert!(c.items.iter().all(|(n, _)| !n.contains("deferred")));
+        let q = crate::query::dashboard(&s);
+        assert!(q["composition"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| !i["name"].as_str().unwrap().contains("deferred")));
+    }
+
+    /// At 52 cells the lever (Messages) and the free space stay; the
+    /// smallest other used categories go first, the order is /context's.
+    #[test]
+    fn the_cut_keeps_messages_and_free() {
+        let (s, e) = fixture_at("b", usize::MAX);
+        let d = snapshot(&s, &e);
+        let c = composition_of(&d).expect("fixture B has the table");
+        assert!(c.line.chars().count() <= coach::WIDTH, "{}", c.line);
+        assert!(
+            c.line.contains(" msgs ") && c.line.contains(" free "),
+            "{}",
+            c.line
+        );
+        let pos = |k: &str| c.line.find(k);
+        assert!(pos(" msgs ") < pos(" free "));
+        insta::assert_snapshot!("composition_row_b", c.line);
+    }
+
+    #[test]
+    fn no_used_categories_no_row() {
+        let (mut s, _) = fixture_at("a", usize::MAX);
+        let at = s.last_line_at_ms.unwrap() + 1;
+        s.apply_context_spool(crate::context_spool::SpoolCapture {
+            at_ms: at,
+            capture: crate::transcript::ContextCapture {
+                used_tokens: 1,
+                window_tokens: 1_000_000,
+                free_tokens: Some(999_999),
+                ..Default::default()
+            },
+        });
+        assert!(Composition::of(&s).is_none());
+    }
+
+    /// A `/context` table from before the last compaction describes a window
+    /// that is gone: no row; one after it counts.
+    #[test]
+    fn a_transcript_capture_before_a_compaction_gives_no_row() {
+        let (mut s, _) = fixture_at("b", usize::MAX);
+        assert!(Composition::of(&s).is_some(), "fixture B has the table");
+        let boundary = s.last_compaction_ms().expect("fixture B compacts");
+        s.prefix.context_capture_at_ms = Some(boundary - 1);
+        assert!(Composition::of(&s).is_none());
+        s.prefix.context_capture_at_ms = Some(boundary + 1);
+        assert_eq!(Composition::of(&s).unwrap().source, "per /context");
+    }
+
+    /// No capture: no row, no keys, and the cell serialises as before.
+    #[test]
+    fn no_capture_no_row() {
+        let (s, e) = fixture_at("a", usize::MAX);
+        let d = snapshot(&s, &e);
+        assert!(composition_of(&d).is_none());
+        let v = serde_json::to_value(&d).unwrap();
+        assert!(v["cells"][0].get("composition").is_none());
+        let q = crate::query::dashboard(&s);
+        assert!(q.get("composition").is_none() && q.get("composition_source").is_none());
     }
 
     /// The act line pre-empts: a wait paints it crit over any nudge; with

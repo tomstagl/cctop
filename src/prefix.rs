@@ -65,6 +65,8 @@ pub struct Prefix {
     pub invoked_skills: Vec<String>,
     /// `/context`'s own table, when the person ran it.
     pub context_capture: Option<crate::transcript::ContextCapture>,
+    /// Epoch ms of the line `context_capture` came from.
+    pub context_capture_at_ms: Option<i64>,
     /// Plugins: name → (always-on tokens, unused for N startups).
     plugins: Vec<(String, u64, Option<u64>)>,
 }
@@ -75,6 +77,10 @@ impl Prefix {
         if let Line::System(s) = line {
             if let Some(cap) = s.local_command().and_then(|c| c.context_capture()) {
                 self.context_capture = Some(cap);
+                self.context_capture_at_ms = s
+                    .timestamp
+                    .as_deref()
+                    .and_then(crate::metrics::cost::parse_ts_ms);
             }
             return;
         }

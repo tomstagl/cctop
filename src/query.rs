@@ -665,7 +665,20 @@ pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
 /// surface cuts at its own width.
 pub fn dashboard(state: &State) -> Value {
     let engine = advisor::Engine::for_state(state);
-    serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null)
+    let mut v =
+        serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null);
+    // The window's composition, lifted out of the context cell: `composition[]`
+    // and where it was read from (PRD context-breakdown §3.3).
+    if let Some(c) = crate::dashboard::Composition::of(state) {
+        v["composition"] = c
+            .items
+            .iter()
+            .map(|(name, tokens)| json!({"name": name, "tokens": tokens}))
+            .collect();
+        v["composition_source"] = json!(c.source);
+        v["composition_metric_id"] = json!("context_composition");
+    }
+    v
 }
 
 /// `cctop query coach --line`: the one-line form at `columns`.
