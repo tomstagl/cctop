@@ -28,7 +28,18 @@ Shapes the parsers classify are preserved without their content:
 - Agent ids (`agentId`, `agent_id`, the `taskId` of a launch) are random
   17-hex strings Claude Code made up, so they stay as they are: the
   transcript file name, the launch result and the notification must agree.
-- Team keys: `agentName` (a member's role) and `agentType` stay; the team
+- The keys of a `file-history-snapshot`'s `trackedFileBackups` are file
+  paths and are rewritten like a path value (extension kept).
+- A `thinking_drop` attachment keeps its counts, `reason`, `reasonCounts`,
+  `clientChange.kinds` (Claude Code's own words), `firstChangedMessageIndex`
+  and `callNumber`; `blockHashes`, `newlyDropped.first` / `last` and
+  `clientChange.baseline` are removed. A `budget_usd` attachment keeps its
+  numbers; `rendered[].content` is same-length filler. A `derived-from`
+  line keeps each entry's `type` and `via` and rewrites its `id` and
+  `started` (session ids) with the session-id map.
+- Team keys: `agentName` (a member's role) becomes `role<N>` with --team,
+  consistently in `<role>@<team>` ids and in a `name` equal to a role
+  (`team-lead` stays); `agentType` stays; the team
   name `session-<lead id8>` is rewritten to `session-<hid(lead)[:8]>` so it
   still equals the anonymised lead's id, wherever it appears (`teamName`,
   `team_name`, a team config's `name`, the `@<team>` suffix of `agentId` /
@@ -83,7 +94,11 @@ KEEP_KEYS = {"type", "subtype", "role", "model", "id", "name", "tool_use_id", "r
              "spawnDepth", "runId", "workflowName", "canReadOutputFile",
              # team keys: roles and the team name (rewritten with the lead's id, see TEAM)
              "agentName", "teamName", "team_name", "teammate_id", "leadAgentId", "backendType",
-             "isActive", "joinedAt"}
+             "isActive", "joinedAt",
+             # the role of a rendered block, a derived-from entry's `via`
+             "renderedRole", "via"}
+# thinking_drop: values that are Claude Code's own words, read by the parsers.
+THINKING_DROP_KEEP = {"requestId", "model", "querySource", "reason", "kinds", "type"}
 ID_KEYS = {"sessionId", "session_id", "uuid", "parentUuid", "logicalParentUuid", "promptId",
            "leafUuid", "messageId", "snapshotMessageId", "sourceToolAssistantUUID", "toolUseID",
            "sourceToolUseID", "interruptedMessageId", "bridgeSessionId", "ownerAccountUuid",
@@ -145,16 +160,47 @@ def team_name(session_id):
     return "session-" + session_id[:8]
 
 
+# Member roles are the person's own free-form names: with --team they become
+# `role<N>` (the same N everywhere in the file); `team-lead` is Claude Code's.
+BUILTIN_ROLES = {"team-lead"}
+ROLES = set()
+
+
+def role_name(r):
+    return r if r in BUILTIN_ROLES else alias("role", r)
+
+
+def collect_roles(o):
+    """Roles named by a line: `agentName` values and the `<role>@<team>` prefix
+    of member ids."""
+    if TEAM is None:
+        return
+    old = "@" + TEAM[0]
+    if isinstance(o, dict):
+        for k, x in o.items():
+            if k == "agentName" and isinstance(x, str):
+                ROLES.add(x)
+            collect_roles(x)
+    elif isinstance(o, list):
+        for x in o:
+            collect_roles(x)
+    elif isinstance(o, str) and o.endswith(old):
+        ROLES.add(o[: -len(old)])
+
+
 def anon_team(v):
     """A string equal to the team name, or ending in `@<team>`, follows the
-    lead's anonymised id; anything else is returned unchanged."""
+    lead's anonymised id (its role prefix becomes `role<N>`); a string equal
+    to a member's role becomes `role<N>`; anything else is unchanged."""
     if TEAM is None:
         return v
     old, new = TEAM
     if v == old:
         return new
     if v.endswith("@" + old):
-        return v[: -len(old)] + new
+        return role_name(v[: -len(old) - 1]) + "@" + new
+    if v in ROLES:
+        return role_name(v)
     return v
 
 
@@ -492,10 +538,57 @@ def anon_text(s):
     return out
 
 
+def anon_thinking_drop(a):
+    """A thinking_drop attachment: counts and machine tokens, no hashes."""
+    a = dict(a)
+    a.pop("blockHashes", None)
+    drop = a.get("newlyDropped")
+    if isinstance(drop, dict):
+        a["newlyDropped"] = {k: x for k, x in drop.items() if k not in ("first", "last")}
+    change = a.get("clientChange")
+    if isinstance(change, dict):
+        a["clientChange"] = {k: x for k, x in change.items() if k != "baseline"}
+
+    def walk(v, key=None):
+        if isinstance(v, dict):
+            return {k: walk(x, k) for k, x in v.items()}
+        if isinstance(v, str):
+            return v if key in THINKING_DROP_KEEP else fill(min(len(v), MAX_STR))
+        return v
+
+    return walk(a)
+
+
+def anon_derived_from(o):
+    """A derived-from line: entries keep `type` and `via`; ids go through hid."""
+    out = anon({k: x for k, x in o.items() if k != "sessions"})
+    out["sessions"] = [
+        {k: (hid(x) if k in ("id", "started") and isinstance(x, str) else anon(x, k, e))
+         for k, x in e.items()}
+        for e in o.get("sessions") or [] if isinstance(e, dict)
+    ]
+    return out
+
+
+def anon_line(o):
+    if o.get("type") in REQUEST_TYPES:
+        return anon_request(o)
+    if o.get("type") == "derived-from":
+        return anon_derived_from(o)
+    a = o.get("attachment")
+    if o.get("type") == "attachment" and isinstance(a, dict) and a.get("type") == "thinking_drop":
+        o = dict(o, attachment=anon_thinking_drop(a))
+        return {k: (x if k == "attachment" else anon(x, k, o)) for k, x in o.items()}
+    return anon(o)
+
+
 def anon(v, key=None, parent=None):
     if isinstance(v, dict):
         if isinstance(v.get("name"), str) and "input_schema" in v:
             return anon_tool(v)  # a tool definition anywhere (an attachment's surfaced one)
+        if key == "trackedFileBackups":
+            # a snapshot's map is keyed by file path: rewrite the keys like a path value
+            return {anon_path(k): anon(x, k, v) for k, x in v.items()}
         return {k: anon(x, k, v) for k, x in v.items()}
     if isinstance(v, list):
         return [anon(x, key, parent) for x in v]
@@ -508,7 +601,13 @@ def anon(v, key=None, parent=None):
             return agent_type(v)
         if key in ("skill", "attributionSkill", "commandName"):
             return skill_name(v)
+        if key in ("from", "to") and v.startswith("/"):
+            return anon_path(v)  # an environment change's old / new directory
+        if key == "agentType" and ":" in v:
+            return agent_type(v)  # a plugin's agent (`<plugin>:<agent>`) names the plugin
         if key in KEEP_KEYS:
+            if key == "name" and v in ROLES:
+                return role_name(v)
             return tool_name(v) if key == "name" else anon_team(v)
         if key in ID_KEYS:
             return hid(v)
@@ -565,6 +664,7 @@ def main():
             out.write("\n")
         return
     rows = []
+    raw = []
     with open(src) as f:
         for n, line in enumerate(f, 1):
             if lines is not None and n > lines:
@@ -573,7 +673,11 @@ def main():
                 o = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            rows.append(anon_request(o) if o.get("type") in REQUEST_TYPES else anon(o))
+            raw.append(o)
+    for o in raw:
+        collect_roles(o)
+    for o in raw:
+        rows.append(anon_line(o))
     if dst.endswith("/") or os.path.isdir(dst):
         # A teammate transcript is `<sessionId>.jsonl`: name the copy by
         # the anonymised id so the collector still finds it by its lines.

@@ -661,6 +661,17 @@ hooks are off or before its module is accepted.
     Claude Code version:
     Result: pending
 
+41. **After a turn the TUI's context cell shows `per Claude Code` while the
+    pane is loaded** (context breakdown PRD 3, US-003).
+    Setup: a real session with the pane loaded and `cctop run` in another
+    terminal; finish one turn.
+    Expected: the composition row appears in the context body, labelled
+    `per Claude Code`, within a minute, and
+    `cctop query dashboard --session <id> | jq .composition_source` says
+    the same.
+    Claude Code version:
+    Result: pending
+
 ### Run notes (automated, 2026-09-14)
 
 An agent drove Claude Code 2.1.270 in a 162×45 tmux window

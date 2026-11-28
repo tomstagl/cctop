@@ -137,6 +137,9 @@ enum QueryWhat {
     Prefix,
     /// What is in the window right now and what put it there.
     Sources,
+    /// The sessions this one was derived from and continued in, with the
+    /// chain's cost.
+    Lineage,
     /// Event log.
     Events {
         /// Only events newer than this (e.g. 10m, 2h).
@@ -667,6 +670,16 @@ fn query(q: QueryArgs) {
     }
     let out = match &q.what {
         QueryWhat::Explain { metric_id } => qy::explain(metric_id),
+        QueryWhat::Lineage => {
+            let (path, _) = match cctop::load::resolve(&target(&q.attach)) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("cctop: {e}");
+                    std::process::exit(cctop::discover::DiscoverError::EXIT_CODE);
+                }
+            };
+            qy::lineage(&path)
+        }
         QueryWhat::Coach {
             line: true,
             columns,
@@ -716,7 +729,7 @@ fn query(q: QueryArgs) {
                     };
                     qy::events(&state, since_ms)
                 }
-                QueryWhat::Explain { .. } => unreachable!(),
+                QueryWhat::Explain { .. } | QueryWhat::Lineage => unreachable!(),
             }
         }
     };

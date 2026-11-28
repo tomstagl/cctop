@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::advisor::rules::token::MISS_TOKENS;
 use crate::metrics::cost::parse_ts_ms;
-use crate::transcript::{ApiRequest, Line, ShapeFacts, SystemKind};
+use crate::transcript::{ApiRequest, AttachmentKind, Line, ShapeFacts, SystemKind};
 
 /// Why a request missed the cache, in the order the causes are checked.
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +35,33 @@ pub enum LocatedCause {
         gap_ms: u64,
         ttl_ms: u64,
     },
+    /// Claude Code dropped thinking blocks from this request (a
+    /// `thinking_drop` attachment with the same request id): the prefix it
+    /// re-sent no longer matched. `kinds` is its `clientChange.kinds`.
+    ThinkingDrop {
+        kinds: Vec<String>,
+    },
     Unlocated,
+}
+
+/// `messagesHistoryChanged` → `history changed`; an unknown kind stays as
+/// written.
+pub fn change_kind_text(kind: &str) -> String {
+    match kind {
+        "messagesHistoryChanged" => "history changed".to_string(),
+        "systemPromptChanged" => "system prompt changed".to_string(),
+        "toolSchemasChanged" => "tool schemas changed".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// The kinds of a thinking drop, mapped and joined: `history changed, …`.
+pub fn change_kinds_text(kinds: &[String]) -> String {
+    kinds
+        .iter()
+        .map(|k| change_kind_text(k))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// `+1.2k` / `-340`: a signed count, thousands with one decimal.
@@ -67,6 +93,7 @@ impl LocatedCause {
             LocatedCause::SystemChanged { .. } => "system_changed",
             LocatedCause::PrefixRewritten { .. } => "prefix_rewritten",
             LocatedCause::Expired { .. } => "expired",
+            LocatedCause::ThinkingDrop { .. } => "thinking_drop",
             LocatedCause::Unlocated => "unlocated",
         }
     }
@@ -127,6 +154,10 @@ impl LocatedCause {
                     duration(*ttl_ms)
                 )
             }
+            LocatedCause::ThinkingDrop { kinds } => match kinds.first() {
+                Some(k) => format!("{} (thinking drop)", change_kind_text(k)),
+                None => "thinking dropped".to_string(),
+            },
             LocatedCause::Unlocated => "unlocated".to_string(),
         }
     }
@@ -135,6 +166,9 @@ impl LocatedCause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocatedMiss {
     pub message_id: String,
+    /// The API request id (`requestId` of the response line), which a
+    /// `thinking_drop` attachment names too.
+    pub request_id: Option<String>,
     pub turn: Option<usize>,
     pub at: Option<String>,
     /// The miss's cache write, in tokens.
@@ -319,6 +353,10 @@ pub struct RequestChain {
     prev: Option<Closed>,
     misses: Vec<LocatedMiss>,
     by_id: HashMap<String, usize>,
+    /// `thinking_drop` attachments by request id → `clientChange.kinds`:
+    /// the record lands before the response it belongs to, so a miss closing
+    /// later finds it here, and one already closed is filled when it lands.
+    drops: HashMap<String, Vec<String>>,
 }
 
 impl RequestChain {
@@ -366,13 +404,21 @@ impl RequestChain {
                 // the prefix also shrank.
                 let named = reason.as_deref().is_some_and(|r| r != "unavailable");
                 if named || shrank {
-                    let cause = match &self.prev {
+                    let mut cause = match &self.prev {
                         Some(p) => locate(p, &cur, &self.shapes, default_ttl_ms),
                         None => LocatedCause::Unlocated,
                     };
+                    if cause == LocatedCause::Unlocated {
+                        if let Some(kinds) = a.request_id.as_ref().and_then(|r| self.drops.get(r)) {
+                            cause = LocatedCause::ThinkingDrop {
+                                kinds: kinds.clone(),
+                            };
+                        }
+                    }
                     self.by_id.insert(cur.message_id.clone(), self.misses.len());
                     self.misses.push(LocatedMiss {
                         message_id: cur.message_id.clone(),
+                        request_id: a.request_id.clone(),
                         turn,
                         at: a.timestamp.clone(),
                         tokens: cur.cache_creation,
@@ -381,6 +427,30 @@ impl RequestChain {
                     });
                 }
                 self.prev = Some(cur);
+            }
+            Line::Attachment(att) => {
+                if let AttachmentKind::ThinkingDrop {
+                    request_id: Some(id),
+                    change_kinds,
+                    ..
+                } = att.kind()
+                {
+                    // The response may have closed first (order is not
+                    // guaranteed): fill its miss if it is still unlocated.
+                    if let Some(m) = self
+                        .misses
+                        .iter_mut()
+                        .rev()
+                        .find(|m| m.request_id.as_deref() == Some(id.as_str()))
+                    {
+                        if m.cause == LocatedCause::Unlocated {
+                            m.cause = LocatedCause::ThinkingDrop {
+                                kinds: change_kinds.clone(),
+                            };
+                        }
+                    }
+                    self.drops.insert(id, change_kinds);
+                }
             }
             Line::System(s) if s.kind() == SystemKind::CompactBoundary => self.reset(),
             Line::ContinuedIn(_) => self.reset(),
@@ -670,6 +740,82 @@ mod tests {
         let c = miss_pair(req("s1", 12, 1, "high", T1), vec![]);
         assert_eq!(c.misses()[0].cause, LocatedCause::Unlocated);
         assert_eq!(c.misses()[0].cause.short(), "unlocated");
+    }
+
+    fn drop_line(request_id: &str, kinds: &str) -> Line {
+        parse(
+            json!({"type": "attachment", "timestamp": T1, "attachment": {
+            "type": "thinking_drop", "requestId": request_id,
+            "thinkingBlocksSent": 4, "thinkingTurnsSent": 4,
+            "newlyDropped": {"blockCount": 4, "turnCount": 4, "reason": "prefix_mismatch"},
+            "clientChange": {"kinds": kinds, "firstChangedMessageIndex": 0}}}),
+        )
+    }
+
+    /// An unlocated miss `b` (request id `r-b`), with the drop landing at
+    /// `at`: 0 before the request, 1 between request and response, 2 after.
+    fn drop_chain(at: usize, request_id: &str) -> RequestChain {
+        let mut lines = vec![
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            req("s1", 12, 1, "high", T1),
+            reply("b", 5_000, 30_000, T1, None),
+        ];
+        let at = [0, 2, 4][at];
+        lines.insert(at, drop_line(request_id, "messagesHistoryChanged"));
+        run(&lines)
+    }
+
+    #[test]
+    fn unlocated_miss_filled_by_thinking_drop() {
+        // The drop lands before the response closes it, or after.
+        for at in [0, 1, 2] {
+            let c = drop_chain(at, "r-b");
+            let m = &c.misses()[0];
+            assert_eq!(m.cause.kind(), "thinking_drop", "order {at}");
+            assert_eq!(m.cause.short(), "history changed (thinking drop)");
+            assert_eq!(m.request_id.as_deref(), Some("r-b"));
+        }
+        // Another request's drop names nothing here.
+        assert_eq!(
+            drop_chain(0, "r-x").misses()[0].cause,
+            LocatedCause::Unlocated
+        );
+        assert_eq!(
+            drop_chain(2, "r-x").misses()[0].cause,
+            LocatedCause::Unlocated
+        );
+    }
+
+    #[test]
+    fn thinking_drop_does_not_override_a_located_cause() {
+        let mut lines = vec![
+            req("s1", 10, 2, "high", T0),
+            reply("a", 0, 40_000, T0, None),
+            drop_line("r-b", "messagesHistoryChanged"),
+            req("s1", 12, 1, "max", T1),
+            reply("b", 5_000, 30_000, T1, None),
+        ];
+        assert_eq!(run(&lines).misses()[0].cause.kind(), "params_changed");
+        let drop = lines.remove(2);
+        lines.push(drop);
+        assert_eq!(run(&lines).misses()[0].cause.kind(), "params_changed");
+    }
+
+    #[test]
+    fn thinking_drop_forms() {
+        let two = LocatedCause::ThinkingDrop {
+            kinds: vec!["systemPromptChanged".into(), "toolSchemasChanged".into()],
+        };
+        assert_eq!(two.short(), "system prompt changed (thinking drop)");
+        assert_eq!(
+            LocatedCause::ThinkingDrop { kinds: vec![] }.short(),
+            "thinking dropped"
+        );
+        assert_eq!(
+            change_kinds_text(&["systemPromptChanged".into(), "toolSchemasChanged".into()]),
+            "system prompt changed, tool schemas changed"
+        );
     }
 
     #[test]

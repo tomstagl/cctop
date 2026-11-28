@@ -62,6 +62,12 @@ pub fn summary(state: &State) -> Value {
             o.insert("team_cost".into(), team);
         }
     }
+    // The budget of a `--max-budget-usd` run, only when there is one.
+    if state.budget_usd.is_some() {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("budget_usd".into(), budget_value(state));
+        }
+    }
     // The status line's extra facts only once a sample carried any, so a
     // session without a status line prints exactly what it did before.
     if state.status_facts != Default::default() {
@@ -324,7 +330,7 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
         rows.iter()
             .skip(skip)
             .map(|r| {
-                json!({
+                let mut row = json!({
                     "turn": r.turn,
                     "started_at_ms": r.started_at_ms,
                     "duration": r.duration_ms.map(|d| m(d, "ms", "turn_duration", false)),
@@ -350,7 +356,13 @@ pub fn ledger_json(state: &State, last: Option<usize>) -> Value {
                     "api_errors": r.api_errors,
                     "steers": r.steers,
                     "interrupted": r.interrupted,
-                })
+                });
+                // Only on a turn Claude Code dropped thinking in (2.1.308+).
+                if r.thinking_dropped > 0 {
+                    row["thinking_dropped"] =
+                        m(r.thinking_dropped, "count", "thinking_dropped", false);
+                }
+                row
             })
             .collect(),
     )
@@ -665,7 +677,51 @@ pub fn coach(state: &State, snooze: Option<(&str, bool)>) -> Value {
 /// surface cuts at its own width.
 pub fn dashboard(state: &State) -> Value {
     let engine = advisor::Engine::for_state(state);
-    serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null)
+    let mut v =
+        serde_json::to_value(crate::dashboard::snapshot(state, &engine)).unwrap_or(Value::Null);
+    // The window's composition, lifted out of the context cell: `composition[]`
+    // and where it was read from (PRD context-breakdown §3.3).
+    if let Some(c) = crate::dashboard::Composition::of(state) {
+        v["composition"] = c
+            .items
+            .iter()
+            .map(|(name, tokens)| json!({"name": name, "tokens": tokens}))
+            .collect();
+        v["composition_source"] = json!(c.source);
+        v["composition_metric_id"] = json!("context_composition");
+    }
+    // Absent for a session without a `--max-budget-usd` budget.
+    if state.budget_usd.is_some() {
+        v["budget_usd"] = budget_value(state);
+    }
+    // Absent until Claude Code (2.1.308+) drops thinking from a request.
+    let td = &state.agg.thinking_dropped;
+    if td.blocks > 0 || td.turns > 0 {
+        v["thinking_dropped"] = json!({
+            "blocks": td.blocks,
+            "turns": td.turns,
+            "by_kind": td.by_kind,
+            "metric_id": "thinking_dropped",
+        });
+    }
+    v
+}
+
+/// The `--max-budget-usd` budget with its ratio and halt ETA (`null` without one).
+fn budget_value(state: &State) -> Value {
+    let (Some((used, total, remaining)), Some((text, ratio, eta))) =
+        (state.budget_usd, crate::dashboard::budget_line(state))
+    else {
+        return Value::Null;
+    };
+    json!({
+        "used": m(used, "USD", "budget_usd", false),
+        "total": m(total, "USD", "budget_usd", false),
+        "remaining": m(remaining, "USD", "budget_usd", false),
+        "ratio": ratio,
+        "text": text,
+        "halt_eta": eta.map(|e| json!({"text": e, "metric_id": "budget_halt_eta", "estimate": true})),
+    })
 }
 
 /// `cctop query coach --line`: the one-line form at `columns`.
@@ -695,6 +751,13 @@ pub fn advice_of(engine: &advisor::Engine) -> Value {
         "suppressed": engine.suppressed.iter().map(|(r, why)| json!({"rule": r, "why": why})).collect::<Vec<_>>(),
         "recent": engine.recent.iter().map(|l| json!({"rule": l.rule, "what": l.what, "detail": l.detail, "at_ms": l.at_ms})).collect::<Vec<_>>(),
     })
+}
+
+/// The session's chain: ancestors, descendants and the chain's cost, from
+/// the transcript at `path` and the transcripts under `~/.claude/projects`.
+pub fn lineage(path: &std::path::Path) -> Value {
+    let root = crate::baseline::default_projects_dir().unwrap_or_default();
+    serde_json::to_value(crate::lineage::chain(path, &root)).unwrap_or(Value::Null)
 }
 
 pub fn prefix(state: &State) -> Value {
@@ -1258,5 +1321,37 @@ mod tests {
             .collect::<Vec<_>>()
             .join(" ");
         assert!(flat.contains("batch this phase's items, or lower its effort/model"));
+    }
+
+    #[test]
+    fn dashboard_reports_dropped_thinking_on_fixture_t() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-t.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["thinking_dropped"]["blocks"], 10);
+        assert_eq!(v["thinking_dropped"]["turns"], 10);
+        assert_eq!(
+            v["thinking_dropped"]["by_kind"]["messagesHistoryChanged"],
+            10
+        );
+        // Absent where nothing was dropped.
+        assert!(dashboard(&state())["thinking_dropped"].is_null());
+    }
+
+    #[test]
+    fn dashboard_reports_the_budget_on_fixture_s() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-s.jsonl");
+        let s = crate::load::state_from(&path, crate::ui::state::SessionInfo::from_fixture(&path));
+        let v = dashboard(&s);
+        assert_eq!(v["budget_usd"]["total"]["value"], 12.0);
+        assert!(v["budget_usd"]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("budget $"));
+        assert_eq!(v["budget_usd"]["total"]["metric_id"], "budget_usd");
+        // Absent where the session has no budget.
+        assert!(dashboard(&state()).get("budget_usd").is_none());
     }
 }
