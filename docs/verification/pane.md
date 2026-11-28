@@ -69,12 +69,18 @@ Expected:
   wrote `null` here in a `-p` run), `testedWith` and `selfCheck: "ok"`.
 
 The same check without a model call, and so without credentials — what CI
-runs (`.github/workflows/ci.yml`, the `contract` job): the prompt is the
-native `/plugin-types` command, which fires `session.start` like any run and
-writes the contract beside it.
+runs (`.github/workflows/ci.yml`, the `contract` job) through
+`scripts/check-contract.sh`: the prompt is `noop`, with `</dev/null` and
+`HOME` and `CLAUDE_CONFIG_DIR` pointing at a temp dir. `session.start` fires
+like in any run, and the run then stops at "Not logged in". That non-zero
+exit is the expected pass path; the checks above read the debug log and the
+marker. The contract surface is read from the installed binary by
+`scripts/extract-dts.py` (needs `zstd`) and diffed against the checked-in d.ts.
+The script's result line has the shape of the Result line below, with
+`exit 1 (Not logged in, expected without credentials)` in place of `exit 0`.
 
 ```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin '/plugin-types /tmp/types'
+HOME=$(mktemp -d) CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --debug --plugin-dir ./plugin "noop" </dev/null
 ```
 
 Known benign line: `[WARN] plugin cctop: options requested but its manifest
@@ -635,6 +641,23 @@ hooks are off or before its module is accepted.
     indented two cells, the `→ <file>:<line> <call>()` pointer under it —
     and the same rows as `cctop query agents --session <id> | jq
     '.workflows[0].detail_narrow'`; `back` returns to the list.
+    Claude Code version:
+    Result: pending
+
+39. **An interactive session rewrites
+    `plugin/.claude-plugin/types/claude-code/index.d.ts`** (PRD 0 §8).
+    Setup: `claude --plugin-dir ./plugin` in a real terminal, then quit.
+    Expected: the file exists and line 1 names the running version.
+    Claude Code version:
+    Result: pending
+
+40. **A `/model` or `/effort` switch mid-session shows `ParamsChanged` in
+    A01** (request ledger PRD §9).
+    Setup: a real session on Claude Code 2.1.302 or later; switch effort
+    (`/effort`) or model (`/model`) part-way through, send another prompt,
+    then `cctop query dashboard --session <id>`.
+    Expected: `cache.located_misses` has an entry whose cause is
+    `params_changed`.
     Claude Code version:
     Result: pending
 

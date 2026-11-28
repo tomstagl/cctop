@@ -72,6 +72,7 @@ fn header<'a>(t: &Theme, d: &Dashboard, width: usize) -> Line<'a> {
     ));
     let phase = crate::ui::fmt::clip(&phase, width.saturating_sub(10).min(40));
     let facts_room = width.saturating_sub(8 + phase.chars().count() + 2);
+    let facts = dashboard::fit_workspace(&facts, &d.header.workspace, facts_room);
     let facts = crate::ui::fmt::clip(&t.coach_text(&facts), facts_room);
     let pad = width.saturating_sub(8 + facts.chars().count() + phase.chars().count());
     let phase_style = match d.header.phase.glyph {
@@ -308,4 +309,123 @@ pub fn compose<'a>(
 pub fn render(frame: &mut Frame, area: Rect, d: &Dashboard, t: &Theme, open: usize, keys: bool) {
     let lines = compose(t, d, area.width, area.height, open, keys);
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use crate::status::{Repo, Workspace};
+    use crate::ui::state::{SessionInfo, State, StatusFacts};
+    use std::path::Path;
+
+    fn all_facts() -> StatusFacts {
+        StatusFacts {
+            workspace: Some(Workspace {
+                added_dirs: vec!["/x/y".into()],
+                git_worktree: Some("feat".into()),
+                repo: Some(Repo {
+                    host: Some("github.com".into()),
+                    owner: Some("acme".into()),
+                    name: Some("shop".into()),
+                }),
+                ..Default::default()
+            }),
+            output_style: Some("Concise".into()),
+            agent_name: Some("reviewer".into()),
+            remote_session_id: Some("r-1".into()),
+            ..Default::default()
+        }
+    }
+
+    fn dashboard_with(facts: StatusFacts) -> (App, Dashboard) {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-b.jsonl");
+        let mut app = App::new(
+            crate::ui::panels::all(),
+            Box::new(|l, s: &mut State| s.apply(l)),
+        );
+        app.caps = crate::theme::Caps::full();
+        crate::attach::attach_headless(&mut app, &path, SessionInfo::from_fixture(&path));
+        app.set_theme("default-dark");
+        app.state.status_facts = facts;
+        let d = app.dashboard();
+        (app, d)
+    }
+
+    fn header_row(app: &App, d: &Dashboard, width: u16) -> String {
+        let rows = compose(&app.state.theme, d, width, 24, 0, false);
+        rows[0]
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn tui_header_drops_from_right() {
+        let (app, d) = dashboard_with(all_facts());
+        assert_eq!(
+            d.header.workspace,
+            [
+                "acme/shop",
+                "wt feat",
+                "+1 dir",
+                "style Concise",
+                "agent: reviewer",
+                "remote"
+            ]
+        );
+        let phase = format!(
+            "{} {} {}",
+            d.header.phase.glyph, d.header.phase.word, d.header.phase.elapsed
+        );
+        let mut last = usize::MAX;
+        for w in [200u16, 140, 100, 80, 70, 60] {
+            let row = header_row(&app, &d, w);
+            assert!(row.chars().count() <= w as usize, "{w}: {row}");
+            assert!(row.contains(&phase), "{w}: phase cut: {row}");
+            let n = d
+                .header
+                .workspace
+                .iter()
+                .filter(|i| row.contains(i.as_str()))
+                .count();
+            assert!(n <= last, "{w}: items came back: {row}");
+            last = n;
+            // Dropped from the right: what shows is always a prefix.
+            let shown = d
+                .header
+                .workspace
+                .iter()
+                .take_while(|i| row.contains(i.as_str()))
+                .count();
+            assert_eq!(n, shown, "{w}: not a prefix: {row}");
+        }
+        // At 60 columns `remote` is gone while the repo may remain.
+        let narrow = header_row(&app, &d, 60);
+        assert!(!narrow.contains("remote"), "{narrow}");
+        let wide = header_row(&app, &d, 200);
+        assert!(
+            wide.contains("remote") && wide.contains("acme/shop"),
+            "{wide}"
+        );
+        // A width that fits the repo but not `remote`.
+        let mut seen = false;
+        for w in 60..200u16 {
+            let r = header_row(&app, &d, w);
+            if r.contains("acme/shop") && !r.contains("remote") {
+                seen = true;
+            }
+            assert!(!r.contains("remote") || r.contains("acme/shop"), "{w}: {r}");
+        }
+        assert!(seen);
+    }
+
+    #[test]
+    fn header_snapshots_with_all_items() {
+        let (app, d) = dashboard_with(all_facts());
+        for w in [80u16, 120, 200] {
+            insta::assert_snapshot!(format!("header_workspace_{w}"), header_row(&app, &d, w));
+        }
+    }
 }

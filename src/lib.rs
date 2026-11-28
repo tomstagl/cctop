@@ -38,6 +38,7 @@ pub mod query;
 pub mod registry;
 pub mod replay;
 pub mod report;
+pub mod requests;
 pub mod series;
 pub mod split;
 pub mod status;
