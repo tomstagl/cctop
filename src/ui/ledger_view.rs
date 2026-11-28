@@ -79,9 +79,18 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    // A DROP column (thinking blocks Claude Code dropped) only once a turn has one.
+    let show_drop = rows.iter().any(|r| r.thinking_dropped > 0);
+    let drop_col = |text: String| {
+        if show_drop {
+            format!("{text:>4} ")
+        } else {
+            String::new()
+        }
+    };
     let mut lines = vec![Line::from(Span::styled(
         format!(
-            " {:>3} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {:<6} {:<8} {}",
+            " {:>3} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {}{:<6} {:<8} {}",
             "#",
             "START",
             "DUR",
@@ -92,6 +101,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             "OUT",
             "THINK",
             "COST",
+            drop_col("DROP".into()),
             "EFFORT",
             "MODEL",
             "TOOLS"
@@ -103,7 +113,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
     for (i, r) in rows.iter().enumerate().skip(first).take(body) {
         let model = r.model.trim_start_matches("claude-").to_string();
         let mut line = Line::from(format!(
-            " {:>2}{} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {:<6} {:<8} {}",
+            " {:>2}{} {:<8} {:>6} {:>4} {:>7} {:>7} {:>6} {:>6} {:>6} {:>7} {}{:<6} {:<8} {}",
             r.turn,
             if r.compaction { "C" } else { " " },
             clock(r.started_at_ms),
@@ -117,6 +127,11 @@ pub fn render(frame: &mut Frame, area: Rect, state: &State) {
             fmt::tokens(r.usage.output),
             fmt::tokens(r.usage.thinking),
             r.cost_usd.map(fmt::usd).unwrap_or_else(|| "—".into()),
+            drop_col(if r.thinking_dropped > 0 {
+                r.thinking_dropped.to_string()
+            } else {
+                String::new()
+            }),
             fmt::clip(&r.effort, 6),
             fmt::clip(&model, 8),
             r.tools
@@ -156,6 +171,9 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &State, turn: Option<usiz
         }
         if let (Some(c), Some(at)) = (r.cost_usd, r.cost_at_100k_usd) {
             facts.push(format!("{} ({} at 100k)", fmt::usd(c), fmt::usd(at)));
+        }
+        if r.thinking_dropped > 0 {
+            facts.push(format!("thinking dropped {} blocks", r.thinking_dropped));
         }
         if r.steers > 0 {
             facts.push(format!("steers {}", r.steers));
@@ -218,7 +236,11 @@ mod tests {
     use std::path::Path;
 
     fn fixture_app() -> App {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session-a.jsonl");
+        fixture_app_of("session-a")
+    }
+
+    fn fixture_app_of(name: &str) -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/{name}.jsonl"));
         let mut app = App::new(
             crate::ui::panels::all(),
             Box::new(|l, s: &mut State| s.apply(l)),
@@ -234,6 +256,32 @@ mod tests {
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn the_ledger_shows_a_drop_column_only_when_a_turn_has_a_drop() {
+        let mut app = fixture_app_of("session-t");
+        app.state.open = Some(1);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let out = render_to_string(&app, 140, 60);
+        let head = out.lines().find(|l| l.contains("START")).expect("header");
+        assert!(head.contains("DROP"), "{head}");
+        let row = out
+            .lines()
+            .find(|l| l.contains("thinking dropped 10") || is_drop_row(l, head))
+            .expect("a row carrying the drop count");
+        assert!(row.contains(" 10 "), "{row}");
+        // A transcript without a drop has no column.
+        let mut app = fixture_app();
+        app.state.open = Some(1);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!render_to_string(&app, 140, 60).contains("DROP"));
+    }
+
+    /// A ledger row whose DROP cell (aligned under the header's) is `10`.
+    fn is_drop_row(line: &str, head: &str) -> bool {
+        let col = head.find("DROP").unwrap();
+        line.get(col..col + 4).is_some_and(|c| c.trim() == "10")
     }
 
     #[test]
